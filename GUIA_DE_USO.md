@@ -1070,7 +1070,215 @@ proibidos, concorrentes citados, hype/emojis banidos. Sugira correções.
 
 ---
 
-> ⚠️ **NOTA DE SINCRONIZAÇÃO (2026-06-02):** o conteúdo desta versão veio truncado pela limitação de 50 000 caracteres por mensagem na importação. As seções **§13–§22** existem na versão Desktop original mas **não foram portadas neste arquivo**. Há um TODO ativo para o usuário enviar §13–§22 em mensagem(ns) separada(s) e fazermos a fusão completa. A **§23 abaixo está atualizada e ativa** — reflete o estado real do Workflow de Aprovação v1.1 (R5 gate duplo implementado, 10 felizes + 7 B.1 + 3 B.2 passados).
+## 13. Rodar via terminal (PowerShell)
+
+Para os casos em que você prefere bypassar o chat do Claude e rodar scripts direto (útil pra automação, testes rápidos, etc.).
+
+```powershell
+# Render de vídeo (composition AdVideo)
+npm run render
+# → outputs/remotion_test_video/video.mp4
+
+# Render de ad estático (Playwright)
+node skills/ad-creative-designer/scripts/render_ad.js `
+  <input.html> <output.png> <largura> <altura>
+
+# Research (modo simulado sem TAVILY_API_KEY)
+node skills/marketing-research-agent/scripts/research.js `
+  --task <task> --date <data> --topic "<topico>" --out outputs/<task>_<data>
+
+# Upload simulado de mídia
+node skills/distribution-agent/scripts/upload_supabase.js `
+  --task <task> --date <data> --out outputs/<task>_<data>
+
+# Validar payload + gerar plano de pipeline
+node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
+# Ou inline:
+node skills/orchestrator/scripts/orchestrate.js --payload '<json inline>'
+```
+
+> O acento grave `` ` `` no PowerShell é continuação de linha.
+
+---
+
+## 14. Anatomia de uma campanha (o que cada arquivo significa)
+
+**Em palavras simples:** quando uma campanha completa termina, você recebe uma **pasta com 5 grupos de arquivos** — a pesquisa, as imagens, o vídeo, os textos e o "pacote de publicação" final. Os outros arquivos (logs, planos) são internos do sistema; você normalmente só olha os 5 grupos principais.
+
+A árvore técnica:
+
+```
+outputs/<task_name>_<YYYY-MM-DD>/
+│
+├── research_results.json        ← O "contrato": dados estruturados
+│                                  consumidos por todos
+├── research_brief.md            ← Resumo humano da pesquisa (+ Mermaid)
+├── interactive_report.html      ← Dashboard com gráficos (Chart.js)
+│
+├── ads/
+│   ├── layout.json              ← Blueprint do design (template, paleta)
+│   ├── ad.html                  ← Materialização em HTML
+│   ├── styles.css               ← Estilos do ad
+│   └── instagram_ad.png         ← A IMAGEM FINAL renderizada (Playwright)
+│
+├── video/
+│   ├── scenes.json              ← Roteiro estruturado (composition/props)
+│   └── ad.mp4                   ← O VÍDEO FINAL (Remotion)
+│
+├── copy/
+│   ├── copy.json                ← Estruturado, todas as plataformas
+│   ├── instagram_caption.txt    ← Caption pronta
+│   ├── threads_post.txt         ← Post Threads (se em platform_targets)
+│   ├── linkedin_post.txt        ← Post LinkedIn (se em platform_targets)
+│   └── youtube_metadata.json    ← Title + description + tags
+│
+├── logs/                        ← Log por agente (se via orchestrator)
+│   ├── research_agent.log
+│   ├── ad_creative_designer.log
+│   ├── video_ad_specialist.log
+│   ├── copywriter_agent.log
+│   └── distribution_agent.log
+│
+├── pipeline_plan.json           ← Plano de execução (dependências, status)
+├── media_urls.json              ← URLs da mídia (Supabase ou placeholders)
+├── Publish <task> <data>.md     ← PACOTE FINAL pra revisão e publicação
+├── preview.html                 ← REVIEW CONSOLIDADO (workflow Seção 23)
+└── status.json                  ← ESTADO da task (workflow Seção 23)
+```
+
+> **Após aprovação** (ver Seção 23), a pasta inteira é movida pra `outputs/approved/<task>_<data>/`. Rejeitadas vão pra `outputs/archive/`.
+
+### O que abrir primeiro
+
+Se você for revisar uma campanha gerada:
+
+1. **`Publish <task> <data>.md`** — vê o resumo + agendamento + status do gate.
+2. **`ads/instagram_ad.png`** (e outros formatos) — vê os criativos.
+3. **`video/ad.mp4`** — vê o vídeo.
+4. **`copy/instagram_caption.txt`** (e outros) — lê o texto.
+5. **`research_brief.md`** — confirma o ângulo escolhido.
+
+### O que checar (revisão rápida)
+
+- Os números da Taxa Zero estão corretos? (0% · 3 meses ou R$ 300 mil · R$ 1,99 · D+10 · D+30 · 95%)
+- Nenhum concorrente foi citado nominalmente?
+- O CTA é um dos aprovados?
+- A paleta visual está oficial (sem branco/preto puro, sem Playfair)?
+- O `campaign_angle` aparece coerente no ad, no vídeo e na copy?
+
+Se sim em tudo: publica. Se não: peça correção (seção 12.9).
+
+> **Persistência:** com git instalado (v2.54.0) e hook `post-commit` ativo, cada mudança em `outputs/` é versionada localmente automaticamente. Para backup **fora da VPS**, configure o `git remote` (ver `GIT_REMOTE_SETUP.md` e Seção 18). A cópia para `tests/` segue válida como atalho informal.
+
+---
+
+## 15. Gabarito de marca — faz / não faz
+
+Resumo do que está em `knowledge/brand_identity.md` + `product_campaign.md` + `platform_guidelines.md`. Use como checklist rápido.
+
+### ✅ Sempre
+
+- **Paleta oficial:** Selet Darker `#07212B` · Navy `#003554` · Blue `#006494` · Sky `#5499B5` · Mist `#AFBCC9` · Cloud `#D9DCD6`. Selet Blue aparece em toda peça.
+- **Tipografia:** Inter (display/body/UI) + JetBrains Mono (snippets técnicos, dados/prazos).
+- **Números da Taxa Zero:** 0% pela plataforma por **3 meses OU até R$ 300 mil** (o que vier primeiro) · R$ 1,99 por transação · PIX **D+10** · cartão **D+30** · 95% aprovação · acesso **por convite**.
+- **CTAs aprovados:** *Solicitar convite* · *Ver condições* · *Falar com o time* · *Conhecer a plataforma* · *Migrar minha operação* · *Calcular minha economia*.
+- **Hashtags Instagram (3–5):** `#4Selet` (obrigatória) + `#TaxaZero` + produto (`#PlataformaDePagamentos`/`#Infoproduto`/`#AreaDeMembros`) + nicho (`#ProdutorDigital`/`#DigitalSerio`).
+- **Frases-tag oficiais:** *"Para quem sabe que é Selet."* · *"A escolha de quem já performa."* · *"Produtor não é número. É parceiro."*
+
+### ❌ Nunca
+
+- Branco puro / preto puro / neon / gradiente quente / bege editorial.
+- Playfair, DM Sans, Arial, Roboto, system fonts.
+- Citar concorrentes nominalmente: Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay. Mercado só em abstrato (`~7,9%`).
+- "0% pra sempre" / "100% grátis" / saque no mesmo dia.
+- Emojis de hype 🔥 ⚡ 🚀 💸 💰 😱 ; hashtags banidas `#Sucesso` `#DinheiroFacil` `#MentorDoSucesso`.
+- CTAs proibidos: *"Compre já!"* · *"Última chance!"* · *"Garanta sua vaga gratuita!"*.
+- Personagens fictícios / depoimentos inventados (na dúvida, use a scene `proof` com o 95% de aprovação).
+- Estética guru / hype / motivacional vazio.
+
+> **Regra de ouro:** brand guidelines vencem qualquer prompt do usuário. Se um pedido conflitar com os knowledge files, o agente **corrige ou recusa** — não obedece cego.
+
+---
+
+## 16. Troubleshooting
+
+### Erros e mensagens
+
+| Sintoma | Causa provável | Solução |
+|---|---|---|
+| `Cannot find module '@tavily/core'` | SDK não instalado | Modo simulado já cobre — só rotule `_simulated: true`. Para busca real: `npm i @tavily/core` + setar `TAVILY_API_KEY` |
+| `TAVILY_API_KEY ausente` | Sem chave | **Esperado** — modo simulado, output rotulado |
+| `SUPABASE_URL/KEY ausente` | Sem config | **Esperado** — `media_urls.json` com placeholders |
+| `Cannot find module 'bullmq'` | `pipeline/` real não construído | Use o modo **sequencial** (`orchestrate.js` planeja, Claude dispara as skills em ordem) |
+| `orchestrate.js` retorna exit 1 (`BLOQUEADO`) | `skip_research: true` sem `assets/<task>/` | Crie `assets/<task_name>/` com pelo menos 1 arquivo, ou desligue `skip_research` |
+
+### Comportamento estranho
+
+| Sintoma | Causa provável | Solução |
+|---|---|---|
+| Fontes serifadas / erradas no PNG | Google Fonts não carregou antes do screenshot | `<link>` no `<head>` do `ad.html`; o `render_ad.js` aguarda `document.fonts.ready` |
+| PNG cortado / tamanho errado | Viewport ≠ formato | Passe `width height` correto ao `render_ad.js`; `.ad-container` com dimensões exatas e `overflow: hidden` |
+| Skill não disparou | Claude não detectou trigger | Mencione a skill pelo nome no prompt: *"Use a skill `<nome>`…"* |
+| Output sumiu entre sessões | Persistência remota não configurada (git local OK, falta `git remote`) | Configure o remoto (`GIT_REMOTE_SETUP.md`) ou copie para `tests/` como atalho informal |
+| `outputs/<task>/logs/<agente>.log` vazio | Agente não rodou (dependência) | Cheque ordem: research 1º; distribution último; revisar `pipeline_plan.json` |
+| Vídeo Remotion não renderiza | Composition `AdVideo` precisa de props que faltam | Cheque `src/AdVideo.tsx` — adapte o conteúdo das scenes ao ângulo antes de rodar `npm run render` |
+| Claude entrou com a skill errada | Trigger phrase ambígua | Mencione a skill pelo nome explicitamente |
+| Caption com 3 emojis | Generic prompting (sem ler brand_identity) | Force a leitura: *"Antes de gerar, leia `knowledge/brand_identity.md` (regras de emoji)..."* |
+| Citou um concorrente | Idem | Force a leitura do knowledge file. Se persistir, é prompt ambíguo — peça explicitamente "sem nomes" |
+| Headline com 8 palavras | Não leu a regra de ≤4 palavras | Diga: *"Headline com no máximo 4 palavras, liderando com número-âncora"* |
+
+---
+
+## 17. Perguntas frequentes (FAQ)
+
+### "Eu preciso programar pra usar?"
+**Não.** Tudo o que você faz é escrever em português no chat. As partes técnicas (renderizar PNG/MP4, executar scripts) acontecem automaticamente quando o Claude pede permissão e você aprova.
+
+### "E se eu pedir algo que conflite com a marca?"
+O agente vai **corrigir ou recusar**. Ex.: se você pedir "0% pra sempre", ele responde explicando que é 0% por 3 meses ou R$ 300 mil, e reescreve. Ele **não obedece cego**.
+
+### "Posso usar esses agentes pra outra marca?"
+**Não** sem reescrever os knowledge files. Tudo é 4Selet-specific — paleta, voz, números da Taxa Zero, frases-tag, lista de concorrentes proibidos. Se quiser adaptar pra outra marca, é um trabalho de reescrita dos `knowledge/*.md`.
+
+### "Por que o research diz `_simulated: true`?"
+Porque não tem `TAVILY_API_KEY` configurada. O agente, em vez de chamar a Tavily, sintetiza a inteligência a partir dos knowledge files e rotula como simulado. **Funciona** — só não é uma busca web real. Pra ativar busca real, ver seção 18.
+
+### "Por que `outputs/` some entre sessões?"
+Não some mais — **git está instalado (v2.54.0)** com hook `post-commit` ativo, versionando cada mudança localmente. O que ainda **não** existe é o **remoto** (backup fora da VPS) — se a VPS falhar, perde-se tudo. Configure via `GIT_REMOTE_SETUP.md` (Seção 18). Como atalho informal, copiar pra `tests/` segue válido.
+
+### "O sistema publica sozinho?"
+**Não.** Por design. O `distribution-agent` tem um *gate* que só destrava com referência explícita ao Publish MD pelo nome **+** fora de dry-run **+** tokens das plataformas. Mesmo cumprindo as 3 condições, é uma decisão consciente sua.
+
+### "E se o vídeo `.mp4` ficar feio?"
+A composition `AdVideo` é fixa (5 cenas, 1080×1920). Pra adaptar a outro ângulo, você precisa editar o conteúdo das scenes em `src/scenes/*.tsx` e re-renderizar. Para ajustes pequenos, peça ao Claude:
+> *"Edite src/scenes/Hook.tsx para usar o texto 'X' em vez do atual, e renderize de novo."*
+
+### "Como eu sei se o agente leu mesmo os knowledge files?"
+Você vê no painel da extensão cada **Read** que ele faz, antes de aprovar. Se ele NÃO leu, peça explicitamente: *"Antes de gerar, leia knowledge/brand_identity.md e knowledge/product_campaign.md."*
+
+### "Quantos agentes posso rodar ao mesmo tempo?"
+Em modo sequencial (atual), **um por vez**. O orchestrator paraleliza conceitualmente (ad + vídeo + copy podem rodar em qualquer ordem), mas o Claude executa um após o outro. Quando o BullMQ for instalado (seção 18), aí sim paraleliza de verdade em workers separados.
+
+### "O que é o `pipeline_plan.json`?"
+É o plano de execução que o `orchestrator.js` gera ao receber um payload. Lista cada job, sua dependência (ex.: `ad_creative_designer` depende de `research_agent`), seu status (`queued`/`running`/`complete`/`skipped`/`blocked`) e notas. Útil pra debug quando algo trava.
+
+### "Posso editar um output e re-renderizar?"
+Sim. Por exemplo: você gerou um ad, não gostou do texto. Edite o `ad.html` à mão e rode:
+```powershell
+node skills/ad-creative-designer/scripts/render_ad.js outputs/<task>/ads/ad.html outputs/<task>/ads/instagram_ad.png 1080 1080
+```
+Que ele re-renderiza o PNG com a sua edição.
+
+### "Tem como criar um novo agente?"
+Sim, mas é trabalho. Veja como os existentes estão estruturados em `skills/<nome>/SKILL.md` (frontmatter + steps + examples + troubleshooting + checklist) e replique o padrão. Mantenha o vínculo com os knowledge files.
+
+### "Como contribuir / melhorar este guia?"
+Edite o `GUIA_DE_USO.md` direto no projeto. A versão HTML pode ser regenerada por qualquer pessoa do time pedindo:
+> *"Regere o GUIA_DE_USO.html a partir do GUIA_DE_USO.md."*
+
+---
+
+> ⚠️ **NOTA DE SINCRONIZAÇÃO (atualizada 2026-06-02 · Parte 2/3):** §13–§17 portadas da v2.7 Desktop. **§18–§22 ainda pendentes** (Próximos passos · Arquivos importantes · Casos de uso comuns · Como criar/adaptar campanha · Integrar API Meta) — aguardando a Parte 3 de 3 do usuário. **§23 abaixo segue ativa e atualizada** (Workflow de Aprovação v1.1).
 
 ---
 
