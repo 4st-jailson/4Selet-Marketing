@@ -152,7 +152,7 @@ if (target === "approved") {
   // A.2 — snapshot SHA-256 dos arquivos (excluindo o proprio status.json) para
   // permitir check_approved_integrity detectar edicoes pos-aprovacao.
   try {
-    status.content_hashes = hashDirectory(src.path, ["status.json"]);
+    status.content_hashes = hashDirectory(src.path, ["status.json", "preview.html"]);
   } catch (e) {
     warn("falha ao calcular content_hashes (seguindo sem): " + e.message);
   }

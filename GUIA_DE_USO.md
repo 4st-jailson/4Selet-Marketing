@@ -73,7 +73,7 @@ node scripts/promote_task.js --task minha_campanha --date 2026-06-15 --to in_rev
 # Validar todos os status.json (schema, zona vs status, hashes em approved)
 node scripts/validate_status.js
 
-# Verificar integridade SHA-256 de outputs/approved/
+# Verificar integridade SHA-256 de outputs/approved/ (exclui status.json e preview.html)
 node scripts/check_approved_integrity.js                # só relata
 node scripts/check_approved_integrity.js --auto-revert  # move para draft se editado
 
@@ -85,6 +85,24 @@ node scripts/migrate_legacy.js --dry-run                # lista o que faria
 node scripts/migrate_legacy.js                          # executa
 node scripts/migrate_legacy.js --include-test           # inclui test/campanha-demo/
 ```
+
+### 23.4a Gate duplo de publicação (R5) ⚠️
+
+**OBRIGATÓRIO antes de qualquer post real (IG Graph, YouTube Data API).** Verifica em runtime que:
+1. `status.status === "approved"` (não basta pasta em `outputs/approved/` — pode ser órfã)
+2. `content_hashes` batem com SHA-256 do conteúdo atual (não basta pasta intacta — pode ter sido editada)
+
+```bash
+# Como CLI (uma task):
+node scripts/check_approval_gate.js --task <name> --date <date>
+# Exit 0 → OK publicar. Exit 1 → bloqueado (ler stderr para código)
+
+# Como módulo (no código do publisher):
+const { assertPublishApproved } = require('./scripts/check_approval_gate');
+assertPublishApproved({ taskName: 'x', date: '2026-06-02' });  // lança em violação
+```
+
+`content_hashes` exclui `status.json` (mutável por design) e `preview.html` (artefato gerado). Tasks sem conteúdo real (só status + preview) → `content_hashes = {}` → gate bloqueia com `E_GATE_NO_HASHES` (proteção contra task vazia bypass).
 
 ### 23.5 O que a `preview.html` mostra
 
@@ -104,6 +122,8 @@ Cada regra: ✅ (ok) · ⚠️ (warn, com evidência textual) · ❌ (fail).
 
 ### 23.6 Códigos de erro
 
+**Transições e bootstrap (`promote_task.js`, `orchestrator.js`, `generate_preview.js`):**
+
 | Código | Exit | Causa típica | Como recuperar |
 |---|---|---|---|
 | `E_INVALID_TRANSITION` | 1 | Transição fora da matriz | Mensagem sugere rota legal |
@@ -112,6 +132,15 @@ Cada regra: ✅ (ok) · ⚠️ (warn, com evidência textual) · ❌ (fail).
 | `E_STATUS_PARSE` | 2 | `status.json` corrompido (JSON inválido) | Restaurar do git: `git checkout HEAD -- outputs/.../status.json` |
 | `E_DUPLICATE_LOCATION` | 2 | Task em múltiplas zonas (outputs/, approved/, archive/) | Decidir manualmente qual é canônica, apagar as outras |
 | `E_REBOOTSTRAP_BLOCKED` | 1 | `orchestrator.js` chamado em task aprovada/rejeitada | Rodar `--to in_review` antes |
+
+**Gate duplo de publicação (`check_approval_gate.js` — R5):**
+
+| Código | Exit | Causa típica | Como recuperar |
+|---|---|---|---|
+| `E_TASK_NOT_FOUND` | 1 | `outputs/approved/<task>_<date>/` ausente | Task nunca foi aprovada; checar com `validate_status.js` |
+| `E_INVALID_STATE` | 1 | Pasta em `approved/` mas `status.status !== "approved"` (órfã) | Reconciliar via `promote_task.js`; investigar como ficou inconsistente |
+| `E_GATE_NO_HASHES` | 1 | Task aprovada **sem** `content_hashes` (legacy ou pre-A.2 ou task vazia) | Re-promover (`--to in_review` → `--to approved`) ou migrar via `migrate_legacy.js`. **Bypass para task vazia é NEGADO por design.** |
+| `E_HASH_MISMATCH` | 1 | Conteúdo alterado pós-aprovação | `check_approved_integrity.js --auto-revert`, reaprovar |
 
 ### 23.7 Gate de POSTING (inalterado)
 

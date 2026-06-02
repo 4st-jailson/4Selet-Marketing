@@ -180,6 +180,100 @@ Output Típico (salvo em `outputs/<task_name>_<date>/`):
 
 ---
 
+# Workflow de Aprovação — Níveis 1+2 (v1.1)
+
+Camada de governança sobre os 6 agentes + orchestrator. Transforma artefatos em entregáveis com **trilha rastreável de revisão**, **integridade pós-aprovação** (SHA-256) e **gate duplo de publicação** (estado lógico + hashes em runtime).
+
+## Máquina de estados
+
+```
+null → draft → in_review → approved → in_review (rework)
+                       └── rejected → in_review
+                       (approved também pode auto-revert para draft via check_approved_integrity)
+```
+
+Cada task tem `status.json` na raiz (versionado em git como fonte da verdade): `task_name`, `task_date`, `status`, `created_at`, `last_updated_at`, `approved_by`, `approved_at`, `campaign_angle`, `platforms`, `content_hashes` (SHA-256 por arquivo, em approved), `history` (append-only). Detalhes em `SPEC_WORKFLOW_APROVACAO.md` v1.1.
+
+## Localizações
+
+| Status | Pasta | Versionado em git |
+|---|---|---|
+| `draft` / `in_review` | `outputs/<task>_<date>/` | ❌ (ignorado pelo .gitignore) |
+| `approved` | `outputs/approved/<task>_<date>/` | ✅ |
+| `rejected` | `outputs/archive/<task>_<date>/` | ✅ |
+
+## Scripts (em `scripts/`)
+
+| Script | Propósito |
+|---|---|
+| `orchestrator.js` | Bootstrap idempotente de `status.json` (wrapper sobre `lib/status_bootstrap.js`) |
+| `generate_preview.js` | Gera `preview.html` (single-file, 6 seções + checklist de 6 regras de marca) e promove `draft → in_review` |
+| `promote_task.js` | **Único ponto** de transição. Calcula `content_hashes` (excluindo `status.json` e `preview.html`) ao transicionar para `approved`. Move pasta atomicamente |
+| `refresh_index.js` | Regenera `outputs/approved/INDEX.md` |
+| **`check_approval_gate.js`** ⚠️ | **Gate duplo (R5)** — verifica `status === approved` E `content_hashes` em RUNTIME antes de qualquer post. Lança `E_INVALID_STATE` / `E_HASH_MISMATCH` / `E_GATE_NO_HASHES` |
+| `check_approved_integrity.js` | Varre `outputs/approved/`; com `--auto-revert` move tasks editadas para `draft` com `event_type="edit_revert"` e `previous_approval` preservado |
+| `migrate_legacy.js` | Bootstrap retroativo de tasks pré-Workflow (`legacy: true`) |
+| `validate_status.js` | Auditoria — schema, zona vs status, hashes em approved |
+
+Módulos compartilhados em `scripts/lib/`: `content_hash.js` (SHA-256 + `diffHashes`), `status_bootstrap.js`.
+
+## Regra CRITICAL Re-aprovação
+
+As 4 skills de conteúdo (`ad-creative-designer`, `video-ad-specialist`, `copywriter-agent`, `marketing-research-agent`) **NÃO** podem escrever em `outputs/approved/<task>/`. Para editar:
+
+```bash
+node scripts/promote_task.js --task <name> --date <date> --to in_review
+```
+
+Isso move a pasta de volta para `outputs/<task>_<date>/`. Reaprovação obrigatória antes de publicar. Contracheque automático via `check_approved_integrity.js --auto-revert` detecta edições silenciosas e reverte (preservando `previous_approval`).
+
+## Gate de publicação (4 invariantes)
+
+Antes de qualquer post real (IG Graph, YouTube Data API), TODAS as 4:
+
+1. ✅ Usuário referencia o Publish MD **pelo nome** (Step 5).
+2. ✅ `dry_run: false`.
+3. ✅ Tokens presentes (IG, YouTube OAuth).
+4. ⚠️ **R5 (Step 5a):** `assertPublishApproved({ taskName, date })` retorna sucesso → `status.status === "approved"` E `content_hashes` batem em runtime.
+
+Falha em qualquer = não publicar essa task (não bloqueia outras).
+
+## Comandos diários
+
+```bash
+# 1) Criar task
+node scripts/orchestrator.js --task <name> --date YYYY-MM-DD --platforms instagram,youtube
+
+# 2) Rodar agentes (Claude executa cada SKILL.md em ordem, cada uma respeita CRITICAL Re-aprovação)
+
+# 3) Gerar preview + promover para revisão
+node scripts/generate_preview.js --task <name> --date YYYY-MM-DD
+
+# 4) Aprovar (humano)
+node scripts/promote_task.js --task <name> --date YYYY-MM-DD --to approved --by "<aprovador>"
+
+# 5) Verificar antes de publicar (R5)
+node scripts/check_approval_gate.js --task <name> --date YYYY-MM-DD
+
+# Auditoria periódica
+node scripts/check_approved_integrity.js [--auto-revert]
+node scripts/validate_status.js
+```
+
+Detalhes operacionais em `GUIA_DE_USO.md` §23.
+
+## Validação (testes que passaram)
+
+- **10/10 caminhos felizes** (bootstrap → preview → approve → rework → reject)
+- **7/7 adversariais** (B.1.1–B.1.7): `E_INVALID_TRANSITION`, `E_MISSING_APPROVER`, `E_UNKNOWN_STATE`, `E_STATUS_PARSE`, `E_DUPLICATE_LOCATION`, idempotência
+- **3/3 runtime de integridade** (B.2.1–B.2.3): edit detection sem mutação · `--auto-revert` restaura com `previous_approval` · gate bloqueia task vazia com `E_GATE_NO_HASHES`
+
+## Backup remoto
+
+`outputs/approved/` versionado em git local. **Falta configurar remote** — instruções em `GIT_REMOTE_SETUP.md`. Hook `post-commit` instalado em `.git/hooks/post-commit` (push automático em background quando remote estiver configurado). Sem remote, falha de disco apaga `history[]`, `content_hashes`, decisões de approver.
+
+---
+
 # Knowledge Files
 
 Todos os agentes devem referenciar os seguintes knowledge files localizados no diretório **knowledge/**. São a fonte de verdade da marca 4Selet e devem ser lidos **antes** de qualquer geração.

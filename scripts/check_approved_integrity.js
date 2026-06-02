@@ -59,7 +59,7 @@ try {
       logLines.push("[" + ent.name + "] no content_hashes (legacy)");
       continue;
     }
-    const current = hashDirectory(taskDir, ["status.json"]);
+    const current = hashDirectory(taskDir, ["status.json", "preview.html"]);
     const divs = diffHashes(status.content_hashes, current);
     if (divs.length === 0) {
       logLines.push("[" + ent.name + "] OK (" + Object.keys(current).length + " arquivos)");

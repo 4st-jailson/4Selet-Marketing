@@ -148,6 +148,53 @@ Para retomar revisao:   "Volte para revisao a campanha <task_name>, task_date <t
 NAO publicar nada neste step. O **gate de POSTING continua valido** — a
 publicacao real exige referencia explicita ao Publish MD (Step 5).
 
+## Step 5a (CRITICAL): Pre-publish gate — verificar status + content_hashes em RUNTIME
+
+> ⚠️ **Bloqueador absoluto antes de Meta API / YouTube API real (R5 do reporte v1.1).**
+> Localizacao em `outputs/approved/` **nao basta** — uma pasta orfa (falha parcial de
+> `promote_task`, restore de backup, edicao manual) com `status.status !== "approved"`
+> ou com `content_hashes` divergentes seria publicada sem este gate.
+
+Antes de **qualquer** chamada de API que publique conteudo (POST IG Graph
+`/media_publish`, YouTube `videos.insert`, etc.), e para **cada** task, rodar:
+
+```bash
+node scripts/check_approval_gate.js --task <task_name> --date <task_date>
+```
+
+ou, programaticamente, no codigo do publisher:
+
+```js
+const { assertPublishApproved } = require("../../scripts/check_approval_gate");
+assertPublishApproved({ taskName, date });  // lanca em violacao; nao continuar
+```
+
+O gate verifica **duas invariantes em runtime**:
+
+1. **Estado logico:** `status.status === "approved"` (le `outputs/approved/<task>_<date>/status.json`).
+2. **Integridade de conteudo:** recalcula SHA-256 de cada arquivo (excluindo o proprio
+   `status.json`) e compara com `status.content_hashes`. Qualquer divergencia
+   (`missing`/`modified`/`added`) aborta.
+
+Codigos de erro:
+
+| Code | Causa | Acao |
+|---|---|---|
+| `E_TASK_NOT_FOUND` | `outputs/approved/<task>_<date>/` ausente | Task nao aprovada (ou nunca foi). Rodar `validate_status.js` |
+| `E_INVALID_STATE` | pasta em `approved/` mas `status.status !== "approved"` | Reconciliar via `promote_task.js` |
+| `E_GATE_NO_HASHES` | task aprovada sem `content_hashes` (legacy ou pre-A.2) | Re-promover (`--to in_review` -> `--to approved`) para gerar hashes |
+| `E_HASH_MISMATCH` | conteudo alterado pos-aprovacao | `check_approved_integrity.js --auto-revert` e re-aprovar |
+
+**Se qualquer codigo acima for retornado, NAO publicar essa task.** Falha de uma task
+nao deve bloquear outras — registrar em log e seguir com as que passaram no gate.
+
+> O gate `R5` e **independente** e **adicional** a:
+> - Regra do Publish MD (referencia explicita pelo nome) — Step 5 abaixo.
+> - Regra `dry_run: false` — Step 5 abaixo.
+> - Regra CRITICAL Re-aprovacao nos agentes de conteudo (`outputs/approved/` e read-only para edicao).
+>
+> Os quatro gates juntos protegem o ponto de nao-retorno (impressao real cobrada).
+
 ## Step 5: Publishing layer (GATED — so com referencia explicita)
 
 Somente se o gate (topo) for satisfeito:
