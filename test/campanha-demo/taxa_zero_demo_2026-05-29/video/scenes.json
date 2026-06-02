@@ -1,0 +1,48 @@
+{
+  "_demo": true,
+  "composition": "CampanhaDemo",
+  "props": {
+    "style": "problem_solution",
+    "duration": 15,
+    "platform": "instagram_reels",
+    "anchor_concept": "Migracao Sem Trauma",
+    "source_angle": "Migracao sem perder margem: 0% por 3 meses ou ate R$ 300 mil em vendas",
+    "scenes": [
+      {
+        "type": "hook",
+        "text": "Vai perder vendas migrando?",
+        "visual": "Background Selet Darker (#07212B) com Selet Dots; Inter Black em Selet Cloud.",
+        "transition": "fade",
+        "animation": "word-by-word easeOut"
+      },
+      {
+        "type": "answer",
+        "text": "Nao. O time conduz.",
+        "visual": "Nao gigante em Selet Cloud com ponto em Selet Blue; sub-label em Mist.",
+        "transition": "fade",
+        "animation": "spring contido"
+      },
+      {
+        "type": "offer",
+        "text": "0% por 3 meses. R$ 1,99 por transacao.",
+        "visual": "0% gigante em Selet Blue; sub mono 'ou ate R$ 300 mil em vendas · PIX D+10 · cartao D+30'.",
+        "transition": "slide",
+        "animation": "0% spring scale-in"
+      },
+      {
+        "type": "proof",
+        "text": "95% de aprovacao no cartao.",
+        "visual": "95% em Selet Blue gigante; sub em JetBrains Mono Mist.",
+        "transition": "fade",
+        "animation": "spring contido"
+      },
+      {
+        "type": "cta",
+        "text": "Solicitar convite.",
+        "visual": "Selet Navy; Inter Black Cloud; logo-4selet-light.png fade-in no fim.",
+        "transition": "fade",
+        "animation": "logo reveal"
+      }
+    ]
+  }
+}

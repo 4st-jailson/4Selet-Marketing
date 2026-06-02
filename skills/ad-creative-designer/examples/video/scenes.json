@@ -1,0 +1,20 @@
+{
+  "_test": true,
+  "_label": "TESTE - saida do Video Ad Specialist (dry-run). Props adaptados ao payload test_job_payload_1.",
+  "composition": "AdVideoTest",
+  "props": {
+    "style": "problem_solution",
+    "duration": 15,
+    "platform": "instagram_reels",
+    "source_composition": "AdVideo",
+    "watermark": "TESTE · DRY-RUN",
+    "scenes": [
+      { "type": "hook", "text": "Quanto a taxa come da sua venda?" },
+      { "type": "problem", "text": "7,9% de taxa. E o dinheiro demorando a cair." },
+      { "type": "offer", "text": "4Selet. 0% de taxa por 3 meses." },
+      { "type": "benefit", "text": "95% de aprovacao no cartao | R$ 1,99 por transacao | Suporte de gente de verdade" },
+      { "type": "cta", "text": "Solicitar convite." }
+    ]
+  },
+  "_note": "Reaproveita a composition Remotion existente (src/AdVideo.tsx). O wrapper AdVideoTest renderiza AdVideo + selo TESTE. Render -> ad.mp4."
+}

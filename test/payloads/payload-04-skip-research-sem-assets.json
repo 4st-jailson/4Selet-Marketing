@@ -1,0 +1,8 @@
+{
+  "task_name": "teste_skip_noassets",
+  "task_date": "2026-05-29",
+  "platform_targets": ["instagram"],
+  "user_flags": { "skip_research": true, "skip_image": false, "skip_video": false },
+  "source_folder": null,
+  "dry_run": true
+}

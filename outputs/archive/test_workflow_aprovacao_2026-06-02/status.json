@@ -1,0 +1,55 @@
+{
+  "task_name": "test_workflow_aprovacao",
+  "task_date": "2026-06-02",
+  "status": "rejected",
+  "created_at": "2026-06-02T09:30:12-03:00",
+  "last_updated_at": "2026-06-02T09:30:13-03:00",
+  "approved_by": "QA",
+  "approved_at": "2026-06-02T09:30:13-03:00",
+  "campaign_angle": null,
+  "platforms": [
+    "instagram",
+    "facebook"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "draft",
+      "at": "2026-06-02T09:30:12-03:00",
+      "by": "orchestrator",
+      "event_type": "first_creation"
+    },
+    {
+      "from": "draft",
+      "to": "in_review",
+      "at": "2026-06-02T09:30:13-03:00",
+      "by": "distribution-agent",
+      "event_type": "transition"
+    },
+    {
+      "from": "in_review",
+      "to": "approved",
+      "at": "2026-06-02T09:30:13-03:00",
+      "by": "QA",
+      "event_type": "promoted"
+    },
+    {
+      "from": "approved",
+      "to": "in_review",
+      "at": "2026-06-02T09:30:13-03:00",
+      "by": "promote_task",
+      "event_type": "promoted"
+    },
+    {
+      "from": "in_review",
+      "to": "rejected",
+      "at": "2026-06-02T09:30:13-03:00",
+      "by": "QA",
+      "event_type": "promoted",
+      "reason": "teste"
+    }
+  ],
+  "rejected_by": "QA",
+  "rejected_at": "2026-06-02T09:30:13-03:00",
+  "rejection_reason": "teste"
+}

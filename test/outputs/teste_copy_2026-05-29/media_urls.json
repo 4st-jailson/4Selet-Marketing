@@ -1,0 +1,13 @@
+{
+  "task_name": "teste_copy",
+  "task_date": "2026-05-29",
+  "bucket": "campaign-uploads",
+  "media": {
+    "instagram_ad.png": {
+      "local": "ads/instagram_ad.png",
+      "public_url": "https://PLACEHOLDER.supabase.co/storage/v1/object/public/campaign-uploads/teste_copy_2026-05-29/instagram_ad.png"
+    }
+  },
+  "_simulated": true,
+  "_label": "TESTE/SIMULADO - URLs placeholder, nenhuma midia hospedada"
+}

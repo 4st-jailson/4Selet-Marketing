@@ -1,0 +1,15 @@
+O produtor estabelecido nao adia migracao por preco. Adia por medo de perder vendas no mes da troca.
+
+E faz sentido. Quem ja faturou R$ 50k+/mes nao quer derrubar uma operacao que funciona para reconstruir do zero do outro lado. Os tres custos invisiveis de uma migracao malfeita sao:
+
+→ Receita do mes da transicao (carrinho que para)
+→ Taxa de aprovacao do novo gateway nas primeiras semanas (queda silenciosa)
+→ Horas-equipe ensinando processo novo pra plataforma nova
+
+A 4Selet foi desenhada para resolver as tres antes de o produtor migrar. A campanha Taxa Zero amplia esse desenho com um corredor financeiro: 0% pela plataforma por 3 meses ou ate R$ 300 mil em vendas (o que vier primeiro), R$ 1,99 por transacao, PIX em D+10 e cartao em D+30. A migracao em si e assistida em 5 etapas (aceite, migracao dos produtos, integracoes, treinamento, publicacao) — nao e voce sozinho na transicao.
+
+A prova-ancora tecnica: 95% de aprovacao no cartao, sustentada por multi-adquirencia inteligente. Cada 1% a mais de aprovacao no cartao e receita liquida que volta pra sua operacao.
+
+Acesso por convite. Falar com o time para ver as condicoes da sua operacao.
+
+#4Selet #TaxaZero #PagamentosDigitais #Infoproduto #NegocioDigital

@@ -1,0 +1,24 @@
+# node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# tasks em andamento — nao versionar (apenas approved/ e archive/ sao fonte de verdade)
+outputs/*
+!outputs/approved/
+!outputs/archive/
+!outputs/approved/**
+!outputs/archive/**
+!outputs/INDEX.md
+
+# logs e temp
+logs/
+*.log
+*.tmp
+*.tmp.*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

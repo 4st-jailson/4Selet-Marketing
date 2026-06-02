@@ -1,0 +1,27 @@
+{
+  "_comment": "TESTE - Job Payload de dry-run para validacao end-to-end do pipeline de marketing 4Selet. Nenhum posting real de API. Fixture canonico versionado em skills/ad-creative-designer/examples/ porque outputs/ nao persiste entre turnos.",
+  "task_name": "test_job_payload_1",
+  "task_date": "2026-03-31",
+  "test": true,
+  "dry_run": true,
+  "purpose": "Verificar a execucao completa do pipeline do inicio ao fim (dry-run).",
+  "output_folder": "outputs/test_job_payload_1/",
+  "platform_targets": ["instagram", "youtube"],
+  "source_folder": null,
+  "user_flags": { "skip_research": false, "skip_image": false, "skip_video": false },
+  "execution": {
+    "order": ["research_agent", "ad_creative_designer", "video_ad_specialist", "copywriter_agent", "distribution_agent"],
+    "agents": {
+      "research_agent": { "run": true, "skill": "marketing-research-agent", "output": "research_results.json" },
+      "ad_creative_designer": { "run": true, "skill": "ad-creative-designer", "format": "instagram_square_1080x1080", "output": "ads/" },
+      "video_ad_specialist": { "run": true, "skill": "video-ad-specialist", "platform": "instagram_reels", "output": "video/" },
+      "copywriter_agent": { "run": true, "skill": "copywriter-agent", "platforms": ["instagram", "youtube"], "output": "copy/" },
+      "distribution_agent": { "run": true, "skill": "distribution-agent", "real_posting": false, "simulate_supabase_uploads": true, "publish_md": "Publish test_job_payload_1 2026-03-31.md" }
+    }
+  },
+  "constraints": {
+    "no_real_api_posting": true,
+    "label_all_outputs_as_test": true,
+    "knowledge_files": ["knowledge/brand_identity.md", "knowledge/product_campaign.md", "knowledge/platform_guidelines.md"]
+  }
+}

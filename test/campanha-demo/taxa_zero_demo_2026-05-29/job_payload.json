@@ -1,0 +1,12 @@
+{
+  "_demo": true,
+  "_label": "DEMO/TESTE - campanha-demo da Taxa Zero, dry-run (sem posting real, modo simulado onde faltar chave)",
+  "task_name": "taxa_zero_demo",
+  "task_date": "2026-05-29",
+  "platform_targets": ["instagram", "threads", "youtube", "linkedin"],
+  "user_flags": { "skip_research": false, "skip_image": false, "skip_video": false },
+  "source_folder": null,
+  "dry_run": true,
+  "selected_campaign_angle": "Migracao sem perder margem: 0% por 3 meses ou ate R$ 300 mil em vendas",
+  "video_concept_anchor": "Migracao Sem Trauma"
+}

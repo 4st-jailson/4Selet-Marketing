@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Research Report — taxa_zero_demo (DEMO) — 4Selet</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+      :root {
+        --darker: #07212b; --navy: #003554; --blue: #006494;
+        --sky: #5499b5; --mist: #afbcc9; --cloud: #d9dcd6;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 48px; min-height: 100vh;
+        background: radial-gradient(130% 130% at 50% 0%, var(--navy) 0%, var(--darker) 100%);
+        color: var(--cloud); font-family: "Inter", system-ui, sans-serif; }
+      .badge { font-family: "JetBrains Mono", monospace; font-size: 13px; letter-spacing: 2px;
+        color: var(--mist); border: 1px solid rgba(175,188,201,.4); padding: 6px 12px;
+        border-radius: 8px; display: inline-block; margin-bottom: 24px; }
+      h1 { font-weight: 900; letter-spacing: -1px; margin: 0 0 8px; }
+      .anchor { color: var(--sky); font-family: "JetBrains Mono", monospace; font-size: 14px; letter-spacing: 2px; }
+      h2 { font-weight: 700; color: var(--sky); margin: 40px 0 12px; font-size: 18px; letter-spacing: -0.3px; }
+      .sub { color: var(--mist); margin: 0 0 8px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+      .card { background: rgba(0,53,84,.5); border: 1px solid rgba(84,153,181,.25); border-radius: 16px; padding: 24px; }
+      ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.7; }
+      .num { font-family: "JetBrains Mono", monospace; color: var(--sky); }
+      canvas { max-height: 320px; }
+      .angle-banner { background: var(--blue); color: var(--cloud); padding: 18px 24px; border-radius: 12px;
+        font-weight: 700; margin: 16px 0 32px; font-size: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="badge">DEMO · SIMULADO (sem TAVILY_API_KEY)</div>
+    <h1>Research — Campanha Taxa Zero</h1>
+    <p class="sub">taxa_zero_demo · 2026-05-29 · público: produtor estabelecido (R$ 50k+/mês)</p>
+    <p class="anchor">ÂNCORA DE VÍDEO: MIGRAÇÃO SEM TRAUMA</p>
+
+    <div class="angle-banner">
+      Ângulo selecionado: Migração sem perder margem — <span class="num">0%</span> por 3 meses ou até <span class="num">R$ 300 mil</span>.
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Prioridade dos ângulos de campanha</h2>
+        <canvas id="anglesChart"></canvas>
+      </div>
+      <div class="card">
+        <h2>Dores da audiência (top 4)</h2>
+        <ul>
+          <li><strong>Medo de perder vendas migrando</strong> (objeção #1)</li>
+          <li>Taxa de mercado <span class="num">~7,9%</span></li>
+          <li>Prazo de recebimento longo (15–30 dias)</li>
+          <li>Aprovação de cartão abaixo do ideal</li>
+        </ul>
+        <h2>Hooks priorizados</h2>
+        <ul>
+          <li><em>Vai perder vendas migrando? Não.</em></li>
+          <li>Quanto a taxa come da sua venda?</li>
+          <li>Você não precisa derrubar a operação para migrar.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:32px">
+      <h2>Fatos da campanha (gabarito)</h2>
+      <p>
+        <span class="num">0%</span> por 3 meses ou até <span class="num">R$ 300 mil</span> ·
+        <span class="num">R$ 1,99</span>/transação · PIX <span class="num">D+10</span> ·
+        cartão <span class="num">D+30</span> · <span class="num">95%</span> aprovação · acesso por convite ·
+        migração assistida em 5 etapas
+      </p>
+    </div>
+
+    <script>
+      new Chart(document.getElementById("anglesChart"), {
+        type: "bar",
+        data: {
+          labels: ["Migração s/ trauma", "0% por 3 meses", "95% aprovação", "Por convite"],
+          datasets: [{ label: "Prioridade", data: [10, 9, 8, 6],
+            backgroundColor: "#006494", borderColor: "#5499B5", borderWidth: 1 }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, max: 10, ticks: { color: "#AFBCC9" }, grid: { color: "rgba(175,188,201,.15)" } },
+            x: { ticks: { color: "#D9DCD6" }, grid: { display: false } },
+          },
+        },
+      });
+    </script>
+  </body>
+</html>

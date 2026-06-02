@@ -1,0 +1,23 @@
+{
+  "_test": true,
+  "_label": "TESTE - design spec do Ad Creative Designer (dry-run)",
+  "task_name": "test_job_payload_1",
+  "format": "instagram_square",
+  "width": 1080,
+  "height": 1080,
+  "layout_type": "product_focus",
+  "background": "#003554",
+  "palette": {
+    "darker": "#07212B", "navy": "#003554", "blue": "#006494",
+    "sky": "#5499B5", "mist": "#AFBCC9", "cloud": "#D9DCD6"
+  },
+  "source_angle": "Migracao sem perder margem: 0% por 3 meses ou ate R$ 300 mil em vendas",
+  "elements": [
+    { "type": "test_badge", "text": "TESTE · DRY-RUN" },
+    { "type": "eyebrow", "text": "CAMPANHA TAXA ZERO", "font": "JetBrains Mono", "color": "#5499B5" },
+    { "type": "headline", "text": "0% de taxa.", "font": "Inter", "weight": 900, "color": "#D9DCD6", "accent": "#006494" },
+    { "type": "subtext", "text": "Por 3 meses ou ate R$ 300 mil em vendas. R$ 1,99 por transacao. PIX em D+10.", "font": "Inter", "weight": 500, "color": "#AFBCC9" },
+    { "type": "cta", "text": "Solicitar convite", "font": "Inter", "weight": 700, "bg": "#006494", "color": "#D9DCD6" },
+    { "type": "footer", "text": "Para quem sabe que e Selet.", "font": "Inter", "weight": 500, "color": "#5499B5" }
+  ]
+}

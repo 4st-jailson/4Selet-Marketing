@@ -1,0 +1,1 @@
+﻿asset de origem para o teste B5 (skip_research com assets)

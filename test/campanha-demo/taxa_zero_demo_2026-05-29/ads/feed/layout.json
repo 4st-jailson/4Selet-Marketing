@@ -1,0 +1,22 @@
+{
+  "_demo": true,
+  "task_name": "taxa_zero_demo",
+  "format": "instagram_feed",
+  "width": 1080,
+  "height": 1350,
+  "layout_type": "product_focus",
+  "background": "#003554",
+  "palette": { "darker": "#07212B", "navy": "#003554", "blue": "#006494", "sky": "#5499B5", "mist": "#AFBCC9", "cloud": "#D9DCD6" },
+  "source_angle": "Migracao sem perder margem: 0% por 3 meses ou ate R$ 300 mil em vendas",
+  "elements": [
+    { "type": "eyebrow", "text": "CAMPANHA TAXA ZERO", "font": "JetBrains Mono", "color": "#5499B5" },
+    { "type": "number_block", "label": "DE TAXA POR 3 MESES", "number": "0%", "color_label": "#5499B5", "color_number": "#006494" },
+    { "type": "bullets", "items": [
+      "Ou ate R$ 300 mil em vendas",
+      "R$ 1,99 por transacao (PIX D+10, cartao D+30)",
+      "95% de aprovacao no cartao"
+    ], "color": "#D9DCD6" },
+    { "type": "cta", "text": "Solicitar convite", "font": "Inter", "weight": 700, "bg": "#006494", "color": "#D9DCD6" },
+    { "type": "footer", "text": "Para quem sabe que e Selet.", "font": "Inter", "weight": 500, "color": "#5499B5" }
+  ]
+}

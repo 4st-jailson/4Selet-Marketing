@@ -1,0 +1,21 @@
+{
+  "_test": true,
+  "_label": "TESTE - URLs Supabase SIMULADAS (placeholder). Nenhum upload real foi feito.",
+  "task_name": "test_job_payload_1",
+  "task_date": "2026-03-31",
+  "bucket": "campaign-uploads (simulado)",
+  "media": {
+    "instagram_ad_png": {
+      "local": "ads/instagram_ad.png",
+      "public_url": "https://PLACEHOLDER.supabase.co/storage/v1/object/public/campaign-uploads/test_job_payload_1/instagram_ad.png",
+      "platform": "instagram",
+      "format": "1080x1080"
+    },
+    "video_ad_mp4": {
+      "local": "video/ad.mp4",
+      "public_url": "https://PLACEHOLDER.supabase.co/storage/v1/object/public/campaign-uploads/test_job_payload_1/ad.mp4",
+      "platform": "instagram_reels | youtube_shorts",
+      "format": "1080x1920"
+    }
+  }
+}

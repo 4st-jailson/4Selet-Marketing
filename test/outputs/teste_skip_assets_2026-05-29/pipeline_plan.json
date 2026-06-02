@@ -1,0 +1,54 @@
+{
+  "task_name": "teste_skip_assets",
+  "task_date": "2026-05-29",
+  "platform_targets": [
+    "instagram",
+    "youtube"
+  ],
+  "dry_run": true,
+  "mode": "sequential (sem Redis)",
+  "blocked": false,
+  "block_note": null,
+  "jobs": [
+    {
+      "job_name": "research_agent",
+      "status": "skipped",
+      "dependencies": [],
+      "notes": "skip_research=true; assets/teste_skip_assets/ presente"
+    },
+    {
+      "job_name": "ad_creative_designer",
+      "status": "queued",
+      "dependencies": [
+        "research_agent"
+      ],
+      "notes": ""
+    },
+    {
+      "job_name": "video_ad_specialist",
+      "status": "queued",
+      "dependencies": [
+        "research_agent"
+      ],
+      "notes": ""
+    },
+    {
+      "job_name": "copywriter_agent",
+      "status": "queued",
+      "dependencies": [
+        "research_agent"
+      ],
+      "notes": ""
+    },
+    {
+      "job_name": "distribution_agent",
+      "status": "queued",
+      "dependencies": [
+        "ad_creative_designer",
+        "video_ad_specialist",
+        "copywriter_agent"
+      ],
+      "notes": "roda por ultimo; nao publica (gate)"
+    }
+  ]
+}

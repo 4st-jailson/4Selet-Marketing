@@ -1,0 +1,45 @@
+{
+  "composition": "AdVideo",
+  "props": {
+    "style": "limited_offer",
+    "duration": 18,
+    "platform": "instagram_reels",
+    "scenes": [
+      {
+        "type": "hook",
+        "text": "Taxa média do mercado: 7,9%.",
+        "visual": "Background Selet Darker (#07212B) com Selet Dots 8%. Inter Black em Selet Cloud.",
+        "transition": "fade",
+        "animation": "word-by-word easeOut"
+      },
+      {
+        "type": "offer",
+        "text": "0% pela plataforma por 3 meses.",
+        "visual": "Bloco Selet Navy (#003554); 0% gigante em Selet Blue (#006494).",
+        "transition": "slide",
+        "animation": "spring contido"
+      },
+      {
+        "type": "benefit",
+        "text": "Ou até R$ 300 mil em vendas. R$ 1,99 por transação. PIX D+10.",
+        "visual": "Bullets com indicador ▸ em Selet Blue sobre Selet Darker; valores em JetBrains Mono.",
+        "transition": "fade",
+        "animation": "staggered"
+      },
+      {
+        "type": "proof",
+        "text": "95% de aprovação no cartão.",
+        "visual": "Número-âncora em Selet Blue; sub-label em Selet Mist.",
+        "transition": "fade",
+        "animation": "spring contido"
+      },
+      {
+        "type": "cta",
+        "text": "Solicitar convite.",
+        "visual": "Selet Navy; Inter Black em Selet Cloud; logo-4selet-light.png fade-in.",
+        "transition": "fade",
+        "animation": "logo reveal"
+      }
+    ]
+  }
+}

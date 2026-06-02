@@ -1,0 +1,176 @@
+[
+  {
+    "file": "palette-board.html",
+    "w": 1800,
+    "h": 1100,
+    "out": "02-cores/palette-board.png"
+  },
+  {
+    "file": "swatch-darker.html",
+    "w": 800,
+    "h": 800,
+    "out": "02-cores/swatch-darker.png"
+  },
+  {
+    "file": "swatch-navy.html",
+    "w": 800,
+    "h": 800,
+    "out": "02-cores/swatch-navy.png"
+  },
+  {
+    "file": "swatch-blue.html",
+    "w": 800,
+    "h": 800,
+    "out": "02-cores/swatch-blue.png"
+  },
+  {
+    "file": "swatch-sky.html",
+    "w": 800,
+    "h": 800,
+    "out": "02-cores/swatch-sky.png"
+  },
+  {
+    "file": "swatch-mist.html",
+    "w": 800,
+    "h": 800,
+    "out": "02-cores/swatch-mist.png"
+  },
+  {
+    "file": "swatch-cloud.html",
+    "w": 800,
+    "h": 800,
+    "out": "02-cores/swatch-cloud.png"
+  },
+  {
+    "file": "inter-specimen.html",
+    "w": 1800,
+    "h": 1100,
+    "out": "03-tipografia/inter-specimen.png"
+  },
+  {
+    "file": "dots-navy.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "04-texturas-padroes/dots-navy.png"
+  },
+  {
+    "file": "dots-darker.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "04-texturas-padroes/dots-darker.png"
+  },
+  {
+    "file": "dots-blue-on-cloud.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "04-texturas-padroes/dots-blue-on-cloud.png"
+  },
+  {
+    "file": "bg-navy-1x1.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "05-fundos/bg-navy-1x1.png"
+  },
+  {
+    "file": "bg-navy-4x5.html",
+    "w": 1080,
+    "h": 1350,
+    "out": "05-fundos/bg-navy-4x5.png"
+  },
+  {
+    "file": "bg-navy-9x16.html",
+    "w": 1080,
+    "h": 1920,
+    "out": "05-fundos/bg-navy-9x16.png"
+  },
+  {
+    "file": "bg-navy-16x9.html",
+    "w": 1920,
+    "h": 1080,
+    "out": "05-fundos/bg-navy-16x9.png"
+  },
+  {
+    "file": "bg-darker-1x1.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "05-fundos/bg-darker-1x1.png"
+  },
+  {
+    "file": "bg-darker-9x16.html",
+    "w": 1080,
+    "h": 1920,
+    "out": "05-fundos/bg-darker-9x16.png"
+  },
+  {
+    "file": "bg-darker-16x9.html",
+    "w": 1920,
+    "h": 1080,
+    "out": "05-fundos/bg-darker-16x9.png"
+  },
+  {
+    "file": "bg-blue-radial-1x1.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "05-fundos/bg-blue-radial-1x1.png"
+  },
+  {
+    "file": "bg-cloud-1x1.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "05-fundos/bg-cloud-1x1.png"
+  },
+  {
+    "file": "bg-cloud-4x5.html",
+    "w": 1080,
+    "h": 1350,
+    "out": "05-fundos/bg-cloud-4x5.png"
+  },
+  {
+    "file": "tpl-ig-feed-4x5.html",
+    "w": 1080,
+    "h": 1350,
+    "out": "06-social-templates/template-instagram-feed-4x5.png"
+  },
+  {
+    "file": "tpl-ig-story-9x16.html",
+    "w": 1080,
+    "h": 1920,
+    "out": "06-social-templates/template-instagram-story-9x16.png"
+  },
+  {
+    "file": "tpl-ig-square-1x1.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "06-social-templates/template-instagram-square-1x1.png"
+  },
+  {
+    "file": "tpl-linkedin-1x1.html",
+    "w": 1200,
+    "h": 1200,
+    "out": "06-social-templates/template-linkedin-1x1.png"
+  },
+  {
+    "file": "tpl-youtube-16x9.html",
+    "w": 1280,
+    "h": 720,
+    "out": "06-social-templates/template-youtube-thumb-16x9.png"
+  },
+  {
+    "file": "logo-on-navy.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "01-logos/logo-showcase-navy-1x1.png"
+  },
+  {
+    "file": "logo-on-cloud.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "01-logos/logo-showcase-cloud-1x1.png"
+  },
+  {
+    "file": "simbolo-showcase.html",
+    "w": 1080,
+    "h": 1080,
+    "out": "01-logos/simbolo-showcase-1x1.png"
+  }
+]
