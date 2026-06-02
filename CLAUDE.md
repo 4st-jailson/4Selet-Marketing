@@ -30,10 +30,11 @@ O **Orchestrator** skill coordena todos os agentes via filas de job **BullMQ** b
 
 Cada agente usa uma combinação de **custom skills, knowledge files e APIs** para executar suas tarefas.
 
-> **Estado de implementação (2026-05-26):**
-> **PRONTO ✅** — knowledge files (`knowledge/`), assets de marca (`assets/`), as **6 skills** em `skills/` (5 agentes + orchestrator, com scripts empacotados), o projeto **Remotion** em `src/` (composition `AdVideo`), `package.json` / `tsconfig.json` / `remotion.config.ts`, e dependências instaladas (**Node v24.16.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). Já existem outputs em `outputs/` (dry-run `test_job_payload_1` + `remotion_test_video`).
+> **Estado de implementação (2026-06-02):**
+> **PRONTO ✅** — knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (composition `AdVideo` + `CampanhaDemo`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados.
 > **PENDENTE ⏳** — a pasta `pipeline/` (BullMQ `orchestrator.js` + `worker.js`) e os scripts npm `pipeline:run`; e os **SDKs/chaves externos**: `@tavily/core` + `TAVILY_API_KEY`, `@supabase/supabase-js` + Supabase, `bullmq` + Redis, OAuth YouTube / token Instagram. Enquanto a fila BullMQ não existe, o orchestrator roda em **modo sequencial**; research/hosting/posting rodam **simulados** sem as chaves.
-> Detalhes em **`STATUS_PROJETO.md`**. As seções abaixo são o contrato-alvo; o que ainda não existe está marcado como pendente.
+> **Documentação de referência** (ordem de leitura): 1) `STATUS_PROJETO.md` — estado atual · 2) `GUIA_DE_USO.md` — passo a passo (§23 Workflow) · 3) `SPEC_WORKFLOW_APROVACAO.md` — contrato v1.1 · 4) `skills/<nome>/SKILL.md` — comportamento por agente.
+> ⚠️ **Regra CRITICAL Re-aprovação** ativa nas 4 skills de conteúdo: NÃO editar `outputs/approved/<task>/` diretamente — rework via `node scripts/promote_task.js --to in_review`.
 
 ---
 
