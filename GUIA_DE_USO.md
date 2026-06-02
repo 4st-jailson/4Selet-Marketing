@@ -1278,7 +1278,263 @@ Edite o `GUIA_DE_USO.md` direto no projeto. A versão HTML pode ser regenerada p
 
 ---
 
-> ⚠️ **NOTA DE SINCRONIZAÇÃO (atualizada 2026-06-02 · Parte 2/3):** §13–§17 portadas da v2.7 Desktop. **§18–§22 ainda pendentes** (Próximos passos · Arquivos importantes · Casos de uso comuns · Como criar/adaptar campanha · Integrar API Meta) — aguardando a Parte 3 de 3 do usuário. **§23 abaixo segue ativa e atualizada** (Workflow de Aprovação v1.1).
+## 18. Próximos passos do projeto
+
+Em ordem de prioridade (do `STATUS_PROJETO.md`):
+
+### 1) Criar repositório remoto e configurar `git remote`
+**Por quê:** Git local **já está instalado** (v2.54.0) com hook `post-commit` ativo empurrando em background. Falta apenas o **remoto** para backup fora da VPS — sem isso, falha de disco apaga `history[]`, `content_hashes` e decisões de aprovador.
+**Como:** criar repo **privado** (GitHub/GitLab/Bitbucket), depois `git remote add origin <URL>` + `git push -u origin main`. Passo a passo + fallback cron de 5 min em `GIT_REMOTE_SETUP.md`.
+
+### 2) Configurar `TAVILY_API_KEY`
+**Por quê:** Desliga o modo simulado da pesquisa, libera as 5 buscas web reais (tendências, concorrentes, audiência, hooks, virais).
+**Como:** `npm i @tavily/core`, criar conta na Tavily, gerar API key, setar como variável de ambiente `TAVILY_API_KEY=...` (no `.env` ou no shell).
+
+### 3) Configurar Supabase
+**Por quê:** Desliga o modo simulado do hosting de mídia, gera URLs públicas reais consumíveis pelas APIs do Instagram/YouTube.
+**Como:** `npm i @supabase/supabase-js`, criar projeto no Supabase, criar bucket `campaign-uploads` público, pegar `SUPABASE_URL` e `SUPABASE_KEY` (service role), setar como env vars.
+
+### 4) Construir `pipeline/` (BullMQ + Redis)
+**Por quê:** Execução enfileirada em vez de sequencial — paraleliza ad/vídeo/copy em workers separados, retry automático, agendamento.
+**Como:** `npm i bullmq`, configurar `REDIS_URL` (Upstash funciona bem como serviço gerenciado), criar `pipeline/orchestrator.js` (enqueue) e `pipeline/worker.js` (processamento).
+
+### 5) OAuth YouTube + token Instagram
+**Por quê:** Habilita posting real (sempre **atrás do gate** de aprovação manual).
+**Como:** seguir docs do YouTube Data API (OAuth refresh token) e do Instagram Graph API (token de Business Account). Adicionar credenciais ao distribution-agent.
+
+---
+
+## 19. Arquivos importantes do projeto
+
+| Arquivo | Para que serve |
+|---|---|
+| `CLAUDE.md` | Contexto técnico principal — auto-carregado pela extensão Claude Code |
+| `STATUS_PROJETO.md` | Estado atual (o que está pronto / pendente) |
+| **`GUIA_DE_USO.md`** | **Este documento** — como operar o sistema no dia a dia |
+| **`GUIA_DE_USO.html`** | Versão estilizada do guia (mesma informação, para abrir no browser) |
+| `knowledge/brand_identity.md` | Identidade visual + voz + governance (v1.1) |
+| `knowledge/product_campaign.md` | Taxa Zero, números, 9 diferenciais, 4 conceitos de vídeo (v1.2) |
+| `knowledge/platform_guidelines.md` | Specs e tom por plataforma (v1.1) |
+| `skills/<nome>/SKILL.md` | Definição de cada agente (steps, examples, checklist) |
+| `skills/<nome>/scripts/*.js` | Scripts auxiliares (render, research, upload, orchestrate) |
+| `src/AdVideo.tsx` + `src/scenes/*` | Composition Remotion (vídeo) |
+| `assets/` | Logos oficiais, kit de identidade, vídeos de referência |
+| `tests/TESTES_AGENTES.md` | Pacote de 17 testes (skills + pipeline + guardrails) |
+| `tests/RESULTADOS_TESTES.md` | Resultado da última execução de testes |
+| `SPEC_WORKFLOW_APROVACAO.md` | Spec técnica do Workflow de Aprovação (v1.1 pós-implementação com changelog + issues fechadas/abertas) |
+| `VALIDACAO_E_AJUSTES_WORKFLOW.md` | Relatório da auditoria inicial + prompt de ajustes pra VPS (referência histórica) |
+| `VALIDACAO_FINAL_v1.1.md` | Validação final pós-v1.1+ (3 críticos fechados, B.2 runtime, decisões abertas) |
+| `GIT_REMOTE_SETUP.md` | Passo a passo pra configurar repo remoto + push automatizado + cron de fallback |
+| `Skills dos Agentes Detalhado.md` | Documento-fonte original (escopo) — referência histórica, **não editar** |
+
+---
+
+## 20. Casos de uso comuns (prompts diários)
+
+Esta seção é um **índice por necessidade** — você sabe o que quer fazer, ela mostra qual prompt usar. Para a referência completa **por agente**, ver Seção 12.
+
+### 🟢 "Quero fazer UM post de Instagram (feed)"
+**Receita:** ad estático + caption.
+1. Crie o ad: Seção 12.2 (formato 1080×1080 quadrado, ou 1080×1350 para 4:5).
+2. Escreva a caption: Seção 12.4 (plataforma `instagram`).
+
+### 🟢 "Quero fazer UM Story"
+**Receita:** ad estático no formato story.
+- Seção 12.2 com tamanho **1080×1920** (`instagram_story`). Cuide pra texto ficar na **zona segura central** (~60% do meio — em torno do logo do perfil em cima e da barra de "Enviar mensagem" embaixo).
+- Stories geralmente não levam caption longa — coloque a copy-chave no próprio visual.
+
+### 🟢 "Quero fazer UM Reels (vídeo curto)"
+**Receita:** roteiro + render.
+1. Gere o scene JSON: Seção 12.3 (plataforma `instagram_reels`).
+2. Renderize o `.mp4`: Seção 12.3 (prompt do render).
+3. Opcional: caption pro Reels via Seção 12.4.
+
+### 🟡 "Quero um carrossel pro Instagram"
+**⚠️ Limitação conhecida:** o `ad-creative-designer` gera **UMA imagem por vez**. Carrossel é uma **sequência**. Workflow:
+
+1. Defina **quantos slides** (3 a 5 é o ideal) e o **arco narrativo**:
+   - Slide 1: hook (número-âncora ou pergunta)
+   - Slides 2 a N−1: desenvolvimento
+   - Slide N: CTA
+2. Rode Seção 12.2 **uma vez para cada slide**, mantendo o `task_name` e variando o conteúdo:
+   ```
+   Crie ad slide 1 da Taxa Zero, layout product_focus, 1080×1080,
+   hook "0% de taxa". task_name: carrossel_junho, task_date: 2026-06-15.
+   Salve como outputs/carrossel_junho_2026-06-15/ads/slide_1.png.
+   ```
+   ```
+   Crie ad slide 2 da Taxa Zero, layout product_focus, 1080×1080,
+   "Por 3 meses ou até R$ 300 mil em vendas". task_name: carrossel_junho...
+   Salve como slide_2.png. MESMO layout e MESMA paleta do slide 1 (coerência visual).
+   ```
+3. Escreva a caption do carrossel via Seção 12.4.
+4. **No Instagram, faça upload manual dos N PNGs** na ordem. (Não há automação de carrossel hoje — Meta API permite, mas não está implementado — ver Seção 22.)
+
+### 🟢 "Quero uma thumbnail de YouTube"
+**Receita:** ad estático no formato 16:9.
+- Seção 12.2 com tamanho **1280×720**. Headline com até **6 palavras**, alto contraste Navy/Darker, foco em UM número-âncora.
+
+### 🟢 "Quero adaptar um post de feed para Story"
+**Mesma campanha, formato diferente:**
+```
+Para a task <nome_existente> (já criada), gere uma versão Story (1080×1920) do ad.
+Mantenha o mesmo selected_campaign_angle e o mesmo headline. Reposicione o texto
+na zona segura central. Salve em outputs/<nome>/ads/story.png.
+```
+
+### 🟢 "Quero várias variações do mesmo ad pra testar A/B"
+```
+Crie 3 variações do ad da Taxa Zero (1080×1080, product_focus), cada uma com um
+ângulo diferente: (1) Migração sem trauma, (2) 95% de aprovação no cartão,
+(3) 0% por 3 meses pra medir a diferença. task_name: teste_ab_junho,
+task_date: 2026-06-15. Salve como variacao_1.png, variacao_2.png, variacao_3.png
+em outputs/teste_ab_junho_2026-06-15/ads/.
+```
+
+### 🟢 "Quero o conjunto de uma semana inteira (cronograma)"
+Use o pipeline completo (Seção 12.6) **e depois** peça as adaptações por dia da semana:
+1. Rode a pipeline (research + ad + vídeo + copy + Publish MD).
+2. A partir da pasta gerada, peça versões adicionais (story do ad, thumbnail, carrossel) reaproveitando o `selected_campaign_angle`.
+3. O Publish MD vai trazer o **sequenciamento sugerido** (Seg LinkedIn → Ter IG Feed → Qua YouTube → Qui Reels+Threads → Sex Story).
+
+### 🟢 "Quero auditar um conteúdo antes de publicar"
+**Seção 12.9 (Auditoria de marca).** Envie o caminho do arquivo, o sistema aponta o que está off-brand (cores, fontes, números, CTAs, concorrentes citados, hype).
+
+### 🟢 "Quero a campanha COMPLETA (tudo de uma vez)"
+**Seção 12.6 (Pipeline completo).** Um payload, todos os agentes rodam em ordem. Saída em `outputs/<task>_<data>/` com tudo organizado.
+
+> **Dúvida frequente:** "qual agente eu uso para X?" Se não souber, use o **prompt em linguagem natural** descrevendo o resultado que quer ("uma imagem pro Instagram", "um vídeo de 15s") — o Claude detecta o agente certo pela trigger phrase. Se acertar a skill errada, mencione-a pelo nome: *"Use a skill `<nome>`..."*.
+
+---
+
+## 21. Como criar / adaptar uma campanha
+
+A 4Selet hoje tem **Taxa Zero** como campanha principal. Mas você vai precisar de variações eventualmente. Três níveis — escolha o que cabe no seu caso:
+
+### Nível 1 — Mesmo guarda-chuva, ângulo diferente (TRIVIAL)
+*Exemplo: dentro de Taxa Zero, focar em "95% de aprovação" em vez de "0% por 3 meses".*
+
+**Como fazer:** **só trocar o `<angulo>` no prompt.** O agente já tem todos os fatos da Taxa Zero no `product_campaign.md` — você só escolhe a ênfase.
+
+```
+Crie um ad estático 1080×1080 da Taxa Zero, layout product_focus,
+ancorado no ângulo "95% de aprovação no cartão = mais receita líquida".
+task_name: campanha_aprovacao, task_date: 2026-06-15.
+```
+
+⏱️ Tempo: instantâneo. **Nada técnico precisa mudar.**
+
+### Nível 2 — Sub-campanha NOVA da 4Selet (MÉDIO)
+*Exemplo: lançar "Indique e Ganhe", "Aniversário Selet", "Black Friday Selet".*
+
+**Duas opções, dependendo se é pontual ou recorrente:**
+
+**🅐 Opção A — Pontual (uma vez só):** descreva a campanha no próprio prompt, com **mais contexto** que o normal. O agente trabalha em cima do `brand_identity.md` geral e adapta:
+```
+Crie um ad estático 1080×1080 para a campanha "Indique e Ganhe" da 4Selet.
+Mecânica: produtor estabelecido que indica outro produtor estabelecido ganha
+30 dias adicionais de Taxa Zero. Use o tom sóbrio da marca, paleta oficial,
+CTA "Indicar agora". task_name: indique_e_ganhe, task_date: 2026-06-15.
+```
+
+⏱️ Tempo: minutos. **Nada permanente muda.**
+
+**🅑 Opção B — Permanente (várias peças ao longo do tempo):** peça pra **atualizar o `product_campaign.md`** adicionando uma seção sobre a nova campanha. A partir daí, ela faz parte do knowledge base e o sistema usa naturalmente:
+```
+Adicione ao knowledge/product_campaign.md uma nova seção (após a Taxa Zero)
+descrevendo a campanha "Indique e Ganhe": mecânica, números, headlines aprovadas,
+conceitos de vídeo, CTAs. Mantenha o tom e a estrutura das outras seções.
+```
+
+Depois disso, **qualquer prompt** ("crie um ad da Indique e Ganhe...") aciona os fatos corretos automaticamente — sem precisar repetir contexto.
+
+⏱️ Tempo: ~15-30 min (uma edição do knowledge file + revisão).
+
+### Nível 3 — Marca diferente (GRANDE)
+*Exemplo: usar o sistema pra produzir conteúdo de outra empresa.*
+
+**Não é o caso de uso esperado.** Os knowledge files são totalmente 4Selet-specific — paleta, voz, números, frases-tag, lista de concorrentes proibidos.
+
+**Tecnicamente possível** reescrever os 3 arquivos `knowledge/*.md` pra outra marca, mas isso é **um projeto à parte** — clone a estrutura num diretório novo, refaça `brand_identity` / `product_campaign` / `platform_guidelines`, ajuste os exemplos nos `SKILL.md`.
+
+⏱️ Tempo: dias/semana. **Trabalho real de adaptação.**
+
+> **Resumo prático:** Nível 1 e 2 cobrem 99% dos casos. Nível 3 é refazer o projeto pra outra marca — discuta com o time antes.
+
+---
+
+## 22. Integrar a API da Meta para postagens automatizadas
+
+### ⚠️ Antes de mais nada — duas verdades importantes
+
+**Verdade 1:** o sistema foi desenhado pra **PROTEGER você** de postar sem revisão. O **gate** do `distribution-agent` **continua existindo** mesmo com a API da Meta configurada. Você ainda precisa dizer *"publica usando Publish X.md"* pra cada peça. Isso é proteção contra erros caros (texto errado, número errado, momento errado).
+
+**Verdade 2:** "**postar sem fazer mais nada**" — automação 100%, sem revisão humana — **NÃO é recomendado**. Já vimos marcas postando conteúdo errado de bot sem ninguém olhar. Pra a 4Selet, que tem voz sóbria e regras estritas de marca, é alto risco de **queimar reputação por economizar 30 segundos**.
+
+### O que muda com a API configurada (caminho recomendado)
+
+| Hoje (sem API) | Com Meta API |
+|---|---|
+| Gera a campanha → revisa Publish MD → **copia caption à mão, faz upload da imagem no app, posta** | Gera a campanha → revisa Publish MD → **"publica usando Publish X.md"** → sistema posta automaticamente |
+
+**O que economiza:** o trabalho **manual** de upload + cópia.
+**O que NÃO economiza:** a **revisão**. E é assim por design.
+
+### O fluxo do usuário, comparado
+
+**Hoje** (gate fechado, sem API):
+1. Rodar pipeline ou peça única
+2. Revisar o Publish MD
+3. **Copiar a caption no Instagram à mão**
+4. **Fazer upload do PNG no Instagram à mão**
+5. **Publicar manualmente**
+
+**Com Meta API + Supabase configurados** (gate fechado, posting automatizado):
+1. Rodar pipeline ou peça única
+2. Revisar o Publish MD
+3. *"Publica usando Publish taxa_zero_maio 2026-05-29.md"*
+4. **Sistema posta automaticamente** e devolve `post_id` + URL pública
+
+Passos 1, 2 e 3 continuam exigindo você. O passo 4 substitui upload manual.
+
+### O que precisa ser configurado (trabalho de dev/admin, não do usuário)
+
+**Do lado da Meta:**
+- Conta **Facebook Business** ativa.
+- **Página do Facebook** conectada à conta **Instagram Business** (Instagram pessoal **não** funciona).
+- App no **Facebook Developers** com as permissões: `instagram_basic`, `instagram_content_publish`, `pages_read_engagement`, `pages_manage_posts`.
+- App pode precisar passar por **App Review** da Meta — pode levar dias ou semanas, dependendo do tipo de uso e da documentação enviada.
+- **Long-lived access token** (`IG_ACCESS_TOKEN`).
+- ID da conta business (`IG_BUSINESS_ACCOUNT_ID`).
+
+**Do lado do projeto 4Selet:**
+- Configurar **Supabase** (ou outro hosting) — Instagram **exige URLs públicas** pra publicar a partir de mídia externa.
+- Setar variáveis de ambiente: `IG_ACCESS_TOKEN`, `IG_BUSINESS_ACCOUNT_ID`.
+- Implementar as chamadas Graph API no `distribution-agent` (já existe um esqueleto no `SKILL.md` descrevendo o alvo — falta o código real).
+
+**YouTube** segue padrão similar mas com **OAuth 2.0** (mais complicado de obter, porque exige tela de consentimento do Google e armazenamento seguro do refresh token).
+
+### Plataformas e limites
+
+| Plataforma | API | Limite/dia | Status do projeto |
+|---|---|---|---|
+| Instagram (Feed + Reels) | Graph API | ~25 posts | Implementável (gate + Supabase necessários) |
+| YouTube (Shorts + Long-form) | Data API v3 | ~6 uploads | Implementável (OAuth necessário) |
+| Threads / X | — | — | **Sem API pública estável** → continua post manual |
+| LinkedIn | — | — | **Sem API pública estável** pra orgânico → continua post manual |
+
+### Se quiser desabilitar o gate (autopublicação 100%)
+
+**Tecnicamente possível, mas:** você assume o risco de publicar conteúdo errado **sem nenhuma revisão humana**. Pra desabilitar, modificaria-se o `distribution-agent` removendo a checagem do gate.
+
+**Recomendação:** **NÃO faça.** O ganho de "uma frase a menos" não compensa o risco de queimar a marca com um post errado. Se for absolutamente necessário (ex.: uma automação noturna agendada), implemente um **gate condicional** (só auto-posta se o conteúdo passou no Brand Governance checklist **sem nenhum aviso**). Mas isso é design fino — vale discutir com o time antes.
+
+### Resumo executivo
+
+- ✅ **Pode automatizar o upload e a chamada de API** (esse é o ganho real, e é seguro).
+- ❌ **Não recomendamos automatizar a APROVAÇÃO** (perde-se a revisão humana — a marca paga o preço se sair errado).
+- 🔧 **É trabalho de dev/admin**, não de usuário. Discuta com o time técnico antes de iniciar.
+- 📅 **Pré-requisito:** Supabase configurado (sem isso, não dá pra postar via API).
 
 ---
 
