@@ -1,8 +1,0 @@
-{
-  "task_name": "teste_skip_assets",
-  "task_date": "2026-05-29",
-  "platform_targets": ["instagram", "youtube"],
-  "user_flags": { "skip_research": true, "skip_image": false, "skip_video": false },
-  "source_folder": "assets/teste_skip_assets",
-  "dry_run": true
-}
