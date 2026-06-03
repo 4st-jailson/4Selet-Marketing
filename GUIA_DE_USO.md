@@ -1320,12 +1320,14 @@ Em ordem de prioridade (do `STATUS_PROJETO.md`):
 | `src/AdVideo.tsx` + `src/scenes/*` | Composition Remotion (vídeo) |
 | `assets/` | Logos oficiais, kit de identidade, vídeos de referência |
 | `tests/TESTES_AGENTES.md` | Pacote de 17 testes (skills + pipeline + guardrails) |
-| `tests/RESULTADOS_TESTES.md` | Resultado da última execução de testes |
 | `SPEC_WORKFLOW_APROVACAO.md` | Spec técnica do Workflow de Aprovação (v1.1 pós-implementação com changelog + issues fechadas/abertas) |
 | `VALIDACAO_E_AJUSTES_WORKFLOW.md` | Relatório da auditoria inicial + prompt de ajustes pra VPS (referência histórica) |
 | `VALIDACAO_FINAL_v1.1.md` | Validação final pós-v1.1+ (3 críticos fechados, B.2 runtime, decisões abertas) |
 | `GIT_REMOTE_SETUP.md` | Passo a passo pra configurar repo remoto + push automatizado + cron de fallback |
 | `Skills dos Agentes Detalhado.md` | Documento-fonte original (escopo) — referência histórica, **não editar** |
+
+<!-- RESULTADOS_TESTES.md será re-adicionado à §19 quando os 17 testes
+     do tests/TESTES_AGENTES.md forem executados e o relatório gerado. -->
 
 ---
 
