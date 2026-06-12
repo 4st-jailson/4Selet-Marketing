@@ -30,9 +30,10 @@ O **Orchestrator** skill coordena todos os agentes via filas de job **BullMQ** b
 
 Cada agente usa uma combinação de **custom skills, knowledge files e APIs** para executar suas tarefas.
 
-> **Estado de implementação (2026-06-02):**
-> **PRONTO ✅** — knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (composition `AdVideo` + `CampanhaDemo`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados.
-> **PENDENTE ⏳** — a pasta `pipeline/` (BullMQ `orchestrator.js` + `worker.js`) e os scripts npm `pipeline:run`; e os **SDKs/chaves externos**: `@tavily/core` + `TAVILY_API_KEY`, `@supabase/supabase-js` + Supabase, `bullmq` + Redis, OAuth YouTube / token Instagram. Enquanto a fila BullMQ não existe, o orchestrator roda em **modo sequencial**; research/hosting/posting rodam **simulados** sem as chaves.
+> **Estado de implementação (2026-06-12):**
+> **Interface principal:** o **Painel web** em `interface/` (`npm start` → `http://localhost:4500`) é o **caminho principal** de operação — gerência de campanhas, geração de conteúdo com IA e workflow de aprovação visual. A **extensão Claude Code no VSCode** é o caminho **secundário/avançado** (chat direto com os agentes, pipeline e scripts). Ver `GUIA_DE_USO.md` (Seções 4 e 8) e `interface/README.md`.
+> **PRONTO ✅** — **Painel web** (`interface/`: Express + SPA, geração/refino/aprovação, governança de marca); **pipeline executável** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`, sequencial + BullMQ, entregue commit e787dc7); knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (composition `AdVideo` + `CampanhaDemo`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados.
+> **PENDENTE ⏳** — chaves/contas externas: **chave Anthropic no painel** (`interface/.env`; sem ela a geração roda simulada), `@tavily/core` + `TAVILY_API_KEY`, `@supabase/supabase-js` + Supabase, **`REDIS_URL`** para ativar a fila BullMQ (a pasta `pipeline/` já existe; sem Redis roda **sequencial**), OAuth YouTube / token Instagram. Sem essas chaves, research/hosting/posting rodam **simulados**.
 > **Documentação de referência** (ordem de leitura): 1) `STATUS_PROJETO.md` — estado atual · 2) `GUIA_DE_USO.md` — passo a passo (§23 Workflow) · 3) `SPEC_WORKFLOW_APROVACAO.md` — contrato v1.1 · 4) `skills/<nome>/SKILL.md` — comportamento por agente.
 > ⚠️ **Regra CRITICAL Re-aprovação** ativa nas 4 skills de conteúdo: NÃO editar `outputs/approved/<task>/` diretamente — rework via `node scripts/promote_task.js --to in_review`.
 
@@ -60,7 +61,7 @@ npm run pipeline:run:payload '<json>'    # rodar com JSON payload inline
 node pipeline/worker.js                  # iniciar o BullMQ worker (terminal separado)
 ```
 
-> ⏳ **Pendente:** `pipeline/orchestrator.js`, `pipeline/worker.js` e os scripts `pipeline:run` ainda não existem. Hoje o orchestrator **valida o payload e monta o plano** via `node skills/orchestrator/scripts/orchestrate.js --file <payload.json>` e os agentes rodam em **modo sequencial** (sem fila). Os comandos acima são o alvo com BullMQ + Redis.
+> ✅ **Entregue (commit e787dc7):** a pasta `pipeline/` (`orchestrator.js` + `worker.js` + `agents.js`) já existe e é executável. Por padrão roda em **modo sequencial**; ao definir `REDIS_URL`, usa a **fila BullMQ** assíncrona. O caminho histórico `node skills/orchestrator/scripts/orchestrate.js --file <payload.json>` (valida payload + monta plano) continua disponível. ⏳ **Pendente:** apenas a chave `REDIS_URL` para a fila e os scripts npm `pipeline:run` no `package.json`, se ainda não estiverem mapeados.
 
 ### Skip Flags
 
@@ -416,10 +417,10 @@ outputs/<task_name>_<date>/
 | Node.js + npm | Runtime / registry | ✅ Instalado (v24.16.0) |
 | Remotion + React | Rendering de video ads (React + SVG) | ✅ Instalado (4.0.469 / React 19) |
 | Playwright (`chromium`) | Rendering HTML-to-PNG de ads | ✅ Instalado |
-| BullMQ + Upstash Redis | Job queuing e worker orchestration | ⏳ Pendente (`pipeline/` + Redis) |
+| BullMQ + Upstash Redis | Job queuing e worker orchestration | ✅ `pipeline/` entregue · ⏳ falta `REDIS_URL` (roda sequencial sem ele) |
 | Tavily AI SDK (`@tavily/core`) | Pesquisa de mercado via scripts Node.js | ⏳ Pendente (SDK + `TAVILY_API_KEY`) |
 | Supabase (`@supabase/supabase-js`) | Hosting de mídia e geração de public URLs | ⏳ Pendente (SDK + chaves) |
 | Instagram Graph API | Publicação no Instagram | ⏳ Pendente (token; gated) |
 | YouTube Data API | Publicação no YouTube (requer OAuth) | ⏳ Pendente (OAuth; gated) |
 
-> **Status do stack (2026-05-26):** `package.json`, `skills/` (6 skills), `src/` (Remotion) e as deps **Remotion + React** e **Playwright + Chromium** já estão criados/instalados. Falta a pasta `pipeline/` (BullMQ + worker) e os SDKs/chaves externos (`bullmq` + Redis, `@tavily/core`, `@supabase/supabase-js`, OAuth/token). Sem eles, research/hosting/posting rodam em **modo simulado** e o orchestrator roda **sequencial**. Fonte de verdade do progresso: `STATUS_PROJETO.md`.
+> **Status do stack (2026-06-12):** o **painel web** (`interface/`), a pasta **`pipeline/`** (BullMQ + worker), `package.json`, `skills/` (7 skills), `src/` (Remotion) e as deps **Remotion + React** e **Playwright + Chromium** já estão criados/instalados. Faltam apenas **chaves/contas externas**: chave Anthropic no painel, `REDIS_URL` (ativa a fila; sem ele roda sequencial), `@tavily/core` + `TAVILY_API_KEY`, `@supabase/supabase-js` + Supabase, OAuth/token IG+YouTube. Sem elas, research/hosting/posting rodam em **modo simulado**. Fonte de verdade do progresso: `STATUS_PROJETO.md`.

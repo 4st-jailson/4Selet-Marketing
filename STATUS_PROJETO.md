@@ -1,8 +1,8 @@
 # Status do Projeto — Sistema de Marketing com IA (4Selet)
 
-*Atualizado em 2026-06-02 · Marca: 4Selet · Pipeline de 5 agentes + Orchestrator + task-promoter (7 skills) + Workflow de Aprovação Níveis 1/2*
+*Atualizado em 2026-06-12 · Marca: 4Selet · Painel web (interface principal) + Pipeline executável + 7 skills + Workflow de Aprovação Níveis 1/2*
 
-> **Resumo:** O sistema de skills está **funcionalmente completo** (7 skills) e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.0)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). Pesquisa, hosting de mídia e publicação rodam em **modo simulado** porque as chaves externas (Tavily, Supabase, OAuth) ainda não foram configuradas. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados.
+> **Resumo:** O **Painel web** (`interface/`, `http://localhost:4500`) é a **interface principal** de operação — campanhas, geração de conteúdo com IA, refino e workflow de aprovação visual; a extensão Claude Code no VSCode é o caminho **secundário/avançado**. O sistema de skills está **funcionalmente completo** (7 skills); o **pipeline executável** (`pipeline/`, sequencial + BullMQ) foi **entregue** (commit e787dc7); e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.0)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). A geração do painel exige a **chave Anthropic** configurada; pesquisa, hosting de mídia e publicação rodam em **modo simulado** porque as chaves externas (Tavily, Supabase, Redis, OAuth) ainda não foram configuradas. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados.
 
 ---
 
@@ -10,14 +10,17 @@
 
 | Item | Status |
 |---|---|
+| **Painel web (`interface/`)** | ✅ **Pronto — interface principal** (`npm start` → `http://localhost:4500`) |
 | Node.js | ✅ Instalado (v24.16.0) + npm 11.13.0 |
 | **git** | ✅ **Instalado (v2.54.0.windows.1)** — repo init, outputs/approved + archive versionados |
 | Remotion + React | ✅ Instalado (remotion 4.0.469, React 19.2.6) |
 | Playwright + Chromium | ✅ Instalado (HTML→PNG funcional) |
 | `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore` | ✅ Presentes |
+| **`pipeline/` (orchestrator + worker + agents)** | ✅ **Entregue** (sequencial + BullMQ, commit e787dc7) |
+| **Chave Anthropic (painel)** | ⚠️ Configurar em *Configurações* (`interface/.env`) — sem ela, geração simulada |
 | Tavily (`@tavily/core`) | ⏳ Não instalado / sem `TAVILY_API_KEY` |
 | Supabase (`@supabase/supabase-js`) | ⏳ Não instalado / sem `SUPABASE_URL`+`KEY` |
-| BullMQ + Redis | ⏳ Não instalado / sem `REDIS_URL` |
+| BullMQ + Redis | ✅ `pipeline/` pronto · ⏳ falta `REDIS_URL` (roda sequencial sem ele) |
 | OAuth YouTube / token Instagram | ⏳ Não configurado |
 
 ---
@@ -77,13 +80,28 @@ Implementado em 2026-06-02. Máquina de estados explícita `draft → in_review 
 - **Felizes (10):** bootstrap, status inicial, preview gerado, status promovido, aprovação com `--by`, movimentação para `approved/`, INDEX atualizado, rework para `in_review`, INDEX limpo, arquivamento com `reason`.
 - **Adversariais (7):** todos com exit code + mensagem stderr corretos.
 
+### 2.6 Painel web (`interface/`) — interface principal
+
+Aplicação web local (Express + SPA vanilla, tema 4Selet) que é o **caminho principal** de operação. Reutiliza os `knowledge/` files, os `scripts/` oficiais e `outputs/` como fonte única de verdade.
+
+- **Campanhas** (CRUD em `campaigns/*.json`), **Criar Conteúdo** (geração + refino com IA via Claude, prompt padrão montado no back), **Conteúdo/Aprovados** (biblioteca + workflow visual: preview → aprovar/rejeitar → versiona em `outputs/approved/`).
+- **Governança de marca** roda no back (`lib/validation.js`) **antes** de gravar — bloqueia (422) concorrentes/emojis de hype, avisa sobre hashtags/tamanho/CTAs.
+- Render real de **PNG** (Playwright) e **MP4** (Remotion parametrizado) disparável pela peça.
+- Chave Anthropic em `interface/.env` (fora do git). Sem chave → modo simulado rotulado.
+- Interface **refeita do zero** (design system editorial 4Selet, tema claro/escuro), validada no navegador, commit `0f05312`.
+
+### 2.7 Pipeline executável (`pipeline/`)
+
+Entregue (commit e787dc7): `orchestrator.js` (enqueue/plano), `worker.js` (processamento) e `agents.js`. Roda **sequencial por padrão**; com `REDIS_URL` ativa a **fila BullMQ** assíncrona.
+
 ---
 
 ## 3. Pendente / Level-up
 
 | # | Pendência | Impacto | Como resolver |
 |---|---|---|---|
-| 1 | **`pipeline/` (BullMQ + worker) não existe** | Orquestração sequencial; `pipeline_plan.json` já lista `preview_generator` como job sintético, falta o worker | `npm i bullmq` + `REDIS_URL` + criar `pipeline/orchestrator.js` e `worker.js` + scripts `pipeline:run` |
+| 0 | **Chave Anthropic no painel** | Geração do painel roda **simulada** sem ela | Painel → *Configurações* → colar `sk-ant-...` → salvar (grava em `interface/.env`) |
+| 1 | **`REDIS_URL` para a fila BullMQ** | A `pipeline/` **já existe** (entregue) mas roda **sequencial** sem Redis | Provisionar Redis (Upstash) + setar `REDIS_URL` + `npm run pipeline:run` |
 | 2 | **`TAVILY_API_KEY` ausente** | Research é simulado | `npm i @tavily/core` + setar a chave |
 | 3 | **Supabase não configurado** | Mídia não é hospedada (URLs placeholder) | `npm i @supabase/supabase-js` + `SUPABASE_URL`/`KEY` |
 | 4 | **OAuth YouTube / token Instagram** | Publicação real impossível | Configurar `YOUTUBE_REFRESH_TOKEN` + IG Graph token |
@@ -159,8 +177,9 @@ node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
 
 ## 6. Próximos passos recomendados
 
-1. **Construir `pipeline/` (BullMQ + worker)** — o `preview_generator` já está no `pipeline_plan.json` como job sintético; falta o worker que executa.
-2. **Configurar chaves externas** para sair do modo simulado: Tavily → Supabase → OAuth YouTube + IG.
-3. **Validar caminhos reais** (busca Tavily, upload Supabase) com tasks de teste rotuladas.
-4. **Lock multi-usuário** em `status.json` se evoluir para multi-operador.
-5. **Estado `published`** para registrar publicação efetiva (Nível 3 quando entrar webapp).
+1. **Configurar a chave Anthropic no painel** (*Configurações*) — liga a geração real; é o passo mais imediato para o uso diário.
+2. **Ativar a fila BullMQ** — `pipeline/` já está pronto; basta provisionar `REDIS_URL` para sair do modo sequencial.
+3. **Configurar demais chaves externas** para sair do modo simulado: Tavily → Supabase → OAuth YouTube + IG.
+4. **Validar caminhos reais** (busca Tavily, upload Supabase) com tasks de teste rotuladas.
+5. **Lock multi-usuário** em `status.json` se evoluir para multi-operador.
+6. **Estado `published`** para registrar publicação efetiva (Nível 3 — já há webapp/painel).

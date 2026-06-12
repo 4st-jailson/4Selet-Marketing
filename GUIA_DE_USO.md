@@ -2,8 +2,16 @@
 
 *Manual operacional do sistema de 6 agentes de marketing com IA.*
 
-> **Versão 2.7** · Junho/2026 · Marca: 4Selet · Campanha ativa: Taxa Zero
-> Mantido por: Marketing 4Selet · Documentos-irmãos: `CLAUDE.md` (contexto técnico), `STATUS_PROJETO.md` (estado atual), `SPEC_WORKFLOW_APROVACAO.md` (contrato técnico do Workflow), `GIT_REMOTE_SETUP.md` (backup remoto)
+> **Versão 3.0** · Junho/2026 · Marca: 4Selet · Campanha ativa: Taxa Zero
+> Mantido por: Marketing 4Selet · Documentos-irmãos: `CLAUDE.md` (contexto técnico), `STATUS_PROJETO.md` (estado atual), `SPEC_WORKFLOW_APROVACAO.md` (contrato técnico do Workflow), `GIT_REMOTE_SETUP.md` (backup remoto), `interface/README.md` (painel web)
+
+> ### 🆕 Como usar o sistema — leia isto primeiro
+> Existem **dois caminhos** para criar conteúdo. Use o primeiro no dia a dia.
+>
+> 1. **🟢 Painel web (PRINCIPAL)** — uma interface visual em `http://localhost:4500`. Você gerencia campanhas, gera conteúdo com IA, revê o preview e aprova **com cliques**, sem digitar prompt nenhum. É o caminho recomendado para todo mundo do time. Quickstart na **Seção 4**; setup na **Seção 8.1**.
+> 2. **⚙️ Extensão Claude Code no VSCode (SECUNDÁRIO / avançado)** — conversar direto com os agentes via chat, rodar a pipeline completa, scripts e automações finas. Para quem precisa de controle total ou de recursos que ainda não estão no painel. Setup na **Seção 8.2**.
+>
+> As Seções 5, 6, 9–17 e 20–23 valem para **os dois caminhos** — descrevem os mesmos agentes, regras de marca e workflow de aprovação por baixo.
 
 ---
 
@@ -12,11 +20,11 @@
 1. [Bem-vindo(a) — como ler este guia](#1-bem-vindoa--como-ler-este-guia)
 2. [Glossário rápido](#2-glossário-rápido)
 3. [Objetivo do projeto](#3-objetivo-do-projeto)
-4. [Quickstart — sua primeira peça em 5 minutos](#4-quickstart--sua-primeira-peça-em-5-minutos)
+4. [Quickstart — sua primeira peça em 5 minutos (no Painel)](#4-quickstart--sua-primeira-peça-em-5-minutos)
 5. [Os 6 agentes em detalhe](#5-os-6-agentes-em-detalhe)
 6. [Como os agentes conversam (o "contrato")](#6-como-os-agentes-conversam-o-contrato)
 7. [Estado atual do sistema](#7-estado-atual-do-sistema)
-8. [Setup no VSCode + extensão Claude Code](#8-setup-no-vscode--extensão-claude-code)
+8. [Setup — Painel web (principal) e extensão VSCode (secundário)](#8-setup--painel-web-principal-e-extensão-vscode-secundário)
 9. [Como funciona uma sessão na prática](#9-como-funciona-uma-sessão-na-prática)
 10. [Fluxos de uso (cenários reais)](#10-fluxos-de-uso-cenários-reais)
 11. [Anatomia de um bom prompt](#11-anatomia-de-um-bom-prompt)
@@ -58,12 +66,16 @@ Você pode usá-lo de duas formas:
 
 ### O que você precisa para usar
 
+**Para o caminho principal (Painel web):**
 - **Acesso remoto à VPS** (RDP) com as credenciais corretas — o projeto roda **na VPS**, não no seu computador local.
-- Dentro da sessão da VPS: **VSCode** com a **extensão Claude Code** instalada e autenticada (já configurado).
-- O projeto aberto na VPS em: `C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes`.
-- Disposição para **revisar** o que o sistema entrega antes de publicar.
+- O **painel rodando** na VPS (`npm start` na pasta `interface/`) e aberto em `http://localhost:4500` no navegador da sessão. Setup na **Seção 8.1**.
+- A **chave Anthropic** configurada uma única vez em **Configurações** do painel (para a IA gerar de verdade; sem ela, roda em modo simulado).
+- Disposição para **revisar** o que o sistema entrega antes de aprovar/publicar.
 
-> Você **não precisa** programar para usar. Não precisa saber Node, React, Remotion nem nada técnico. Tudo o que você faz é **escrever em português no chat do Claude**. As partes técnicas estão por baixo, automatizadas.
+**Para o caminho secundário (extensão no VSCode):**
+- Tudo o acima, mais o **VSCode** com a **extensão Claude Code** instalada e autenticada (já configurado na VPS), com o projeto aberto em `C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes`. Setup na **Seção 8.2**.
+
+> Você **não precisa** programar para usar. Não precisa saber Node, React, Remotion nem nada técnico. No painel, você só **clica e preenche campos em português**; na extensão, você **escreve em português no chat do Claude**. As partes técnicas estão por baixo, automatizadas.
 
 ---
 
@@ -150,47 +162,54 @@ A **diferença** aqui é que esses 6 papéis são **interpretados pelo Claude** 
 
 ---
 
-## 4. Quickstart — sua primeira peça em 5 minutos
+## 4. Quickstart — sua primeira peça em 5 minutos (no Painel)
 
-Antes de mergulhar no resto, **rode uma peça** para sentir como funciona.
+Antes de mergulhar no resto, **crie uma peça** para sentir como funciona. Este quickstart usa o **Painel web** — o caminho principal, só com cliques. (Quem prefere o caminho avançado por chat, veja o box "Alternativa" no fim desta seção.)
 
-### Passo 1 — Conecte-se à VPS via RDP, depois abra o projeto
+### Passo 1 — Conecte-se à VPS e abra o painel
 
-Antes de tudo, **conecte-se à VPS** (detalhes completos na seção 8):
+1. **Conecte-se à VPS via RDP** (detalhes na Seção 8.1): `Win + R` → `mstsc` → IP da VPS → login `administrator` + senha (do seu gerenciador).
+2. Dentro da sessão da VPS, confirme que o **painel está rodando**. Se não estiver, abra o terminal e rode (uma vez por sessão de servidor):
+   ```bash
+   cd "C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes\interface"
+   npm start
+   ```
+3. Abra o navegador em **`http://localhost:4500`**.
 
-1. Abra a Conexão de Área de Trabalho Remota (`Win + R` → digite `mstsc` → Enter).
-2. Em **Computador**, digite o IP da VPS.
-3. Faça login com o usuário (`administrator`) e a senha (do seu gerenciador de senhas).
+### Passo 2 — Configure a IA (só na 1ª vez)
 
-Dentro da sessão da VPS, abra o VSCode → `File → Open Folder` → selecione:
-`C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes`
+No menu lateral → **Configurações** → cole sua **chave Anthropic** (`sk-ant-...`) → *Salvar chave* → *Testar conexão*. O selo na lateral deve virar **"IA conectada"**.
 
-### Passo 2 — Abra o painel da extensão Claude Code
+> Sem chave, o painel funciona em **modo simulado** (conteúdo rotulado `SIMULADO`) — dá pra conhecer o fluxo, mas o texto não é real.
 
-Sidebar ou atalho do seu setup (geralmente um ícone "Claude" na barra lateral do VSCode).
+### Passo 3 — Crie o conteúdo
 
-### Passo 3 — Cole este prompt no chat
+1. Vá em **Criar Conteúdo** no menu.
+2. Escolha o **tipo** (ex.: *Threads/X* ou *LinkedIn* para começar com texto puro).
+3. Preencha o **Título** (ex.: "Taxa Zero — primeiro teste") e o **Tema/objetivo** (ex.: *"0% por 3 meses para o produtor medir a diferença"*).
+4. Deixe **instagram** marcado em Plataformas (ou ajuste).
+5. Clique em **Gerar com IA**.
 
-```
-Escreva uma caption de Instagram da Taxa Zero, ângulo "0% por 3 meses
-para o produtor medir a diferença". task_name: teste_rapido,
-task_date: 2026-06-01. Salve em outputs/teste_rapido_2026-06-01/copy/.
-```
+### Passo 4 — Revise e salve
 
-### Passo 4 — Aprove as permissões
+- O resultado aparece no painel **Resultado**, com um **checklist de marca** (governança) ao lado.
+- Não gostou de algo? Use o campo de **refino** ("ajuste o CTA", "deixe mais curto") e gere de novo.
+- Satisfeito? Clique em **Salvar** — a peça é criada em `outputs/<titulo>_<data>/` e entra na biblioteca.
 
-O Claude vai pedir permissão pra:
-- Ler os knowledge files (`brand_identity.md`, etc.)
-- Escrever o arquivo `instagram_caption.txt`
+### Passo 5 — Aprove (workflow)
 
-**Aceite cada uma**. Você verá no painel cada ação antes de ser executada.
-
-### Passo 5 — Abra o resultado
-
-Navegue até `outputs/teste_rapido_2026-06-01/copy/instagram_caption.txt`. Lá está sua caption.
+Em **Conteúdo**, abra a peça → **gerar preview** (vai para *em revisão*) → **Aprovar** (versiona em `outputs/approved/` com hash SHA-256) ou **Rejeitar**.
 
 ### O que você acabou de fazer
-Você usou o **`copywriter-agent`** — uma das 6 skills. O Claude detectou pela palavra "caption" no seu prompt, leu os knowledge files da 4Selet, escreveu a caption respeitando os números da Taxa Zero, as regras de emoji (máx 1 funcional), hashtags (`#4Selet` obrigatória), CTA aprovado e tom sóbrio. Sem você precisar lembrar de nenhuma dessas regras.
+O painel montou, nos bastidores, o **mesmo prompt padrão** que a skill **`copywriter-agent`** usaria: leu os knowledge files da 4Selet e escreveu respeitando os números da Taxa Zero, as regras de emoji (máx 1 funcional), hashtags (`#4Selet` obrigatória), CTA aprovado e tom sóbrio — tudo sem você precisar lembrar de nenhuma dessas regras nem digitar um prompt. A governança de marca rodou **antes** de salvar.
+
+> **Alternativa (avançado — extensão no VSCode):** o mesmo resultado pode ser obtido conversando direto com o agente. Abra o painel da extensão Claude Code e cole:
+> ```
+> Escreva uma caption de Instagram da Taxa Zero, ângulo "0% por 3 meses
+> para o produtor medir a diferença". task_name: teste_rapido,
+> task_date: 2026-06-01. Salve em outputs/teste_rapido_2026-06-01/copy/.
+> ```
+> Aprove as permissões (ler knowledge files, escrever `instagram_caption.txt`) e abra o arquivo gerado. Setup completo na Seção 8.2.
 
 **Próximo passo:** veja a seção 5 pra entender os outros 5 agentes e o que cada um faz.
 
@@ -515,31 +534,85 @@ Se o copywriter usar um ângulo diferente do ad, a campanha **vira uma colcha de
 
 | Componente | Status | O que isso significa na prática |
 |---|---|---|
+| **Painel web (`interface/`)** | ✅ **Pronto — interface principal** | Gerência de campanhas + geração de conteúdo com IA + workflow de aprovação visual em `http://localhost:4500` |
 | Node.js, Remotion, Playwright | ✅ Instalados | Renders de PNG e MP4 saem **reais** |
 | `skills/` (7 skills + scripts) | ✅ Pronto | Os 6 agentes + a **task-promoter** (Workflow de Aprovação) funcionando |
 | `src/` (composition AdVideo Remotion) | ✅ Pronto | Vídeo pode ser renderizado via `npm run render` |
 | Knowledge files (`knowledge/`) | ✅ brand v1.1 · product v1.2 · platform v1.1 | Fontes de verdade da marca atualizadas |
 | **Workflow de Aprovação v1.1** | ✅ Implementado (R5 gate duplo + B.2 runtime + git local) | 10 felizes + 7 adversariais B.1 + 3 runtime B.2 passaram |
-| Pasta `pipeline/` (BullMQ) | ⏳ Pendente | Pipeline roda **sequencial** (não enfileirada). Funciona, mas não é assíncrono |
+| Pasta `pipeline/` (BullMQ) | ✅ **Entregue** (orchestrator + worker + agents) | Roda **sequencial por padrão**; com `REDIS_URL` ativa a fila BullMQ assíncrona |
+| **Chave Anthropic no painel** | ⚠️ Depende de você | Configurar em *Configurações* (`interface/.env`). Sem ela, a geração do painel roda **simulada** |
 | `TAVILY_API_KEY` | ⏳ Pendente | Research roda em **modo simulado** (sintetiza dos knowledge files, não busca na web) |
 | `SUPABASE_URL` + `SUPABASE_KEY` | ⏳ Pendente | Distribution gera URLs **placeholder** (`_simulated: true`) — nada hospedado de fato |
+| Redis (`REDIS_URL`) para a fila | ⏳ Pendente | Sem ele a `pipeline/` roda **sequencial** (funciona, mas não enfileira/paraleliza) |
 | OAuth YouTube + token Instagram | ⏳ Pendente | Posting real **impossível** — gate sempre fechado |
 | `git` | ✅ Instalado (v2.54.0) | Hook `post-commit` ativo (push automático em background, fail-silent). **Remoto pendente** — ver `GIT_REMOTE_SETUP.md` e Seção 18 |
 
 ### Implicações práticas para você
 
-1. **Renders de ad (PNG) e vídeo (MP4) saem REAIS** e ficam na pasta — não dependem de chave externa.
-2. **Research e Supabase rodam simulados** — os outputs são gerados, mas vêm com `_simulated: true` marcado. Use-os como se fossem reais para revisão, **mas saiba que** a "pesquisa" não consultou a web e as URLs do Supabase são fake.
-3. **Posting real não acontece** — o pipeline sempre para no Publish MD pra revisão humana. Você ainda pode postar manualmente copiando o texto do Publish MD.
-4. **Persistência garantida localmente** via commits automáticos a cada mudança (hook `post-commit`). Persistência **remota** ainda exige `git remote add origin <URL>` — passo a passo em `GIT_REMOTE_SETUP.md`.
+1. **O painel é o jeito recomendado de trabalhar** — campanhas, geração, refino e aprovação, tudo visual. A extensão no VSCode continua disponível para uso avançado.
+2. **A geração de IA depende da chave Anthropic** estar configurada no painel (*Configurações*). Sem ela, o conteúdo vem rotulado `SIMULADO`.
+3. **Renders de ad (PNG) e vídeo (MP4) saem REAIS** e ficam na pasta — não dependem de chave externa.
+4. **Research e Supabase rodam simulados** — os outputs são gerados, mas vêm com `_simulated: true` marcado. Use-os como se fossem reais para revisão, **mas saiba que** a "pesquisa" não consultou a web e as URLs do Supabase são fake.
+5. **Posting real não acontece** — o sistema sempre para no Publish MD / na aprovação pra revisão humana. Você ainda pode postar manualmente copiando o texto.
+6. **Persistência garantida localmente** via commits automáticos a cada mudança (hook `post-commit`). Persistência **remota** ainda exige `git remote add origin <URL>` — passo a passo em `GIT_REMOTE_SETUP.md`.
 
 Para destravar os caminhos reais, ver seção 18.
 
 ---
 
-## 8. Setup no VSCode + extensão Claude Code (via VPS)
+## 8. Setup — Painel web (principal) e extensão VSCode (secundário)
 
-> **Importante:** o projeto **roda na VPS** — não localmente. A pasta `Claude Equipe de Marketing - 6 Agentes/` mora no servidor remoto. Você se conecta à VPS via Área de Trabalho Remota (RDP) e, **dentro da sessão da VPS**, abre o projeto no VSCode com a extensão Claude Code.
+> **Importante:** o projeto **roda na VPS** — não localmente. A pasta `Claude Equipe de Marketing - 6 Agentes/` mora no servidor remoto. Os dois caminhos começam do mesmo jeito: você se conecta à VPS via Área de Trabalho Remota (RDP) e trabalha **dentro da sessão da VPS**.
+
+### Conectar à VPS (RDP) — comum aos dois caminhos
+
+| Campo | Valor |
+|---|---|
+| **IP da VPS** | `143.14.247.176` |
+| **Usuário** | `administrator` |
+| **Senha** | _consulte com seu gestor / gerenciador de senhas — **não está documentada aqui** por segurança_ |
+| **Porta RDP** | `3389` (padrão) |
+
+1. **Abrir o cliente RDP** (Windows: `Win + R` → `mstsc` → Enter). Em Mac: "Microsoft Remote Desktop"; Linux: Remmina.
+2. Em **Computador**, digite o **IP da VPS** (`143.14.247.176`) → **Conectar**.
+3. Faça login com usuário (`administrator`) e a senha (do seu gerenciador).
+4. Aguarde a **área de trabalho do servidor** abrir — a partir daqui tudo acontece dentro dela.
+
+> ⚠️ **Segurança:** **nunca** registre a senha neste guia, em README, em commits ou em prints. Mantenha-a em gerenciador de senhas. Se vazar, peça rotação imediata ao gestor. Aviso de "certificado não confiável" na 1ª vez: confirme o nome do servidor com o gestor antes de aceitar.
+
+---
+
+### 8.1 Caminho principal — Painel web (`http://localhost:4500`)
+
+Recomendado para todo o time. Visual, sem prompt.
+
+**Passo 1 — Iniciar o painel** (uma vez por sessão de servidor). No terminal da VPS:
+```bash
+cd "C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes\interface"
+npm install   # só na primeiríssima vez
+npm start
+```
+Deixe esse terminal aberto — é o servidor do painel.
+
+**Passo 2 — Abrir no navegador.** Acesse **`http://localhost:4500`**. Você verá o Dashboard.
+
+**Passo 3 — Configurar a IA (1ª vez).** Menu lateral → **Configurações** → cole a **chave Anthropic** (`sk-ant-...`) → *Salvar chave* → *Testar conexão*. A chave é gravada só em `interface/.env` (fora do git). Escolha o modelo (padrão: Sonnet 4.6). O selo lateral deve indicar **"IA conectada"**.
+
+**Passo 4 — Usar no dia a dia:**
+- **Campanhas** → *Nova campanha*: nome, objetivo, ângulo, pilar e mensagens-chave.
+- **Criar Conteúdo**: escolha a campanha + o tipo, preencha o brief e **Gerar com IA**; refine se quiser; **Salvar**.
+- **Conteúdo** → abra a peça → **preview** → **Aprovar** / **Rejeitar** (versiona em `outputs/approved/` com hash).
+- **Aprovados**: biblioteca das peças versionadas, com download.
+- **Assistente IA** (topo): tira dúvidas de uso do painel e sugere conteúdo no tom da marca.
+
+> Detalhes do painel em `interface/README.md`. Para reabrir uma peça aprovada e editar, use **Reabrir p/ edição (rework)** na própria peça — nunca edite `outputs/approved/` na mão.
+
+---
+
+### 8.2 Caminho secundário (avançado) — extensão Claude Code no VSCode
+
+Para controle total: conversar direto com os agentes, rodar a **pipeline completa**, scripts e automações que ainda não estão no painel. Conecte-se à VPS (acima) e, **dentro da sessão**, abra o projeto no VSCode com a extensão Claude Code.
 
 ### Pré-requisitos
 
@@ -550,26 +623,7 @@ Para destravar os caminhos reais, ver seção 18.
 | **Credenciais da VPS** | IP, usuário e senha — armazene em **gerenciador seguro** (1Password, Bitwarden, etc.). **NÃO** salve em arquivo no projeto. |
 | **Na VPS (já instalado)** | VSCode + extensão Claude Code + Node.js 24+ + Remotion + Playwright. Nada pra fazer ali. |
 
-### Credenciais
-
-| Campo | Valor |
-|---|---|
-| **IP da VPS** | `143.14.247.176` |
-| **Usuário** | `administrator` |
-| **Senha** | _consulte com seu gestor / gerenciador de senhas — **não está documentada aqui** por segurança_ |
-| **Porta RDP** | `3389` (padrão) |
-
-> ⚠️ **Segurança:** **nunca** registre a senha neste guia, em README, em commits ou em prints compartilhados. Mantenha-a em gerenciador de senhas. Se vazar, peça rotação imediata ao gestor. Quem precisa de acesso pede ao responsável.
-
-### Passo a passo — conectar à VPS (RDP)
-
-1. **Abrir o cliente RDP** (Windows: `Win + R` → digite `mstsc` → Enter).
-2. Em **Computador**, digite o **IP da VPS** (`143.14.247.176`).
-3. Clique em **Conectar**.
-4. Na tela de login, informe o usuário (`administrator`) e a senha (do seu gerenciador).
-5. Aguarde a sessão da VPS abrir — você verá a **área de trabalho do servidor**. A partir daqui, tudo acontece dentro dela.
-
-> **Aviso de certificado na primeira vez:** o Windows pode mostrar um aviso de "certificado não confiável". Confirme o nome do servidor com seu gestor antes de aceitar. Aceitar uma vez é suficiente.
+> Credenciais e passos de conexão RDP: ver a seção **"Conectar à VPS (RDP)"** acima (comum aos dois caminhos).
 
 ### Passo a passo — abrir o projeto e usar o Claude Code
 
@@ -1280,25 +1334,29 @@ Edite o `GUIA_DE_USO.md` direto no projeto. A versão HTML pode ser regenerada p
 
 ## 18. Próximos passos do projeto
 
-Em ordem de prioridade (do `STATUS_PROJETO.md`):
+O que **falta providenciar** para destravar os caminhos reais, em ordem de prioridade. Itens 1–2 dependem só de você; 3–6 são chaves/contas externas.
 
-### 1) Criar repositório remoto e configurar `git remote`
+### 1) Configurar a chave Anthropic no painel ⭐ (o mais importante para o dia a dia)
+**Por quê:** É o que liga a geração **real** de conteúdo no painel. Sem ela, tudo sai rotulado `SIMULADO`.
+**Como:** abrir o painel → **Configurações** → colar `sk-ant-...` → *Salvar chave* → *Testar conexão*. Grava em `interface/.env` (fora do git). Já existe uma chave configurada — só repetir se precisar trocar/rotacionar.
+
+### 2) Criar repositório remoto e configurar `git remote`
 **Por quê:** Git local **já está instalado** (v2.54.0) com hook `post-commit` ativo empurrando em background. Falta apenas o **remoto** para backup fora da VPS — sem isso, falha de disco apaga `history[]`, `content_hashes` e decisões de aprovador.
 **Como:** criar repo **privado** (GitHub/GitLab/Bitbucket), depois `git remote add origin <URL>` + `git push -u origin main`. Passo a passo + fallback cron de 5 min em `GIT_REMOTE_SETUP.md`.
 
-### 2) Configurar `TAVILY_API_KEY`
+### 3) Configurar `TAVILY_API_KEY`
 **Por quê:** Desliga o modo simulado da pesquisa, libera as 5 buscas web reais (tendências, concorrentes, audiência, hooks, virais).
 **Como:** `npm i @tavily/core`, criar conta na Tavily, gerar API key, setar como variável de ambiente `TAVILY_API_KEY=...` (no `.env` ou no shell).
 
-### 3) Configurar Supabase
+### 4) Configurar Supabase
 **Por quê:** Desliga o modo simulado do hosting de mídia, gera URLs públicas reais consumíveis pelas APIs do Instagram/YouTube.
 **Como:** `npm i @supabase/supabase-js`, criar projeto no Supabase, criar bucket `campaign-uploads` público, pegar `SUPABASE_URL` e `SUPABASE_KEY` (service role), setar como env vars.
 
-### 4) Construir `pipeline/` (BullMQ + Redis)
-**Por quê:** Execução enfileirada em vez de sequencial — paraleliza ad/vídeo/copy em workers separados, retry automático, agendamento.
-**Como:** `npm i bullmq`, configurar `REDIS_URL` (Upstash funciona bem como serviço gerenciado), criar `pipeline/orchestrator.js` (enqueue) e `pipeline/worker.js` (processamento).
+### 5) Configurar `REDIS_URL` para a fila BullMQ
+**Por quê:** A pasta **`pipeline/` já existe** (orchestrator + worker + agents, entregue). Hoje roda **sequencial**; com Redis ela vira execução **enfileirada/assíncrona** — paraleliza ad/vídeo/copy, retry automático, agendamento.
+**Como:** provisionar um Redis (Upstash funciona bem como serviço gerenciado), setar `REDIS_URL=...` e rodar `npm run pipeline:run` + o worker. *(A construção da pasta `pipeline/` já está concluída — só falta a chave do Redis.)*
 
-### 5) OAuth YouTube + token Instagram
+### 6) OAuth YouTube + token Instagram
 **Por quê:** Habilita posting real (sempre **atrás do gate** de aprovação manual).
 **Como:** seguir docs do YouTube Data API (OAuth refresh token) e do Instagram Graph API (token de Business Account). Adicionar credenciais ao distribution-agent.
 
@@ -1312,6 +1370,9 @@ Em ordem de prioridade (do `STATUS_PROJETO.md`):
 | `STATUS_PROJETO.md` | Estado atual (o que está pronto / pendente) |
 | **`GUIA_DE_USO.md`** | **Este documento** — como operar o sistema no dia a dia |
 | **`GUIA_DE_USO.html`** | Versão estilizada do guia (mesma informação, para abrir no browser) |
+| **`interface/`** | **Painel web (caminho principal)** — `npm start` → `http://localhost:4500`. Server Express + SPA |
+| **`interface/README.md`** | Como rodar e usar o painel (configurar IA, fluxo de campanhas/conteúdo) |
+| `pipeline/` | Orquestrador executável (sequencial + BullMQ): `orchestrator.js`, `worker.js`, `agents.js` |
 | `knowledge/brand_identity.md` | Identidade visual + voz + governance (v1.1) |
 | `knowledge/product_campaign.md` | Taxa Zero, números, 9 diferenciais, 4 conceitos de vídeo (v1.2) |
 | `knowledge/platform_guidelines.md` | Specs e tom por plataforma (v1.1) |
