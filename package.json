@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts AdVideo outputs/remotion_test_video/video.mp4"
+    "render": "remotion render src/index.ts AdVideo outputs/remotion_test_video/video.mp4",
+    "pipeline:run": "node pipeline/orchestrator.js",
+    "pipeline:run:payload": "node pipeline/orchestrator.js --file",
+    "pipeline:worker": "node pipeline/worker.js"
   },
   "keywords": [],
   "author": "",
