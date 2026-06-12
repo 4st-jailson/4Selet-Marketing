@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel 4Selet — Marketing</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="mask-icon" href="/brand-assets/simbolo.svg" color="#006494" />
+  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <script>
+    // Aplica o tema salvo antes da pintura (evita flash). Padrao: escuro (brandbook).
+    (function () {
+      try {
+        var t = localStorage.getItem("painel4selet_theme");
+        if (!t) t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+    })();
+  </script>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/brand-assets/logo-4selet-light.png" alt="4Selet" class="brand-logo" id="brand-logo" onerror="this.style.display='none'" />
+        <span class="brand-sub">Marketing</span>
+      </div>
+      <nav class="nav" id="nav">
+        <a href="#/dashboard" data-route="dashboard"><span class="ico">▣</span> Dashboard</a>
+        <a href="#/campaigns" data-route="campaigns"><span class="ico">◈</span> Campanhas</a>
+        <a href="#/content" data-route="content"><span class="ico">▤</span> Conteúdo</a>
+        <a href="#/approved" data-route="approved"><span class="ico">✓</span> Aprovados</a>
+        <a href="#/create" data-route="create"><span class="ico">＋</span> Criar Conteúdo</a>
+        <a href="#/settings" data-route="settings"><span class="ico">⚙</span> Configurações</a>
+      </nav>
+      <div class="sidebar-foot">
+        <div id="key-status" class="key-status">verificando…</div>
+        <div class="tagline">Para quem sabe que é Selet.</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h1 id="page-title">Painel 4Selet</h1>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-theme" title="Alternar tema claro/escuro" aria-label="Alternar tema">Tema</button>
+          <button class="btn btn-ghost" id="btn-assistant">Assistente IA</button>
+        </div>
+      </header>
+      <section id="view" class="view"></section>
+    </main>
+
+    <!-- Assistente IA (slide-over) -->
+    <div class="assistant" id="assistant" aria-hidden="true">
+      <div class="assistant-head">
+        <strong>Assistente 4Selet</strong>
+        <button class="btn btn-icon" id="assistant-close">✕</button>
+      </div>
+      <div class="assistant-body" id="assistant-log">
+        <div class="msg msg-bot">Posso ajudar a usar o painel e a criar conteúdo no padrão da marca. Pergunte algo, ex.: "como crio um carrossel para a Taxa Zero?"</div>
+      </div>
+      <form class="assistant-form" id="assistant-form">
+        <textarea id="assistant-input" rows="2" placeholder="Escreva sua pergunta…"></textarea>
+        <button class="btn btn-primary" type="submit">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
