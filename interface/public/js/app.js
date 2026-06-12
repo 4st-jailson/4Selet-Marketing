@@ -1,10 +1,11 @@
-// public/js/app.js — SPA do Painel 4Selet.
+// public/js/app.js — SPA do Painel 4Selet (reconstruído do zero).
+// Vanilla JS, hash-router, sem build. Contrato de API inalterado (ver api.js).
 "use strict";
 
 const State = { meta: null, settings: null };
 
-// ---- helpers ----
-const $ = (sel, root = document) => root.querySelector(sel);
+/* ============================ helpers ============================ */
+const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function slugify(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); }
@@ -19,20 +20,21 @@ function toast(msg, type) {
 }
 
 function setView(html) { $("#view").innerHTML = html; }
-function setTitle(t) { $("#page-title").textContent = t; }
+function setTitle(t) { $("#page-title").textContent = t; document.title = t + " · Painel 4Selet"; }
 function metaType(id) { return (State.meta.content_types || []).find((c) => c.id === id); }
 function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels[k]) || k || "Outros"; }
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
 function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video"; }
+function tag(text) { return '<span class="badge plain">' + esc(text) + "</span>"; }
 
-// ---- rótulos em português (status, zona) ----
+/* ---- rótulos PT (status, zona) ---- */
 const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", rejected: "Rejeitado", active: "Ativa", paused: "Pausada", done: "Concluída" };
 const ZONE_LABELS = { active: "Em produção", approved: "Aprovado", archive: "Arquivado", archived: "Arquivado", rejected: "Rejeitado" };
 function statusLabel(s) { return STATUS_LABELS[s] || s || "—"; }
 function statusBadge(s) { return '<span class="badge ' + esc(s) + '">' + esc(statusLabel(s)) + "</span>"; }
 function zoneLabel(z) { return ZONE_LABELS[z] || z || ""; }
 
-// ---- nome de exibição humanizado (esconde o slug técnico) ----
+/* ---- nome de exibição humanizado (esconde o slug técnico) ---- */
 function humanize(s) {
   s = String(s == null ? "" : s).replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
   if (!s) return "—";
@@ -45,7 +47,7 @@ function displayName(t) {
   return humanize(t.task_name || (t.status && t.status.task_name) || "");
 }
 
-// ---- datas legíveis (pt-BR) ----
+/* ---- datas legíveis (pt-BR) ---- */
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 function fmtDate(v) {
   if (!v) return "—";
@@ -61,7 +63,7 @@ function fmtDateTime(v) {
   return d.getDate() + " " + MESES[d.getMonth()] + " " + d.getFullYear() + " às " + p(d.getHours()) + "h" + p(d.getMinutes());
 }
 
-// ---- Modal in-app (substitui prompt/confirm nativos, que congelam navegadores controlados) ----
+/* ---- Modal in-app (substitui prompt/confirm nativos) ---- */
 function uiModal(opts) {
   opts = opts || {};
   const fields = opts.fields || [];
@@ -76,7 +78,7 @@ function uiModal(opts) {
     }).join("");
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
       <h3>${esc(opts.title || "")}</h3>
-      ${opts.message ? '<p class="muted">' + esc(opts.message) + "</p>" : ""}
+      ${opts.message ? '<p class="muted mt">' + esc(opts.message) + "</p>" : ""}
       ${fieldHtml}
       <div class="modal-actions">
         <button class="btn btn-ghost" data-mx="cancel">${esc(opts.cancelText || "Cancelar")}</button>
@@ -90,7 +92,7 @@ function uiModal(opts) {
     const collect = () => { const o = {}; fields.forEach((f, i) => { o[f.name || i] = ov.querySelector('[data-mf="' + i + '"]').value.trim(); }); return o; };
     const done = (val) => {
       ov.classList.remove("open"); document.body.classList.remove("no-scroll");
-      document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 150); resolve(val);
+      document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val);
     };
     const onKey = (e) => {
       if (e.key === "Escape") { e.preventDefault(); done(null); }
@@ -107,7 +109,7 @@ function uiConfirm(message, opts) {
 }
 window.uiModal = uiModal; window.uiConfirm = uiConfirm;
 
-// ---- router ----
+/* ============================ router ============================ */
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "") || "dashboard";
   const [pathPart, queryPart] = raw.split("?");
@@ -131,12 +133,14 @@ const Routes = {
 async function router() {
   const { route, arg, query } = parseHash();
   $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === route));
+  closeSidebar();
   const fn = Routes[route] || viewDashboard;
-  setView('<div class="dim"><span class="spinner"></span> carregando…</div>');
-  try { await fn(arg, query); } catch (e) { setView('<div class="empty">Erro: ' + esc(e.message) + "</div>"); toast(e.message, "error"); }
+  setView('<div class="empty"><span class="spinner"></span> carregando…</div>');
+  try { await fn(arg, query); window.scrollTo({ top: 0 }); }
+  catch (e) { setView('<div class="empty">Erro ao carregar: ' + esc(e.message) + "</div>"); toast(e.message, "error"); }
 }
 
-// ---- settings status (sidebar) ----
+/* ---- status da IA (sidebar) ---- */
 async function refreshKeyStatus() {
   try {
     State.settings = await API.settings();
@@ -146,36 +150,36 @@ async function refreshKeyStatus() {
   } catch (e) { /* silencioso */ }
 }
 
-// =====================================================================
-// DASHBOARD
-// =====================================================================
+/* =====================================================================
+   DASHBOARD
+   ===================================================================== */
 async function viewDashboard() {
   setTitle("Dashboard");
   const [{ campaigns }, { tasks }] = await Promise.all([API.campaigns(), API.content()]);
   const active = campaigns.filter((c) => c.status === "active").length;
   const inReview = tasks.filter((t) => t.status === "in_review").length;
-  const approved = tasks.filter((t) => t.status === "approved").length;
+  const approved = tasks.filter((t) => t.status === "approved" || t.zone === "approved").length;
   const keyWarn = State.settings && !State.settings.has_key
-    ? '<div class="card" style="border-color:#6b4a1d;background:rgba(217,119,6,.08)"><h3>Configure a IA</h3><p class="muted">Cole sua chave Anthropic em <a href="#/settings">Configurações</a> para geração real de conteúdo. Sem chave, o painel funciona em modo simulado.</p></div>' : "";
+    ? `<div class="card callout mb"><div class="flex-between"><div><h3>Configure a Inteligência Artificial</h3><p class="muted mt">Cole sua chave Anthropic para geração real. Sem chave, o painel funciona em modo simulado.</p></div><a class="btn btn-primary" href="#/settings">Configurar</a></div></div>` : "";
   setView(`
     ${keyWarn}
     <div class="stat-grid mb">
       <div class="card stat" data-accent="sky"><span class="stat-ico">◈</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></div>
-      <div class="card stat" data-accent="blue"><span class="stat-ico">▤</span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></div>
+      <div class="card stat" data-accent="blue"><span class="stat-ico">▦</span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></div>
       <div class="card stat" data-accent="warn"><span class="stat-ico">◷</span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></div>
       <div class="card stat" data-accent="ok"><span class="stat-ico">✓</span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div></div>
     </div>
     <div class="grid grid-2">
       <div class="card">
-        <div class="section-head"><h2>Conteúdo recente</h2><a class="muted-link" href="#/content">ver tudo</a></div>
+        <div class="section-head"><h2>Conteúdo recente</h2><a class="muted-link" href="#/content">ver tudo →</a></div>
         ${tasks.length ? '<div class="list">' + tasks.slice(0, 6).map(taskRow).join("") + "</div>" : '<div class="empty">Nenhuma peça ainda. <a href="#/create">Criar conteúdo</a></div>'}
       </div>
       <div class="card">
         <div class="section-head"><h2>Ações rápidas</h2></div>
         <div class="list">
-          <a class="list-row action-row" href="#/create"><div class="lr-main"><div class="lr-title">＋ Criar conteúdo com IA</div><div class="lr-meta">Gere caption, carrossel, ad ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true">→</span></a>
-          <a class="list-row action-row" href="#/campaigns"><div class="lr-main"><div class="lr-title">◈ Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true">→</span></a>
-          <a class="list-row action-row" href="#/settings"><div class="lr-main"><div class="lr-title">⚙ Configurar IA</div><div class="lr-meta">Chave Anthropic e modelo</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">◈</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças versionadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>`);
@@ -185,30 +189,29 @@ function taskRow(t) {
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
     <span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>
     <div class="lr-main"><div class="lr-title">${esc(displayName(t))}</div>
-    <div class="lr-meta">${esc(fmtDate(t.task_date))} · ${esc((t.platforms || []).join(", "))}${t.campaign_id ? " · " + esc(t.campaign_id) : ""}</div></div>
+    <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.platforms || []).length ? " · " + esc(t.platforms.join(", ")) : ""}</div></div>
     ${statusBadge(t.status)}</a>`;
 }
 
-// =====================================================================
-// CAMPANHAS
-// =====================================================================
+/* =====================================================================
+   CAMPANHAS
+   ===================================================================== */
 async function viewCampaigns() {
   setTitle("Campanhas");
   const { campaigns } = await API.campaigns();
   setView(`
     <div class="section-head"><h2>Suas campanhas</h2><button class="btn btn-primary" id="new-camp">＋ Nova campanha</button></div>
     <div id="camp-form-wrap"></div>
-    ${campaigns.length ? '<div class="grid grid-3">' + campaigns.map(campCard).join("") + "</div>" : '<div class="empty">Nenhuma campanha. Crie a primeira para organizar suas peças.</div>'}`);
-  $("#new-camp").onclick = () => renderCampaignForm();
+    ${campaigns.length ? '<div class="grid grid-3">' + campaigns.map(campCard).join("") + "</div>" : '<div class="empty">Nenhuma campanha ainda. Crie a primeira para organizar suas peças.</div>'}`);
+  $("#new-camp").onclick = () => { renderCampaignForm(); $("#camp-form-wrap").scrollIntoView({ behavior: "smooth", block: "start" }); };
 }
 
 function campCard(c) {
   return `<div class="card card-link" onclick="location.hash='#/campaign/${encodeURIComponent(c.id)}'">
     <div class="flex-between"><h3>${esc(c.name)}</h3>${statusBadge(c.status)}</div>
-    <p class="muted">${esc(c.objective || c.angle || "—")}</p>
-    <div class="chips mt">${(c.platforms || []).map((p) => '<span class="badge">' + esc(p) + "</span>").join("")}
-      ${c.pillar ? '<span class="badge">' + esc(c.pillar) + "</span>" : ""}</div>
-    <div class="muted mt">${(c.content_ids || []).length} peça(s)</div>
+    <p class="muted mt">${esc(c.objective || c.angle || "—")}</p>
+    <div class="chips mt">${(c.platforms || []).map((p) => tag(p)).join("")}${c.pillar ? tag(c.pillar) : ""}</div>
+    <div class="muted mt">${(c.content_ids || []).length} peça(s) vinculada(s)</div>
   </div>`;
 }
 
@@ -218,11 +221,11 @@ function renderCampaignForm(existing) {
   const pillars = State.meta.pillars.map((p) => `<option ${c.pillar === p ? "selected" : ""}>${esc(p)}</option>`).join("");
   const wrap = $("#camp-form-wrap") || $("#view");
   wrap.innerHTML = `<div class="card mb">
-    <h3>${existing ? "Editar" : "Nova"} campanha</h3>
-    <div class="field"><label>Nome *<span class="hint"> (mín. 3 caracteres)</span></label><input id="c-name" value="${esc(c.name || "")}" /><div class="field-error" id="e-name"></div></div>
-    <div class="field"><label>Objetivo</label><textarea id="c-obj" rows="2">${esc(c.objective || "")}</textarea></div>
+    <h3>${existing ? "Editar campanha" : "Nova campanha"}</h3>
+    <div class="field mt"><label>Nome <span class="hint">(mín. 3 caracteres)</span></label><input id="c-name" value="${esc(c.name || "")}" placeholder="ex.: Taxa Zero — 2º semestre" /><div class="field-error" id="e-name"></div></div>
+    <div class="field"><label>Objetivo</label><textarea id="c-obj" rows="2" placeholder="O que esta campanha precisa alcançar?">${esc(c.objective || "")}</textarea></div>
     <div class="row">
-      <div class="field"><label>Ângulo</label><input id="c-angle" value="${esc(c.angle || "")}" placeholder="ex.: Taxa Zero - 0% por 3 meses" /></div>
+      <div class="field"><label>Ângulo</label><input id="c-angle" value="${esc(c.angle || "")}" placeholder="ex.: 0% por 3 meses" /></div>
       <div class="field"><label>Pilar estratégico</label><select id="c-pillar"><option value="">—</option>${pillars}</select></div>
     </div>
     <div class="row">
@@ -234,14 +237,14 @@ function renderCampaignForm(existing) {
     <div class="field"><label>Plataformas</label><div class="checks">${plats}</div></div>
     <div class="field"><label>Mensagens-chave <span class="hint">(uma por linha)</span></label><textarea id="c-msgs" rows="3">${esc((c.key_messages || []).join("\n"))}</textarea></div>
     <div class="field"><label>Notas</label><textarea id="c-notes" rows="2">${esc(c.notes || "")}</textarea></div>
-    <div class="flex"><button class="btn btn-primary" id="c-save">${existing ? "Salvar alterações" : "Criar campanha"}</button><button class="btn btn-ghost" id="c-cancel">Cancelar</button></div>
+    <div class="flex mt"><button class="btn btn-primary" id="c-save">${existing ? "Salvar alterações" : "Criar campanha"}</button><button class="btn btn-ghost" id="c-cancel">Cancelar</button></div>
   </div>`;
   bindCheckPills(wrap);
   $("#c-cancel").onclick = () => router();
   $("#c-save").onclick = async () => {
     const name = $("#c-name").value.trim();
     $("#e-name").textContent = "";
-    if (name.length < 3) { $("#c-name").classList.add("invalid"); $("#e-name").textContent = "Nome obrigatório (mín. 3)."; return; }
+    if (name.length < 3) { $("#c-name").classList.add("invalid"); $("#e-name").textContent = "Nome obrigatório (mín. 3 caracteres)."; return; }
     const payload = {
       name, objective: $("#c-obj").value.trim(), angle: $("#c-angle").value.trim(),
       pillar: $("#c-pillar").value, status: $("#c-status").value,
@@ -254,7 +257,7 @@ function renderCampaignForm(existing) {
       if (existing) { await API.updateCampaign(existing.id, payload); toast("Campanha atualizada", "success"); location.hash = "#/campaign/" + existing.id; }
       else { const r = await API.createCampaign(payload); toast("Campanha criada", "success"); location.hash = "#/campaign/" + r.campaign.id; }
     } catch (e) {
-      if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); } else toast(e.message, "error");
+      if (e.data && e.data.errors) e.data.errors.forEach((x) => toast(x, "error")); else toast(e.message, "error");
     }
   };
 }
@@ -263,8 +266,8 @@ async function viewCampaignDetail(id) {
   const { campaign: c, tasks } = await API.campaign(id);
   setTitle(c.name);
   setView(`
-    <div class="flex-between mb">
-      <div class="flex flex-wrap">${statusBadge(c.status)}${c.pillar ? '<span class="badge">' + esc(c.pillar) + "</span>" : ""}</div>
+    <div class="flex-between mb flex-wrap">
+      <div class="flex flex-wrap">${statusBadge(c.status)}${c.pillar ? tag(c.pillar) : ""}${(c.platforms || []).map((p) => tag(p)).join("")}</div>
       <div class="flex"><button class="btn btn-sm" id="edit-camp">Editar</button><button class="btn btn-sm btn-primary" id="create-here">＋ Criar conteúdo</button><button class="btn btn-sm btn-danger" id="del-camp">Excluir</button></div>
     </div>
     <div class="grid grid-2">
@@ -277,14 +280,14 @@ async function viewCampaignDetail(id) {
           <div class="k">Período</div><div>${esc(c.start_date || "—")} ${c.end_date ? "→ " + esc(c.end_date) : ""}</div>
           <div class="k">Notas</div><div>${esc(c.notes || "—")}</div>
         </div>
-        ${(c.key_messages || []).length ? '<div class="mt"><div class="k dim">Mensagens-chave</div><ul>' + c.key_messages.map((m) => "<li>" + esc(m) + "</li>").join("") + "</ul></div>" : ""}
+        ${(c.key_messages || []).length ? '<hr class="sep" /><div class="k dim">Mensagens-chave</div><ul>' + c.key_messages.map((m) => "<li>" + esc(m) + "</li>").join("") + "</ul>" : ""}
       </div>
       <div class="card">
         <div class="section-head"><h2>Conteúdo (${tasks.length})</h2></div>
-        ${tasks.length ? '<div class="list">' + tasks.map(taskRow).join("") + "</div>" : '<div class="empty">Sem peças. <span class="muted-link" id="create-here2">Criar agora</span></div>'}
+        ${tasks.length ? '<div class="list">' + tasks.map(taskRow).join("") + "</div>" : '<div class="empty">Sem peças ainda. <span class="muted-link" id="create-here2">Criar agora →</span></div>'}
       </div>
     </div>`);
-  $("#edit-camp").onclick = () => { setView(""); renderCampaignForm(c); };
+  $("#edit-camp").onclick = () => { setView('<div id="camp-form-wrap"></div>'); renderCampaignForm(c); };
   $("#create-here").onclick = () => location.hash = "#/create?campaign=" + encodeURIComponent(c.id);
   if ($("#create-here2")) $("#create-here2").onclick = () => location.hash = "#/create?campaign=" + encodeURIComponent(c.id);
   $("#del-camp").onclick = async () => {
@@ -294,14 +297,14 @@ async function viewCampaignDetail(id) {
   };
 }
 
-// =====================================================================
-// CONTEÚDO (tasks)
-// =====================================================================
+/* =====================================================================
+   CONTEÚDO (biblioteca de tasks)
+   ===================================================================== */
 function thumbHtml(t) {
   if (t.thumb && t.thumb.rel) {
     const url = API.rawUrl(t.folder, t.thumb.rel);
     if (t.thumb.type === "video") return `<video class="thumb" src="${url}" muted preload="metadata"></video>`;
-    return `<img class="thumb" src="${url}" alt="" loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('thumb-fallback')" />`;
+    return `<img class="thumb" src="${url}" alt="" loading="lazy" onerror="this.style.display='none';this.closest('.content-card').classList.add('thumb-fallback')" />`;
   }
   return "";
 }
@@ -320,7 +323,7 @@ function taskCard(t) {
     <div class="cc-body">
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}</div>
-      <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? '<span class="badge">' + esc(t.campaign_id) + "</span>" : ""}</div>
+      <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? tag(t.campaign_id) : ""}</div>
     </div></a>`;
 }
 
@@ -340,7 +343,7 @@ async function viewContent(arg, query) {
   setView(`
     <div class="section-head"><h2>Biblioteca de conteúdo</h2><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div>
     <div class="lib-toolbar">
-      <input id="lib-search" class="lib-search" type="search" placeholder="🔍 Buscar por título…" />
+      <input id="lib-search" class="lib-search" type="search" placeholder="Buscar por título…" />
       <select id="lib-status">${statusOpts}</select>
       ${campIds.length ? '<select id="lib-camp">' + campOpts + "</select>" : ""}
     </div>
@@ -378,7 +381,6 @@ async function viewApproved(arg, query) {
       const c = campaigns.find((x) => x.id === id);
       return `<button class="chip-filter ${id === fc ? "on" : ""}" data-camp="${esc(id)}">${esc(c ? c.name : id)}</button>`;
     })).join("");
-  // agrupa por kind
   const byKind = {};
   shown.forEach((t) => { (byKind[t.kind] = byKind[t.kind] || []).push(t); });
   const order = Object.keys(State.meta.kind_labels || {}).filter((k) => byKind[k]);
@@ -394,6 +396,9 @@ async function viewApproved(arg, query) {
   $$(".filter-bar .chip-filter").forEach((b) => { b.onclick = () => { location.hash = "#/approved?campaign=" + encodeURIComponent(b.dataset.camp); }; });
 }
 
+/* =====================================================================
+   DETALHE DA TASK
+   ===================================================================== */
 function fileRow(folder, f) {
   const media = f.isImage || f.isVideo;
   const viewBtn = media
@@ -408,16 +413,16 @@ function mediaGallery(folder, task) {
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const items = []
-    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost mt" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost mt" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
-  return `<div class="card"><h3>Mídia renderizada</h3><p class="muted">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
+    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
+  return `<div class="card"><h3>Mídia renderizada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
 function renderPanel(folder, task) {
   if (!isMediaKind(task.kind)) return "";
   const hasMedia = task.files.some((f) => f.isImage || f.isVideo);
   if (task.zone !== "active") {
-    return `<div class="card"><h3>Renderização</h3><p class="muted">A peça está em <strong>${esc(task.zone)}</strong>. Para re-renderizar, reabra para edição (rework).</p></div>`;
+    return `<div class="card"><h3>Renderização</h3><p class="muted mt">A peça está em <strong>${esc(zoneLabel(task.zone))}</strong>. Para re-renderizar, reabra para edição (rework).</p></div>`;
   }
   const label = task.kind === "video" ? "Renderizar vídeo (MP4)" : "Renderizar imagem (PNG)";
   const note = task.kind === "video"
@@ -425,7 +430,7 @@ function renderPanel(folder, task) {
     : "Gera a arte final no padrão da marca via Playwright.";
   return `<div class="card">
     <h3>Renderização de mídia</h3>
-    <p class="muted">${note}</p>
+    <p class="muted mt">${note}</p>
     <div class="flex mt"><button class="btn btn-primary" id="btn-render" data-kind="${esc(task.kind)}">${hasMedia ? "Re-renderizar" : label}</button><span id="render-out" class="muted"></span></div>
   </div>`;
 }
@@ -433,7 +438,7 @@ function renderPanel(folder, task) {
 function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel"; }
 
 function refineCard(task) {
-  if (task.zone !== "active") return ""; // só edita em zona ativa
+  if (task.zone !== "active") return "";
   const ct = (State.meta.content_types || []).find((c) => c.kind === task.kind);
   if (!ct) return "";
   const note = autoRenders(task.kind)
@@ -443,7 +448,7 @@ function refineCard(task) {
       : "A IA ajusta o texto desta peça mantendo o resto.");
   return `<div class="card mt">
     <h3>Ajustar com IA</h3>
-    <p class="muted">${note}</p>
+    <p class="muted mt">${note}</p>
     <div class="refine-box mt">
       <textarea id="refine-input" rows="2" placeholder="ex.: deixe o segundo slide mais direto e troque o CTA"></textarea>
       <button class="btn btn-primary mt" id="btn-refine" data-ct="${esc(ct.id)}" data-file="${esc(ct.file)}">Aplicar ajuste</button>
@@ -463,7 +468,6 @@ async function refineTask(folder, task) {
     const current = await API.taskFile(folder, file);
     const r = await API.refine({ content_type: ctId, current, instruction, campaign_id: s.campaign_id || undefined });
     if (r.simulated) toast("Ajuste simulado (configure a chave p/ IA real)", "warn");
-    // persiste o ajuste sobrescrevendo o arquivo da peça (zona ativa)
     await API.save({
       content_type: ctId,
       brief: "Ajuste via painel: " + instruction,
@@ -471,11 +475,10 @@ async function refineTask(folder, task) {
       platforms: s.platforms || [], campaign_id: s.campaign_id || undefined,
       parsed: r.parsed, raw: r.raw,
     });
-    // Re-renderiza automaticamente as mídias rápidas (imagem/feed/carrossel).
     if (autoRenders(task.kind)) {
       btn.innerHTML = '<span class="spinner"></span> re-renderizando…';
       const rr = await API.renderMedia(folder, task.kind);
-      if (!rr.ok) { toast("Ajustado, mas falhou a re-renderização: " + (rr.stderr || rr.error || "erro"), "warn"); }
+      if (!rr.ok) toast("Ajustado, mas falhou a re-renderização: " + (rr.stderr || rr.error || "erro"), "warn");
       else toast("Ajustado e re-renderizado", "success");
     } else if (task.kind === "video") {
       toast("Roteiro ajustado — clique em Re-renderizar para atualizar o vídeo", "success");
@@ -498,8 +501,8 @@ async function viewTaskDetail(folder) {
   const canDiscard = task.zone !== "approved";
   const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">slug: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
   setView(`
-    <div class="flex-between mb">
-      <div class="flex flex-wrap">${statusBadge(s.status)}<span class="badge">${esc(kindLabel(task.kind))}</span><span class="badge">${esc(zoneLabel(task.zone))}</span>${(s.platforms || []).map((p) => '<span class="badge">' + esc(p) + "</span>").join("")}${techSlug}</div>
+    <div class="flex-between mb flex-wrap">
+      <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(p)).join("")}${techSlug}</div>
       <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
     </div>
     ${mediaGallery(folder, task)}
@@ -554,7 +557,6 @@ async function viewTaskDetail(folder) {
 
 function workflowActions(task) {
   const s = task.status.status;
-  const f = task.folder;
   if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Gerar preview → em revisão</button>`;
   if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Regerar preview</button>`;
   if (s === "approved") return `<span class="badge approved">aprovada e versionada</span><button class="btn btn-sm" data-wf="rework">Reabrir p/ edição (rework)</button>`;
@@ -612,7 +614,7 @@ async function openFile(folder, rel) {
 }
 window.openFile = openFile;
 
-// ---- Lightbox: visualizar midia dentro do site (sem nova aba) ----
+/* ---- Lightbox ---- */
 function openLightbox(url, type, dlUrl) {
   const lb = $("#lightbox");
   const stage = $("#lightbox-stage");
@@ -632,7 +634,7 @@ function closeLightbox() {
   lb.classList.remove("open");
   lb.setAttribute("aria-hidden", "true");
   const stage = $("#lightbox-stage");
-  if (stage) stage.innerHTML = ""; // descarrega video/imagem (para audio/CPU)
+  if (stage) stage.innerHTML = "";
   document.body.classList.remove("no-scroll");
 }
 function setupLightbox() {
@@ -640,16 +642,15 @@ function setupLightbox() {
   if (!lb) return;
   const closeBtn = $("#lightbox-close");
   if (closeBtn) closeBtn.onclick = closeLightbox;
-  // clicar no fundo (fora da midia) fecha
   lb.addEventListener("click", (e) => { if (e.target === lb || e.target.id === "lightbox-stage") closeLightbox(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lb.classList.contains("open")) closeLightbox(); });
 }
 window.openLightbox = openLightbox;
 window.closeLightbox = closeLightbox;
 
-// =====================================================================
-// CRIAR CONTEÚDO (geração com IA)
-// =====================================================================
+/* =====================================================================
+   CRIAR CONTEÚDO (geração com IA)
+   ===================================================================== */
 let LAST_GEN = null;
 async function viewCreate(arg, query) {
   setTitle("Criar conteúdo");
@@ -661,30 +662,30 @@ async function viewCreate(arg, query) {
     <button type="button" class="type-card ${c.id === preType ? "on" : ""}" data-type="${esc(c.id)}" title="${esc(c.description)}">
       <span class="tc-icon">${esc(c.icon || "▣")}</span>
       <span class="tc-label">${esc(c.short || c.label)}</span>
-      <span class="tc-media badge">${esc(mediaLabel(c.media))}</span>
+      <span class="tc-media badge plain">${esc(mediaLabel(c.media))}</span>
     </button>`).join("");
   setView(`
     <div class="grid grid-2">
       <div class="card">
         <h3>Brief da peça</h3>
-        <div class="field"><label>Campanha</label><select id="g-camp">${campOpts}</select></div>
-        <div class="field"><label>Tipo de conteúdo *</label>
+        <div class="field mt"><label>Campanha</label><select id="g-camp">${campOpts}</select></div>
+        <div class="field"><label>Tipo de conteúdo</label>
           <div class="type-grid" id="g-type-grid">${typeCards}</div>
           <input type="hidden" id="g-type" value="${esc(preType)}" />
           <div class="hint" id="g-type-desc"></div>
         </div>
-        <div class="field"><label>Título da peça *<span class="hint"> (nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" /><div class="field-error" id="e-title"></div></div>
-        <div class="field"><label>Tema / objetivo da peça *</label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos"></textarea><div class="field-error" id="e-brief"></div></div>
+        <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" /><div class="field-error" id="e-title"></div></div>
+        <div class="field"><label>Tema / objetivo da peça</label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos"></textarea><div class="field-error" id="e-brief"></div></div>
         <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
         <div class="row">
           <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
           <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
         </div>
         <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
-        <div class="field"><label>Data *</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
+        <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
         <details class="adv-block">
           <summary>Identificador técnico (avançado)</summary>
-          <div class="field mt"><label>Slug da pasta<span class="hint"> (derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
+          <div class="field"><label>Slug da pasta <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
         </details>
         <button class="btn btn-primary mt" id="g-run">Gerar com IA</button>
       </div>
@@ -694,7 +695,6 @@ async function viewCreate(arg, query) {
       </div>
     </div>`);
 
-  // Plataformas: herdadas da campanha selecionada (com fallback Instagram)
   const campMap = {}; campaigns.forEach((c) => { campMap[c.id] = c; });
   function renderPlats(selected, inherited) {
     const set = (selected && selected.length) ? selected : ["instagram"];
@@ -718,7 +718,6 @@ async function viewCreate(arg, query) {
     };
   });
   updDesc();
-  // O título humano dirige o slug técnico automaticamente (até o usuário editar o slug manualmente).
   $("#g-title").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; } });
   $("#g-task").addEventListener("input", () => { delete $("#g-task").dataset.auto; });
 
@@ -748,7 +747,7 @@ async function runGenerate() {
 }
 
 function renderGenResult(r) {
-  $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge">' + esc(r.model) + "</span>";
+  $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain">' + esc(r.model) + "</span>";
   const ct = metaType(r.content_type);
   let editorVal;
   if (ct.format === "json") editorVal = JSON.stringify(r.parsed || {}, null, 2);
@@ -760,7 +759,7 @@ function renderGenResult(r) {
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
       <label>Ajustar com IA <span class="hint">(descreva o que mudar; o resto é mantido)</span></label>
-      <div class="flex"><textarea id="g-refine" rows="2" placeholder="ex.: encurte o headline e troque o CTA por Solicitar convite"></textarea></div>
+      <textarea id="g-refine" rows="2" placeholder="ex.: encurte o headline e troque o CTA por Solicitar convite"></textarea>
       <button class="btn btn-sm mt" id="g-refine-btn">Aplicar ajuste</button>
     </div>
     <div class="flex mt"><button class="btn btn-primary" id="g-save">Salvar na campanha</button><button class="btn btn-ghost" id="g-regen">Regerar do zero</button></div>`;
@@ -773,8 +772,7 @@ async function refineGenerated() {
   if (!LAST_GEN) return;
   const instruction = $("#g-refine").value.trim();
   if (instruction.length < 3) { toast("Escreva a orientação do ajuste.", "error"); return; }
-  const ct = metaType(LAST_GEN.req.content_type);
-  const current = $("#g-edit").value; // usa o conteúdo atual (já editado, se for o caso)
+  const current = $("#g-edit").value;
   const payload = {
     content_type: LAST_GEN.req.content_type,
     current,
@@ -784,7 +782,6 @@ async function refineGenerated() {
   const btn = $("#g-refine-btn"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ajustando…';
   try {
     const r = await API.refine(payload);
-    // funde o resultado ajustado no estado e re-renderiza o bloco
     LAST_GEN.res = Object.assign({}, LAST_GEN.res, {
       parsed: r.parsed, raw: r.raw, governance: r.governance,
       simulated: r.simulated, model: r.model, content_type: r.content_type,
@@ -808,14 +805,14 @@ function composeText(parsed, raw) {
 function structuredPreview(type, p) {
   if (!p) return "";
   if (type === "instagram_carousel" && Array.isArray(p.slides)) {
-    return '<div>' + p.slides.map((s, i) => `<div class="slide-card"><div class="sc-title">Slide ${i + 1}: ${esc(s.title || "")}</div><div class="sc-body">${esc(s.body || "")}</div></div>`).join("") + "</div>";
+    return '<div class="gen-out">' + p.slides.map((s, i) => `<div class="slide-card"><div class="sc-title">Slide ${i + 1}: ${esc(s.title || "")}</div><div class="sc-body">${esc(s.body || "")}</div></div>`).join("") + "</div>";
   }
   if (type === "ad_creative") {
-    return `<div class="slide-card"><div class="sc-title">${esc(p.headline || "")}</div><div class="sc-body">${esc(p.subtext || "")}</div><div class="muted mt">CTA: ${esc(p.cta || "")} · ${esc(p.layout_type || "")}</div></div>`;
+    return `<div class="gen-out"><div class="slide-card"><div class="sc-title">${esc(p.headline || "")}</div><div class="sc-body">${esc(p.subtext || "")}</div><div class="muted mt">CTA: ${esc(p.cta || "")} · ${esc(p.layout_type || "")}</div></div></div>`;
   }
   if (type === "video_idea" && Array.isArray(p.scenes)) {
-    return `<div class="slide-card"><div class="sc-title">${esc(p.concept || "")}</div><div class="sc-body">Hook: ${esc(p.hook || "")}</div></div>` +
-      p.scenes.map((s, i) => `<div class="slide-card"><div class="sc-title">Cena ${i + 1} · ${esc(s.type || "")}</div><div class="sc-body">${esc(s.text || "")} <span class="dim">— ${esc(s.visual || "")}</span></div></div>`).join("");
+    return '<div class="gen-out">' + `<div class="slide-card"><div class="sc-title">${esc(p.concept || "")}</div><div class="sc-body">Hook: ${esc(p.hook || "")}</div></div>` +
+      p.scenes.map((s, i) => `<div class="slide-card"><div class="sc-title">Cena ${i + 1} · ${esc(s.type || "")}</div><div class="sc-body">${esc(s.text || "")} <span class="dim">— ${esc(s.visual || "")}</span></div></div>`).join("") + "</div>";
   }
   return "";
 }
@@ -832,8 +829,8 @@ async function saveGenerated() {
   const date = $("#g-date").value;
   if ($("#e-title")) $("#e-title").textContent = "";
   $("#e-task").textContent = "";
-  if (title.length < 3) { if ($("#g-title")) { $("#g-title").classList.add("invalid"); } if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
-  if (!task) task = slugify(title).slice(0, 40); // deriva o slug do título se vazio
+  if (title.length < 3) { if ($("#g-title")) $("#g-title").classList.add("invalid"); if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
+  if (!task) task = slugify(title).slice(0, 40);
   if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#e-task").textContent = "Slug inválido (a-z, 0-9, _ ou -)."; return; }
   if (!date) { toast("Informe a data.", "error"); return; }
   const ct = metaType(LAST_GEN.req.content_type);
@@ -854,9 +851,9 @@ async function saveGenerated() {
   } finally { btn.disabled = false; btn.textContent = "Salvar na campanha"; }
 }
 
-// =====================================================================
-// CONFIGURAÇÕES
-// =====================================================================
+/* =====================================================================
+   CONFIGURAÇÕES
+   ===================================================================== */
 async function viewSettings() {
   setTitle("Configurações");
   const s = await API.settings();
@@ -867,9 +864,9 @@ async function viewSettings() {
     { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido/econômico)" },
   ];
   setView(`
-    <div class="card" style="max-width:640px">
+    <div class="card" style="max-width:660px">
       <h3>Inteligência Artificial (Claude)</h3>
-      <p class="muted">Cole sua chave da Anthropic. Ela é salva apenas localmente em <span class="codeblock">interface/.env</span> (fora do git) e nunca é exposta no front.</p>
+      <p class="muted mt">Cole sua chave da Anthropic. Ela é salva apenas localmente em <span class="codeblock">interface/.env</span> (fora do git) e nunca é exposta no front.</p>
       <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)</label>
         <input id="s-key" type="password" placeholder="${s.has_key ? "configurada: " + esc(s.masked_key) : "sk-ant-..."}" />
       </div>
@@ -896,9 +893,9 @@ async function viewSettings() {
   };
 }
 
-// =====================================================================
-// componentes reutilizáveis (checks)
-// =====================================================================
+/* =====================================================================
+   componentes reutilizáveis (checkbox pills)
+   ===================================================================== */
 function checkPill(group, value, on) {
   return `<label class="check ${on ? "on" : ""}"><input type="checkbox" data-group="${group}" value="${esc(value)}" ${on ? "checked" : ""} /> ${esc(value)}</label>`;
 }
@@ -911,9 +908,9 @@ function collectChecks(root, group) {
   return $$('.check input[data-group="' + group + '"]', root).filter((i) => i.checked).map((i) => i.value);
 }
 
-// =====================================================================
-// Assistente IA
-// =====================================================================
+/* =====================================================================
+   Assistente IA
+   ===================================================================== */
 function setupAssistant() {
   const panel = $("#assistant");
   $("#btn-assistant").onclick = () => panel.classList.add("open");
@@ -934,26 +931,34 @@ function setupAssistant() {
   };
 }
 
-// =====================================================================
-// Tema claro/escuro (persistido em localStorage; padrao escuro = brandbook)
-// =====================================================================
+/* =====================================================================
+   Menu mobile
+   ===================================================================== */
+function openSidebar() { $("#sidebar").classList.add("open"); $("#scrim").classList.add("open"); }
+function closeSidebar() { const sb = $("#sidebar"); if (sb) sb.classList.remove("open"); const sc = $("#scrim"); if (sc) sc.classList.remove("open"); }
+function setupMenu() {
+  const btn = $("#btn-menu"); if (btn) btn.onclick = openSidebar;
+  const scrim = $("#scrim"); if (scrim) scrim.onclick = closeSidebar;
+}
+
+/* =====================================================================
+   Tema claro/escuro
+   ===================================================================== */
 const THEME_KEY = "painel4selet_theme";
 const ICON_MOON = '<svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>';
-const ICON_SUN = '<svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const ICON_SUN  = '<svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   const logo = $("#brand-logo");
   if (logo) logo.src = theme === "light" ? "/brand-assets/logo-4selet.png" : "/brand-assets/logo-4selet-light.png";
   const btn = $("#btn-theme");
   if (btn) {
-    const toDark = theme === "light"; // o botão leva para o tema oposto
+    const toDark = theme === "light";
     btn.innerHTML = (toDark ? ICON_MOON : ICON_SUN) + "<span>" + (toDark ? "Escuro" : "Claro") + "</span>";
     btn.setAttribute("aria-label", toDark ? "Mudar para tema escuro" : "Mudar para tema claro");
   }
 }
-function currentTheme() {
-  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-}
+function currentTheme() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }
 function setupTheme() {
   applyTheme(currentTheme());
   const btn = $("#btn-theme");
@@ -964,9 +969,10 @@ function setupTheme() {
   };
 }
 
-// ---- boot ----
+/* ---- boot ---- */
 async function boot() {
   setupTheme();
+  setupMenu();
   try { State.meta = await API.meta(); } catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   setupAssistant();
   setupLightbox();

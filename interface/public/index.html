@@ -4,12 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Painel 4Selet — Marketing</title>
-  <!-- Favicon: símbolo oficial 4Selet (recortado de assets/logo-4selet.png — "4" Sky #5499B5 em quadrado arredondado) -->
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
   <script>
-    // Aplica o tema salvo antes da pintura (evita flash). Padrao: escuro (brandbook).
+    // Aplica o tema salvo antes da pintura (evita flash). Padrão: escuro (brandbook).
     (function () {
       try {
         var t = localStorage.getItem("painel4selet_theme");
@@ -18,36 +17,70 @@
       } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
     })();
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
 </head>
 <body>
   <div id="app">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <img src="/brand-assets/logo-4selet-light.png" alt="4Selet" class="brand-logo" id="brand-logo" onerror="this.style.display='none'" />
+        <img src="/brand-assets/logo-4selet-light.png" alt="4Selet" class="brand-logo" id="brand-logo"
+             onerror="this.style.display='none';document.getElementById('brand-mark').style.display='inline'" />
+        <span class="brand-mark" id="brand-mark" style="display:none">4<b>Selet</b></span>
         <span class="brand-sub">Marketing</span>
       </div>
+
       <nav class="nav" id="nav">
-        <a href="#/dashboard" data-route="dashboard"><span class="ico">▣</span> Dashboard</a>
-        <a href="#/campaigns" data-route="campaigns"><span class="ico">◈</span> Campanhas</a>
-        <a href="#/content" data-route="content"><span class="ico">▤</span> Conteúdo</a>
-        <a href="#/approved" data-route="approved"><span class="ico">✓</span> Aprovados</a>
-        <a href="#/create" data-route="create"><span class="ico">＋</span> Criar Conteúdo</a>
-        <a href="#/settings" data-route="settings"><span class="ico">⚙</span> Configurações</a>
+        <a href="#/dashboard" data-route="dashboard">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span>
+          Dashboard
+        </a>
+        <a href="#/campaigns" data-route="campaigns">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
+          Campanhas
+        </a>
+        <a href="#/content" data-route="content">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+          Conteúdo
+        </a>
+        <a href="#/approved" data-route="approved">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+          Aprovados
+        </a>
+        <div class="nav-sep"></div>
+        <a href="#/create" data-route="create">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M12 8v8M8 12h8"/></svg></span>
+          Criar Conteúdo
+        </a>
+        <a href="#/settings" data-route="settings">
+          <span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7.6 1.6 1.6 0 0 0-1.1 1.5V22a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H8a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>
+          Configurações
+        </a>
       </nav>
+
       <div class="sidebar-foot">
-        <div id="key-status" class="key-status">verificando…</div>
+        <div id="key-status" class="key-status"><a href="#/settings">verificando…</a></div>
         <div class="tagline">Para quem sabe que é Selet.</div>
       </div>
     </aside>
+    <div class="scrim" id="scrim"></div>
 
     <main class="main">
       <header class="topbar">
-        <h1 id="page-title">Painel 4Selet</h1>
+        <div class="topbar-left">
+          <button class="btn btn-ghost btn-icon menu-btn" id="btn-menu" aria-label="Abrir menu">
+            <svg class="ico-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          </button>
+          <h1 id="page-title">Painel 4Selet</h1>
+        </div>
         <div class="topbar-actions">
-          <button class="btn btn-ghost btn-sm" id="btn-theme" title="Alternar tema claro/escuro" aria-label="Alternar tema">Tema</button>
-          <button class="btn btn-ghost" id="btn-assistant">Assistente IA</button>
+          <button class="btn btn-ghost btn-sm" id="btn-theme" title="Alternar tema" aria-label="Alternar tema">Tema</button>
+          <button class="btn btn-ghost btn-sm" id="btn-assistant">
+            <svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Assistente</span>
+          </button>
         </div>
       </header>
       <section id="view" class="view"></section>
@@ -57,7 +90,7 @@
     <div class="assistant" id="assistant" aria-hidden="true">
       <div class="assistant-head">
         <strong>Assistente 4Selet</strong>
-        <button class="btn btn-icon" id="assistant-close">✕</button>
+        <button class="btn btn-ghost btn-icon" id="assistant-close" aria-label="Fechar">✕</button>
       </div>
       <div class="assistant-body" id="assistant-log">
         <div class="msg msg-bot">Posso ajudar a usar o painel e a criar conteúdo no padrão da marca. Pergunte algo, ex.: "como crio um carrossel para a Taxa Zero?"</div>
@@ -71,7 +104,7 @@
 
   <div id="toasts" class="toasts"></div>
 
-  <!-- Lightbox (visualizacao de midia dentro do site) -->
+  <!-- Lightbox -->
   <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Visualizador de mídia">
     <button class="lightbox-close" id="lightbox-close" aria-label="Fechar">✕</button>
     <a class="lightbox-dl btn btn-sm btn-ghost" id="lightbox-dl" href="#" download>Baixar</a>
