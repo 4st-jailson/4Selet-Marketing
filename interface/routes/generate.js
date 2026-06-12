@@ -179,6 +179,9 @@ router.post("/save", async (req, res, next) => {
       content.setCampaignId(folder, body.campaign_id);
     }
 
+    // 2b) grava o titulo de exibicao humanizado (separado do slug tecnico)
+    if (body.title) content.setTitle(folder, body.title);
+
     // 3) grava o arquivo de conteudo
     const text = formatContentFile(ct, parsed, body.raw);
     let rel;

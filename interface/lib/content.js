@@ -87,6 +87,7 @@ function listTasks() {
         zone: z.zone,
         path: full,
         task_name: status.task_name,
+        title: status.title || null,
         task_date: status.task_date,
         status: status.status,
         campaign_id: status.campaign_id || null,
@@ -210,6 +211,18 @@ function setCampaignId(folder, campaignId) {
   return true;
 }
 
+// Grava um titulo de exibicao (humanizado) no status.json, separado do slug tecnico.
+function setTitle(folder, title) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return false;
+  status.title = String(title || "").slice(0, 120);
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return true;
+}
+
 function generatePreview(task_name, task_date) {
   return runScript("generate_preview.js", ["--task", task_name, "--date", task_date]);
 }
@@ -243,5 +256,5 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  setCampaignId, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
+  setCampaignId, setTitle, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

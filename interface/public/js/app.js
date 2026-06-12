@@ -25,6 +25,88 @@ function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
 function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video"; }
 
+// ---- rótulos em português (status, zona) ----
+const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", rejected: "Rejeitado", active: "Ativa", paused: "Pausada", done: "Concluída" };
+const ZONE_LABELS = { active: "Em produção", approved: "Aprovado", archive: "Arquivado", archived: "Arquivado", rejected: "Rejeitado" };
+function statusLabel(s) { return STATUS_LABELS[s] || s || "—"; }
+function statusBadge(s) { return '<span class="badge ' + esc(s) + '">' + esc(statusLabel(s)) + "</span>"; }
+function zoneLabel(z) { return ZONE_LABELS[z] || z || ""; }
+
+// ---- nome de exibição humanizado (esconde o slug técnico) ----
+function humanize(s) {
+  s = String(s == null ? "" : s).replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return "—";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function displayName(t) {
+  if (!t) return "—";
+  const explicit = t.title || (t.status && t.status.title);
+  if (explicit) return String(explicit);
+  return humanize(t.task_name || (t.status && t.status.task_name) || "");
+}
+
+// ---- datas legíveis (pt-BR) ----
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+function fmtDate(v) {
+  if (!v) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+  if (m) return parseInt(m[3], 10) + " " + MESES[parseInt(m[2], 10) - 1] + " " + m[1];
+  const d = new Date(v); if (isNaN(d.getTime())) return String(v);
+  return d.getDate() + " " + MESES[d.getMonth()] + " " + d.getFullYear();
+}
+function fmtDateTime(v) {
+  if (!v) return "—";
+  const d = new Date(v); if (isNaN(d.getTime())) return fmtDate(v);
+  const p = (n) => String(n).padStart(2, "0");
+  return d.getDate() + " " + MESES[d.getMonth()] + " " + d.getFullYear() + " às " + p(d.getHours()) + "h" + p(d.getMinutes());
+}
+
+// ---- Modal in-app (substitui prompt/confirm nativos, que congelam navegadores controlados) ----
+function uiModal(opts) {
+  opts = opts || {};
+  const fields = opts.fields || [];
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "modal-ov";
+    const fieldHtml = fields.map((f, i) => {
+      const ctrl = f.type === "textarea"
+        ? `<textarea data-mf="${i}" rows="3" placeholder="${esc(f.placeholder || "")}">${esc(f.value || "")}</textarea>`
+        : `<input data-mf="${i}" type="${esc(f.inputType || "text")}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" />`;
+      return `<div class="field"><label>${esc(f.label || "")}</label>${ctrl}</div>`;
+    }).join("");
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+      <h3>${esc(opts.title || "")}</h3>
+      ${opts.message ? '<p class="muted">' + esc(opts.message) + "</p>" : ""}
+      ${fieldHtml}
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-mx="cancel">${esc(opts.cancelText || "Cancelar")}</button>
+        <button class="btn ${opts.confirmKind === "danger" ? "btn-danger" : "btn-primary"}" data-mx="ok">${esc(opts.confirmText || "Confirmar")}</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const focusEl = ov.querySelector("[data-mf]") || ov.querySelector("[data-mx='ok']");
+    if (focusEl) focusEl.focus();
+    const collect = () => { const o = {}; fields.forEach((f, i) => { o[f.name || i] = ov.querySelector('[data-mf="' + i + '"]').value.trim(); }); return o; };
+    const done = (val) => {
+      ov.classList.remove("open"); document.body.classList.remove("no-scroll");
+      document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 150); resolve(val);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); done(null); }
+      else if (e.key === "Enter" && !fields.some((f) => f.type === "textarea")) { e.preventDefault(); done(fields.length ? collect() : true); }
+    };
+    ov.querySelector("[data-mx='ok']").onclick = () => done(fields.length ? collect() : true);
+    ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    document.addEventListener("keydown", onKey);
+  });
+}
+function uiConfirm(message, opts) {
+  return uiModal(Object.assign({ title: "Confirmar", message: message, confirmText: "Confirmar" }, opts || {})).then((v) => !!v);
+}
+window.uiModal = uiModal; window.uiConfirm = uiConfirm;
+
 // ---- router ----
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "") || "dashboard";
@@ -59,7 +141,7 @@ async function refreshKeyStatus() {
   try {
     State.settings = await API.settings();
     const el = $("#key-status");
-    if (State.settings.has_key) { el.className = "key-status ok"; el.textContent = "IA conectada · " + State.settings.model; }
+    if (State.settings.has_key) { el.className = "key-status ok"; el.innerHTML = '<a href="#/settings" title="Modelo: ' + esc(State.settings.model || "") + '">IA conectada</a>'; }
     else { el.className = "key-status off"; el.innerHTML = '<a href="#/settings">IA não configurada</a>'; }
   } catch (e) { /* silencioso */ }
 }
@@ -77,11 +159,11 @@ async function viewDashboard() {
     ? '<div class="card" style="border-color:#6b4a1d;background:rgba(217,119,6,.08)"><h3>Configure a IA</h3><p class="muted">Cole sua chave Anthropic em <a href="#/settings">Configurações</a> para geração real de conteúdo. Sem chave, o painel funciona em modo simulado.</p></div>' : "";
   setView(`
     ${keyWarn}
-    <div class="grid grid-3 mb">
-      <div class="card stat"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas (${active} ativas)</span></div>
-      <div class="card stat"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div>
-      <div class="card stat"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div>
-      <div class="card stat"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div>
+    <div class="stat-grid mb">
+      <div class="card stat" data-accent="sky"><span class="stat-ico">◈</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></div>
+      <div class="card stat" data-accent="blue"><span class="stat-ico">▤</span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></div>
+      <div class="card stat" data-accent="warn"><span class="stat-ico">◷</span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></div>
+      <div class="card stat" data-accent="ok"><span class="stat-ico">✓</span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div></div>
     </div>
     <div class="grid grid-2">
       <div class="card">
@@ -91,9 +173,9 @@ async function viewDashboard() {
       <div class="card">
         <div class="section-head"><h2>Ações rápidas</h2></div>
         <div class="list">
-          <a class="list-row" href="#/create"><div class="lr-main"><div class="lr-title">＋ Criar conteúdo com IA</div><div class="lr-meta">Gere caption, carrossel, ad ou vídeo no padrão da marca</div></div><span class="badge">ir</span></a>
-          <a class="list-row" href="#/campaigns"><div class="lr-main"><div class="lr-title">◈ Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="badge">ir</span></a>
-          <a class="list-row" href="#/settings"><div class="lr-main"><div class="lr-title">⚙ Configurar IA</div><div class="lr-meta">Chave Anthropic e modelo</div></div><span class="badge">ir</span></a>
+          <a class="list-row action-row" href="#/create"><div class="lr-main"><div class="lr-title">＋ Criar conteúdo com IA</div><div class="lr-meta">Gere caption, carrossel, ad ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/campaigns"><div class="lr-main"><div class="lr-title">◈ Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/settings"><div class="lr-main"><div class="lr-title">⚙ Configurar IA</div><div class="lr-meta">Chave Anthropic e modelo</div></div><span class="lr-go" aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>`);
@@ -101,9 +183,10 @@ async function viewDashboard() {
 
 function taskRow(t) {
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
-    <div class="lr-main"><div class="lr-title">${esc(t.task_name)}</div>
-    <div class="lr-meta">${esc(t.task_date)} · ${esc((t.platforms || []).join(", "))}${t.campaign_id ? " · " + esc(t.campaign_id) : ""}</div></div>
-    <span class="badge ${t.status}">${esc(t.status)}</span></a>`;
+    <span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>
+    <div class="lr-main"><div class="lr-title">${esc(displayName(t))}</div>
+    <div class="lr-meta">${esc(fmtDate(t.task_date))} · ${esc((t.platforms || []).join(", "))}${t.campaign_id ? " · " + esc(t.campaign_id) : ""}</div></div>
+    ${statusBadge(t.status)}</a>`;
 }
 
 // =====================================================================
@@ -121,7 +204,7 @@ async function viewCampaigns() {
 
 function campCard(c) {
   return `<div class="card card-link" onclick="location.hash='#/campaign/${encodeURIComponent(c.id)}'">
-    <div class="flex-between"><h3>${esc(c.name)}</h3><span class="badge ${c.status}">${esc(c.status)}</span></div>
+    <div class="flex-between"><h3>${esc(c.name)}</h3>${statusBadge(c.status)}</div>
     <p class="muted">${esc(c.objective || c.angle || "—")}</p>
     <div class="chips mt">${(c.platforms || []).map((p) => '<span class="badge">' + esc(p) + "</span>").join("")}
       ${c.pillar ? '<span class="badge">' + esc(c.pillar) + "</span>" : ""}</div>
@@ -144,7 +227,7 @@ function renderCampaignForm(existing) {
     </div>
     <div class="row">
       <div class="field"><label>Status</label><select id="c-status">
-        ${["active", "paused", "done"].map((s) => `<option value="${s}" ${(c.status || "active") === s ? "selected" : ""}>${s}</option>`).join("")}
+        ${["active", "paused", "done"].map((s) => `<option value="${s}" ${(c.status || "active") === s ? "selected" : ""}>${esc(statusLabel(s))}</option>`).join("")}
       </select></div>
       <div class="field"><label>Período</label><div class="row"><input type="date" id="c-start" value="${esc(c.start_date || "")}" /><input type="date" id="c-end" value="${esc(c.end_date || "")}" /></div></div>
     </div>
@@ -181,7 +264,7 @@ async function viewCampaignDetail(id) {
   setTitle(c.name);
   setView(`
     <div class="flex-between mb">
-      <div class="flex flex-wrap"><span class="badge ${c.status}">${esc(c.status)}</span>${c.pillar ? '<span class="badge">' + esc(c.pillar) + "</span>" : ""}</div>
+      <div class="flex flex-wrap">${statusBadge(c.status)}${c.pillar ? '<span class="badge">' + esc(c.pillar) + "</span>" : ""}</div>
       <div class="flex"><button class="btn btn-sm" id="edit-camp">Editar</button><button class="btn btn-sm btn-primary" id="create-here">＋ Criar conteúdo</button><button class="btn btn-sm btn-danger" id="del-camp">Excluir</button></div>
     </div>
     <div class="grid grid-2">
@@ -205,7 +288,8 @@ async function viewCampaignDetail(id) {
   $("#create-here").onclick = () => location.hash = "#/create?campaign=" + encodeURIComponent(c.id);
   if ($("#create-here2")) $("#create-here2").onclick = () => location.hash = "#/create?campaign=" + encodeURIComponent(c.id);
   $("#del-camp").onclick = async () => {
-    if (!confirm("Excluir a campanha \"" + c.name + "\"? As peças de conteúdo não são apagadas.")) return;
+    const ok = await uiConfirm("As peças de conteúdo vinculadas NÃO são apagadas.", { title: "Excluir “" + c.name + "”?", confirmText: "Excluir campanha", confirmKind: "danger" });
+    if (!ok) return;
     await API.deleteCampaign(c.id); toast("Campanha excluída", "success"); location.hash = "#/campaigns";
   };
 }
@@ -227,28 +311,59 @@ function kindIcon(kind) {
 }
 function taskCard(t) {
   const hasThumb = t.thumb && t.thumb.rel;
+  const previewable = hasThumb && (t.thumb.type === "video" || t.thumb.type === "image" || /\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i.test(t.thumb.rel));
+  const zoomBtn = previewable
+    ? `<button class="cc-zoom" title="Pré-visualizar" onclick="event.preventDefault();event.stopPropagation();openLightbox('${API.rawUrl(t.folder, t.thumb.rel)}','${t.thumb.type === "video" ? "video" : "image"}','${API.downloadUrl(t.folder, t.thumb.rel)}')">⤢</button>`
+    : "";
   return `<a class="content-card ${hasThumb ? "" : "thumb-fallback"}" href="#/task/${encodeURIComponent(t.folder)}">
-    <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span></div>
+    <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span>${zoomBtn}</div>
     <div class="cc-body">
-      <div class="cc-title">${esc(t.task_name)}</div>
-      <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(t.task_date)}</div>
-      <div class="cc-foot"><span class="badge ${t.status}">${esc(t.status)}</span>${t.campaign_id ? '<span class="badge">' + esc(t.campaign_id) + "</span>" : ""}</div>
+      <div class="cc-title">${esc(displayName(t))}</div>
+      <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}</div>
+      <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? '<span class="badge">' + esc(t.campaign_id) + "</span>" : ""}</div>
     </div></a>`;
 }
 
 async function viewContent(arg, query) {
   setTitle("Conteúdo");
-  const { tasks } = await API.content();
+  const [{ tasks }, { campaigns }] = await Promise.all([API.content(), API.campaigns()]);
   const active = tasks.filter((t) => t.zone !== "approved");
-  const fk = (query && query.kind) || "all";
+  const campName = (id) => { const c = campaigns.find((x) => x.id === id); return c ? c.name : id; };
   const kinds = ["all"].concat(Object.keys(State.meta.kind_labels || {}).filter((k) => active.some((t) => t.kind === k)));
-  const shown = fk === "all" ? active : active.filter((t) => t.kind === fk);
-  const filters = kinds.map((k) => `<button class="chip-filter ${k === fk ? "on" : ""}" data-kind="${esc(k)}">${k === "all" ? "Todos" : esc(kindLabel(k))}</button>`).join("");
+  const statuses = Array.from(new Set(active.map((t) => t.status)));
+  const campIds = Array.from(new Set(active.map((t) => t.campaign_id).filter(Boolean)));
+
+  const kindChips = kinds.map((k) => `<button class="chip-filter" data-fkind="${esc(k)}">${k === "all" ? "Todos os tipos" : esc(kindLabel(k))}</button>`).join("");
+  const statusOpts = '<option value="all">Todos os status</option>' + statuses.map((s) => `<option value="${esc(s)}">${esc(statusLabel(s))}</option>`).join("");
+  const campOpts = '<option value="all">Todas as campanhas</option>' + campIds.map((id) => `<option value="${esc(id)}">${esc(campName(id))}</option>`).join("");
+
   setView(`
     <div class="section-head"><h2>Biblioteca de conteúdo</h2><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div>
-    <div class="filter-bar">${filters}</div>
-    ${shown.length ? '<div class="content-grid">' + shown.map(taskCard).join("") + "</div>" : '<div class="empty">Nenhuma peça nesta categoria. <a href="#/create">Criar conteúdo</a></div>'}`);
-  $$(".filter-bar .chip-filter").forEach((b) => { b.onclick = () => { location.hash = "#/content?kind=" + encodeURIComponent(b.dataset.kind); }; });
+    <div class="lib-toolbar">
+      <input id="lib-search" class="lib-search" type="search" placeholder="🔍 Buscar por título…" />
+      <select id="lib-status">${statusOpts}</select>
+      ${campIds.length ? '<select id="lib-camp">' + campOpts + "</select>" : ""}
+    </div>
+    <div class="filter-bar" id="lib-kinds">${kindChips}</div>
+    <div id="lib-grid"></div>`);
+
+  const st = { kind: (query && query.kind) || "all", status: "all", camp: "all", q: "" };
+  function apply() {
+    let shown = active.slice();
+    if (st.kind !== "all") shown = shown.filter((t) => t.kind === st.kind);
+    if (st.status !== "all") shown = shown.filter((t) => t.status === st.status);
+    if (st.camp !== "all") shown = shown.filter((t) => (t.campaign_id || "") === st.camp);
+    if (st.q) { const q = st.q.toLowerCase(); shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "")).toLowerCase().includes(q)); }
+    $$("#lib-kinds .chip-filter").forEach((b) => b.classList.toggle("on", b.dataset.fkind === st.kind));
+    $("#lib-grid").innerHTML = shown.length
+      ? '<div class="content-grid">' + shown.map(taskCard).join("") + "</div>"
+      : '<div class="empty">Nenhuma peça com esses filtros. <a href="#/create">Criar conteúdo</a></div>';
+  }
+  $$("#lib-kinds .chip-filter").forEach((b) => { b.onclick = () => { st.kind = b.dataset.fkind; apply(); }; });
+  $("#lib-status").onchange = () => { st.status = $("#lib-status").value; apply(); };
+  if ($("#lib-camp")) $("#lib-camp").onchange = () => { st.camp = $("#lib-camp").value; apply(); };
+  $("#lib-search").oninput = () => { st.q = $("#lib-search").value.trim(); apply(); };
+  apply();
 }
 
 async function viewApproved(arg, query) {
@@ -282,7 +397,7 @@ async function viewApproved(arg, query) {
 function fileRow(folder, f) {
   const media = f.isImage || f.isVideo;
   const viewBtn = media
-    ? `<a class="btn btn-sm" href="${API.rawUrl(folder, f.rel)}" target="_blank">abrir</a>`
+    ? `<button class="btn btn-sm" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','${f.isVideo ? "video" : "image"}','${API.downloadUrl(folder, f.rel)}')">ver</button>`
     : `<button class="btn btn-sm" onclick="openFile('${esc(folder)}','${esc(f.rel)}')">ver</button>`;
   return `<div class="list-row"><div class="lr-main"><div class="lr-title">${esc(f.rel)}</div><div class="lr-meta">${f.size} bytes</div></div>
     <div class="flex">${viewBtn}<a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div></div>`;
@@ -293,9 +408,9 @@ function mediaGallery(folder, task) {
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const items = []
-    .concat(vids.map((f) => `<div class="media-item"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><a class="btn btn-sm btn-ghost mt" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" /><a class="btn btn-sm btn-ghost mt" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
-  return `<div class="card"><h3>Mídia renderizada</h3><div class="media-gallery mt">${items.join("")}</div></div>`;
+    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost mt" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost mt" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
+  return `<div class="card"><h3>Mídia renderizada</h3><p class="muted">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
 function renderPanel(folder, task) {
@@ -378,12 +493,13 @@ async function refineTask(folder, task) {
 async function viewTaskDetail(folder) {
   const { task } = await API.task(folder);
   const s = task.status;
-  setTitle(s.task_name);
+  setTitle(displayName(s));
   const actions = workflowActions(task);
   const canDiscard = task.zone !== "approved";
+  const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">slug: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
   setView(`
     <div class="flex-between mb">
-      <div class="flex flex-wrap"><span class="badge ${s.status}">${esc(s.status)}</span><span class="badge">${esc(kindLabel(task.kind))}</span><span class="badge">${esc(task.zone)}</span>${(s.platforms || []).map((p) => '<span class="badge">' + esc(p) + "</span>").join("")}</div>
+      <div class="flex flex-wrap">${statusBadge(s.status)}<span class="badge">${esc(kindLabel(task.kind))}</span><span class="badge">${esc(zoneLabel(task.zone))}</span>${(s.platforms || []).map((p) => '<span class="badge">' + esc(p) + "</span>").join("")}${techSlug}</div>
       <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
     </div>
     ${mediaGallery(folder, task)}
@@ -401,9 +517,9 @@ async function viewTaskDetail(folder) {
           <div class="kv mt">
             <div class="k">Campanha</div><div>${s.campaign_id ? '<a href="#/campaign/' + esc(s.campaign_id) + '">' + esc(s.campaign_id) + "</a>" : "—"}</div>
             <div class="k">Ângulo</div><div>${esc(s.campaign_angle || "—")}</div>
-            <div class="k">Criada</div><div>${esc(s.created_at || "—")}</div>
-            <div class="k">Atualizada</div><div>${esc(s.last_updated_at || "—")}</div>
-            ${s.approved_by ? '<div class="k">Aprovada por</div><div>' + esc(s.approved_by) + " · " + esc(s.approved_at || "") + "</div>" : ""}
+            <div class="k">Criada</div><div>${esc(fmtDateTime(s.created_at))}</div>
+            <div class="k">Atualizada</div><div>${esc(fmtDateTime(s.last_updated_at))}</div>
+            ${s.approved_by ? '<div class="k">Aprovada por</div><div>' + esc(s.approved_by) + " · " + esc(fmtDateTime(s.approved_at)) + "</div>" : ""}
           </div>
           <hr class="sep" />
           <div class="flex flex-wrap" id="wf-actions">${actions}</div>
@@ -428,7 +544,8 @@ async function viewTaskDetail(folder) {
   }
   if ($("#btn-discard")) {
     $("#btn-discard").onclick = async () => {
-      if (!confirm("Descartar \"" + s.task_name + "\"? A peça vai para outputs/_archived/ (pode ser restaurada manualmente).")) return;
+      const ok = await uiConfirm("A peça vai para outputs/_archived/ (reversível — pode ser restaurada manualmente).", { title: "Descartar “" + displayName(s) + "”?", confirmText: "Descartar peça", confirmKind: "danger" });
+      if (!ok) return;
       try { await API.discard(folder); toast("Peça descartada (arquivada)", "warn"); location.hash = "#/content"; }
       catch (e) { toast(e.message, "error"); }
     };
@@ -455,13 +572,24 @@ function bindWorkflow(task) {
   $$("#wf-actions [data-wf]").forEach((btn) => {
     btn.onclick = async () => {
       const wf = btn.dataset.wf;
+      const orig = btn.innerHTML;
+      const busy = () => { $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = true)); btn.innerHTML = '<span class="spinner"></span> processando…'; };
       try {
-        if (wf === "preview") { btn.innerHTML = '<span class="spinner"></span>'; const r = await API.preview(task.folder); if (!r.ok) throw new Error(r.stderr || "falha no preview"); toast("Preview gerado · em revisão", "success"); }
-        else if (wf === "approve") { const by = prompt("Aprovado por (seu nome):"); if (!by) return; const r = await API.promote(task.folder, { to: "approved", by }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Aprovada e versionada", "success"); }
-        else if (wf === "reject") { const reason = prompt("Motivo da rejeição:") || ""; const r = await API.promote(task.folder, { to: "rejected", by: "painel", reason }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Rejeitada e arquivada", "warn"); }
-        else if (wf === "rework") { const r = await API.promote(task.folder, { to: "in_review" }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Reaberta para edição", "success"); }
+        if (wf === "preview") {
+          busy(); const r = await API.preview(task.folder); if (!r.ok) throw new Error(r.stderr || "falha no preview"); toast("Preview gerado · em revisão", "success");
+        } else if (wf === "approve") {
+          const res = await uiModal({ title: "Aprovar peça", message: "Versiona a peça (SHA-256) em outputs/approved.", fields: [{ name: "by", label: "Aprovado por (seu nome)", placeholder: "ex.: Hugo Belo" }], confirmText: "Aprovar e versionar" });
+          if (!res || !res.by) return;
+          busy(); const r = await API.promote(task.folder, { to: "approved", by: res.by }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Aprovada e versionada", "success");
+        } else if (wf === "reject") {
+          const res = await uiModal({ title: "Rejeitar peça", message: "A peça será arquivada (reversível).", fields: [{ name: "reason", label: "Motivo da rejeição (opcional)", type: "textarea", placeholder: "ex.: headline fora do tom da marca" }], confirmText: "Rejeitar peça", confirmKind: "danger" });
+          if (res === null) return;
+          busy(); const r = await API.promote(task.folder, { to: "rejected", by: "painel", reason: res.reason || "" }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Rejeitada e arquivada", "warn");
+        } else if (wf === "rework") {
+          busy(); const r = await API.promote(task.folder, { to: "in_review" }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Reaberta para edição", "success");
+        }
         router();
-      } catch (e) { toast(e.message, "error"); router(); }
+      } catch (e) { toast(e.message, "error"); $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = false)); btn.innerHTML = orig; }
     };
   });
 }
@@ -469,15 +597,55 @@ function bindWorkflow(task) {
 async function openFile(folder, rel) {
   try {
     const text = await API.taskFile(folder, rel);
+    const host = $("#file-view");
     if (rel.endsWith(".html")) {
       const url = URL.createObjectURL(new Blob([text], { type: "text/html" }));
-      window.open(url, "_blank");
+      host.innerHTML = '<div class="gen-out"><div class="flex-between mb"><strong>' + esc(rel) + '</strong>'
+        + '<a class="btn btn-sm btn-ghost" href="' + url + '" target="_blank" rel="noopener">abrir em nova aba ↗</a></div>'
+        + '<iframe class="file-frame" src="' + url + '" title="' + esc(rel) + '"></iframe></div>';
+      host.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
-    $("#file-view").innerHTML = '<div class="gen-out"><div class="flex-between mb"><strong>' + esc(rel) + '</strong></div><pre class="codeblock">' + esc(text) + "</pre></div>";
+    host.innerHTML = '<div class="gen-out"><div class="flex-between mb"><strong>' + esc(rel) + '</strong></div><pre class="codeblock">' + esc(text) + "</pre></div>";
+    host.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (e) { toast(e.message, "error"); }
 }
 window.openFile = openFile;
+
+// ---- Lightbox: visualizar midia dentro do site (sem nova aba) ----
+function openLightbox(url, type, dlUrl) {
+  const lb = $("#lightbox");
+  const stage = $("#lightbox-stage");
+  if (!lb || !stage) { window.open(url, "_blank"); return; }
+  stage.innerHTML = type === "video"
+    ? `<video src="${url}" controls autoplay playsinline></video>`
+    : `<img src="${url}" alt="" />`;
+  const dl = $("#lightbox-dl");
+  if (dl) { dl.href = dlUrl || url; dl.style.display = dlUrl ? "" : "none"; }
+  lb.classList.add("open");
+  lb.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+}
+function closeLightbox() {
+  const lb = $("#lightbox");
+  if (!lb) return;
+  lb.classList.remove("open");
+  lb.setAttribute("aria-hidden", "true");
+  const stage = $("#lightbox-stage");
+  if (stage) stage.innerHTML = ""; // descarrega video/imagem (para audio/CPU)
+  document.body.classList.remove("no-scroll");
+}
+function setupLightbox() {
+  const lb = $("#lightbox");
+  if (!lb) return;
+  const closeBtn = $("#lightbox-close");
+  if (closeBtn) closeBtn.onclick = closeLightbox;
+  // clicar no fundo (fora da midia) fecha
+  lb.addEventListener("click", (e) => { if (e.target === lb || e.target.id === "lightbox-stage") closeLightbox(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lb.classList.contains("open")) closeLightbox(); });
+}
+window.openLightbox = openLightbox;
+window.closeLightbox = closeLightbox;
 
 // =====================================================================
 // CRIAR CONTEÚDO (geração com IA)
@@ -495,7 +663,6 @@ async function viewCreate(arg, query) {
       <span class="tc-label">${esc(c.short || c.label)}</span>
       <span class="tc-media badge">${esc(mediaLabel(c.media))}</span>
     </button>`).join("");
-  const plats = State.meta.platforms.map((p) => checkPill("gplat", p, p === "instagram")).join("");
   setView(`
     <div class="grid grid-2">
       <div class="card">
@@ -506,27 +673,41 @@ async function viewCreate(arg, query) {
           <input type="hidden" id="g-type" value="${esc(preType)}" />
           <div class="hint" id="g-type-desc"></div>
         </div>
+        <div class="field"><label>Título da peça *<span class="hint"> (nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" /><div class="field-error" id="e-title"></div></div>
         <div class="field"><label>Tema / objetivo da peça *</label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos"></textarea><div class="field-error" id="e-brief"></div></div>
-        <div class="field"><label>Plataformas</label><div class="checks">${plats}</div></div>
+        <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
         <div class="row">
           <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
           <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
         </div>
         <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
-        <hr class="sep" />
-        <div class="row">
-          <div class="field"><label>Nome da peça (slug) *</label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
-          <div class="field"><label>Data *</label><input type="date" id="g-date" value="${todayISO()}" /></div>
-        </div>
-        <button class="btn btn-primary" id="g-run">Gerar com IA</button>
+        <div class="field"><label>Data *</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
+        <details class="adv-block">
+          <summary>Identificador técnico (avançado)</summary>
+          <div class="field mt"><label>Slug da pasta<span class="hint"> (derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
+        </details>
+        <button class="btn btn-primary mt" id="g-run">Gerar com IA</button>
       </div>
-      <div class="card">
+      <div class="card create-result">
         <div class="flex-between"><h3>Resultado</h3><span id="g-flag"></span></div>
         <div id="g-result"><div class="empty">Preencha o brief e clique em <strong>Gerar com IA</strong>.</div></div>
       </div>
     </div>`);
 
-  bindCheckPills($("#view"));
+  // Plataformas: herdadas da campanha selecionada (com fallback Instagram)
+  const campMap = {}; campaigns.forEach((c) => { campMap[c.id] = c; });
+  function renderPlats(selected, inherited) {
+    const set = (selected && selected.length) ? selected : ["instagram"];
+    $("#g-plats").innerHTML = State.meta.platforms.map((p) => checkPill("gplat", p, set.includes(p))).join("");
+    bindCheckPills($("#g-plats"));
+    $("#g-plats-hint").textContent = inherited ? "(herdadas da campanha — ajuste se quiser)" : "";
+  }
+  const preCampObj = preCamp && campMap[preCamp];
+  renderPlats(preCampObj ? preCampObj.platforms : ["instagram"], !!preCampObj);
+  $("#g-camp").addEventListener("change", () => {
+    const c = campMap[$("#g-camp").value];
+    renderPlats(c && c.platforms && c.platforms.length ? c.platforms : ["instagram"], !!c);
+  });
   const updDesc = () => { const ct = metaType($("#g-type").value); $("#g-type-desc").textContent = ct ? ct.description : ""; };
   $$("#g-type-grid .type-card").forEach((card) => {
     card.onclick = () => {
@@ -537,7 +718,8 @@ async function viewCreate(arg, query) {
     };
   });
   updDesc();
-  $("#g-brief").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-brief").value).slice(0, 30); $("#g-task").dataset.auto = "1"; } });
+  // O título humano dirige o slug técnico automaticamente (até o usuário editar o slug manualmente).
+  $("#g-title").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; } });
   $("#g-task").addEventListener("input", () => { delete $("#g-task").dataset.auto; });
 
   $("#g-run").onclick = runGenerate;
@@ -645,16 +827,20 @@ function govHtml(gov) {
 
 async function saveGenerated() {
   if (!LAST_GEN) return;
-  const task = $("#g-task").value.trim();
+  const title = ($("#g-title") && $("#g-title").value.trim()) || "";
+  let task = $("#g-task").value.trim();
   const date = $("#g-date").value;
+  if ($("#e-title")) $("#e-title").textContent = "";
   $("#e-task").textContent = "";
+  if (title.length < 3) { if ($("#g-title")) { $("#g-title").classList.add("invalid"); } if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
+  if (!task) task = slugify(title).slice(0, 40); // deriva o slug do título se vazio
   if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#e-task").textContent = "Slug inválido (a-z, 0-9, _ ou -)."; return; }
   if (!date) { toast("Informe a data.", "error"); return; }
   const ct = metaType(LAST_GEN.req.content_type);
   const editVal = $("#g-edit").value;
   let parsed = null, raw = editVal;
   if (ct.format === "json") { try { parsed = JSON.parse(editVal); } catch (e) { toast("JSON inválido no editor: " + e.message, "error"); return; } }
-  const payload = Object.assign({}, LAST_GEN.req, { task_name: task, task_date: date, parsed, raw });
+  const payload = Object.assign({}, LAST_GEN.req, { task_name: task, title, task_date: date, parsed, raw });
   const btn = $("#g-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando…';
   try {
     const r = await API.save(payload);
@@ -752,12 +938,18 @@ function setupAssistant() {
 // Tema claro/escuro (persistido em localStorage; padrao escuro = brandbook)
 // =====================================================================
 const THEME_KEY = "painel4selet_theme";
+const ICON_MOON = '<svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>';
+const ICON_SUN = '<svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   const logo = $("#brand-logo");
   if (logo) logo.src = theme === "light" ? "/brand-assets/logo-4selet.png" : "/brand-assets/logo-4selet-light.png";
   const btn = $("#btn-theme");
-  if (btn) btn.textContent = theme === "light" ? "☾ Escuro" : "☀ Claro";
+  if (btn) {
+    const toDark = theme === "light"; // o botão leva para o tema oposto
+    btn.innerHTML = (toDark ? ICON_MOON : ICON_SUN) + "<span>" + (toDark ? "Escuro" : "Claro") + "</span>";
+    btn.setAttribute("aria-label", toDark ? "Mudar para tema escuro" : "Mudar para tema claro");
+  }
 }
 function currentTheme() {
   return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
@@ -777,6 +969,7 @@ async function boot() {
   setupTheme();
   try { State.meta = await API.meta(); } catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   setupAssistant();
+  setupLightbox();
   await refreshKeyStatus();
   window.addEventListener("hashchange", router);
   router();

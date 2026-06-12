@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Painel 4Selet — Marketing</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="mask-icon" href="/brand-assets/simbolo.svg" color="#006494" />
-  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <!-- Favicon: símbolo oficial 4Selet (recortado de assets/logo-4selet.png — "4" Sky #5499B5 em quadrado arredondado) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
   <script>
     // Aplica o tema salvo antes da pintura (evita flash). Padrao: escuro (brandbook).
     (function () {
@@ -69,6 +70,13 @@
   </div>
 
   <div id="toasts" class="toasts"></div>
+
+  <!-- Lightbox (visualizacao de midia dentro do site) -->
+  <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Visualizador de mídia">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Fechar">✕</button>
+    <a class="lightbox-dl btn btn-sm btn-ghost" id="lightbox-dl" href="#" download>Baixar</a>
+    <div class="lightbox-stage" id="lightbox-stage"></div>
+  </div>
 
   <script src="/js/api.js"></script>
   <script src="/js/app.js"></script>
