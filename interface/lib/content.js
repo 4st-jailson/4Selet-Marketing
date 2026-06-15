@@ -160,7 +160,7 @@ function readFile(folder, rel) {
   if (!loc) return null;
   // proteger contra path traversal
   const target = path.normalize(path.join(loc.path, rel));
-  if (!target.startsWith(loc.path)) return null;
+  if (target !== loc.path && !target.startsWith(loc.path + path.sep)) return null;
   if (!fs.existsSync(target)) return null;
   return fs.readFileSync(target, "utf8");
 }
@@ -196,7 +196,7 @@ function writeContentFile(folder, rel, content) {
     e.code = "E_NOT_EDITABLE"; throw e;
   }
   const target = path.normalize(path.join(loc.path, rel));
-  if (!target.startsWith(loc.path)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
+  if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content, "utf8");
   return path.relative(loc.path, target).split(path.sep).join("/");

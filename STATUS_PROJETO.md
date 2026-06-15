@@ -2,7 +2,7 @@
 
 *Atualizado em 2026-06-12 · Marca: 4Selet · Painel web (interface principal) + Pipeline executável + 7 skills + Workflow de Aprovação Níveis 1/2*
 
-> **Resumo:** O **Painel web** (`interface/`, `http://localhost:4500`) é a **interface principal** de operação — campanhas, geração de conteúdo com IA, refino e workflow de aprovação visual; a extensão Claude Code no VSCode é o caminho **secundário/avançado**. O sistema de skills está **funcionalmente completo** (7 skills); o **pipeline executável** (`pipeline/`, sequencial + BullMQ) foi **entregue** (commit e787dc7); e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.0)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). A geração do painel exige a **chave Anthropic** configurada; pesquisa, hosting de mídia e publicação rodam em **modo simulado** porque as chaves externas (Tavily, Supabase, Redis, OAuth) ainda não foram configuradas. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados.
+> **Resumo:** O **Painel web** (`interface/`, `http://localhost:4500`) é a **interface principal** de operação — campanhas, geração de conteúdo com IA, refino e workflow de aprovação visual; a extensão Claude Code no VSCode é o caminho **secundário/avançado**. O sistema de skills está **funcionalmente completo** (7 skills); o **pipeline executável** (`pipeline/`, sequencial + BullMQ) foi **entregue** (commit e787dc7); e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.1)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). A geração do painel exige a **chave Anthropic** configurada; pesquisa, hosting de mídia e publicação rodam em **modo simulado** porque as chaves externas (Tavily, Supabase, Redis, OAuth) ainda não foram configuradas. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados.
 
 ---
 
@@ -41,7 +41,7 @@
 
 Todas com a regra **CRITICAL Re-aprovação** nas 4 skills de conteúdo (ad/video/copywriter/research).
 
-### 2.2 Workflow de Aprovação — Níveis 1+2 (v1.0)
+### 2.2 Workflow de Aprovação — Níveis 1+2 (v1.1)
 
 Implementado em 2026-06-02. Máquina de estados explícita `draft → in_review → approved/rejected → in_review`. **Fonte da verdade:** `status.json` por task, versionado em git.
 

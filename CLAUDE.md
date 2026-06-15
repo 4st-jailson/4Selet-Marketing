@@ -32,7 +32,7 @@ Cada agente usa uma combinação de **custom skills, knowledge files e APIs** pa
 
 > **Estado de implementação (2026-06-12):**
 > **Interface principal:** o **Painel web** em `interface/` (`npm start` → `http://localhost:4500`) é o **caminho principal** de operação — gerência de campanhas, geração de conteúdo com IA e workflow de aprovação visual. A **extensão Claude Code no VSCode** é o caminho **secundário/avançado** (chat direto com os agentes, pipeline e scripts). Ver `GUIA_DE_USO.md` (Seções 4 e 8) e `interface/README.md`.
-> **PRONTO ✅** — **Painel web** (`interface/`: Express + SPA, geração/refino/aprovação, governança de marca); **pipeline executável** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`, sequencial + BullMQ, entregue commit e787dc7); knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (composition `AdVideo` + `CampanhaDemo`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados.
+> **PRONTO ✅** — **Painel web** (`interface/`: Express + SPA, geração/refino/aprovação, governança de marca); **pipeline executável** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`, sequencial + BullMQ, entregue commit e787dc7); knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (compositions `AdVideo` + `CampanhaDemo` + `BrandStory`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados.
 > **PENDENTE ⏳** — chaves/contas externas: **chave Anthropic no painel** (`interface/.env`; sem ela a geração roda simulada), `@tavily/core` + `TAVILY_API_KEY`, `@supabase/supabase-js` + Supabase, **`REDIS_URL`** para ativar a fila BullMQ (a pasta `pipeline/` já existe; sem Redis roda **sequencial**), OAuth YouTube / token Instagram. Sem essas chaves, research/hosting/posting rodam **simulados**.
 > **Documentação de referência** (ordem de leitura): 1) `STATUS_PROJETO.md` — estado atual · 2) `GUIA_DE_USO.md` — passo a passo (§23 Workflow) · 3) `SPEC_WORKFLOW_APROVACAO.md` — contrato v1.1 · 4) `skills/<nome>/SKILL.md` — comportamento por agente.
 > ⚠️ **Regra CRITICAL Re-aprovação** ativa nas 4 skills de conteúdo: NÃO editar `outputs/approved/<task>/` diretamente — rework via `node scripts/promote_task.js --to in_review`.
@@ -126,7 +126,7 @@ Responsabilidades:
 - Gerar um conceito de vídeo (hook, arco emocional, estilo visual, intenção de CTA)
 - Construir um breakdown scene-by-scene (Hook → Product Showcase → Benefit → CTA)
 - Gerar scene JSON para renderização Remotion
-- Renderização real via a composition Remotion **`AdVideo`** em `src/` (React + SVG, `useCurrentFrame()`/`interpolate()`, fontes via `@remotion/google-fonts`) — rodar com `npm run render`. *(Não existe skill `remotion-best-practices`; o mecanismo de render é o projeto Remotion em `src/`.)*
+- Renderização real via o projeto Remotion em `src/` (React + SVG, `useCurrentFrame()`/`interpolate()`, fontes via `@remotion/google-fonts`). O **painel** (`interface/lib/render.js`) renderiza a composition **`BrandStory`** e grava `video/video.mp4`; o CLI `npm run render` pode renderizar qualquer composition registrada em `src/Root.tsx` (`AdVideo`, `CampanhaDemo`, `BrandStory`). *(Não existe skill `remotion-best-practices`; o mecanismo de render é o projeto Remotion em `src/`.)*
 
 Output Típico (salvo em `outputs/<task_name>_<date>/video/`):
 - `scenes.json` — scene JSON no schema canônico `composition` / `props`: no topo `composition` (ex.: `"AdVideo"`); dentro de `props`, os campos `style`, `duration` (segundos), `platform` e `scenes[]`. Cada scene tem `type` + `text` obrigatórios e `visual` / `transition` / `animation` opcionais.
@@ -183,7 +183,7 @@ Output Típico (salvo em `outputs/<task_name>_<date>/`):
 
 # Workflow de Aprovação — Níveis 1+2 (v1.1)
 
-Camada de governança sobre os 6 agentes + orchestrator. Transforma artefatos em entregáveis com **trilha rastreável de revisão**, **integridade pós-aprovação** (SHA-256) e **gate duplo de publicação** (estado lógico + hashes em runtime).
+Camada de governança sobre os 5 agentes + orchestrator (7 skills no total, incluindo o task-promoter). Transforma artefatos em entregáveis com **trilha rastreável de revisão**, **integridade pós-aprovação** (SHA-256) e **gate duplo de publicação** (estado lógico + hashes em runtime).
 
 ## Máquina de estados
 
@@ -391,7 +391,7 @@ outputs/<task_name>_<date>/
 │   └── instagram_ad.png          ← Ad Creative Designer (Playwright render)
 ├── video/
 │   ├── scenes.json               ← Video Ad Specialist (JSON composition/props)
-│   └── ad.mp4                    ← Remotion (composition AdVideo em src/ · npm run render)
+│   └── video.mp4                 ← Remotion (composition BrandStory em src/ · render via painel ou npm run render)
 ├── copy/
 │   ├── instagram_caption.txt     ← Copywriter Agent
 │   ├── threads_post.txt          ← Copywriter Agent
@@ -406,7 +406,7 @@ outputs/<task_name>_<date>/
 └── Publish <task_name> <date>.md ← Distribution Agent
 ```
 
-> A pasta `outputs/` **já contém artefatos**: `outputs/test_job_payload_1/` (dry-run end-to-end completo, rotulado TESTE) e `outputs/remotion_test_video/` (vídeo Remotion renderizado + stills). A árvore acima é o **layout-alvo** de uma run completa — nem todo arquivo existe em toda task (ex.: `research_brief.md` / `interactive_report.html` e `logs/` só quando efetivamente gerados; o dry-run atual tem `research_results.json` mas não os reports HTML/Mermaid).
+> A pasta `outputs/` **já contém artefatos**: tasks de validação end-to-end como `outputs/e2e_video_2026-06-10/` (vídeo Remotion renderizado), `outputs/e2e_carousel_2026-06-10/` e `outputs/e2e_feed_2026-06-10/` (ads estáticos), além das tasks aprovadas em `outputs/approved/` (ex.: `e2e_image_2026-06-10`). A árvore acima é o **layout-alvo** de uma run completa — nem todo arquivo existe em toda task (ex.: `research_brief.md` / `interactive_report.html` e `logs/` só quando efetivamente gerados).
 
 ---
 

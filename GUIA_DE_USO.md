@@ -20,7 +20,7 @@
 1. [Bem-vindo(a) — como ler este guia](#1-bem-vindoa--como-ler-este-guia)
 2. [Glossário rápido](#2-glossário-rápido)
 3. [Objetivo do projeto](#3-objetivo-do-projeto)
-4. [Quickstart — sua primeira peça em 5 minutos (no Painel)](#4-quickstart--sua-primeira-peça-em-5-minutos)
+4. [Quickstart — sua primeira peça em 5 minutos (no Painel)](#4-quickstart--sua-primeira-peça-em-5-minutos-no-painel)
 5. [Os 6 agentes em detalhe](#5-os-6-agentes-em-detalhe)
 6. [Como os agentes conversam (o "contrato")](#6-como-os-agentes-conversam-o-contrato)
 7. [Estado atual do sistema](#7-estado-atual-do-sistema)
