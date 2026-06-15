@@ -100,11 +100,11 @@ Entregue (commit e787dc7): `orchestrator.js` (enqueue/plano), `worker.js` (proce
 
 | # | Pendência | Impacto | Como resolver |
 |---|---|---|---|
-| 0 | **Chave Anthropic no painel** | Geração do painel roda **simulada** sem ela | Painel → *Configurações* → colar `sk-ant-...` → salvar (grava em `interface/.env`) |
-| 1 | **`REDIS_URL` para a fila BullMQ** | A `pipeline/` **já existe** (entregue) mas roda **sequencial** sem Redis | Provisionar Redis (Upstash) + setar `REDIS_URL` + `npm run pipeline:run` |
-| 2 | **`TAVILY_API_KEY` ausente** | Research é simulado | `npm i @tavily/core` + setar a chave |
-| 3 | **Supabase não configurado** | Mídia não é hospedada (URLs placeholder) | `npm i @supabase/supabase-js` + `SUPABASE_URL`/`KEY` |
-| 4 | **OAuth YouTube / token Instagram** | Publicação real impossível | Configurar `YOUTUBE_REFRESH_TOKEN` + IG Graph token |
+| 0 | ~~**Chave Anthropic no painel**~~ | ✅ **Configurada** (verificado 2026-06-15: `/api/settings` `has_key:true`, `/api/health` `ai_key:true`) — painel em **modo real** | — concluído |
+| 1 | **`REDIS_URL` para a fila BullMQ** | A `pipeline/` **já existe** (entregue) mas roda **sequencial** sem Redis | Provisionar Redis (Upstash) + setar `REDIS_URL` + `npm run pipeline:run` — **passo a passo no §7.2** |
+| 2 | **`TAVILY_API_KEY` ausente** | Research é simulado | `npm i @tavily/core` + setar a chave — **passo a passo no §7.1** |
+| 3 | **Supabase não configurado** | Mídia não é hospedada (URLs placeholder) | `npm i @supabase/supabase-js` + `SUPABASE_URL`/`KEY` — *adiado por decisão do Hugo (2026-06-15)* |
+| 4 | **OAuth YouTube / token Instagram** | Publicação real impossível | Configurar `YOUTUBE_REFRESH_TOKEN` + IG Graph token — *adiado: sem publicação automática por ora (Hugo, 2026-06-15)* |
 | 5 | **Estado `published` no enum** | Não há transição terminal "campanha foi ao ar" | Adicionar `published` ao enum + transição manual em `promote_task.js` |
 | 6 | **Lock multi-usuário concorrente em `status.json`** | Race em execuções simultâneas de `promote_task.js` na mesma task | `proper-lockfile` por task_dir |
 | 7 | **Skills não empacotadas p/ distribuição** | Arquivos no repo, não `.zip` instaláveis | Zipar cada pasta de skill se for distribuir |
@@ -183,3 +183,35 @@ node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
 4. **Validar caminhos reais** (busca Tavily, upload Supabase) com tasks de teste rotuladas.
 5. **Lock multi-usuário** em `status.json` se evoluir para multi-operador.
 6. **Estado `published`** para registrar publicação efetiva (Nível 3 — já há webapp/painel).
+
+---
+
+## 7. Passo a passo das integrações pendentes (escopo atual)
+
+*Decisão do Hugo (2026-06-15): por ora **não** haverá publicação automática (item 4) nem hospedagem em Supabase (item 3). Os dois itens abaixo — Tavily e Redis — são os únicos no escopo.*
+
+> **Onde as variáveis moram.** O `interface/.env` é lido **só pelo painel** e só para `ANTHROPIC_API_KEY` e `MODEL`. Os scripts de pipeline/skills leem `process.env` **diretamente** (não há `dotenv` no projeto). Logo, `TAVILY_API_KEY`, `REDIS_URL` e afins precisam existir no **ambiente real do processo**: no **PM2** (recomendado — `pm2 set painel-4selet:VAR "valor"` ou via `ecosystem.config.js`) ou exportados no shell antes de rodar o comando.
+>
+> **Status das libs (2026-06-15):** nenhuma instalada ainda — `bullmq`, `ioredis`, `@tavily/core` ausentes do `package.json`.
+
+### 7.1 Tavily — pesquisa de mercado real (`TAVILY_API_KEY`) — *recomendado*
+
+**Finalidade:** dá **pesquisa de mercado real** ao Marketing Research Agent (tendências, concorrentes, hooks, tópicos virais). Sem a chave, o research roda **simulado** (dados rotulados `_simulated: true`). É o item de maior ganho no dia a dia.
+
+1. Criar conta em **tavily.com** → *API Keys* → gerar chave (`tvly-…`).
+2. Instalar a lib: `npm i @tavily/core`
+3. Definir a variável: `pm2 set painel-4selet:TAVILY_API_KEY "tvly-…"` (ou `export` no shell antes de rodar).
+4. **Testar:** `node skills/marketing-research-agent/scripts/research.js --task teste --date 2026-06-15 --topic "taxa zero pagamentos" --out outputs/teste_tavily_2026-06-15` — **não** deve aparecer `TAVILY_API_KEY ausente -> modo SIMULADO`.
+
+### 7.2 Redis — fila BullMQ assíncrona (`REDIS_URL`) — *opcional*
+
+**Finalidade:** ativa a fila **BullMQ**. Hoje o pipeline roda **sequencial** (um agente após o outro, no mesmo processo). Com Redis, os jobs entram numa fila e um **worker** os processa de forma **assíncrona/paralela**. Só compensa com **volume alto** de campanhas simultâneas — para uso normal, o modo sequencial atual já atende.
+
+1. Criar conta em **upstash.com** → *Create Database* → **Redis** (região próxima, ex.: `sa-east-1`).
+2. Copiar a connection string **`redis://…`** (ou `rediss://…` com TLS).
+3. Instalar as libs: `npm i bullmq ioredis`
+4. Definir as variáveis: `pm2 set painel-4selet:REDIS_URL "rediss://default:SENHA@host:porta"` — opcional `PIPELINE_CONCURRENCY=2` (jobs em paralelo).
+5. Subir o worker num processo separado: `node pipeline/worker.js`
+6. **Testar:** ao rodar `npm run pipeline:run`, o log deve dizer `queued (BullMQ+Redis)` em vez de `sequential (sem Redis)`.
+
+> **Itens fora do escopo atual (adiados):** Supabase (§3 item 3) e OAuth YouTube/IG (§3 item 4) permanecem documentados na tabela, mas **não** serão configurados neste momento. A trava de segurança permanece válida: o pipeline **nunca publica sozinho** — exige referência explícita ao Publish MD, `dry_run:false`, tokens presentes e gate de aprovação (R5).
