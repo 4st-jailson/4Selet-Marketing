@@ -424,9 +424,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 @keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 
 /* ---- lightbox ---- */
-.lightbox { position: fixed; inset: 0; z-index: 1300; display: none; align-items: center; justify-content: center; padding: var(--s7); background: rgba(3, 12, 17, .9); backdrop-filter: blur(6px); }
+.lightbox { position: fixed; inset: 0; z-index: 1300; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; padding: var(--s7); background: rgba(3, 12, 17, .9); backdrop-filter: blur(6px); }
 .lightbox.open { display: flex; }
-.lightbox-stage { max-width: 92vw; max-height: 88vh; display: flex; }
+/* B3 — margin:auto centra quando cabe e permite scroll vertical quando o conteúdo excede a viewport (evita o clipping do topo no flex centralizado) */
+.lightbox-stage { margin: auto; max-width: 92vw; display: flex; }
 .lightbox-stage img, .lightbox-stage video { max-width: 92vw; max-height: 88vh; border-radius: var(--r-sm); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .lightbox-close { position: absolute; top: 20px; right: 24px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; cursor: pointer; }
 .lightbox-close:hover { background: rgba(255,255,255,.22); }
