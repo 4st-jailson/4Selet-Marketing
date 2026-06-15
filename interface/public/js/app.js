@@ -476,8 +476,36 @@ function renderPanel(folder, task) {
   return `<div class="card">
     <h3>Renderização de mídia</h3>
     <p class="muted mt">${note}</p>
+    ${templatePicker(task)}
     <div class="flex mt"><button class="btn btn-primary" id="btn-render" data-kind="${esc(task.kind)}">${hasMedia ? "Re-renderizar" : label}</button><span id="render-out" class="muted"></span></div>
   </div>`;
+}
+
+// Templates visuais disponiveis para pecas estaticas (image/feed/carousel).
+const VISUAL_TEMPLATES = [
+  { id: "editorial", name: "Editorial", desc: "Gradiente azul, dots, headline à esquerda" },
+  { id: "bold", name: "Destaque", desc: "Fundo escuro centralizado, número em evidência" },
+  { id: "split", name: "Split", desc: "Faixa clara (logo) + faixa escura (headline)" },
+];
+
+function templatePicker(task) {
+  if (task.kind === "video") return ""; // video usa a composition BrandStory
+  const current = task.template || "editorial";
+  const opts = VISUAL_TEMPLATES.map((t) => `
+    <label class="tpl-opt${t.id === current ? " is-active" : ""}" data-tpl="${t.id}">
+      <input type="radio" name="render-tpl" value="${t.id}"${t.id === current ? " checked" : ""} />
+      <span class="tpl-name">${esc(t.name)}</span>
+      <span class="tpl-desc">${esc(t.desc)}</span>
+    </label>`).join("");
+  return `<div class="tpl-picker mt">
+    <div class="muted" style="font-size:13px;margin-bottom:8px">Template visual</div>
+    <div class="tpl-grid">${opts}</div>
+  </div>`;
+}
+
+function selectedTemplate() {
+  const el = document.querySelector('input[name="render-tpl"]:checked');
+  return el ? el.value : undefined;
 }
 
 function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel"; }
@@ -522,7 +550,7 @@ async function refineTask(folder, task) {
     });
     if (autoRenders(task.kind)) {
       btn.innerHTML = '<span class="spinner"></span> re-renderizando…';
-      const rr = await API.renderMedia(folder, task.kind);
+      const rr = await API.renderMedia(folder, task.kind, selectedTemplate());
       if (!rr.ok) toast("Ajustado, mas falhou a re-renderização: " + (rr.stderr || rr.error || "erro"), "warn");
       else toast("Ajustado e re-renderizado", "success");
     } else if (task.kind === "video") {
@@ -585,13 +613,18 @@ async function viewTaskDetail(folder) {
   bindWorkflow(task);
   if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
   if ($("#btn-refine")) $("#btn-refine").onclick = () => refineTask(folder, task);
+  document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
+    el.onchange = () => {
+      document.querySelectorAll(".tpl-opt").forEach((o) => o.classList.toggle("is-active", o.dataset.tpl === el.value));
+    };
+  });
   if ($("#btn-render")) {
     $("#btn-render").onclick = async () => {
       const btn = $("#btn-render"); const out = $("#render-out");
       btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> renderizando…';
       out.textContent = task.kind === "video" ? "isto pode levar alguns minutos…" : "";
       try {
-        const r = await API.renderMedia(folder, btn.dataset.kind);
+        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate());
         if (!r.ok) throw new Error(r.stderr || r.error || "falha na renderização");
         toast("Mídia renderizada", "success"); router();
       } catch (e) { toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }

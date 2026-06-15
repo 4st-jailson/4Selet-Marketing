@@ -378,6 +378,18 @@ npm run pipeline:worker                    # worker da fila (terminal separado)
 
 No painel, a renderização acontece ao salvar/aprovar a peça visual. O vídeo é renderizado pela composition `BrandStory` do projeto Remotion em `src/`.
 
+### Templates visuais (peças estáticas)
+
+Imagem, feed e carrossel podem ser renderizados em três layouts on-brand, selecionáveis no painel antes de **Renderizar** / **Re-renderizar**. A escolha fica salva por peça, então re-renderizações e o reabrir da peça mantêm o template.
+
+| Template | Visual | Quando usar |
+| --- | --- | --- |
+| Editorial | Gradiente azul, Selet Dots, logo no topo, headline à esquerda | Padrão; mensagem com subtexto descritivo |
+| Destaque | Fundo escuro centralizado, símbolo "4" como marca-d'água | Headlines curtas com número em evidência (ex.: `0%`, `95%`) |
+| Split | Faixa clara (logo + rótulo) sobre faixa escura (headline + CTA) | Contraste editorial, números realçados na headline |
+
+Todos seguem a paleta e a tipografia oficiais (logo claro sobre fundo escuro, escuro sobre claro). Números e percentuais na headline recebem realce automático na cor Sky.
+
 > [!NOTE]
 > A primeira renderização de vídeo após subir o servidor é mais lenta (o motor monta o bundle a frio). As seguintes são rápidas. Pela linha de comando, `npm run render` renderiza a composition padrão do projeto.
 

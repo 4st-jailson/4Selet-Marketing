@@ -152,6 +152,10 @@ function getTask(folder) {
     tags: Array.isArray(status && status.tags) ? status.tags : [],
     kind: classifyKind(files),
     thumb: pickThumb(files),
+    template: (function () {
+      const rp = readJsonSafe(path.join(loc.path, "render.json"));
+      return (rp && typeof rp.template === "string") ? rp.template : null;
+    })(),
   };
 }
 

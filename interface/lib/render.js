@@ -14,6 +14,8 @@ const { findTask } = require("./content");
 const ASSETS = PATHS.ASSETS_DIR;
 function fileUrl(p) { return "file:///" + path.resolve(p).replace(/\\/g, "/"); }
 const LOGO_LIGHT = fileUrl(path.join(ASSETS, "logo-4selet-light.png"));
+const LOGO_DARK = fileUrl(path.join(ASSETS, "logo-4selet.png"));
+const SIMBOLO = fileUrl(path.join(ASSETS, "simbolo.svg"));
 
 // Resolve o JS do CLI do Remotion (sem depender do shim .cmd do npx).
 let _remotionCli = null;
@@ -56,12 +58,17 @@ function htmlToPng(htmlPath, outPng, width, height) {
   };
 }
 
-// ---- Template HTML da marca (1 cartao) ------------------------------------
-// Gera um criativo editorial sobrio (paleta azul, Selet Dots, logo).
-function brandCard({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
+// ---- Templates visuais da marca -------------------------------------------
+// 3 layouts on-brand (paleta 4Selet, Inter/JetBrains Mono, logo, Selet Dots).
+// Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
+// `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
+const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
+const DEFAULT_FOOTER = "Para quem sabe que e Selet.";
+
+// 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
+function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
   const headlineSize = headline && headline.length > 22 ? 120 : 168;
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${width}px; height:${height}px; }
@@ -88,7 +95,7 @@ function brandCard({ width, height, eyebrow, headline, subtext, cta, badge, foot
   .subtext { margin-top:36px; font-size:40px; line-height:1.34; color:${PALETTE.mist};
     max-width:90%; font-weight:400; }
   .bottom { position:relative; display:flex; align-items:center; justify-content:space-between; }
-  .cta { font-weight:800; font-size:36px; color:${PALETTE.darker};
+  .cta { font-weight:800; font-size:36px;
     background:${PALETTE.blue}; color:#FFFFFF; padding:26px 48px; border-radius:999px; }
   .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
 </style></head>
@@ -104,9 +111,138 @@ function brandCard({ width, height, eyebrow, headline, subtext, cta, badge, foot
   </div>
   <div class="bottom">
     ${cta ? `<span class="cta">${esc(cta)} →</span>` : "<span></span>"}
-    <span class="footer">${esc(footer || "Para quem sabe que e Selet.")}</span>
+    <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
   </div>
 </div></body></html>`;
+}
+
+// 2) Bold — fundo Darker solido, simbolo "4" como marca d'agua, tudo centralizado.
+// Pensado p/ headlines curtas number-forward (ex.: "0%", "95%", "Os 4 numeros").
+function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
+  const headlineSize = headline && headline.length > 18 ? 132 : 196;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:${width}px; height:${height}px; }
+  .card {
+    position:relative; width:${width}px; height:${height}px; overflow:hidden;
+    background: linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);
+    color:${PALETTE.cloud}; font-family:'Inter',sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:space-between;
+    text-align:center; padding:104px 96px;
+  }
+  .mark { position:absolute; right:-${Math.round(width * 0.18)}px; bottom:-${Math.round(height * 0.12)}px;
+    width:${Math.round(width * 0.72)}px; opacity:.06; }
+  .logo { position:relative; height:50px; }
+  .mid { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; color:${PALETTE.sky};
+    font-size:32px; letter-spacing:4px; text-transform:uppercase; margin-bottom:36px; }
+  .badge { font-family:'JetBrains Mono',monospace; font-size:28px; letter-spacing:1px;
+    color:${PALETTE.darker}; background:${PALETTE.sky}; padding:9px 22px; border-radius:999px; font-weight:500; margin-bottom:40px; }
+  .headline { font-weight:900; font-size:${headlineSize}px; line-height:0.96;
+    color:#FFFFFF; letter-spacing:-3px; }
+  .headline .accent { color:${PALETTE.sky}; }
+  .subtext { margin-top:40px; font-size:42px; line-height:1.32; color:${PALETTE.mist};
+    max-width:84%; font-weight:400; }
+  .bottom { position:relative; display:flex; flex-direction:column; align-items:center; gap:28px; }
+  .cta { font-weight:800; font-size:38px;
+    background:${PALETTE.blue}; color:#FFFFFF; padding:28px 56px; border-radius:999px; }
+  .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
+</style></head>
+<body><div class="card">
+  <img class="mark" src="${SIMBOLO}" alt=""/>
+  <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
+  <div class="mid">
+    ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
+    ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
+    <div class="headline">${headline || ""}</div>
+    ${subtext ? `<div class="subtext">${esc(subtext)}</div>` : ""}
+  </div>
+  <div class="bottom">
+    ${cta ? `<span class="cta">${esc(cta)} →</span>` : ""}
+    <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+  </div>
+</div></body></html>`;
+}
+
+// 3) Split — banda superior clara (Cloud, logo dark + eyebrow) + banda inferior
+// escura (Navy/Darker) com headline e CTA. Contraste editorial.
+function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
+  // Em formato quadrado (1080x1080) a banda inferior e mais curta — reduz a
+  // tipografia e o padding para o subtexto e o CTA nao serem cortados.
+  const square = height < 1200;
+  const headlineSize = square ? (headline && headline.length > 22 ? 100 : 124)
+                              : (headline && headline.length > 22 ? 112 : 150);
+  const subSize = square ? 34 : 40;
+  const topFlex = square ? 30 : 36;
+  const botPad = square ? 64 : 88;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:${width}px; height:${height}px; }
+  .card { position:relative; width:${width}px; height:${height}px; overflow:hidden;
+    font-family:'Inter',sans-serif; display:flex; flex-direction:column; }
+  .band-top { position:relative; flex:0 0 ${topFlex}%; background:${PALETTE.cloud}; color:${PALETTE.navy};
+    display:flex; flex-direction:column; justify-content:center; gap:22px; padding:0 92px; }
+  .band-top .dots { position:absolute; inset:0;
+    background-image: radial-gradient(${PALETTE.blue}1f 2px, transparent 2px);
+    background-size: 44px 44px; opacity:.6; }
+  .logo { position:relative; height:48px; align-self:flex-start; }
+  .eyebrow { position:relative; font-family:'JetBrains Mono',monospace; color:${PALETTE.blue};
+    font-size:30px; letter-spacing:3px; text-transform:uppercase; }
+  .badge { position:relative; align-self:flex-start; font-family:'JetBrains Mono',monospace; font-size:28px;
+    color:#FFFFFF; background:${PALETTE.blue}; padding:9px 22px; border-radius:999px; font-weight:500; }
+  .band-bot { position:relative; flex:1; min-height:0; background:linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);
+    color:${PALETTE.cloud}; display:flex; flex-direction:column; justify-content:space-between; padding:${botPad}px 92px; }
+  .headline { font-weight:900; font-size:${headlineSize}px; line-height:0.99;
+    color:#FFFFFF; letter-spacing:-2px; }
+  .headline .accent { color:${PALETTE.sky}; }
+  .subtext { margin-top:28px; font-size:${subSize}px; line-height:1.3; color:${PALETTE.mist};
+    max-width:92%; font-weight:400; }
+  .bottom { display:flex; align-items:center; justify-content:space-between; }
+  .cta { font-weight:800; font-size:36px;
+    background:${PALETTE.blue}; color:#FFFFFF; padding:26px 48px; border-radius:999px; }
+  .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
+</style></head>
+<body><div class="card">
+  <div class="band-top"><div class="dots"></div>
+    <img class="logo" src="${LOGO_DARK}" alt="4Selet"/>
+    ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
+    ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
+  </div>
+  <div class="band-bot">
+    <div class="headline">${headline || ""}</div>
+    <div>
+      ${subtext ? `<div class="subtext">${esc(subtext)}</div>` : ""}
+    </div>
+    <div class="bottom">
+      ${cta ? `<span class="cta">${esc(cta)} →</span>` : "<span></span>"}
+      <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+    </div>
+  </div>
+</div></body></html>`;
+}
+
+const TEMPLATES = { editorial: tplEditorial, bold: tplBold, split: tplSplit };
+const TEMPLATE_IDS = Object.keys(TEMPLATES);
+function resolveTemplate(id) { return TEMPLATES[id] || tplEditorial; }
+
+// Persistencia leve da escolha de template por task (render.json na raiz).
+// Permite que "Re-renderizar" e a reabertura mantenham o layout escolhido.
+function readRenderPref(loc) {
+  const j = readJson(path.join(loc.path, "render.json"));
+  return (j && typeof j.template === "string" && TEMPLATES[j.template]) ? j.template : null;
+}
+function writeRenderPref(loc, template) {
+  if (!TEMPLATES[template]) return;
+  try { fs.writeFileSync(path.join(loc.path, "render.json"), JSON.stringify({ template }, null, 2) + "\n", "utf8"); } catch (e) {}
+}
+// Decide o template efetivo: opcao da request > preferencia salva > editorial.
+function pickTemplate(loc, requested) {
+  const id = (requested && TEMPLATES[requested]) ? requested
+    : (readRenderPref(loc) || "editorial");
+  if (requested && TEMPLATES[requested]) writeRenderPref(loc, requested);
+  return { id, build: resolveTemplate(id) };
 }
 
 // Destaca numeros/percentuais no headline (ex.: "0%", "R$ 1,99", "D+10").
@@ -115,27 +251,29 @@ function highlightHeadline(text) {
 }
 
 // ---- Renders por tipo -----------------------------------------------------
-function renderImage(folder) {
+function renderImage(folder, opts) {
   const loc = requireActive(folder);
+  const tpl = pickTemplate(loc, opts && opts.template);
   const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
   const htmlPath = path.join(loc.path, "ads", "ad.html");
   const outPng = path.join(loc.path, "ads", "ad.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
-  const html = brandCard({
+  const html = tpl.build({
     width: 1080, height: 1080,
-    eyebrow: concept.layout_type || "Taxa Zero",
-    headline: highlightHeadline(concept.headline || "Zero taxa. Tres meses."),
+    eyebrow: concept.layout_type || concept.eyebrow || "Destaque",
+    headline: highlightHeadline(concept.headline || "Para quem sabe que e Selet."),
     subtext: concept.subtext || "",
     cta: concept.cta || "Ver as condicoes",
-    badge: "#TaxaZero",
+    badge: concept.badge || "",
   });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = htmlToPng(htmlPath, outPng, 1080, 1080);
-  return Object.assign(r, { rel: "ads/ad.png" });
+  return Object.assign(r, { rel: "ads/ad.png", template: tpl.id });
 }
 
-function renderFeed(folder) {
+function renderFeed(folder, opts) {
   const loc = requireActive(folder);
+  const tpl = pickTemplate(loc, opts && opts.template);
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
@@ -144,21 +282,22 @@ function renderFeed(folder) {
   const htmlPath = path.join(loc.path, "ads", "feed.html");
   const outPng = path.join(loc.path, "ads", "feed.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
-  const html = brandCard({
+  const html = tpl.build({
     width: 1080, height: 1350,
     eyebrow: "Feed",
     headline: highlightHeadline(headline),
     subtext: "",
     cta: "Solicitar convite",
-    badge: "#TaxaZero",
+    badge: "",
   });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = htmlToPng(htmlPath, outPng, 1080, 1350);
-  return Object.assign(r, { rel: "ads/feed.png" });
+  return Object.assign(r, { rel: "ads/feed.png", template: tpl.id });
 }
 
-function renderCarousel(folder) {
+function renderCarousel(folder, opts) {
   const loc = requireActive(folder);
+  const tpl = pickTemplate(loc, opts && opts.template);
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const slides = Array.isArray(concept.slides) && concept.slides.length
     ? concept.slides
@@ -173,20 +312,20 @@ function renderCarousel(folder) {
     const isCta = i === slides.length - 1;
     const htmlPath = path.join(dir, "slide_" + n + ".html");
     const outPng = path.join(dir, "slide_" + n + ".png");
-    const html = brandCard({
+    const html = tpl.build({
       width: 1080, height: 1350,
-      eyebrow: isCover ? "Taxa Zero" : (n + " / " + slides.length),
+      eyebrow: isCover ? (concept.eyebrow || "Carrossel") : (n + " / " + slides.length),
       headline: highlightHeadline(s.title || ""),
       subtext: s.body || "",
       cta: isCta ? (concept.cta || "Solicitar convite") : "",
-      badge: isCover ? "#TaxaZero" : "",
+      badge: isCover ? (concept.badge || "") : "",
     });
     fs.writeFileSync(htmlPath, html, "utf8");
     const r = htmlToPng(htmlPath, outPng, 1080, 1350);
     if (!r.ok) lastErr = r.stderr || r.stdout;
     else rels.push("slides/slide_" + n + ".png");
   });
-  return { ok: rels.length === slides.length, rels, stderr: lastErr || "", count: rels.length, total: slides.length };
+  return { ok: rels.length === slides.length, rels, stderr: lastErr || "", count: rels.length, total: slides.length, template: tpl.id };
 }
 
 // ---- Video (Remotion parametrizado) ---------------------------------------
@@ -238,15 +377,18 @@ function renderVideo(folder) {
   };
 }
 
-// Dispatcher por kind.
-function render(folder, kind) {
+// Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
+function render(folder, kind, opts) {
   switch (kind) {
-    case "image": return renderImage(folder);
-    case "feed": return renderFeed(folder);
-    case "carousel": return renderCarousel(folder);
+    case "image": return renderImage(folder, opts);
+    case "feed": return renderFeed(folder, opts);
+    case "carousel": return renderCarousel(folder, opts);
     case "video": return renderVideo(folder);
     default: { const e = new Error("kind sem render de midia: " + kind); e.code = "E_NO_RENDER"; throw e; }
   }
 }
 
-module.exports = { render, renderImage, renderFeed, renderCarousel, renderVideo };
+module.exports = {
+  render, renderImage, renderFeed, renderCarousel, renderVideo,
+  TEMPLATE_IDS,
+};
