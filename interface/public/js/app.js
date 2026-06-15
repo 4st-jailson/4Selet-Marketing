@@ -19,6 +19,18 @@ function toast(msg, type) {
   setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); }, 4200);
 }
 
+// Mostra um erro de chamada de IA de forma clara. 429 (rate limit) vira aviso
+// ambar com instrucao de re-tentar; demais erros viram toast de erro.
+function toastAiError(e) {
+  if (e && e.status === 429) {
+    toast(e.message || "Limite de requisições da API atingido. Aguarde alguns segundos e tente de novo.", "warn");
+  } else if (e && e.status === 401) {
+    toast(e.message || "Chave da API inválida — verifique em Configurações.", "error");
+  } else {
+    toast((e && e.message) || "Erro ao chamar a IA.", "error");
+  }
+}
+
 function setView(html) { $("#view").innerHTML = html; }
 function setTitle(t) { $("#page-title").textContent = t; document.title = t + " · Painel 4Selet"; }
 function metaType(id) { return (State.meta.content_types || []).find((c) => c.id === id); }
@@ -521,7 +533,7 @@ async function refineTask(folder, task) {
     router();
   } catch (e) {
     if (e.status === 422 && e.data && e.data.governance) toast("Ajuste bloqueado por regra de marca — reescreva a orientação.", "error");
-    else toast(e.message, "error");
+    else toastAiError(e);
     btn.disabled = false; btn.textContent = orig;
   }
 }
@@ -823,7 +835,7 @@ async function runGenerate() {
     const r = await API.generate(payload);
     LAST_GEN = { req: payload, res: r };
     renderGenResult(r);
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { toastAiError(e); }
   finally { btn.disabled = false; btn.textContent = "Gerar com IA"; }
 }
 
@@ -870,7 +882,7 @@ async function refineGenerated() {
     renderGenResult(LAST_GEN.res);
     toast(r.simulated ? "Ajuste simulado (configure a chave p/ IA real)" : "Ajuste aplicado", r.simulated ? "warn" : "success");
   } catch (e) {
-    toast(e.message, "error");
+    toastAiError(e);
     btn.disabled = false; btn.textContent = "Aplicar ajuste";
   }
 }
@@ -1052,7 +1064,12 @@ function setupAssistant() {
     try {
       const r = await API.assistant(q, "rota: " + parseHash().route);
       loading.innerHTML = esc(r.answer) + (r.simulated ? ' <span class="sim-flag">SIMULADO</span>' : "");
-    } catch (err) { loading.innerHTML = "Erro: " + esc(err.message); }
+    } catch (err) {
+      const m = (err && err.status === 429)
+        ? "Limite de requisições da API atingido — aguarde alguns segundos e pergunte de novo."
+        : ((err && err.message) || "erro ao responder");
+      loading.innerHTML = esc(m);
+    }
     log.scrollTop = log.scrollHeight;
   };
 }
