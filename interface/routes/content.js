@@ -13,6 +13,8 @@ router.get("/", (req, res) => {
 router.get("/:folder", (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
+  // #4 — carimba a primeira visualizacao (remove o selo "Novo" na biblioteca).
+  try { content.markViewed(req.params.folder); } catch (e) { /* nao critico */ }
   res.json({ task: t });
 });
 

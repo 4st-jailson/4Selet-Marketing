@@ -94,6 +94,7 @@ function listTasks() {
         campaign_angle: status.campaign_angle || null,
         platforms: status.platforms || [],
         last_updated_at: status.last_updated_at,
+        first_viewed_at: status.first_viewed_at || null,
         kind: classifyKind(files),
         thumb: pickThumb(files),
       });
@@ -223,6 +224,20 @@ function setTitle(folder, title) {
   return true;
 }
 
+// #4 — Marca a primeira visualizacao da peca (carimba first_viewed_at uma unica
+// vez). Idempotente: so escreve se ainda nao houver carimbo. Funciona em qualquer
+// zona (apenas grava metadado, nao altera conteudo aprovado).
+function markViewed(folder) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status || status.first_viewed_at) return false;
+  status.first_viewed_at = new Date().toISOString();
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return true;
+}
+
 function generatePreview(task_name, task_date) {
   return runScript("generate_preview.js", ["--task", task_name, "--date", task_date]);
 }
@@ -256,5 +271,5 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  setCampaignId, setTitle, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
+  setCampaignId, setTitle, markViewed, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

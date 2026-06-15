@@ -164,10 +164,10 @@ async function viewDashboard() {
   setView(`
     ${keyWarn}
     <div class="stat-grid mb">
-      <div class="card stat" data-accent="sky"><span class="stat-ico">◈</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></div>
-      <div class="card stat" data-accent="blue"><span class="stat-ico">▦</span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></div>
-      <div class="card stat" data-accent="warn"><span class="stat-ico">◷</span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></div>
-      <div class="card stat" data-accent="ok"><span class="stat-ico">✓</span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div></div>
+      <a class="card stat" data-accent="sky" href="#/campaigns" title="Ver campanhas"><span class="stat-ico">◈</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></a>
+      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico">▦</span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></a>
+      <a class="card stat" data-accent="warn" href="#/content?status=in_review" title="Ver peças em revisão"><span class="stat-ico">◷</span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></a>
+      <a class="card stat" data-accent="ok" href="#/approved" title="Ver peças aprovadas"><span class="stat-ico">✓</span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div></a>
     </div>
     <div class="grid grid-2">
       <div class="card">
@@ -318,8 +318,9 @@ function taskCard(t) {
   const zoomBtn = previewable
     ? `<button class="cc-zoom" title="Pré-visualizar" onclick="event.preventDefault();event.stopPropagation();openLightbox('${API.rawUrl(t.folder, t.thumb.rel)}','${t.thumb.type === "video" ? "video" : "image"}','${API.downloadUrl(t.folder, t.thumb.rel)}')">⤢</button>`
     : "";
+  const newBadge = !t.first_viewed_at ? '<span class="cc-new">Novo</span>' : "";
   return `<a class="content-card ${hasThumb ? "" : "thumb-fallback"}" href="#/task/${encodeURIComponent(t.folder)}">
-    <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span>${zoomBtn}</div>
+    <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span>${newBadge}${zoomBtn}</div>
     <div class="cc-body">
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}</div>
@@ -350,7 +351,8 @@ async function viewContent(arg, query) {
     <div class="filter-bar" id="lib-kinds">${kindChips}</div>
     <div id="lib-grid"></div>`);
 
-  const st = { kind: (query && query.kind) || "all", status: "all", camp: "all", q: "" };
+  const wantStatus = query && query.status && statuses.includes(query.status) ? query.status : "all";
+  const st = { kind: (query && query.kind) || "all", status: wantStatus, camp: "all", q: "" };
   function apply() {
     let shown = active.slice();
     if (st.kind !== "all") shown = shown.filter((t) => t.kind === st.kind);
@@ -362,6 +364,7 @@ async function viewContent(arg, query) {
       ? '<div class="content-grid">' + shown.map(taskCard).join("") + "</div>"
       : '<div class="empty">Nenhuma peça com esses filtros. <a href="#/create">Criar conteúdo</a></div>';
   }
+  if (st.status !== "all" && $("#lib-status")) $("#lib-status").value = st.status;
   $$("#lib-kinds .chip-filter").forEach((b) => { b.onclick = () => { st.kind = b.dataset.fkind; apply(); }; });
   $("#lib-status").onchange = () => { st.status = $("#lib-status").value; apply(); };
   if ($("#lib-camp")) $("#lib-camp").onchange = () => { st.camp = $("#lib-camp").value; apply(); };
@@ -401,9 +404,12 @@ async function viewApproved(arg, query) {
    ===================================================================== */
 function fileRow(folder, f) {
   const media = f.isImage || f.isVideo;
+  const isHtml = /\.html?$/i.test(f.rel);
   const viewBtn = media
     ? `<button class="btn btn-sm" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','${f.isVideo ? "video" : "image"}','${API.downloadUrl(folder, f.rel)}')">ver</button>`
-    : `<button class="btn btn-sm" onclick="openFile('${esc(folder)}','${esc(f.rel)}')">ver</button>`;
+    : isHtml
+      ? `<button class="btn btn-sm" onclick="openHtmlLightbox('${esc(folder)}','${esc(f.rel)}','${API.downloadUrl(folder, f.rel)}')">ver</button>`
+      : `<button class="btn btn-sm" onclick="openFile('${esc(folder)}','${esc(f.rel)}')">ver</button>`;
   return `<div class="list-row"><div class="lr-main"><div class="lr-title">${esc(f.rel)}</div><div class="lr-meta">${f.size} bytes</div></div>
     <div class="flex">${viewBtn}<a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div></div>`;
 }
@@ -615,6 +621,7 @@ async function openFile(folder, rel) {
 window.openFile = openFile;
 
 /* ---- Lightbox ---- */
+let _lbBlobUrl = null;
 function openLightbox(url, type, dlUrl) {
   const lb = $("#lightbox");
   const stage = $("#lightbox-stage");
@@ -628,6 +635,26 @@ function openLightbox(url, type, dlUrl) {
   lb.setAttribute("aria-hidden", "false");
   document.body.classList.add("no-scroll");
 }
+// #6 — Pré-visualiza HTML (ex.: preview.html) num modal amplo e responsivo.
+async function openHtmlLightbox(folder, rel, dlUrl) {
+  const lb = $("#lightbox");
+  const stage = $("#lightbox-stage");
+  if (!lb || !stage) { window.open(API.rawUrl(folder, rel), "_blank"); return; }
+  stage.innerHTML = '<div class="lightbox-loading"><span class="spinner"></span> carregando…</div>';
+  lb.classList.add("open");
+  lb.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+  try {
+    const text = await API.taskFile(folder, rel);
+    if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
+    _lbBlobUrl = URL.createObjectURL(new Blob([text], { type: "text/html" }));
+    stage.innerHTML = `<iframe class="lightbox-frame" src="${_lbBlobUrl}" title="${esc(rel)}"></iframe>`;
+    const dl = $("#lightbox-dl");
+    if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
+  } catch (e) {
+    stage.innerHTML = '<div class="lightbox-loading">Não foi possível abrir: ' + esc(e.message) + "</div>";
+  }
+}
 function closeLightbox() {
   const lb = $("#lightbox");
   if (!lb) return;
@@ -635,6 +662,7 @@ function closeLightbox() {
   lb.setAttribute("aria-hidden", "true");
   const stage = $("#lightbox-stage");
   if (stage) stage.innerHTML = "";
+  if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
   document.body.classList.remove("no-scroll");
 }
 function setupLightbox() {
@@ -646,6 +674,7 @@ function setupLightbox() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lb.classList.contains("open")) closeLightbox(); });
 }
 window.openLightbox = openLightbox;
+window.openHtmlLightbox = openHtmlLightbox;
 window.closeLightbox = closeLightbox;
 
 /* =====================================================================
@@ -822,6 +851,32 @@ function govHtml(gov) {
     gov.warnings.map((w) => '<div class="gov-item warn">⚠ ' + esc(w) + "</div>").join("");
 }
 
+// #1 — Banner de sucesso destacado com CTA principal e auto-redirecionamento.
+function showSaveBanner(folder) {
+  const host = $("#g-result");
+  if (!host) return;
+  const url = "#/task/" + encodeURIComponent(folder);
+  const old = host.querySelector(".save-banner"); if (old) old.remove();
+  const el = document.createElement("div");
+  el.className = "save-banner mb";
+  el.innerHTML = `<div class="save-banner-main"><span class="save-banner-ico">✓</span>
+      <div><strong>Peça salva com sucesso.</strong><div class="muted">Redirecionando para aprovação em <span class="save-count">3</span>s…</div></div></div>
+    <div class="save-banner-actions"><button class="btn btn-ghost btn-sm" data-sb="stay">Ficar aqui</button>
+      <a class="btn btn-primary" href="${url}">Abrir peça →</a></div>`;
+  host.insertAdjacentElement("afterbegin", el);
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  let n = 3; let cancelled = false;
+  const countEl = el.querySelector(".save-count");
+  const stop = () => { cancelled = true; clearInterval(timer); const sub = el.querySelector(".muted"); if (sub) sub.textContent = "Use o botão para abrir quando quiser."; };
+  el.querySelector('[data-sb="stay"]').onclick = stop;
+  const timer = setInterval(() => {
+    if (cancelled) return;
+    n -= 1;
+    if (countEl) countEl.textContent = String(Math.max(n, 0));
+    if (n <= 0) { clearInterval(timer); if (!cancelled) location.hash = url; }
+  }, 1000);
+}
+
 async function saveGenerated() {
   if (!LAST_GEN) return;
   const title = ($("#g-title") && $("#g-title").value.trim()) || "";
@@ -843,7 +898,7 @@ async function saveGenerated() {
     const r = await API.save(payload);
     $("#g-gov").innerHTML = govHtml(r.governance);
     toast("Salvo em " + r.folder + "/" + r.file, "success");
-    $("#g-result").insertAdjacentHTML("afterbegin", `<div class="gov-item ok mb">✓ Peça salva. <a href="#/task/${encodeURIComponent(r.folder)}">Abrir e aprovar →</a></div>`);
+    showSaveBanner(r.folder);
   } catch (e) {
     if (e.status === 422 && e.data && e.data.governance) { $("#g-gov").innerHTML = govHtml(e.data.governance); toast("Bloqueado por regra de marca — corrija o conteúdo.", "error"); }
     else if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); }
@@ -867,8 +922,9 @@ async function viewSettings() {
     <div class="card" style="max-width:660px">
       <h3>Inteligência Artificial (Claude)</h3>
       <p class="muted mt">Cole sua chave da Anthropic. Ela é salva apenas localmente em <span class="codeblock">interface/.env</span> (fora do git) e nunca é exposta no front.</p>
-      <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)</label>
-        <input id="s-key" type="password" placeholder="${s.has_key ? "configurada: " + esc(s.masked_key) : "sk-ant-..."}" />
+      <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)
+        ${s.has_key ? '<span class="key-badge ok">✓ Chave configurada</span>' : '<span class="key-badge none">Nenhuma chave</span>'}</label>
+        <input id="s-key" class="${s.has_key ? "has-key" : ""}" type="password" placeholder="${s.has_key ? "configurada: " + esc(s.masked_key) + " — cole para substituir" : "sk-ant-..."}" />
       </div>
       <div class="flex"><button class="btn btn-primary" id="s-save-key">Salvar chave</button><button class="btn" id="s-test">Testar conexão</button><span id="s-test-out" class="muted"></span></div>
       <hr class="sep" />
@@ -883,6 +939,10 @@ async function viewSettings() {
   $("#s-save-key").onclick = async () => {
     const key = $("#s-key").value.trim();
     if (key.length < 10) { toast("Chave muito curta.", "error"); return; }
+    if (s.has_key) {
+      const ok = await uiConfirm("Já existe uma chave configurada (" + s.masked_key + "). Deseja substituí-la pela nova chave?", { title: "Substituir chave", confirmText: "Substituir", confirmKind: "danger" });
+      if (!ok) return;
+    }
     try { await API.saveKey(key); toast("Chave salva", "success"); await refreshKeyStatus(); viewSettings(); } catch (e) { toast(e.message, "error"); }
   };
   $("#s-save-model").onclick = async () => { await API.saveModel($("#s-model").value); toast("Modelo salvo", "success"); await refreshKeyStatus(); };

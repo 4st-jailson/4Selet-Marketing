@@ -89,18 +89,31 @@ async function complete(opts) {
     const text = typeof opts.simulate === "function" ? opts.simulate() : "[conteudo simulado — configure a chave Anthropic em Configuracoes]";
     return { text, simulated: true, model: "simulado" };
   }
+  // #9 — Cada chamada e stateless (somente system + 1 mensagem do usuario, sem
+  // historico acumulado). Log de auditoria compacto + alerta de contexto grande.
+  const usedModel = opts.model || getModel();
+  const approxIn = Math.round(((opts.system || "").length + (opts.prompt || "").length) / 4);
+  if (approxIn > 150000) {
+    console.warn("[ai] AVISO contexto grande ~" + approxIn + " tokens (perto do limite) — considere encurtar o brief/exemplos");
+  }
+  console.log("[ai] req " + new Date().toISOString() + " model=" + usedModel + " in≈" + approxIn + "tok max_out=" + maxTokens);
   const msg = await client().messages.create({
-    model: opts.model || getModel(),
+    model: usedModel,
     max_tokens: maxTokens,
     system: opts.system,
     messages: [{ role: "user", content: opts.prompt }],
   });
+  const usage = msg.usage || {};
+  console.log("[ai] res model=" + msg.model + " in=" + (usage.input_tokens != null ? usage.input_tokens : "?") + " out=" + (usage.output_tokens != null ? usage.output_tokens : "?") + " stop=" + (msg.stop_reason || "?"));
+  if (msg.stop_reason === "max_tokens") {
+    console.warn("[ai] AVISO resposta truncada por max_tokens (" + maxTokens + ") — saida pode estar incompleta");
+  }
   const text = (msg.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)
     .join("\n")
     .trim();
-  return { text, simulated: false, model: msg.model };
+  return { text, simulated: false, model: msg.model, stop_reason: msg.stop_reason || null, usage };
 }
 
 module.exports = {
