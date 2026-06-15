@@ -11,6 +11,9 @@ outputs/*
 !outputs/archive/**
 !outputs/INDEX.md
 
+# videos de referencia (binarios grandes > limite do GitHub) — manter so localmente
+assets/reference-videos/
+
 # logs e temp
 logs/
 *.log
