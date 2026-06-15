@@ -44,6 +44,16 @@ router.get("/:folder/download", (req, res) => {
   res.download(f.abs, f.name);
 });
 
+// #5 — Define as tags (rotulos livres) da task. Body: { tags: [] | "a,b,c" }.
+router.post("/:folder/tags", (req, res) => {
+  const t = content.getTask(req.params.folder);
+  if (!t) return res.status(404).json({ error: "task nao encontrada" });
+  const tags = (req.body && req.body.tags != null) ? req.body.tags : [];
+  const saved = content.setTags(req.params.folder, tags);
+  if (saved == null) return res.status(400).json({ error: "nao foi possivel salvar as tags" });
+  res.json({ ok: true, tags: saved });
+});
+
 // Renderiza a midia final (PNG/MP4) a partir do conceito. ?kind=image|feed|carousel|video
 router.post("/:folder/render", (req, res) => {
   const t = content.getTask(req.params.folder);

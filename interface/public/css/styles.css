@@ -435,6 +435,27 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .lightbox-frame { width: min(95vw, 1100px); height: 90vh; border: 0; border-radius: var(--r-sm); background: #fff; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .lightbox-loading { color: #fff; font-size: 14px; display: flex; align-items: center; gap: 10px; padding: var(--s7); }
 
+/* ---- #5 tags ---- */
+.cc-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 1px; }
+.cc-tag { font-size: 11px; line-height: 1; padding: 4px 8px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-strong); border: 1px solid var(--border-soft); font-weight: 600; white-space: nowrap; }
+.cc-tag.more { background: var(--surface-3); color: var(--text-mut); }
+#task-tags .cc-tag { font-size: 12px; }
+
+/* ---- #2 strip de slides do carrossel ---- */
+.slide-strip { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.slide-thumb { position: relative; width: 96px; aspect-ratio: 4 / 5; padding: 0; border: 1px solid var(--border-soft); border-radius: var(--r-sm); overflow: hidden; cursor: pointer; background: var(--thumb-bg); transition: border-color var(--tr), transform var(--tr); }
+.slide-thumb:hover { border-color: var(--accent); transform: translateY(-2px); }
+.slide-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slide-num { position: absolute; top: 5px; left: 5px; min-width: 18px; height: 18px; padding: 0 5px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+
+/* ---- #2 seletor de cor de destaque (Aparência) ---- */
+.accent-grid { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.accent-opt { display: flex; align-items: center; gap: 8px; padding: 8px 13px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color var(--tr), background var(--tr); }
+.accent-opt:hover { border-color: var(--accent); }
+.accent-opt.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.accent-sw { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); flex: none; }
+.accent-sw-auto { background: linear-gradient(135deg, var(--brand-sky), var(--brand-blue)); }
+
 /* ---- assistant ---- */
 .assistant { position: fixed; top: 0; right: 0; bottom: 0; z-index: 1000; width: 400px; max-width: 92vw; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform var(--tr-slow); box-shadow: -20px 0 50px -30px rgba(0,0,0,.6); }
 .assistant.open { transform: none; }

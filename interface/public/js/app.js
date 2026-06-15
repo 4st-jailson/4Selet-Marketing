@@ -319,11 +319,15 @@ function taskCard(t) {
     ? `<button class="cc-zoom" title="Pré-visualizar" onclick="event.preventDefault();event.stopPropagation();openLightbox('${API.rawUrl(t.folder, t.thumb.rel)}','${t.thumb.type === "video" ? "video" : "image"}','${API.downloadUrl(t.folder, t.thumb.rel)}')">⤢</button>`
     : "";
   const newBadge = !t.first_viewed_at ? '<span class="cc-new">Novo</span>' : "";
+  const tagsHtml = (t.tags && t.tags.length)
+    ? '<div class="cc-tags">' + t.tags.slice(0, 4).map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") + (t.tags.length > 4 ? '<span class="cc-tag more">+' + (t.tags.length - 4) + "</span>" : "") + "</div>"
+    : "";
   return `<a class="content-card ${hasThumb ? "" : "thumb-fallback"}" href="#/task/${encodeURIComponent(t.folder)}">
     <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span>${newBadge}${zoomBtn}</div>
     <div class="cc-body">
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}</div>
+      ${tagsHtml}
       <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? tag(t.campaign_id) : ""}</div>
     </div></a>`;
 }
@@ -336,10 +340,12 @@ async function viewContent(arg, query) {
   const kinds = ["all"].concat(Object.keys(State.meta.kind_labels || {}).filter((k) => active.some((t) => t.kind === k)));
   const statuses = Array.from(new Set(active.map((t) => t.status)));
   const campIds = Array.from(new Set(active.map((t) => t.campaign_id).filter(Boolean)));
+  const tagSet = Array.from(new Set([].concat.apply([], active.map((t) => t.tags || [])))).sort((a, b) => a.localeCompare(b));
 
   const kindChips = kinds.map((k) => `<button class="chip-filter" data-fkind="${esc(k)}">${k === "all" ? "Todos os tipos" : esc(kindLabel(k))}</button>`).join("");
   const statusOpts = '<option value="all">Todos os status</option>' + statuses.map((s) => `<option value="${esc(s)}">${esc(statusLabel(s))}</option>`).join("");
   const campOpts = '<option value="all">Todas as campanhas</option>' + campIds.map((id) => `<option value="${esc(id)}">${esc(campName(id))}</option>`).join("");
+  const tagOpts = '<option value="all">Todas as tags</option>' + tagSet.map((tg) => `<option value="${esc(tg)}">${esc(tg)}</option>`).join("");
 
   setView(`
     <div class="section-head"><h2>Biblioteca de conteúdo</h2><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div>
@@ -347,27 +353,32 @@ async function viewContent(arg, query) {
       <input id="lib-search" class="lib-search" type="search" placeholder="Buscar por título…" />
       <select id="lib-status">${statusOpts}</select>
       ${campIds.length ? '<select id="lib-camp">' + campOpts + "</select>" : ""}
+      ${tagSet.length ? '<select id="lib-tag">' + tagOpts + "</select>" : ""}
     </div>
     <div class="filter-bar" id="lib-kinds">${kindChips}</div>
     <div id="lib-grid"></div>`);
 
   const wantStatus = query && query.status && statuses.includes(query.status) ? query.status : "all";
-  const st = { kind: (query && query.kind) || "all", status: wantStatus, camp: "all", q: "" };
+  const wantTag = query && query.tag && tagSet.indexOf(query.tag) !== -1 ? query.tag : "all";
+  const st = { kind: (query && query.kind) || "all", status: wantStatus, camp: "all", tag: wantTag, q: "" };
   function apply() {
     let shown = active.slice();
     if (st.kind !== "all") shown = shown.filter((t) => t.kind === st.kind);
     if (st.status !== "all") shown = shown.filter((t) => t.status === st.status);
     if (st.camp !== "all") shown = shown.filter((t) => (t.campaign_id || "") === st.camp);
-    if (st.q) { const q = st.q.toLowerCase(); shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "")).toLowerCase().includes(q)); }
+    if (st.tag !== "all") shown = shown.filter((t) => (t.tags || []).indexOf(st.tag) !== -1);
+    if (st.q) { const q = st.q.toLowerCase(); shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "") + " " + (t.tags || []).join(" ")).toLowerCase().includes(q)); }
     $$("#lib-kinds .chip-filter").forEach((b) => b.classList.toggle("on", b.dataset.fkind === st.kind));
     $("#lib-grid").innerHTML = shown.length
       ? '<div class="content-grid">' + shown.map(taskCard).join("") + "</div>"
       : '<div class="empty">Nenhuma peça com esses filtros. <a href="#/create">Criar conteúdo</a></div>';
   }
   if (st.status !== "all" && $("#lib-status")) $("#lib-status").value = st.status;
+  if (st.tag !== "all" && $("#lib-tag")) $("#lib-tag").value = st.tag;
   $$("#lib-kinds .chip-filter").forEach((b) => { b.onclick = () => { st.kind = b.dataset.fkind; apply(); }; });
   $("#lib-status").onchange = () => { st.status = $("#lib-status").value; apply(); };
   if ($("#lib-camp")) $("#lib-camp").onchange = () => { st.camp = $("#lib-camp").value; apply(); };
+  if ($("#lib-tag")) $("#lib-tag").onchange = () => { st.tag = $("#lib-tag").value; apply(); };
   $("#lib-search").oninput = () => { st.q = $("#lib-search").value.trim(); apply(); };
   apply();
 }
@@ -422,6 +433,22 @@ function mediaGallery(folder, task) {
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
     .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
   return `<div class="card"><h3>Mídia renderizada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
+}
+
+// #2 — Strip ordenado de thumbnails dos slides de um carrossel (slide_1..n).
+function carouselStrip(folder, task) {
+  const slides = task.files
+    .filter((f) => /slide_0*\d+\.png$/i.test(f.rel))
+    .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+    .sort((a, b) => a.n - b.n);
+  if (slides.length < 2) return "";
+  const items = slides.map((s) =>
+    `<button class="slide-thumb" title="Slide ${s.n} — ampliar" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')">
+      <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" /><span class="slide-num">${s.n}</span>
+    </button>`).join("");
+  return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
+    <p class="muted mt">Ordem de publicação — clique para ampliar.</p>
+    <div class="slide-strip mt">${items}</div></div>`;
 }
 
 function renderPanel(folder, task) {
@@ -511,6 +538,7 @@ async function viewTaskDetail(folder) {
       <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(p)).join("")}${techSlug}</div>
       <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
     </div>
+    ${task.kind === "carousel" ? carouselStrip(folder, task) : ""}
     ${mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
@@ -521,6 +549,11 @@ async function viewTaskDetail(folder) {
       <div>
         ${renderPanel(folder, task)}
         ${refineCard(task)}
+        <div class="card mt">
+          <div class="flex-between"><h3>Tags</h3><button class="btn btn-sm" id="btn-tags">Editar</button></div>
+          <div class="chips mt" id="task-tags">${(task.tags && task.tags.length) ? task.tags.map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") : '<span class="muted">Sem tags ainda.</span>'}</div>
+          <p class="muted mt">Rótulos livres para organizar e filtrar na biblioteca.</p>
+        </div>
         <div class="card mt">
           <h3>Workflow de aprovação</h3>
           <div class="kv mt">
@@ -538,6 +571,7 @@ async function viewTaskDetail(folder) {
       </div>
     </div>`);
   bindWorkflow(task);
+  if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
   if ($("#btn-refine")) $("#btn-refine").onclick = () => refineTask(folder, task);
   if ($("#btn-render")) {
     $("#btn-render").onclick = async () => {
@@ -559,6 +593,22 @@ async function viewTaskDetail(folder) {
       catch (e) { toast(e.message, "error"); }
     };
   }
+}
+
+// #5 — Edita as tags da peça (rótulos livres, separados por vírgula).
+async function editTags(folder, current) {
+  const res = await uiModal({
+    title: "Editar tags",
+    message: "Separe por vírgula. Até 12 tags, 32 caracteres cada.",
+    fields: [{ name: "tags", label: "Tags", value: (current || []).join(", "), placeholder: "ex.: taxa-zero, instagram, q3" }],
+    confirmText: "Salvar tags",
+  });
+  if (!res) return;
+  try {
+    await API.setTags(folder, res.tags);
+    toast("Tags atualizadas", "success");
+    router();
+  } catch (e) { toast(e.message, "error"); }
 }
 
 function workflowActions(task) {
@@ -710,6 +760,7 @@ async function viewCreate(arg, query) {
           <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
           <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
         </div>
+        <div class="field"><label>Referência visual / mood (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
         <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
         <details class="adv-block">
@@ -764,6 +815,7 @@ async function runGenerate() {
     platforms: collectChecks($("#view"), "gplat"),
     tone: $("#g-tone").value.trim() || undefined,
     key_offer: $("#g-offer").value.trim() || undefined,
+    mood: ($("#g-mood") && $("#g-mood").value.trim()) || undefined,
     extra: $("#g-extra").value.trim() || undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
@@ -935,7 +987,21 @@ async function viewSettings() {
         <div class="k">Status</div><div>${s.has_key ? '<span class="badge approved">conectada</span>' : '<span class="badge paused">não configurada</span>'}</div>
         <div class="k">Modelo atual</div><div>${esc(s.model)}</div>
       </div>
+    </div>
+    <div class="card mt" style="max-width:660px">
+      <h3>Aparência</h3>
+      <p class="muted mt">Cor de destaque da interface (preferência local, só do seu navegador). Não altera as cores das peças renderizadas — a marca permanece travada.</p>
+      <div class="field mt"><label>Cor de destaque</label>
+        <div class="accent-grid" id="accent-grid">${Object.keys(ACCENT_PRESETS).map((id) => {
+          const p = ACCENT_PRESETS[id];
+          const sw = p.swatch ? '<span class="accent-sw" style="background:' + p.swatch + '"></span>' : '<span class="accent-sw accent-sw-auto"></span>';
+          return '<button type="button" class="accent-opt" data-accent-id="' + id + '">' + sw + '<span>' + esc(p.label) + "</span></button>";
+        }).join("")}</div>
+      </div>
     </div>`);
+  const markAccent = () => { const cur = currentAccent(); $$("#accent-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.accentId === cur)); };
+  $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
+  markAccent();
   $("#s-save-key").onclick = async () => {
     const key = $("#s-key").value.trim();
     if (key.length < 10) { toast("Chave muito curta.", "error"); return; }
@@ -1019,6 +1085,34 @@ function applyTheme(theme) {
   }
 }
 function currentTheme() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }
+
+/* ---- #2 Aparência: cor de destaque da UI (tokens seguros, não toca render de marca) ---- */
+const ACCENT_KEY = "painel4selet_accent";
+const ACCENT_PRESETS = {
+  default: { label: "Padrão do tema" },
+  sky:  { label: "Sky",  swatch: "#5499B5", accent: "#5499B5", strong: "#6fb4cf", ink: "#042029", soft: "rgba(84,153,181,.14)" },
+  blue: { label: "Blue", swatch: "#006494", accent: "#006494", strong: "#1b7aa8", ink: "#ffffff", soft: "rgba(0,100,148,.14)" },
+  navy: { label: "Navy", swatch: "#003554", accent: "#003554", strong: "#0a4d72", ink: "#ffffff", soft: "rgba(0,53,84,.18)" },
+};
+function currentAccent() { try { return localStorage.getItem(ACCENT_KEY) || "default"; } catch (e) { return "default"; } }
+function applyAccent(id) {
+  const root = document.documentElement;
+  ["--accent", "--accent-strong", "--accent-ink", "--accent-soft"].forEach((v) => root.style.removeProperty(v));
+  const p = ACCENT_PRESETS[id];
+  if (p && id !== "default") {
+    root.style.setProperty("--accent", p.accent);
+    root.style.setProperty("--accent-strong", p.strong);
+    root.style.setProperty("--accent-ink", p.ink);
+    root.style.setProperty("--accent-soft", p.soft);
+  }
+}
+function setAccent(id) {
+  if (!ACCENT_PRESETS[id]) id = "default";
+  try { localStorage.setItem(ACCENT_KEY, id); } catch (e) {}
+  applyAccent(id);
+}
+function setupAccent() { applyAccent(currentAccent()); }
+
 function setupTheme() {
   applyTheme(currentTheme());
   const btn = $("#btn-theme");
@@ -1032,6 +1126,7 @@ function setupTheme() {
 /* ---- boot ---- */
 async function boot() {
   setupTheme();
+  setupAccent();
   setupMenu();
   try { State.meta = await API.meta(); } catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   setupAssistant();

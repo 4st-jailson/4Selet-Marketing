@@ -37,6 +37,7 @@ const API = (() => {
     preview: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preview"),
     renderMedia: (folder, kind) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/render?kind=" + encodeURIComponent(kind)),
     discard: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/discard"),
+    setTags: (folder, tags) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/tags", { tags }),
     promote: (folder, payload) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/promote", payload),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),

@@ -95,6 +95,7 @@ function listTasks() {
         platforms: status.platforms || [],
         last_updated_at: status.last_updated_at,
         first_viewed_at: status.first_viewed_at || null,
+        tags: Array.isArray(status.tags) ? status.tags : [],
         kind: classifyKind(files),
         thumb: pickThumb(files),
       });
@@ -148,6 +149,7 @@ function getTask(folder) {
     path: loc.path,
     status,
     files: annotated,
+    tags: Array.isArray(status && status.tags) ? status.tags : [],
     kind: classifyKind(files),
     thumb: pickThumb(files),
   };
@@ -224,6 +226,37 @@ function setTitle(folder, title) {
   return true;
 }
 
+// #5 — Normaliza tags: trim, minusculas, sem vazios/duplicatas, limite de 12.
+function normalizeTags(tags) {
+  const arr = Array.isArray(tags) ? tags : String(tags || "").split(",");
+  const seen = new Set();
+  const out = [];
+  for (const raw of arr) {
+    const t = String(raw || "").trim().replace(/\s+/g, " ").slice(0, 32);
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+// #5 — Grava tags (rotulos livres) no status.json. Funciona em qualquer zona
+// (apenas metadado, nao altera conteudo aprovado). Retorna a lista normalizada.
+function setTags(folder, tags) {
+  const loc = findTask(folder);
+  if (!loc) return null;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return null;
+  const norm = normalizeTags(tags);
+  status.tags = norm;
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return norm;
+}
+
 // #4 — Marca a primeira visualizacao da peca (carimba first_viewed_at uma unica
 // vez). Idempotente: so escreve se ainda nao houver carimbo. Funciona em qualquer
 // zona (apenas grava metadado, nao altera conteudo aprovado).
@@ -271,5 +304,5 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  setCampaignId, setTitle, markViewed, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
+  setCampaignId, setTitle, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

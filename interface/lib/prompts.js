@@ -99,6 +99,7 @@ function generationPrompt(req) {
   if (req.platforms && req.platforms.length) lines.push("- Plataforma(s): " + req.platforms.join(", "));
   if (req.tone) lines.push("- Tom desejado: " + req.tone);
   if (req.key_offer) lines.push("- Oferta/numero a destacar: " + req.key_offer);
+  if (req.mood) lines.push("- Referencia visual/mood (clima e estilo a evocar, sempre dentro da marca): " + req.mood);
   if (req.extra) lines.push("- Observacoes extras: " + req.extra);
   lines.push("");
   lines.push("FORMATO DE SAIDA — responda APENAS com um objeto JSON valido, sem texto fora do JSON, neste schema:");
