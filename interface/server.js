@@ -7,9 +7,21 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_TYPES, KIND_LABELS } = require("./lib/config");
+const ai = require("./lib/anthropic");
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
+
+// Health-check — usado por scripts de auto-restart/monitoramento na VPS.
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "painel-4selet",
+    uptime_s: Math.round(process.uptime()),
+    ai_key: ai.hasKey(),
+    now: new Date().toISOString(),
+  });
+});
 
 // Metadados para o front (dropdowns, tema)
 app.get("/api/meta", (req, res) => {
@@ -42,7 +54,25 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4500;
-app.listen(PORT, () => {
-  console.log("Painel 4Selet rodando em http://localhost:" + PORT);
+// HOST controla a interface de rede:
+//   - vazio/ausente  => bind em todas as interfaces (comportamento atual; acessivel pela rede da VPS)
+//   - 127.0.0.1      => somente local (acesso apenas de dentro da VPS, via RDP)
+// Defina em interface/.env. Sem autenticacao no painel, "127.0.0.1" e a opcao mais segura.
+const HOST = process.env.HOST || undefined;
+const server = app.listen(PORT, HOST, () => {
+  const where = HOST ? HOST : "0.0.0.0 (todas as interfaces)";
+  console.log("Painel 4Selet rodando em http://localhost:" + PORT + "  [bind: " + where + "]");
+  if (!HOST) {
+    console.log("[aviso] Painel sem autenticacao e acessivel pela rede. Para restringir ao acesso local, defina HOST=127.0.0.1 em interface/.env");
+  }
   console.log("Raiz do projeto: " + PATHS.PROJECT_ROOT);
 });
+
+// Encerramento limpo (para auto-restart/servico na VPS).
+function shutdown(sig) {
+  console.log("[" + sig + "] encerrando painel...");
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
