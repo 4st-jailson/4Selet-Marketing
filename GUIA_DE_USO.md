@@ -189,12 +189,13 @@ Crie uma campanha para agrupar peças sob um mesmo tema/ângulo. As peças gerad
 4. **Gerar com IA**. O resultado aparece em um editor.
 
 > [!NOTE]
-> O conteúdo textual (Feed, LinkedIn, Threads) é editável diretamente como texto. Carrossel e Vídeo são estruturados (JSON) e exibem, acima do editor, uma pré-visualização por slide/cena.
+> O conteúdo textual (Feed, LinkedIn, Threads) é editável diretamente como texto. Carrossel e Vídeo têm um **editor estruturado**: cada slide ou cena é um cartão com campos próprios, e você pode adicionar, remover e reordenar os itens.
 
 ### 6.4 Revisar e refinar
 
-- Edite o texto manualmente no editor, ou
-- Use **Aplicar ajuste**: descreva a mudança em linguagem natural (ex.: "encurte o headline e troque o CTA") e a IA reescreve mantendo o resto.
+- **Carrossel / Vídeo:** edite slide a slide (título e texto) ou cena a cena (tipo, texto on-screen, subtexto e direção de arte). Os botões `↑` `↓` `✕` reordenam e removem; "+ Adicionar" cria um novo item. Para editar o JSON à mão, abra **JSON (avançado)**, altere e clique em **Aplicar JSON aos campos**.
+- **Texto (Feed / LinkedIn / Threads):** edite diretamente no campo de texto.
+- Em qualquer tipo, use **Aplicar ajuste**: descreva a mudança em linguagem natural (ex.: "encurte o headline e troque o CTA") e a IA reescreve mantendo o resto.
 
 ### 6.5 Salvar e gerar a mídia
 

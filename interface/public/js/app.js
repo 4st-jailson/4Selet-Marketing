@@ -879,9 +879,17 @@ function renderGenResult(r) {
   if (ct.format === "json") editorVal = JSON.stringify(r.parsed || {}, null, 2);
   else editorVal = composeText(r.parsed, r.raw);
   const gov = r.governance || { errors: [], warnings: [] };
+  const structHtml = ct.format === "json" ? structuredEditor(r.content_type, r.parsed) : null;
+  const editorBlock = structHtml
+    ? `<div class="field mt"><label>Conteúdo (editável por ${r.content_type === "video_idea" ? "cena" : (r.content_type === "instagram_carousel" ? "slide" : "campo")})</label>${structHtml}</div>
+       <details class="json-adv mt"><summary>JSON (avançado)</summary>
+         <textarea id="g-edit" rows="12" style="font-family:var(--mono)">${esc(editorVal)}</textarea>
+         <p class="muted" style="font-size:12px;margin-top:6px">Atualizado automaticamente pelos campos acima. Para editar à mão, altere o JSON e clique em “Aplicar JSON”.</p>
+         <button class="btn btn-ghost btn-sm" id="g-json-apply" type="button">Aplicar JSON aos campos</button>
+       </details>`
+    : `<div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>`;
   $("#g-result").innerHTML = `
-    ${ct.format === "json" ? structuredPreview(r.content_type, r.parsed) : ""}
-    <div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>
+    ${editorBlock}
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
       <label>Ajustar com IA <span class="hint">(descreva o que mudar; o resto é mantido)</span></label>
@@ -892,6 +900,10 @@ function renderGenResult(r) {
   $("#g-regen").onclick = runGenerate;
   $("#g-save").onclick = saveGenerated;
   $("#g-refine-btn").onclick = refineGenerated;
+  if (structHtml) {
+    bindStructuredEditor();
+    if ($("#g-json-apply")) $("#g-json-apply").onclick = () => applyJsonToStructured(r.content_type);
+  }
 }
 
 async function refineGenerated() {
@@ -942,6 +954,145 @@ function structuredPreview(type, p) {
   }
   return "";
 }
+// ---- Editor estruturado (slides do carrossel / cenas do vídeo / anúncio) ----
+// Substitui o JSON cru por campos editáveis. Mantém o textarea #g-edit (oculto
+// em "JSON avançado") sempre sincronizado, então salvar/refinar seguem iguais.
+// Preserva campos não expostos (caption, hashtags, visual_style...) via STRUCT_BASE.
+let STRUCT_BASE = {};
+
+function structuredEditor(type, p) {
+  STRUCT_BASE = (p && typeof p === "object") ? p : {};
+  if (type === "instagram_carousel") return carouselEditor(p || {});
+  if (type === "video_idea") return videoEditor(p || {});
+  if (type === "ad_creative") return adEditor(p || {});
+  return null; // tipos sem editor estruturado caem no textarea cru
+}
+
+function seCtrls(i, total) {
+  return `<button class="se-mini" data-se="up" title="Mover para cima"${i === 0 ? " disabled" : ""}>↑</button>` +
+    `<button class="se-mini" data-se="down" title="Mover para baixo"${i === total - 1 ? " disabled" : ""}>↓</button>` +
+    `<button class="se-mini se-del" data-se="del" title="Remover"${total <= 1 ? " disabled" : ""}>✕</button>`;
+}
+
+function slideItem(s, i, total) {
+  return `<div class="se-item" data-i="${i}">
+    <div class="se-head"><span class="se-n">Slide ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
+    <input class="se-f" data-k="title" placeholder="Título do slide" value="${esc(s.title || "")}" />
+    <textarea class="se-f" data-k="body" rows="2" placeholder="Texto do slide">${esc(s.body || "")}</textarea>
+  </div>`;
+}
+function carouselEditor(p) {
+  const slides = (Array.isArray(p.slides) && p.slides.length) ? p.slides : [{ title: "", body: "" }];
+  return `<div class="struct-ed" data-type="instagram_carousel">
+    <div class="se-list">${slides.map((s, i) => slideItem(s, i, slides.length)).join("")}</div>
+    <button class="btn btn-ghost btn-sm mt" data-se-add="slide" type="button">+ Adicionar slide</button>
+    <div class="field mt"><label>CTA</label><input class="se-cta" placeholder="ex.: Solicitar convite" value="${esc(p.cta || "")}" /></div>
+  </div>`;
+}
+
+function sceneItem(s, i, total) {
+  return `<div class="se-item" data-i="${i}">
+    <div class="se-head"><span class="se-n">Cena ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
+    <input class="se-f se-type" data-k="type" list="se-types" placeholder="tipo (hook, product, benefit, cta)" value="${esc(s.type || "")}" />
+    <textarea class="se-f" data-k="text" rows="2" placeholder="Texto on-screen (headline da cena)">${esc(s.text || "")}</textarea>
+    <input class="se-f" data-k="subtitle" placeholder="Subtexto (segunda linha, opcional)" value="${esc(s.subtitle || "")}" />
+    <textarea class="se-f se-dim" data-k="visual" rows="2" placeholder="Direção de arte (não aparece na tela)">${esc(s.visual || "")}</textarea>
+  </div>`;
+}
+function videoEditor(p) {
+  const scenes = (Array.isArray(p.scenes) && p.scenes.length) ? p.scenes : [{ type: "hook", text: "", subtitle: "", visual: "" }];
+  return `<div class="struct-ed" data-type="video_idea">
+    <datalist id="se-types"><option value="hook"></option><option value="product"></option><option value="benefit"></option><option value="cta"></option></datalist>
+    <div class="field"><label>Conceito</label><input class="se-concept" placeholder="Ideia central do vídeo" value="${esc(p.concept || "")}" /></div>
+    <div class="se-list">${scenes.map((s, i) => sceneItem(s, i, scenes.length)).join("")}</div>
+    <button class="btn btn-ghost btn-sm mt" data-se-add="scene" type="button">+ Adicionar cena</button>
+    <div class="field mt"><label>CTA</label><input class="se-cta" placeholder="ex.: Conhecer a plataforma" value="${esc(p.cta || "")}" /></div>
+  </div>`;
+}
+
+function adEditor(p) {
+  const f = (k, label, ph) => `<div class="field mt"><label>${label}</label><input class="se-f" data-k="${k}" placeholder="${ph}" value="${esc(p[k] || "")}" /></div>`;
+  return `<div class="struct-ed" data-type="ad_creative">
+    ${f("headline", "Headline", "máx. 4 palavras")}
+    ${f("subtext", "Subtexto", "linha de apoio")}
+    ${f("cta", "CTA", "ex.: Ver as condições")}
+    ${f("layout_type", "Layout", "Product Focus, Split, Lifestyle…")}
+  </div>`;
+}
+
+// Lê o editor estruturado e devolve o objeto parsed (mesclado em STRUCT_BASE).
+function structToParsed() {
+  const ed = document.querySelector(".struct-ed");
+  if (!ed) return null;
+  const base = JSON.parse(JSON.stringify(STRUCT_BASE || {}));
+  const type = ed.dataset.type;
+  const items = [...ed.querySelectorAll(".se-item")];
+  const val = (it, k) => { const el = it.querySelector('[data-k="' + k + '"]'); return el ? el.value : ""; };
+  if (type === "instagram_carousel") {
+    base.slides = items.map((it) => ({ title: val(it, "title"), body: val(it, "body") }));
+    base.cta = (ed.querySelector(".se-cta") || {}).value || "";
+  } else if (type === "video_idea") {
+    base.concept = (ed.querySelector(".se-concept") || {}).value || "";
+    base.scenes = items.map((it) => ({ type: val(it, "type"), text: val(it, "text"), subtitle: val(it, "subtitle"), visual: val(it, "visual") }));
+    base.cta = (ed.querySelector(".se-cta") || {}).value || "";
+  } else if (type === "ad_creative") {
+    ["headline", "subtext", "cta", "layout_type"].forEach((k) => {
+      const el = ed.querySelector('[data-k="' + k + '"]'); if (el) base[k] = el.value;
+    });
+  }
+  return base;
+}
+function syncJsonMirror() {
+  const parsed = structToParsed();
+  if (parsed && $("#g-edit")) $("#g-edit").value = JSON.stringify(parsed, null, 2);
+}
+function seRenumber(ed) {
+  const scene = ed.dataset.type === "video_idea";
+  const items = [...ed.querySelectorAll(".se-item")];
+  items.forEach((it, i) => {
+    const n = it.querySelector(".se-n"); if (n) n.textContent = (scene ? "Cena " : "Slide ") + (i + 1);
+    const up = it.querySelector('[data-se="up"]'); if (up) up.disabled = i === 0;
+    const dn = it.querySelector('[data-se="down"]'); if (dn) dn.disabled = i === items.length - 1;
+    const del = it.querySelector('[data-se="del"]'); if (del) del.disabled = items.length <= 1;
+    it.dataset.i = i;
+  });
+}
+function bindStructuredEditor() {
+  const ed = document.querySelector(".struct-ed");
+  if (!ed) return;
+  ed.addEventListener("input", syncJsonMirror);
+  ed.addEventListener("click", (e) => {
+    const add = e.target.closest("[data-se-add]");
+    const ctl = e.target.closest("[data-se]");
+    if (add) {
+      e.preventDefault();
+      const list = ed.querySelector(".se-list");
+      const tmp = document.createElement("div");
+      tmp.innerHTML = add.dataset.seAdd === "slide"
+        ? slideItem({ title: "", body: "" }, list.children.length, list.children.length + 1)
+        : sceneItem({ type: "benefit", text: "", subtitle: "", visual: "" }, list.children.length, list.children.length + 1);
+      list.appendChild(tmp.firstElementChild);
+      seRenumber(ed); syncJsonMirror();
+    } else if (ctl) {
+      e.preventDefault();
+      const item = ctl.closest(".se-item"); const list = item.parentElement; const act = ctl.dataset.se;
+      if (act === "del") { if (list.children.length > 1) item.remove(); }
+      else if (act === "up") { const prev = item.previousElementSibling; if (prev) list.insertBefore(item, prev); }
+      else if (act === "down") { const next = item.nextElementSibling; if (next) list.insertBefore(next, item); }
+      seRenumber(ed); syncJsonMirror();
+    }
+  });
+  syncJsonMirror();
+}
+function applyJsonToStructured(type) {
+  try {
+    const obj = JSON.parse($("#g-edit").value);
+    const host = document.querySelector(".struct-ed");
+    const html = structuredEditor(type, obj);
+    if (host && html) { host.outerHTML = html; bindStructuredEditor(); toast("JSON aplicado aos campos", "success"); }
+  } catch (e) { toast("JSON inválido: " + e.message, "error"); }
+}
+
 function govHtml(gov) {
   if (!gov.errors.length && !gov.warnings.length) return '<div class="gov-item ok">✓ Passou no checklist de marca (sem violações).</div>';
   return gov.errors.map((e) => '<div class="gov-item err">✕ ' + esc(e) + "</div>").join("") +
