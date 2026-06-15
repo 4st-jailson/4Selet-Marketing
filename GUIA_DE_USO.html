@@ -7,1082 +7,367 @@
 <style>
   :root{
     --darker:#07212B; --navy:#003554; --blue:#006494; --sky:#5499B5;
-    --mist:#AFBCC9; --cloud:#D9DCD6; --ink:#0c2330; --paper:#f4f6f5;
-    --code-bg:#07212B; --border:#dbe2e4;
+    --mist:#AFBCC9; --cloud:#D9DCD6; --ink:#102a36; --muted:#5b7180;
+    --paper:#f5f7f7; --surface:#ffffff; --code-bg:#07212B; --border:#dde4e6;
+    --ok:#1f8a52; --pending:#7a6a1f; --warn:#9a6212; --na:#697a84;
+    --max:880px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   body{
     margin:0; background:var(--paper); color:var(--ink);
     font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-    line-height:1.65; font-size:16px;
+    line-height:1.7; font-size:16px; -webkit-font-smoothing:antialiased;
   }
+  .ic{width:1.05em;height:1.05em;flex:0 0 auto;vertical-align:-.16em}
   .topbar{
-    position:sticky; top:0; z-index:10; background:var(--darker); color:var(--cloud);
-    padding:14px 24px; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    position:sticky; top:0; z-index:20; background:var(--darker); color:var(--cloud);
+    padding:13px 28px; box-shadow:0 1px 0 rgba(255,255,255,.04),0 4px 16px rgba(0,0,0,.22);
     display:flex; align-items:center; gap:12px;
   }
-  .topbar .dot{width:14px;height:14px;border-radius:50%;background:var(--sky);box-shadow:0 0 0 4px rgba(84,153,181,.25)}
-  .topbar b{font-weight:700;letter-spacing:.3px}
-  .topbar small{color:var(--mist);margin-left:auto;font-size:13px}
-  .wrap{max-width:920px;margin:0 auto;padding:40px 24px 96px}
-  h1,h2,h3,h4,h5,h6{color:var(--navy);line-height:1.25;scroll-margin-top:72px;font-weight:700}
-  h1{font-size:2rem;margin:.2em 0 .6em;border-bottom:3px solid var(--sky);padding-bottom:.3em}
-  h2{font-size:1.55rem;margin:1.8em 0 .5em;border-bottom:1px solid var(--border);padding-bottom:.25em}
-  h3{font-size:1.25rem;margin:1.5em 0 .4em;color:var(--blue)}
-  h4{font-size:1.05rem;margin:1.2em 0 .3em;color:var(--blue)}
-  p{margin:.6em 0}
+  .topbar .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--sky));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:-1px}
+  .topbar b{font-weight:700;letter-spacing:.2px;font-size:15px}
+  .topbar small{color:var(--mist);margin-left:auto;font-size:12.5px;font-weight:500}
+  .layout{max-width:var(--max);margin:0 auto;padding:48px 28px 120px}
+  h1,h2,h3,h4,h5,h6{color:var(--navy);line-height:1.3;font-weight:700;position:relative}
+  h1,h2,h3,h4{scroll-margin-top:74px}
+  h1{font-size:2.05rem;margin:.1em 0 .2em;letter-spacing:-.5px}
+  h2{font-size:1.5rem;margin:2.2em 0 .6em;padding-bottom:.3em;border-bottom:2px solid var(--sky)}
+  h3{font-size:1.2rem;margin:1.8em 0 .4em;color:var(--blue)}
+  h4{font-size:1.02rem;margin:1.4em 0 .3em;color:var(--blue);text-transform:none}
+  p{margin:.7em 0}
   a{color:var(--blue);text-decoration:none}
   a:hover{text-decoration:underline}
+  .anchor{position:absolute;left:-1.4em;top:.18em;opacity:0;color:var(--mist);padding:0 .25em;transition:opacity .15s}
+  .anchor .ic{width:.8em;height:.8em}
+  h2:hover .anchor,h3:hover .anchor,h4:hover .anchor{opacity:1}
   code{
     font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    background:#e7edef;color:var(--darker);padding:.12em .4em;border-radius:4px;font-size:.88em;
+    background:#e9eef0;color:var(--darker);padding:.12em .42em;border-radius:5px;font-size:.86em;
   }
   pre.code{
-    background:var(--code-bg);color:#e7eef2;padding:16px 18px;border-radius:10px;overflow:auto;
-    border:1px solid #0d2c38;margin:1em 0;font-size:.86rem;line-height:1.55;
+    background:var(--code-bg);color:#e9f0f3;padding:16px 18px;border-radius:10px;overflow:auto;
+    border:1px solid #0e2d39;margin:1.1em 0;font-size:.85rem;line-height:1.6;position:relative;
   }
+  pre.code[data-lang]::before{content:attr(data-lang);position:absolute;top:0;right:0;
+    background:#0e2d39;color:var(--mist);font:600 10px/1 Inter,sans-serif;letter-spacing:.08em;
+    text-transform:uppercase;padding:5px 9px;border-radius:0 10px 0 8px}
   pre.code code{background:none;color:inherit;padding:0;font-size:inherit}
-  blockquote{
-    margin:1em 0;padding:.6em 1em .6em 1.1em;background:#eaf1f4;
-    border-left:4px solid var(--sky);border-radius:0 8px 8px 0;color:#1c3a48;
-  }
-  blockquote>:first-child{margin-top:0}
-  blockquote>:last-child{margin-bottom:0}
-  blockquote h3,blockquote h4{margin-top:.2em}
-  .table-wrap{overflow-x:auto;margin:1.1em 0}
+  blockquote{margin:1.1em 0;padding:.5em 1.1em;border-left:3px solid var(--mist);color:#3a5360;background:#eef2f4;border-radius:0 8px 8px 0}
+  blockquote>:first-child{margin-top:0}blockquote>:last-child{margin-bottom:0}
+  /* callouts (alertas estilo GitHub, com icone) */
+  .callout{margin:1.2em 0;border:1px solid var(--border);border-left-width:4px;border-radius:8px;
+    background:var(--surface);padding:14px 18px}
+  .callout-head{display:flex;align-items:center;gap:.5em;font-weight:700;font-size:.95rem;margin-bottom:.3em}
+  .callout-head .ic{width:1.15em;height:1.15em}
+  .callout-body>:first-child{margin-top:0}.callout-body>:last-child{margin-bottom:0}
+  .callout-note{border-left-color:var(--blue)} .callout-note .callout-head{color:var(--blue)}
+  .callout-tip{border-left-color:var(--ok)} .callout-tip .callout-head{color:var(--ok)}
+  .callout-important{border-left-color:var(--navy)} .callout-important .callout-head{color:var(--navy)}
+  .callout-warning{border-left-color:var(--warn)} .callout-warning .callout-head{color:var(--warn)}
+  .callout-caution{border-left-color:#b3261e} .callout-caution .callout-head{color:#b3261e}
+  .callout-note{background:#f0f6f9}.callout-tip{background:#eef7f1}.callout-warning{background:#fbf4ea}.callout-caution{background:#fcf0ef}
+  /* tabelas */
+  .table-wrap{overflow-x:auto;margin:1.2em 0;border:1px solid var(--border);border-radius:10px}
   table{border-collapse:collapse;width:100%;font-size:.92rem}
-  th,td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
-  thead th{background:var(--navy);color:var(--cloud);font-weight:600}
-  tbody tr:nth-child(even){background:#eef2f3}
-  hr{border:none;border-top:1px solid var(--border);margin:2em 0}
-  ul,ol{margin:.5em 0 .9em;padding-left:1.5em}
-  li{margin:.25em 0}
+  th,td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:9px 13px;text-align:left;vertical-align:top}
+  th:last-child,td:last-child{border-right:none}
+  tbody tr:last-child td{border-bottom:none}
+  thead th{background:var(--navy);color:var(--cloud);font-weight:600;font-size:.85rem;letter-spacing:.01em}
+  tbody tr:nth-child(even){background:#f1f5f6}
+  .st{display:inline-flex;vertical-align:-.16em;margin-right:.35em}
+  .st .ic{width:1em;height:1em}
+  .st-ok{color:var(--ok)}.st-pending{color:var(--pending)}.st-warn{color:var(--warn)}.st-na{color:var(--na)}
+  hr{border:none;border-top:1px solid var(--border);margin:2.4em 0}
+  ul,ol{margin:.5em 0 1em;padding-left:1.5em}
+  li{margin:.3em 0}
   li>ul,li>ol{margin:.3em 0}
   ::selection{background:var(--sky);color:#fff}
-  .foot{margin-top:64px;padding-top:18px;border-top:1px solid var(--border);color:#5b7180;font-size:13px}
+  .foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
+  @media(max-width:640px){.layout{padding:32px 18px 90px}h1{font-size:1.7rem}.anchor{display:none}}
 </style>
 </head>
 <body>
-  <div class="topbar"><span class="dot"></span><b>4Selet · Guia de Uso</b><small>Equipe de Marketing — 6 agentes de IA</small></div>
-  <main class="wrap">
+  <header class="topbar"><span class="mark">4S</span><b>4Selet · Guia de Uso</b><small>Equipe de Marketing com IA</small></header>
+  <main class="layout">
     <h1 id="guia-de-uso--equipe-de-marketing-4selet">Guia de Uso — Equipe de Marketing 4Selet</h1>
-    <p><em>Manual operacional do sistema de 6 agentes de marketing com IA.</em></p>
-    <blockquote><p><strong>Versão 3.0</strong> · Junho/2026 · Marca: 4Selet · Campanha ativa: Taxa Zero Mantido por: Marketing 4Selet · Documentos-irmãos: <code>CLAUDE.md</code> (contexto técnico), <code>STATUS_PROJETO.md</code> (estado atual), <code>SPEC_WORKFLOW_APROVACAO.md</code> (contrato técnico do Workflow), <code>GIT_REMOTE_SETUP.md</code> (backup remoto), <code>interface/README.md</code> (painel web)</p></blockquote>
-    <blockquote><h3 id="🆕-como-usar-o-sistema--leia-isto-primeiro">🆕 Como usar o sistema — leia isto primeiro</h3>
-<p>Existem <strong>dois caminhos</strong> para criar conteúdo. Use o primeiro no dia a dia.</p>
-<ol><li><strong>🟢 Painel web (PRINCIPAL)</strong> — uma interface visual em <code>http://localhost:4500</code>. Você gerencia campanhas, gera conteúdo com IA, revê o preview e aprova <strong>com cliques</strong>, sem digitar prompt nenhum. É o caminho recomendado para todo mundo do time. Quickstart na <strong>Seção 4</strong>; setup na <strong>Seção 8.1</strong>.</li><li><strong>⚙️ Extensão Claude Code no VSCode (SECUNDÁRIO / avançado)</strong> — conversar direto com os agentes via chat, rodar a pipeline completa, scripts e automações finas. Para quem precisa de controle total ou de recursos que ainda não estão no painel. Setup na <strong>Seção 8.2</strong>.</li></ol>
-<p>As Seções 5, 6, 9–17 e 20–23 valem para <strong>os dois caminhos</strong> — descrevem os mesmos agentes, regras de marca e workflow de aprovação por baixo.</p></blockquote>
+    <p><em>Manual operacional do sistema de marketing com IA da 4Selet. Documento vivo: descreve como o sistema funciona e como operá-lo em qualquer campanha ativa.</em></p>
+    <div class="callout callout-important"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3zM7 12v6a2 2 0 0 0 2 2h1"/></svg><span>Existem dois caminhos para usar o sistema</span></div><div class="callout-body"><p>O <strong>Painel web</strong> é o caminho principal — uma interface visual onde você cria, revisa e aprova conteúdo com cliques, sem digitar prompts. A <strong>extensão Claude Code no VSCode</strong> é o caminho secundário, para automações avançadas, pipeline e scripts. Comece pelo painel (Seções 4 e 5).</p></div></div>
     <hr>
-    <h2 id="sumário">Sumário</h2>
-    <ol><li><a href="#1-bem-vindoa--como-ler-este-guia">Bem-vindo(a) — como ler este guia</a></li><li><a href="#2-glossário-rápido">Glossário rápido</a></li><li><a href="#3-objetivo-do-projeto">Objetivo do projeto</a></li><li><a href="#4-quickstart--sua-primeira-peça-em-5-minutos-no-painel">Quickstart — sua primeira peça em 5 minutos (no Painel)</a></li><li><a href="#5-os-6-agentes-em-detalhe">Os 6 agentes em detalhe</a></li><li><a href="#6-como-os-agentes-conversam-o-contrato">Como os agentes conversam (o "contrato")</a></li><li><a href="#7-estado-atual-do-sistema">Estado atual do sistema</a></li><li><a href="#8-setup--painel-web-principal-e-extensão-vscode-secundário">Setup — Painel web (principal) e extensão VSCode (secundário)</a></li><li><a href="#9-como-funciona-uma-sessão-na-prática">Como funciona uma sessão na prática</a></li><li><a href="#10-fluxos-de-uso-cenários-reais">Fluxos de uso (cenários reais)</a></li><li><a href="#11-anatomia-de-um-bom-prompt">Anatomia de um bom prompt</a></li><li><a href="#12-biblioteca-de-prompts-paste-ready">Biblioteca de prompts (paste-ready)</a></li><li><a href="#13-rodar-via-terminal-powershell">Rodar via terminal (PowerShell)</a></li><li><a href="#14-anatomia-de-uma-campanha-o-que-cada-arquivo-significa">Anatomia de uma campanha (o que cada arquivo significa)</a></li><li><a href="#15-gabarito-de-marca--faz--não-faz">Gabarito de marca — faz / não faz</a></li><li><a href="#16-troubleshooting">Troubleshooting</a></li><li><a href="#17-perguntas-frequentes-faq">Perguntas frequentes (FAQ)</a></li><li><a href="#18-próximos-passos-do-projeto">Próximos passos do projeto</a></li><li><a href="#19-arquivos-importantes-do-projeto">Arquivos importantes do projeto</a></li><li><a href="#20-casos-de-uso-comuns-prompts-diários">Casos de uso comuns (prompts diários)</a></li><li><a href="#21-como-criar--adaptar-uma-campanha">Como criar / adaptar uma campanha</a></li><li><a href="#22-integrar-a-api-da-meta-para-postagens-automatizadas">Integrar a API da Meta para postagens automatizadas</a></li><li><a href="#23-workflow-de-aprovação-preview-aprovar-arquivar">Workflow de aprovação: preview, aprovar, arquivar</a></li></ol>
+    <h2 id="sumário">Sumário<a class="anchor" href="#sumário" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <ol><li><a href="#1-sobre-este-guia">Sobre este guia</a></li><li><a href="#2-visão-geral-do-sistema">Visão geral do sistema</a></li><li><a href="#3-conceitos-fundamentais">Conceitos fundamentais</a></li><li><a href="#4-instalação-e-configuração">Instalação e configuração</a></li><li><a href="#5-início-rápido-no-painel">Início rápido no painel</a></li><li><a href="#6-operação-no-painel">Operação no painel</a></li><li><a href="#7-tipos-de-conteúdo">Tipos de conteúdo</a></li><li><a href="#8-os-agentes">Os agentes</a></li><li><a href="#9-identidade-de-marca-e-governança">Identidade de marca e governança</a></li><li><a href="#10-workflow-de-aprovação">Workflow de aprovação</a></li><li><a href="#11-caminho-avançado">Caminho avançado</a></li><li><a href="#12-renderização-de-mídia">Renderização de mídia</a></li><li><a href="#13-integrações-externas">Integrações externas</a></li><li><a href="#14-resolução-de-problemas">Resolução de problemas</a></li><li><a href="#15-referência-rápida">Referência rápida</a></li><li><a href="#16-manutenção-deste-guia">Manutenção deste guia</a></li></ol>
     <hr>
-    <h2 id="1-bem-vindoa--como-ler-este-guia">1. Bem-vindo(a) — como ler este guia</h2>
-    <p>Este guia é o <strong>manual operacional</strong> da equipe de marketing automatizada da 4Selet. Ele foi escrito para que <strong>qualquer pessoa do time</strong> consiga usar o sistema mesmo <strong>sem conhecimento técnico profundo</strong>. Se algum termo parecer estranho, ele provavelmente está no glossário (Seção 2). Na versão HTML do guia, basta <strong>passar o mouse em cima da palavra sublinhada</strong> para ver a definição inline.</p>
-    <h3 id="como-ler">Como ler</h3>
-    <p>Você pode usá-lo de duas formas:</p>
-    <ul><li><strong>Do início ao fim</strong> se está começando — em ~30 minutos de leitura você entende o sistema todo.</li><li><strong>Pulando direto para a seção que precisa</strong> se já conhece — o sumário lateral te leva.</li></ul>
-    <h3 id="sugestão-de-ordem-para-quem-está-aprendendo">Sugestão de ordem para quem está aprendendo</h3>
-    <ol><li><strong>Glossário rápido</strong> (seção 2) — termos que aparecem ao longo do guia.</li><li><strong>Objetivo do projeto</strong> (seção 3) — o "por que" e a analogia da agência interna.</li><li><strong>Quickstart</strong> (seção 4) — rode UMA peça pra sentir como funciona.</li><li><strong>Os 6 agentes</strong> (seção 5) — entenda quem é cada um.</li><li><strong>Como funciona uma sessão</strong> (seção 9) — o que acontece quando você digita um prompt.</li><li><strong>Anatomia de um bom prompt</strong> (seção 11) — como pedir as coisas direito.</li><li>Volte ao que interessa.</li></ol>
-    <h3 id="o-que-você-precisa-para-usar">O que você precisa para usar</h3>
-    <p><strong>Para o caminho principal (Painel web):</strong></p>
-    <ul><li><strong>Acesso remoto à VPS</strong> (RDP) com as credenciais corretas — o projeto roda <strong>na VPS</strong>, não no seu computador local.</li><li>O <strong>painel rodando</strong> na VPS (<code>npm start</code> na pasta <code>interface/</code>) e aberto em <code>http://localhost:4500</code> no navegador da sessão. Setup na <strong>Seção 8.1</strong>.</li><li>A <strong>chave Anthropic</strong> configurada uma única vez em <strong>Configurações</strong> do painel (para a IA gerar de verdade; sem ela, roda em modo simulado).</li><li>Disposição para <strong>revisar</strong> o que o sistema entrega antes de aprovar/publicar.</li></ul>
-    <p><strong>Para o caminho secundário (extensão no VSCode):</strong></p>
-    <ul><li>Tudo o acima, mais o <strong>VSCode</strong> com a <strong>extensão Claude Code</strong> instalada e autenticada (já configurado na VPS), com o projeto aberto em <code>C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes</code>. Setup na <strong>Seção 8.2</strong>.</li></ul>
-    <blockquote><p>Você <strong>não precisa</strong> programar para usar. Não precisa saber Node, React, Remotion nem nada técnico. No painel, você só <strong>clica e preenche campos em português</strong>; na extensão, você <strong>escreve em português no chat do Claude</strong>. As partes técnicas estão por baixo, automatizadas.</p></blockquote>
+    <h2 id="1-sobre-este-guia">1. Sobre este guia<a class="anchor" href="#1-sobre-este-guia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Este guia explica, em ordem de uso, como operar o sistema de geração de conteúdo de marketing da 4Selet. Ele é <strong>independente de campanha</strong>: descreve o funcionamento permanente do sistema. Quando uma campanha específica aparece, é apenas como <strong>exemplo</strong> — substitua pelos dados da campanha que estiver ativa no momento.</p>
+    <p><strong>Para quem é este guia</strong></p>
+    <div class="table-wrap"><table>
+<thead><tr><th>Perfil</th><th>O que ler primeiro</th></tr></thead>
+<tbody>
+<tr><td>Quem vai operar no dia a dia</td><td>Seções 4, 5 e 6 (painel)</td></tr>
+<tr><td>Quem aprova conteúdo</td><td>Seções 6 e 10 (revisão e workflow)</td></tr>
+<tr><td>Quem cuida da marca</td><td>Seções 8 e 9 (agentes e governança)</td></tr>
+<tr><td>Perfil técnico / automação</td><td>Seções 11 a 13 (avançado, render, integrações)</td></tr>
+</tbody></table></div>
+    <p><strong>Convenções</strong></p>
+    <p>Os blocos destacados ao longo do texto indicam o peso da informação:</p>
+    <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>Contexto útil ou detalhe que vale conhecer.</p></div></div>
+    <div class="callout callout-tip"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><span>Dica</span></div><div class="callout-body"><p>Atalho ou boa prática que economiza tempo.</p></div></div>
+    <div class="callout callout-warning"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Atenção</span></div><div class="callout-body"><p>Ponto de atenção que pode gerar retrabalho se ignorado.</p></div></div>
+    <div class="callout callout-caution"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7.9 2 16.1 2 22 7.9 22 16.1 16.1 22 7.9 22 2 16.1 2 7.9"/><path d="M12 8v4M12 16h.01"/></svg><span>Cuidado</span></div><div class="callout-body"><p>Ação sensível ou irreversível — leia antes de executar.</p></div></div>
+    <p>Trechos em <code>fonte monoespaçada</code> são comandos, nomes de arquivos ou caminhos.</p>
     <hr>
-    <h2 id="2-glossário-rápido">2. Glossário rápido</h2>
-    <p>Definições curtas dos termos que aparecem o tempo todo. Volte aqui sempre que esbarrar num termo estranho.</p>
+    <h2 id="2-visão-geral-do-sistema">2. Visão geral do sistema<a class="anchor" href="#2-visão-geral-do-sistema" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>O sistema transforma um briefing simples em peças de marketing prontas para publicar — imagens, vídeos curtos, carrosséis e textos por plataforma — sempre dentro da identidade da marca 4Selet, com uma trilha de revisão e aprovação rastreável.</p>
+    <p><strong>Os dois caminhos</strong></p>
+    <div class="table-wrap"><table>
+<thead><tr><th>Caminho</th><th>O que é</th><th>Quando usar</th></tr></thead>
+<tbody>
+<tr><td><strong>Painel web</strong></td><td>Interface visual em <code>http://localhost:4500</code></td><td>Dia a dia: criar, revisar, aprovar</td></tr>
+<tr><td><strong>Extensão Claude Code (VSCode)</strong></td><td>Chat com os agentes, pipeline e scripts</td><td>Automação, lotes, controle fino</td></tr>
+</tbody></table></div>
+    <p>Os dois caminhos compartilham a mesma base: os mesmos agentes, as mesmas regras de marca e o mesmo workflow de aprovação por baixo. O que muda é a forma de operar.</p>
+    <p><strong>Fluxo de alto nível</strong></p>
+    <pre class="code"><code>Briefing  -&gt;  Geração (IA)  -&gt;  Revisão e refino  -&gt;  Render da mídia  -&gt;  Aprovação  -&gt;  Publicação
+                                                                                            (assistida)</code></pre>
+    <p><strong>Arquitetura resumida</strong></p>
+    <pre class="code"><code>Pesquisa de mercado
+        |
+        +--&gt; Designer de Imagem    --+
+        +--&gt; Especialista de Vídeo   +--&gt; Distribuição
+        +--&gt; Copywriter            --+
+              (coordenados pelo Orchestrator)</code></pre>
+    <p>São <strong>cinco agentes</strong> especializados, um <strong>Orchestrator</strong> que coordena a ordem de execução, e uma camada de <strong>governança de aprovação</strong> por cima de tudo. No total, o sistema empacota <strong>sete skills</strong> (os cinco agentes, o orchestrator e o task-promoter). Detalhes na Seção 8.</p>
+    <hr>
+    <h2 id="3-conceitos-fundamentais">3. Conceitos fundamentais<a class="anchor" href="#3-conceitos-fundamentais" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Leia esta seção uma vez; ela destrava o resto do guia.</p>
     <div class="table-wrap"><table>
 <thead><tr><th>Termo</th><th>O que significa</th></tr></thead>
 <tbody>
-<tr><td><strong>Agente</strong></td><td>Um "papel" especializado (pesquisador, designer, copywriter, etc.). <strong>Não é um software autônomo</strong> — é o Claude <strong>incorporando</strong> aquele papel quando você pede algo que case com a função dele.</td></tr>
-<tr><td><strong>Skill</strong></td><td>A "ficha de instruções" de um agente. Mora em <code>skills/&lt;nome&gt;/SKILL.md</code>. Define o que o agente faz, quando entra em ação, como gera o output e o que ele <strong>não pode</strong> fazer.</td></tr>
-<tr><td><strong>Knowledge file</strong></td><td>Documento oficial da marca que todo agente lê <strong>antes</strong> de gerar conteúdo. Os três principais: <code>brand_identity.md</code> (visual + voz), <code>product_campaign.md</code> (Taxa Zero, números, diferenciais), <code>platform_guidelines.md</code> (specs por plataforma).</td></tr>
-<tr><td><strong>Trigger phrase</strong></td><td>Palavra ou expressão no seu prompt que faz o Claude saber qual skill usar. Ex.: <em>"ad estático"</em> → ativa <code>ad-creative-designer</code>; <em>"Reels"</em> → <code>video-ad-specialist</code>.</td></tr>
-<tr><td><strong>Task</strong></td><td>Uma "campanha" ou "job de trabalho" identificado por <strong><code>task_name</code></strong> (nome curto em <strong>snake_case</strong> — minúsculas com <code>_</code> no lugar de espaço, ex.: <code>lancamento_junho</code>) + <strong><code>task_date</code></strong> (YYYY-MM-DD). Ex.: <code>taxa_zero_maio_2026-05-29</code>. Toda a saída dessa task vai pra uma pasta única com esse nome.</td></tr>
-<tr><td><strong>Output</strong></td><td>O <strong>resultado entregue</strong> pelo agente. Vai sempre pra <code>outputs/&lt;task_name&gt;_&lt;data&gt;/</code>, com subpastas por tipo (<code>ads/</code>, <code>video/</code>, <code>copy/</code>).</td></tr>
-<tr><td><strong>Pipeline</strong></td><td>A <strong>sequência completa</strong> dos 5 agentes criativos: research → ad + vídeo + copy → distribution. Coordenada pelo <code>orchestrator</code>.</td></tr>
-<tr><td><strong>Contrato</strong></td><td>O acordo de "qual arquivo um agente entrega que o próximo consome". Ex.: research entrega <code>research_results.json</code>; ad/vídeo/copy o leem; distribution agrega tudo.</td></tr>
-<tr><td><strong>Dry-run</strong></td><td>Modo "teste": tudo é gerado, <strong>nada é publicado</strong>. É o <strong>padrão de segurança</strong> — quase sempre você roda em dry-run.</td></tr>
-<tr><td><strong>Gate</strong></td><td>Trava de segurança do <code>distribution-agent</code> que <strong>impede publicação automática</strong>. Só destrava com referência explícita ao arquivo <code>Publish &lt;task&gt; &lt;data&gt;.md</code>.</td></tr>
-<tr><td><strong>Modo simulado</strong></td><td>Quando uma chave externa (Tavily, Supabase) <strong>não está configurada</strong>, o agente gera um output simulado e <strong>rotulado</strong> (<code>_simulated: true</code>) em vez de chamar a API real. <strong>Não é bug</strong> — é o comportamento atual esperado.</td></tr>
-<tr><td><strong>Ângulo de campanha</strong> (campaign_angle)</td><td>A "mensagem-mãe" da campanha, escolhida pelo research. Ex.: <em>"Migração sem perder margem"</em>. Tem que ser <strong>o mesmo</strong> em ad + vídeo + copy — é o que mantém a campanha coerente.</td></tr>
-<tr><td><strong>Job payload</strong></td><td>JSON com a configuração de uma task (nome, data, plataformas, skips, dry-run). É o que o <code>orchestrator</code> lê para rodar a pipeline. Modelo na seção 12.6.</td></tr>
-<tr><td><strong>Skip flag</strong></td><td>Opção pra pular um estágio (<code>skip_research</code>, <code>skip_image</code>, <code>skip_video</code>). Útil quando você já tem o asset pronto e não quer gerar de novo.</td></tr>
-<tr><td><strong>Source folder</strong></td><td>Pasta com assets pré-existentes em <code>assets/&lt;task_name&gt;/</code>. <strong>Obrigatória</strong> se você pular o research (<code>skip_research: true</code>) — caso contrário o pipeline bloqueia.</td></tr>
-<tr><td><strong>Scene</strong></td><td>Uma "cena" do vídeo (hook, problem, product, benefit, proof, offer, cta). Tem <code>type</code> + <code>text</code> obrigatórios.</td></tr>
-<tr><td><strong>Layout type</strong></td><td>O modelo visual do ad estático: <code>product_focus</code> (oferta direta), <code>split</code> (comparativo), <code>lifestyle</code> (institucional).</td></tr>
-<tr><td><strong>Platform targets</strong></td><td>Quais plataformas a campanha vai cobrir: <code>instagram</code>, <code>threads</code>, <code>youtube</code>, <code>linkedin</code>. Definido no payload.</td></tr>
-<tr><td><strong>Publish MD</strong></td><td>Arquivo <code>Publish &lt;task&gt; &lt;data&gt;.md</code> gerado pelo <code>distribution-agent</code>. Contém URLs da mídia + metadata + agendamento sugerido + status do gate. É o que você <strong>revisa</strong> antes de qualquer publicação real.</td></tr>
+<tr><td><strong>Agente</strong></td><td>Um papel especializado (pesquisador, designer, copywriter etc.). Não é um software autônomo: é o Claude incorporando aquele papel quando a tarefa exige.</td></tr>
+<tr><td><strong>Skill</strong></td><td>A ficha de instruções de um agente, em <code>skills/&lt;nome&gt;/SKILL.md</code>. Define o que ele faz, quando atua e quais regras segue.</td></tr>
+<tr><td><strong>Knowledge file</strong></td><td>Documento de marca em <code>knowledge/</code>. Fonte de verdade sobre identidade, produto e plataformas. Lido antes de qualquer geração.</td></tr>
+<tr><td><strong>Campanha</strong></td><td>Um agrupador lógico de peças no painel, com um ângulo/tema. Uma peça pode existir sem campanha.</td></tr>
+<tr><td><strong>Task (peça)</strong></td><td>Uma unidade de conteúdo: uma pasta em <code>outputs/</code> com o conteúdo, a mídia e o <code>status.json</code>.</td></tr>
+<tr><td><strong>status.json</strong></td><td>A fonte de verdade de cada task: estado, histórico, aprovador, hashes de integridade.</td></tr>
+<tr><td><strong>Workflow de aprovação</strong></td><td>A máquina de estados que leva uma peça de rascunho até aprovada (Seção 10).</td></tr>
+<tr><td><strong>Geração real vs. simulada</strong></td><td>Com a chave da IA configurada, a geração é real. Sem a chave, o sistema roda em modo simulado (rotulado), útil para testar o fluxo.</td></tr>
 </tbody></table></div>
     <hr>
-    <h2 id="3-objetivo-do-projeto">3. Objetivo do projeto</h2>
-    <h3 id="em-uma-frase">Em uma frase</h3>
-    <p>Este sistema é uma <strong>equipe de marketing automatizada</strong> que, a partir de um <strong>briefing</strong> simples em texto (isto é: instruções básicas — o que você quer, pra qual plataforma, com qual ângulo de mensagem), devolve <strong>uma campanha completa</strong> (pesquisa, ad estático, vídeo, copy multi-plataforma e pacote de publicação) <strong>dentro da identidade oficial da 4Selet</strong>.</p>
-    <h3 id="a-analogia-pra-ficar-visual">A analogia (pra ficar visual)</h3>
-    <p>Imagine uma <strong>agência de marketing interna</strong> com 6 papéis:</p>
+    <h2 id="4-instalação-e-configuração">4. Instalação e configuração<a class="anchor" href="#4-instalação-e-configuração" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <h3 id="41-painel-web-recomendado">4.1 Painel web (recomendado)<a class="anchor" href="#41-painel-web-recomendado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Pré-requisito: Node.js instalado.</p>
+    <pre class="code" data-lang="bash"><code>cd interface
+npm install        # apenas na primeira vez
+npm start          # sobe o painel em http://localhost:4500</code></pre>
+    <p>Abra <code>http://localhost:4500</code> no navegador.</p>
+    <div class="callout callout-tip"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><span>Dica</span></div><div class="callout-body"><p>Em servidor (VPS), rode o painel como serviço gerenciado pelo PM2, que reinicia sozinho após queda ou reboot:</p>
+<pre class="code" data-lang="bash"><code>pm2 restart painel-4selet --update-env
+pm2 logs painel-4selet        # acompanhar logs</code></pre></div></div>
+    <h3 id="42-configurar-a-chave-da-ia">4.2 Configurar a chave da IA<a class="anchor" href="#42-configurar-a-chave-da-ia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Sem chave, a geração funciona em <strong>modo simulado</strong> (conteúdo rotulado, sem custo). Para gerar com IA real:</p>
+    <ol><li>No painel, abra <strong>Configurações</strong>.</li><li>Cole a chave da Anthropic (<code>sk-ant-...</code>) e salve.</li><li>Use <strong>Testar chave</strong> para confirmar a conexão.</li></ol>
+    <p>A chave fica gravada em <code>interface/.env</code> (arquivo local, fora do controle de versão). O modelo padrão é <code>claude-sonnet-4-6</code> e pode ser trocado em Configurações.</p>
+    <div class="callout callout-caution"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7.9 2 16.1 2 22 7.9 22 16.1 16.1 22 7.9 22 2 16.1 2 7.9"/><path d="M12 8v4M12 16h.01"/></svg><span>Cuidado</span></div><div class="callout-body"><p>A chave dá acesso de cobrança à API. Nunca a compartilhe nem a inclua em commits. Se suspeitar de exposição, revogue-a no console da Anthropic e gere uma nova.</p></div></div>
+    <h3 id="43-extensão-claude-code-avançado">4.3 Extensão Claude Code (avançado)<a class="anchor" href="#43-extensão-claude-code-avançado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Para o caminho secundário, abra o projeto no VSCode com a extensão Claude Code. Você conversa direto com os agentes e roda os scripts e o pipeline descritos na Seção 11.</p>
+    <hr>
+    <h2 id="5-início-rápido-no-painel">5. Início rápido no painel<a class="anchor" href="#5-início-rápido-no-painel" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Sua primeira peça em poucos minutos:</p>
+    <ol><li><strong>Configurações</strong> — confirme que a chave está conectada (Seção 4.2). Sem ela, a peça sai simulada.</li><li><strong>Campanhas</strong> — crie uma campanha (ou pule e gere uma peça avulsa).</li><li><strong>Criar Conteúdo</strong> — escolha o tipo (ex.: <em>Feed Instagram</em>), escreva um briefing curto e claro do tema, e opcionalmente preencha <strong>Referência visual / mood</strong>.</li><li><strong>Gerar com IA</strong> — revise o resultado no editor; ajuste o texto ou use <strong>Aplicar ajuste</strong> para refinar com IA.</li><li><strong>Salvar na campanha</strong> — a peça é criada e você é levado à tela de aprovação.</li><li><strong>Preview e aprovação</strong> — gere o preview, revise e aprove.</li></ol>
+    <div class="callout callout-tip"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><span>Dica</span></div><div class="callout-body"><p>Um bom briefing é específico: público, objetivo da peça, ângulo e um número ou prova, se houver. Quanto mais claro o briefing, menos refino depois.</p></div></div>
+    <hr>
+    <h2 id="6-operação-no-painel">6. Operação no painel<a class="anchor" href="#6-operação-no-painel" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Esta é a seção central — o fluxo completo do dia a dia.</p>
+    <h3 id="61-painel-inicial-dashboard">6.1 Painel inicial (Dashboard)<a class="anchor" href="#61-painel-inicial-dashboard" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Mostra os totais (campanhas, peças, em revisão, aprovadas). <strong>Cada card é clicável</strong> e leva à lista já filtrada — por exemplo, o card <em>Em revisão</em> abre a biblioteca filtrada por esse estado.</p>
+    <h3 id="62-campanhas">6.2 Campanhas<a class="anchor" href="#62-campanhas" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Crie uma campanha para agrupar peças sob um mesmo tema/ângulo. As peças geradas podem ser ligadas a ela, o que mantém o trabalho organizado e permite reaproveitar o ângulo entre peças.</p>
+    <h3 id="63-criar-conteúdo">6.3 Criar conteúdo<a class="anchor" href="#63-criar-conteúdo" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <ol><li>Escolha o <strong>tipo de conteúdo</strong> (Seção 7).</li><li>Escreva o <strong>briefing</strong> (mínimo de alguns caracteres; quanto mais específico, melhor).</li><li>Opcional: <strong>Referência visual / mood</strong> — descreve o clima e o estilo a evocar (sempre dentro da marca). Direciona o conceito visual da peça.</li><li><strong>Gerar com IA</strong>. O resultado aparece em um editor.</li></ol>
+    <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>O conteúdo textual (Feed, LinkedIn, Threads) é editável diretamente como texto. Carrossel e Vídeo são estruturados (JSON) e exibem, acima do editor, uma pré-visualização por slide/cena.</p></div></div>
+    <h3 id="64-revisar-e-refinar">6.4 Revisar e refinar<a class="anchor" href="#64-revisar-e-refinar" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <ul><li>Edite o texto manualmente no editor, ou</li><li>Use <strong>Aplicar ajuste</strong>: descreva a mudança em linguagem natural (ex.: "encurte o headline e troque o CTA") e a IA reescreve mantendo o resto.</li></ul>
+    <h3 id="65-salvar-e-gerar-a-mídia">6.5 Salvar e gerar a mídia<a class="anchor" href="#65-salvar-e-gerar-a-mídia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Ao <strong>Salvar na campanha</strong>, a peça vira uma task. Para os tipos visuais, a mídia final é renderizada (Seção 12): imagem, feed e carrossel viram PNG; vídeo vira MP4.</p>
+    <h3 id="66-aprovar-ou-descartar">6.6 Aprovar ou descartar<a class="anchor" href="#66-aprovar-ou-descartar" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <ul><li><strong>Preview</strong> gera uma página de revisão e move a peça para <em>em revisão</em>.</li><li><strong>Aprovar</strong> promove a peça (registra quem aprovou e quando, e calcula hashes de integridade).</li><li><strong>Descartar</strong> arquiva a peça de forma reversível (vai para <code>outputs/_archived/</code>, nunca é apagada de imediato).</li></ul>
+    <h3 id="67-biblioteca-de-conteúdo">6.7 Biblioteca de conteúdo<a class="anchor" href="#67-biblioteca-de-conteúdo" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Onde todas as peças vivem. Recursos:</p>
     <div class="table-wrap"><table>
-<thead><tr><th>Papel</th><th>Equivalente no sistema</th></tr></thead>
+<thead><tr><th>Recurso</th><th>Para que serve</th></tr></thead>
 <tbody>
-<tr><td>🔍 Pesquisador de mercado</td><td><code>marketing-research-agent</code></td></tr>
-<tr><td>🎨 Designer gráfico</td><td><code>ad-creative-designer</code></td></tr>
-<tr><td>🎬 Roteirista de vídeo</td><td><code>video-ad-specialist</code></td></tr>
-<tr><td>✍️ Copywriter (legendas/títulos)</td><td><code>copywriter-agent</code></td></tr>
-<tr><td>📦 Gerente de distribuição</td><td><code>distribution-agent</code></td></tr>
-<tr><td>👔 Diretor de operações</td><td><code>orchestrator</code></td></tr>
+<tr><td>Selo <strong>Novo</strong></td><td>Marca peças ainda não abertas; some na primeira visualização.</td></tr>
+<tr><td><strong>Tags</strong></td><td>Rótulos livres por peça (separados por vírgula). Mais flexíveis que pastas: uma peça pode ter vários contextos.</td></tr>
+<tr><td><strong>Filtros</strong></td><td>Por estado, tipo e tags; a busca também considera as tags.</td></tr>
+<tr><td><strong>Lightbox</strong></td><td>Visualização ampliada (imagens e preview) centralizada, com download.</td></tr>
+<tr><td><strong>Download</strong></td><td>Baixa o arquivo final da peça.</td></tr>
 </tbody></table></div>
-    <p>A <strong>diferença</strong> aqui é que esses 6 papéis são <strong>interpretados pelo Claude</strong> (via skills) que <strong>lê os documentos da marca</strong> (knowledge files) <strong>antes</strong> de produzir qualquer coisa. O resultado é conteúdo que respeita paleta, tipografia, voz, números corretos da campanha e — o mais importante — o que <strong>pode e não pode</strong> dizer (sem hype, sem citar concorrentes, sem inventar dados).</p>
-    <h3 id="o-que-ele-faz">O que ele faz</h3>
-    <ul><li><strong>Produz peças individuais</strong> quando você pede uma só (ex.: "me dá uma caption pro Instagram").</li><li><strong>Roda campanhas inteiras</strong> quando você submete um <em>job payload</em> completo (research + ad + vídeo + copy + pacote de publicação).</li><li><strong>Renderiza artefatos reais</strong>:<ul><li><strong>Imagens PNG</strong> (1080×1080, 1080×1350, 1080×1920, 1280×720) via <strong>Playwright headless</strong> (navegador Chromium que roda invisível, sem abrir tela — só pra capturar a imagem final).</li><li><strong>Vídeos MP4</strong> via Remotion (composition <code>AdVideo</code> em React).</li><li><strong>Textos estruturados</strong> (<code>copy.json</code>, captions, títulos, hashtags).</li><li><strong>Pacotes de publicação</strong> prontos para revisão humana (<code>Publish MD</code>).</li></ul></li><li><strong>Mantém coerência</strong>: o <code>selected_campaign_angle</code> do research aparece igualzinho no ad, no vídeo e na copy.</li><li><strong>Protege a publicação real</strong>: o sistema <strong>nunca posta sozinho</strong> — só com aprovação explícita.</li></ul>
-    <h3 id="o-que-ele-não-faz-por-design-não-é-limitação">O que ele NÃO faz (por design, não é limitação)</h3>
-    <ul><li><strong>Não publica automaticamente</strong> em redes sociais. Tem um <strong>gate</strong> que só abre com referência explícita ao Publish MD + tokens válidos.</li><li><strong>Não cita concorrentes</strong> (Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay). Comparação com mercado só em abstrato (<em>"taxas de mercado em torno de 7,9%"</em>).</li><li><strong>Não inventa depoimentos</strong> nem personagens fictícios. Se faltar prova social real, usa a <em>scene <code>proof</code></em> com o "95% de aprovação no cartão".</li><li><strong>Não usa estética hype/guru</strong> (🔥🚀💸, "última chance", "vaga gratuita", etc.).</li><li><strong>Não trabalha pra outras marcas</strong> — os knowledge files são 4Selet-specific.</li></ul>
-    <h3 id="quando-usar">Quando usar</h3>
-    <p>✅ Produzir creative para a campanha <strong>Taxa Zero</strong> (ads, vídeos, captions, pacotes de publicação). ✅ Gerar conteúdo para Instagram, Threads/X, YouTube e LinkedIn. ✅ Validar conteúdo contra a identidade de marca antes de subir. ✅ Acelerar produção mantendo a marca consistente.</p>
-    <h3 id="quando-não-usar">Quando NÃO usar</h3>
-    <p>❌ Campanhas de outras marcas (os knowledge files são da 4Selet). ❌ Publicação automática sem revisão humana. ❌ Conteúdo institucional fora do escopo Taxa Zero / onboarding por convite. ❌ Geração de assets para áreas que não passaram pelo time de marca.</p>
+    <h3 id="68-configurações">6.8 Configurações<a class="anchor" href="#68-configurações" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Chave da IA, modelo e <strong>Aparência</strong> (tema e cor de destaque do painel).</p>
     <hr>
-    <h2 id="4-quickstart--sua-primeira-peça-em-5-minutos-no-painel">4. Quickstart — sua primeira peça em 5 minutos (no Painel)</h2>
-    <p>Antes de mergulhar no resto, <strong>crie uma peça</strong> para sentir como funciona. Este quickstart usa o <strong>Painel web</strong> — o caminho principal, só com cliques. (Quem prefere o caminho avançado por chat, veja o box "Alternativa" no fim desta seção.)</p>
-    <h3 id="passo-1--conecte-se-à-vps-e-abra-o-painel">Passo 1 — Conecte-se à VPS e abra o painel</h3>
-    <ol><li><strong>Conecte-se à VPS via RDP</strong> (detalhes na Seção 8.1): <code>Win + R</code> → <code>mstsc</code> → IP da VPS → login <code>administrator</code> + senha (do seu gerenciador).</li><li>Dentro da sessão da VPS, confirme que o <strong>painel está rodando</strong>. Se não estiver, abra o terminal e rode (uma vez por sessão de servidor): ``<code>bash cd "C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes\interface" npm start </code>``</li><li>Abra o navegador em <strong><code>http://localhost:4500</code></strong>.</li></ol>
-    <h3 id="passo-2--configure-a-ia-só-na-1ª-vez">Passo 2 — Configure a IA (só na 1ª vez)</h3>
-    <p>No menu lateral → <strong>Configurações</strong> → cole sua <strong>chave Anthropic</strong> (<code>sk-ant-...</code>) → <em>Salvar chave</em> → <em>Testar conexão</em>. O selo na lateral deve virar <strong>"IA conectada"</strong>.</p>
-    <blockquote><p>Sem chave, o painel funciona em <strong>modo simulado</strong> (conteúdo rotulado <code>SIMULADO</code>) — dá pra conhecer o fluxo, mas o texto não é real.</p></blockquote>
-    <h3 id="passo-3--crie-o-conteúdo">Passo 3 — Crie o conteúdo</h3>
-    <ol><li>Vá em <strong>Criar Conteúdo</strong> no menu.</li><li>Escolha o <strong>tipo</strong> (ex.: <em>Threads/X</em> ou <em>LinkedIn</em> para começar com texto puro).</li><li>Preencha o <strong>Título</strong> (ex.: "Taxa Zero — primeiro teste") e o <strong>Tema/objetivo</strong> (ex.: <em>"0% por 3 meses para o produtor medir a diferença"</em>).</li><li>Deixe <strong>instagram</strong> marcado em Plataformas (ou ajuste).</li><li>Clique em <strong>Gerar com IA</strong>.</li></ol>
-    <h3 id="passo-4--revise-e-salve">Passo 4 — Revise e salve</h3>
-    <ul><li>O resultado aparece no painel <strong>Resultado</strong>, com um <strong>checklist de marca</strong> (governança) ao lado.</li><li>Não gostou de algo? Use o campo de <strong>refino</strong> ("ajuste o CTA", "deixe mais curto") e gere de novo.</li><li>Satisfeito? Clique em <strong>Salvar</strong> — a peça é criada em <code>outputs/&lt;titulo&gt;_&lt;data&gt;/</code> e entra na biblioteca.</li></ul>
-    <h3 id="passo-5--aprove-workflow">Passo 5 — Aprove (workflow)</h3>
-    <p>Em <strong>Conteúdo</strong>, abra a peça → <strong>gerar preview</strong> (vai para <em>em revisão</em>) → <strong>Aprovar</strong> (versiona em <code>outputs/approved/</code> com hash SHA-256) ou <strong>Rejeitar</strong>.</p>
-    <h3 id="o-que-você-acabou-de-fazer">O que você acabou de fazer</h3>
-    <p>O painel montou, nos bastidores, o <strong>mesmo prompt padrão</strong> que a skill <strong><code>copywriter-agent</code></strong> usaria: leu os knowledge files da 4Selet e escreveu respeitando os números da Taxa Zero, as regras de emoji (máx 1 funcional), hashtags (<code>#4Selet</code> obrigatória), CTA aprovado e tom sóbrio — tudo sem você precisar lembrar de nenhuma dessas regras nem digitar um prompt. A governança de marca rodou <strong>antes</strong> de salvar.</p>
-    <blockquote><p><strong>Alternativa (avançado — extensão no VSCode):</strong> o mesmo resultado pode ser obtido conversando direto com o agente. Abra o painel da extensão Claude Code e cole:</p>
-<pre class="code"><code>Escreva uma caption de Instagram da Taxa Zero, ângulo "0% por 3 meses
-para o produtor medir a diferença". task_name: teste_rapido,
-task_date: 2026-06-01. Salve em outputs/teste_rapido_2026-06-01/copy/.</code></pre>
-<p>Aprove as permissões (ler knowledge files, escrever <code>instagram_caption.txt</code>) e abra o arquivo gerado. Setup completo na Seção 8.2.</p></blockquote>
-    <p><strong>Próximo passo:</strong> veja a seção 5 pra entender os outros 5 agentes e o que cada um faz.</p>
-    <hr>
-    <h2 id="5-os-6-agentes-em-detalhe">5. Os 6 agentes em detalhe</h2>
-    <p>Cada agente tem uma seção abaixo explicando: <strong>o que faz</strong>, <strong>quando entra</strong>, <strong>o que lê</strong>, <strong>o que entrega</strong>, <strong>como acionar</strong>.</p>
-    <h3 id="51-marketing-research-agent--o-pesquisador">5.1 <code>marketing-research-agent</code> — o pesquisador</h3>
-    <p><strong>Em uma frase:</strong> é o estrategista — pensa quem é o público, qual mensagem usar, e escreve um briefing que todos os outros agentes vão seguir.</p>
-    <p><strong>O que faz:</strong> transforma um nicho/tópico em <strong>inteligência de marketing estruturada</strong> — tendências, ângulos, keywords, hooks, conceitos de vídeo, e o <strong>ângulo único</strong> que vai amarrar a campanha.</p>
-    <p><strong>Quando entra:</strong> <strong>primeiro</strong> no pipeline. Sem ele, os outros não têm "norte estratégico".</p>
-    <p><strong>O que lê:</strong></p>
-    <ul><li>Os 3 knowledge files (brand_identity, product_campaign, platform_guidelines).</li><li>Se tiver chave Tavily: faz <strong>5 buscas web reais</strong> (tendências, concorrentes, audiência, hooks, virais).</li><li>Sem chave: opera em <strong>modo simulado</strong> ancorado nos knowledge files.</li></ul>
-    <p><strong>O que entrega</strong> (em <code>outputs/&lt;task&gt;_&lt;data&gt;/</code>):</p>
+    <h2 id="7-tipos-de-conteúdo">7. Tipos de conteúdo<a class="anchor" href="#7-tipos-de-conteúdo" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>O painel gera seis tipos, cada um com formato e mídia final próprios:</p>
     <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
+<thead><tr><th>Tipo</th><th>Plataforma</th><th>Saída</th><th>Mídia final</th></tr></thead>
 <tbody>
-<tr><td><code>research_results.json</code></td><td>O <strong>contrato machine-readable</strong>. Tem <code>selected_campaign_angle</code>, <code>ad_hooks</code>, <code>marketing_angles</code>, <code>keywords</code>, <code>video_concepts</code>, <code>campaign_facts</code>. É o que os outros agentes consomem.</td></tr>
-<tr><td><code>research_brief.md</code></td><td>Versão human-readable, com diagrama Mermaid do funil.</td></tr>
-<tr><td><code>interactive_report.html</code></td><td>Dashboard interativo com Chart.js (paleta 4Selet) — priorização dos ângulos, dores, etc.</td></tr>
+<tr><td>Feed Instagram</td><td>Instagram</td><td>Texto (legenda + hashtags)</td><td>Texto</td></tr>
+<tr><td>Carrossel Instagram</td><td>Instagram</td><td>Estruturado (slides)</td><td>PNG por slide</td></tr>
+<tr><td>Imagem / Anúncio</td><td>Instagram</td><td>Estruturado (layout)</td><td>PNG 1080x1080</td></tr>
+<tr><td>Vídeo (short-form)</td><td>Instagram</td><td>Estruturado (cenas)</td><td>MP4</td></tr>
+<tr><td>Post LinkedIn</td><td>LinkedIn</td><td>Texto editorial</td><td>Texto</td></tr>
+<tr><td>Post Threads / X</td><td>Threads / X</td><td>Texto curto</td><td>Texto</td></tr>
 </tbody></table></div>
-    <p><strong>Como acionar:</strong></p>
-    <blockquote><p><em>"Rode o marketing-research-agent para a campanha Taxa Zero..."</em> ou simplesmente <em>"Faça a pesquisa de mercado..."</em></p></blockquote>
-    <p><strong>Exemplo de campo do <code>research_results.json</code>:</strong></p>
-    <pre class="code" data-lang="json"><code>"selected_campaign_angle": "Migração sem perder margem: 0% por 3 meses ou até R$ 300 mil em vendas",
-"campaign_facts": {
-  "taxa_plataforma": "0% por 3 meses ou ate R$ 300 mil em vendas",
-  "custo_por_transacao": "R$ 1,99",
-  "prazo_pix": "D+10",
-  "prazo_cartao": "D+30",
-  "prova_ancora": "95% de aprovacao no cartao"
-}</code></pre>
+    <p>Cada tipo segue as regras de formatação da sua plataforma (tamanho, hashtags, tom), definidas nos knowledge files (Seção 9).</p>
     <hr>
-    <h3 id="52-ad-creative-designer--o-designer-gráfico">5.2 <code>ad-creative-designer</code> — o designer gráfico</h3>
-    <p><strong>Em uma frase:</strong> é o designer — cria a imagem do post, em vários formatos (quadrado, story, thumb), pronta pra publicar.</p>
-    <p><strong>O que faz:</strong> transforma um briefing em <strong>imagem real</strong> — gera um <strong>blueprint JSON</strong> (a "planta" do design: que template, cores, textos, posições), escreve HTML/CSS, e <strong>renderiza</strong> (transforma o HTML em arquivo PNG final) via <strong>Playwright headless</strong> (navegador rodando invisível em background).</p>
-    <p><strong>Quando entra:</strong> depois do research (consome o <code>selected_campaign_angle</code> e o <code>ad_hooks</code>). Pode rodar em paralelo com video e copy.</p>
-    <p><strong>O que lê:</strong></p>
-    <ul><li>Knowledge files (especialmente <code>platform_guidelines.md</code> para specs por formato).</li><li><code>research_results.json</code> (se existe na task).</li></ul>
-    <p><strong>O que entrega</strong> (em <code>outputs/&lt;task&gt;_&lt;data&gt;/ads/</code>):</p>
+    <h2 id="8-os-agentes">8. Os agentes<a class="anchor" href="#8-os-agentes" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Cinco agentes especializados, coordenados pelo Orchestrator. No painel, eles atuam por baixo; na extensão, você pode acioná-los diretamente.</p>
+    <h3 id="81-pesquisa-de-mercado">8.1 Pesquisa de mercado<a class="anchor" href="#81-pesquisa-de-mercado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Conduz pesquisa estruturada de inteligência de mercado (tendências, concorrência, audiência, ganchos). Produz dados estruturados e um brief que alimenta os demais agentes.</p>
+    <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>A pesquisa real depende de uma integração externa (Seção 13). Sem ela, roda em modo simulado.</p></div></div>
+    <h3 id="82-designer-de-imagem-ad-creative-designer">8.2 Designer de Imagem (Ad Creative Designer)<a class="anchor" href="#82-designer-de-imagem-ad-creative-designer" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Gera criativos estáticos como especificação de layout e os renderiza em PNG (1080x1080) via Playwright. Escolhe o tipo de layout conforme plataforma e objetivo, e produz a copy do anúncio (headline, subtexto, CTA).</p>
+    <h3 id="83-especialista-de-vídeo">8.3 Especialista de Vídeo<a class="anchor" href="#83-especialista-de-vídeo" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Cria conceitos de vídeo curto e o roteiro cena a cena (gancho, demonstração, benefício, CTA) em estrutura pronta para renderização em vídeo (Seção 12).</p>
+    <h3 id="84-copywriter">8.4 Copywriter<a class="anchor" href="#84-copywriter" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Transforma o tema em copy nativa de cada plataforma (Instagram, Threads/X, LinkedIn, YouTube), ajustando tom, tamanho, CTA e formato de hashtags.</p>
+    <h3 id="85-distribuição">8.5 Distribuição<a class="anchor" href="#85-distribuição" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Monta os metadados de publicação por plataforma, recomenda agendamento e protege a publicação real atrás de um gate (a publicação só ocorre sob condições explícitas — Seção 10).</p>
+    <h3 id="86-orchestrator">8.6 Orchestrator<a class="anchor" href="#86-orchestrator" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Não é um agente: é a skill de coordenação. Recebe um payload com a tarefa e as plataformas, valida, e executa os agentes na ordem de dependência (pesquisa primeiro, depois os criativos em paralelo, distribuição por último).</p>
+    <hr>
+    <h2 id="9-identidade-de-marca-e-governança">9. Identidade de marca e governança<a class="anchor" href="#9-identidade-de-marca-e-governança" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Toda peça gerada deve respeitar a marca 4Selet. As regras vivem em <code>knowledge/</code> e são lidas antes de qualquer geração.</p>
     <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
+<thead><tr><th>Knowledge file</th><th>Define</th></tr></thead>
 <tbody>
-<tr><td><code>layout.json</code></td><td>O <strong>blueprint</strong> semântico do design (template, paleta, elementos).</td></tr>
-<tr><td><code>ad.html</code> + <code>styles.css</code></td><td>A materialização em HTML/CSS.</td></tr>
-<tr><td><code>instagram_ad.png</code> (ou outros nomes)</td><td>A <strong>imagem final renderizada</strong>.</td></tr>
+<tr><td><code>brand_identity.md</code></td><td>Posicionamento, paleta oficial, tipografia, voz e tom, regras de CTA e hashtags, checklist de governança.</td></tr>
+<tr><td><code>product_campaign.md</code></td><td>Produto, diferenciais, provas e a campanha vigente (ângulos e headlines aprovadas).</td></tr>
+<tr><td><code>platform_guidelines.md</code></td><td>Especificações e tom por plataforma; sequenciamento de distribuição.</td></tr>
 </tbody></table></div>
-    <p><strong>Formatos suportados:</strong></p>
-    <ul><li><code>instagram_square</code> 1080×1080 (feed quadrado)</li><li><code>instagram_feed</code> 1080×1350 (feed 4:5)</li><li><code>instagram_story</code> 1080×1920 (story/Reels cover)</li><li><code>youtube_thumbnail</code> 1280×720 (thumbnail)</li></ul>
-    <p><strong>Templates de layout:</strong></p>
-    <ul><li><code>product_focus</code> — eyebrow + headline grande + subtext + CTA (oferta direta).</li><li><code>split</code> — texto de um lado, número-âncora/mockup do outro (comparativo).</li><li><code>lifestyle</code> — full-bleed (gradiente + Selet Dots) com headline + CTA (institucional).</li></ul>
-    <p><strong>Como acionar:</strong></p>
-    <blockquote><p><em>"Crie um ad estático 1080×1080 da Taxa Zero..."</em> <em>"Faça uma imagem para Instagram..."</em> <em>"Gere uma thumbnail para YouTube..."</em></p></blockquote>
+    <p><strong>Identidade visual (fixa)</strong></p>
+    <ul><li>Paleta oficial: Selet Darker <code>#07212B</code>, Navy <code>#003554</code>, Blue <code>#006494</code>, Sky <code>#5499B5</code>, Mist <code>#AFBCC9</code>, Cloud <code>#D9DCD6</code>.</li><li>Tipografia: Inter para tudo; JetBrains Mono apenas para trechos técnicos.</li><li>Logo claro sobre fundos escuros, logo escuro sobre fundos claros, sem efeitos.</li></ul>
+    <p><strong>Governança automática</strong></p>
+    <p>O sistema roda uma verificação de marca sobre o conteúdo antes de salvar. Violações duras bloqueiam o salvamento até serem corrigidas.</p>
+    <div class="callout callout-warning"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Atenção</span></div><div class="callout-body"><p>A campanha citada nos knowledge files muda com o tempo. Não fixe peças em uma campanha encerrada: gere sempre referenciando a campanha <strong>ativa no momento</strong>. Exemplos neste guia (como a campanha "Taxa Zero") servem apenas de ilustração.</p></div></div>
     <hr>
-    <h3 id="53-video-ad-specialist--o-roteirista-de-vídeo">5.3 <code>video-ad-specialist</code> — o roteirista de vídeo</h3>
-    <p><strong>Em uma frase:</strong> é o roteirista — escreve cena por cena o que o vídeo vai dizer e mostrar. A geração do <code>.mp4</code> em si acontece num passo separado, automaticamente.</p>
-    <p><strong>O que faz:</strong> transforma o briefing em <strong>scene JSON</strong> estruturado, pronto para a composition Remotion renderizar.</p>
-    <blockquote><p><strong>Importante:</strong> esta skill <strong>não renderiza o vídeo</strong> — só gera o JSON com a sequência de cenas, estratégia, pacing, transições. A renderização final (<code>.mp4</code>) é feita separadamente via <code>npm run render</code> em cima da composition <code>AdVideo</code> em <code>src/</code>.</p></blockquote>
-    <p><strong>Quando entra:</strong> depois do research. Paraleliza com ad e copy.</p>
-    <p><strong>O que lê:</strong></p>
-    <ul><li>Knowledge files (especialmente <code>product_campaign.md</code> com os 4 conceitos de vídeo).</li><li><code>research_results.json</code>.</li></ul>
-    <p><strong>O que entrega</strong> (em <code>outputs/&lt;task&gt;_&lt;data&gt;/video/</code>):</p>
+    <h2 id="10-workflow-de-aprovação">10. Workflow de aprovação<a class="anchor" href="#10-workflow-de-aprovação" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Camada de governança que dá às peças uma trilha de revisão rastreável, integridade pós-aprovação e um gate duplo de publicação.</p>
+    <h3 id="101-estados">10.1 Estados<a class="anchor" href="#101-estados" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <pre class="code"><code>rascunho -&gt; em revisão -&gt; aprovado -&gt; em revisão (rework)
+                  +------ rejeitado -&gt; em revisão</code></pre>
+    <p>Cada task carrega um <code>status.json</code> versionado, com estado, histórico (somente acréscimo), aprovador, data e hashes de integridade dos arquivos aprovados.</p>
+    <h3 id="102-onde-cada-peça-fica">10.2 Onde cada peça fica<a class="anchor" href="#102-onde-cada-peça-fica" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
     <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
+<thead><tr><th>Estado</th><th>Pasta</th><th>Versionado em git</th></tr></thead>
 <tbody>
-<tr><td><code>scenes.json</code></td><td>O <strong>roteiro estruturado</strong> no schema <code>composition</code>/<code>props</code>. Apenas JSON válido — sem texto fora do bloco.</td></tr>
+<tr><td>Rascunho / em revisão</td><td><code>outputs/&lt;task&gt;_&lt;data&gt;/</code></td><td><span class="st st-na"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></span>Não</td></tr>
+<tr><td>Aprovado</td><td><code>outputs/approved/&lt;task&gt;_&lt;data&gt;/</code></td><td><span class="st st-ok"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>Sim</td></tr>
+<tr><td>Rejeitado</td><td><code>outputs/archive/&lt;task&gt;_&lt;data&gt;/</code></td><td><span class="st st-ok"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>Sim</td></tr>
 </tbody></table></div>
-    <p><strong>Estratégias suportadas:</strong></p>
-    <ul><li><code>problem_solution</code> — começa pela dor, oferece a solução.</li><li><code>limited_offer</code> — comunica a mecânica Taxa Zero.</li><li><code>product_showcase</code> — destaca diferenciais (95% aprovação, etc.).</li><li><code>testimonial</code> — só com depoimento real autorizado (raro).</li></ul>
-    <p><strong>Tipos de scene:</strong> <code>hook</code>, <code>problem</code>, <code>product</code>, <code>benefit</code>, <code>proof</code>, <code>offer</code>, <code>testimonial</code>, <code>cta</code>.</p>
-    <p><strong>Plataformas suportadas:</strong></p>
-    <ul><li><code>instagram_reels</code> 1080×1920 (9:16, 15–20s)</li><li><code>instagram_feed</code> 1080×1350 (4:5, 15–20s)</li><li><code>youtube_shorts</code> 1080×1920 (9:16, 15–25s)</li><li><code>youtube</code> 1920×1080 (16:9, 25–30s)</li></ul>
-    <p><strong>Como acionar:</strong></p>
-    <blockquote><p><em>"Gere o scene JSON de um Reels da Taxa Zero..."</em> <em>"Faça o roteiro de um Short do YouTube..."</em></p></blockquote>
-    <p><strong>Para renderizar o <code>.mp4</code> (etapa separada):</strong></p>
-    <blockquote><p><em>"Renderize o vídeo da task X reaproveitando a composition AdVideo..."</em> Ou via terminal: <code>npm run render</code></p></blockquote>
+    <h3 id="103-regra-de-reaprovação">10.3 Regra de reaprovação<a class="anchor" href="#103-regra-de-reaprovação" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Peças aprovadas não podem ser editadas no lugar. Para alterar, rode o rework (volta a peça para <em>em revisão</em>); a reaprovação passa a ser obrigatória. Uma verificação automática de integridade detecta edições silenciosas e reverte o estado, preservando o registro da aprovação anterior.</p>
+    <div class="callout callout-caution"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7.9 2 16.1 2 22 7.9 22 16.1 16.1 22 7.9 22 2 16.1 2 7.9"/><path d="M12 8v4M12 16h.01"/></svg><span>Cuidado</span></div><div class="callout-body"><p>Nunca edite arquivos dentro de <code>outputs/approved/</code> diretamente. Use o rework — caso contrário a peça perde a garantia de integridade e a verificação automática a reverte.</p></div></div>
+    <h3 id="104-gate-de-publicação">10.4 Gate de publicação<a class="anchor" href="#104-gate-de-publicação" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Antes de qualquer publicação real, o sistema exige um conjunto de condições (estado aprovado, hashes íntegros em tempo de execução, tokens presentes e confirmação explícita). Se qualquer condição falhar, aquela peça não é publicada — sem bloquear as demais.</p>
     <hr>
-    <h3 id="54-copywriter-agent--o-copywriter">5.4 <code>copywriter-agent</code> — o copywriter</h3>
-    <p><strong>Em uma frase:</strong> é o redator — escreve as legendas, títulos e descrições pra cada rede social, cada uma no tom certo daquela rede.</p>
-    <p><strong>O que faz:</strong> transforma o ângulo de campanha em <strong>copy platform-native</strong> — adaptado ao estilo, tamanho, hashtags e CTA de cada rede.</p>
-    <p><strong>Quando entra:</strong> depois do research. Paraleliza com ad e vídeo.</p>
-    <p><strong>O que lê:</strong></p>
-    <ul><li>Knowledge files (especialmente <code>platform_guidelines.md</code> com specs por plataforma).</li><li><code>research_results.json</code> (<code>selected_campaign_angle</code> e <code>ad_hooks</code>).</li></ul>
-    <p><strong>O que entrega</strong> (em <code>outputs/&lt;task&gt;_&lt;data&gt;/copy/</code>):</p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
-<tbody>
-<tr><td><code>copy.json</code></td><td>Estruturado, <strong>todas as plataformas</strong> num único objeto (consumível pelo distribution).</td></tr>
-<tr><td><code>instagram_caption.txt</code></td><td>Caption pronta (gerada se <code>instagram</code> está em <code>platform_targets</code>).</td></tr>
-<tr><td><code>threads_post.txt</code></td><td>Post Threads (se <code>threads</code> em targets).</td></tr>
-<tr><td><code>linkedin_post.txt</code></td><td>Post LinkedIn longo (se <code>linkedin</code> em targets).</td></tr>
-<tr><td><code>youtube_metadata.json</code></td><td>Title + description + tags (se <code>youtube</code> em targets).</td></tr>
-</tbody></table></div>
-    <p><strong>Plataformas suportadas e estilo:</strong></p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Plataforma</th><th>Estilo</th><th>Tamanho</th><th>Hashtags</th><th>Emoji</th><th>CTA</th></tr></thead>
-<tbody>
-<tr><td><strong>Instagram</strong></td><td>Editorial, sóbrio, com número</td><td>1–3 frases + hashtags</td><td>3–5 (<code>#4Selet</code> obrigatória)</td><td>máx 1 funcional (<code>→</code>)</td><td>Sim, conduzido</td></tr>
-<tr><td><strong>Threads/X</strong></td><td>Provocação controlada com dado</td><td>1–3 frases curtas</td><td>0–1</td><td>máx 1</td><td>Opcional</td></tr>
-<tr><td><strong>YouTube</strong></td><td>Didático, SEO-friendly</td><td>Title 60–70 chars + description 2–4 frases</td><td>via tags</td><td>evitar no título</td><td>Sim, no fim</td></tr>
-<tr><td><strong>LinkedIn</strong></td><td>Editorial premium, autoridade</td><td>1.200–1.500 chars</td><td>3–5</td><td>0–1 funcional</td><td>Suave</td></tr>
-</tbody></table></div>
-    <p><strong>Como acionar:</strong></p>
-    <blockquote><p><em>"Escreva a copy da Taxa Zero para Instagram e YouTube..."</em> <em>"Faça a caption..."</em> <em>"Gere o post de LinkedIn..."</em></p></blockquote>
-    <hr>
-    <h3 id="55-distribution-agent--o-gerente-de-distribuição">5.5 <code>distribution-agent</code> — o gerente de distribuição</h3>
-    <p><strong>Em uma frase:</strong> é o organizador final — junta imagem + vídeo + texto num pacote pronto pra você revisar e publicar manualmente. <strong>Ele nunca publica sozinho.</strong></p>
-    <p><strong>O que faz:</strong> <strong>agrega</strong> mídia + research + copy num pacote publish-ready, <strong>gera URLs</strong> (via Supabase ou placeholders) e escreve o <strong>Publish MD</strong> — o arquivo que a pessoa revisa antes de publicar.</p>
-    <blockquote><p><strong>Importante:</strong> este agente tem o <strong>gate de segurança</strong>. Ele <strong>nunca posta sozinho</strong>. Posting real só rola com referência explícita ao Publish MD pelo nome + fora de dry-run + tokens das plataformas presentes.</p></blockquote>
-    <p><strong>Quando entra:</strong> <strong>por último</strong>, depois que ad + vídeo + copy estão prontos.</p>
-    <p><strong>O que lê:</strong></p>
-    <ul><li>Knowledge files (especialmente <code>platform_guidelines.md</code> para o sequenciamento de distribuição).</li><li>Mídia da task (<code>ads/*.png</code>, <code>video/*.mp4</code>).</li><li><code>research_results.json</code> + <code>copy.json</code>.</li></ul>
-    <p><strong>O que entrega</strong> (em <code>outputs/&lt;task&gt;_&lt;data&gt;/</code>):</p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
-<tbody>
-<tr><td><code>media_urls.json</code></td><td>URLs públicas da mídia (Supabase real ou placeholders rotulados <code>_simulated: true</code>).</td></tr>
-<tr><td><code>Publish &lt;task&gt; &lt;data&gt;.md</code></td><td>O <strong>pacote final</strong> humano: URLs da mídia, metadata por plataforma, agendamento sugerido, status do gate. <strong>Você revisa este arquivo antes de publicar</strong>.</td></tr>
-</tbody></table></div>
-    <p><strong>O sequenciamento de distribuição padrão</strong> (do <code>platform_guidelines.md</code>):</p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Dia</th><th>Plataforma</th><th>Formato</th></tr></thead>
-<tbody>
-<tr><td>Segunda</td><td>LinkedIn</td><td>post editorial</td></tr>
-<tr><td>Terça (manhã)</td><td>Instagram Feed</td><td>static ad</td></tr>
-<tr><td>Quarta</td><td>YouTube</td><td>video</td></tr>
-<tr><td>Quinta</td><td>Instagram Reels + Threads</td><td>video curto</td></tr>
-<tr><td>Sexta</td><td>Instagram Story</td><td>sticker/poll</td></tr>
-</tbody></table></div>
-    <p><strong>Como acionar:</strong></p>
-    <blockquote><p><em>"Prepare a distribuição da task X em dry-run..."</em> <em>"Gere o Publish MD da task..."</em></p></blockquote>
-    <p><strong>Para publicar de verdade</strong> (quando configurado):</p>
-    <blockquote><p><em>"Publica usando Publish taxa_zero_maio 2026-05-29.md"</em> — com o nome exato do arquivo.</p></blockquote>
-    <hr>
-    <h3 id="56-orchestrator--o-diretor-de-operações">5.6 <code>orchestrator</code> — o diretor de operações</h3>
-    <p><strong>Em uma frase:</strong> é o coordenador — você diz "roda a campanha completa" e ele aciona os 5 agentes na ordem certa, automaticamente.</p>
-    <p><strong>O que faz:</strong> <strong>coordena</strong> os 5 agentes acima. Recebe um <em>job payload</em> JSON, valida, resolve dependências e skips, dispara cada agente na ordem certa, rastreia status e gera logs.</p>
-    <blockquote><p><strong>Importante:</strong> <strong>NÃO é um agente criativo</strong>. Não escreve, não desenha, não pesquisa. Apenas <strong>organiza</strong> quem faz o quê e quando.</p></blockquote>
-    <p><strong>Quando entra:</strong> quando você quer <strong>rodar a pipeline completa</strong> (não uma peça isolada).</p>
-    <p><strong>Modos de execução:</strong></p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Modo</th><th>Como funciona</th><th>Pré-requisito</th></tr></thead>
-<tbody>
-<tr><td><strong>Sequencial</strong> (atual)</td><td>Claude segue o plano e dispara cada skill na ordem</td><td>Nenhum extra</td></tr>
-<tr><td><strong>Enfileirado</strong> (futuro)</td><td>BullMQ + Redis processam em fila assíncrona</td><td><code>npm i bullmq</code> + <code>REDIS_URL</code> + pasta <code>pipeline/</code></td></tr>
-</tbody></table></div>
-    <p><strong>Ordem de execução:</strong></p>
-    <pre class="code"><code>research → (ad + video + copy paralelos) → distribution</code></pre>
-    <p><strong>Dependências e regras:</strong></p>
-    <ul><li><code>research_agent</code> roda primeiro (a menos que <code>skip_research: true</code>).</li><li>Se <code>skip_research: true</code>, <strong>exige</strong> a pasta <code>assets/&lt;task_name&gt;/</code> — senão <strong>bloqueia</strong>.</li><li><code>ad_creative_designer</code>, <code>video_ad_specialist</code>, <code>copywriter_agent</code> rodam <strong>após</strong> o research.</li><li><code>distribution_agent</code> roda <strong>por último</strong>, depois que todos os outros entregaram.</li></ul>
-    <p><strong>Job payload — campos obrigatórios:</strong></p>
-    <pre class="code" data-lang="json"><code>{
-  "task_name": "nome_curto_snake_case",
-  "task_date": "YYYY-MM-DD",
-  "platform_targets": ["instagram", "youtube"],
-  "user_flags": {
-    "skip_research": false,
-    "skip_image": false,
-    "skip_video": false
-  },
-  "source_folder": null,
-  "dry_run": true
-}</code></pre>
-    <p><strong>O que entrega</strong> (em <code>outputs/&lt;task&gt;_&lt;data&gt;/</code>):</p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
-<tbody>
-<tr><td><code>pipeline_plan.json</code></td><td>O plano com dependências, ordem, status de cada job.</td></tr>
-<tr><td><code>logs/&lt;agente&gt;.log</code></td><td>Um log por agente (5 arquivos).</td></tr>
-</tbody></table></div>
-    <p><strong>Como acionar:</strong></p>
-    <blockquote><p><em>"Rode o pipeline completo com este payload: [cole JSON]"</em> <em>"Orquestre a campanha taxa_zero_maio com IG e YouTube..."</em></p></blockquote>
-    <hr>
-    <h2 id="6-como-os-agentes-conversam-o-contrato">6. Como os agentes conversam (o "contrato")</h2>
-    <p><strong>Em palavras simples:</strong> o pesquisador escreve um <strong>briefing</strong>. Os outros 3 (designer, roteirista, redator) <strong>leem esse briefing antes de criar</strong> suas peças. Assim, todos seguem a mesma linha — a mensagem da imagem, do vídeo e do texto bate. No fim, o organizador da distribuição junta tudo num pacote pra você revisar.</p>
-    <p>Tecnicamente: a coerência da campanha vem de um <strong>contrato de arquivos</strong> — o que um agente entrega, o próximo consome. É o <strong><code>selected_campaign_angle</code> do research</strong> que mantém ad + vídeo + copy alinhados.</p>
-    <h3 id="o-fluxo-visualizado">O fluxo visualizado</h3>
-    <pre class="code"><code>┌─────────────────────────────┐
-│  marketing-research-agent   │
-│  ↓                          │
-│  research_results.json      │
-│  • selected_campaign_angle  │
-│  • ad_hooks                 │
-│  • marketing_angles         │
-│  • keywords                 │
-│  • video_concepts           │
-│  • campaign_facts           │
-└──────────┬──────────────────┘
-           │
-           ├─► ad-creative-designer
-           │   ├─ usa: selected_campaign_angle, ad_hooks
-           │   └─ gera: ads/{layout.json, ad.html, styles.css, *.png}
-           │
-           ├─► video-ad-specialist
-           │   ├─ usa: marketing_angles, video_concepts, campaign_facts
-           │   └─ gera: video/scenes.json (→ Remotion render → ad.mp4)
-           │
-           └─► copywriter-agent
-               ├─ usa: selected_campaign_angle, ad_hooks, keywords
-               └─ gera: copy/{copy.json, *.txt, youtube_metadata.json}
-                          │
-                          ▼
-              ┌────────────────────────────┐
-              │   distribution-agent       │
-              │   (agregador final)        │
-              │   ├─ media_urls.json       │
-              │   └─ Publish &lt;task&gt;.md     │
-              │      ↑ GATE: não posta     │
-              │        sem aprovação       │
-              └────────────────────────────┘</code></pre>
-    <h3 id="por-que-isso-importa">Por que isso importa</h3>
-    <p>Se o copywriter usar um ângulo diferente do ad, a campanha <strong>vira uma colcha de retalhos</strong>. Por isso o research decide UM ângulo, e todo mundo segue.</p>
-    <blockquote><p><strong>Regra de ouro do contrato:</strong> se você rodar a pipeline pela orchestrator, isso é automático. Se você rodar agentes isolados, <strong>passe o <code>selected_campaign_angle</code> no prompt</strong> pra todos eles, ou referencie o <code>research_results.json</code> da task.</p></blockquote>
-    <hr>
-    <h2 id="7-estado-atual-do-sistema">7. Estado atual do sistema</h2>
-    <div class="table-wrap"><table>
-<thead><tr><th>Componente</th><th>Status</th><th>O que isso significa na prática</th></tr></thead>
-<tbody>
-<tr><td><strong>Painel web (<code>interface/</code>)</strong></td><td>✅ <strong>Pronto — interface principal</strong></td><td>Gerência de campanhas + geração de conteúdo com IA + workflow de aprovação visual em <code>http://localhost:4500</code></td></tr>
-<tr><td>Node.js, Remotion, Playwright</td><td>✅ Instalados</td><td>Renders de PNG e MP4 saem <strong>reais</strong></td></tr>
-<tr><td><code>skills/</code> (7 skills + scripts)</td><td>✅ Pronto</td><td>Os 6 agentes + a <strong>task-promoter</strong> (Workflow de Aprovação) funcionando</td></tr>
-<tr><td><code>src/</code> (composition AdVideo Remotion)</td><td>✅ Pronto</td><td>Vídeo pode ser renderizado via <code>npm run render</code></td></tr>
-<tr><td>Knowledge files (<code>knowledge/</code>)</td><td>✅ brand v1.1 · product v1.2 · platform v1.1</td><td>Fontes de verdade da marca atualizadas</td></tr>
-<tr><td><strong>Workflow de Aprovação v1.1</strong></td><td>✅ Implementado (R5 gate duplo + B.2 runtime + git local)</td><td>10 felizes + 7 adversariais B.1 + 3 runtime B.2 passaram</td></tr>
-<tr><td>Pasta <code>pipeline/</code> (BullMQ)</td><td>✅ <strong>Entregue</strong> (orchestrator + worker + agents)</td><td>Roda <strong>sequencial por padrão</strong>; com <code>REDIS_URL</code> ativa a fila BullMQ assíncrona</td></tr>
-<tr><td><strong>Chave Anthropic no painel</strong></td><td>⚠️ Depende de você</td><td>Configurar em <em>Configurações</em> (<code>interface/.env</code>). Sem ela, a geração do painel roda <strong>simulada</strong></td></tr>
-<tr><td><code>TAVILY_API_KEY</code></td><td>⏳ Pendente</td><td>Research roda em <strong>modo simulado</strong> (sintetiza dos knowledge files, não busca na web)</td></tr>
-<tr><td><code>SUPABASE_URL</code> + <code>SUPABASE_KEY</code></td><td>⏳ Pendente</td><td>Distribution gera URLs <strong>placeholder</strong> (<code>_simulated: true</code>) — nada hospedado de fato</td></tr>
-<tr><td>Redis (<code>REDIS_URL</code>) para a fila</td><td>⏳ Pendente</td><td>Sem ele a <code>pipeline/</code> roda <strong>sequencial</strong> (funciona, mas não enfileira/paraleliza)</td></tr>
-<tr><td>OAuth YouTube + token Instagram</td><td>⏳ Pendente</td><td>Posting real <strong>impossível</strong> — gate sempre fechado</td></tr>
-<tr><td><code>git</code></td><td>✅ Instalado (v2.54.0)</td><td>Hook <code>post-commit</code> ativo (push automático em background, fail-silent). <strong>Remoto pendente</strong> — ver <code>GIT_REMOTE_SETUP.md</code> e Seção 18</td></tr>
-</tbody></table></div>
-    <h3 id="implicações-práticas-para-você">Implicações práticas para você</h3>
-    <ol><li><strong>O painel é o jeito recomendado de trabalhar</strong> — campanhas, geração, refino e aprovação, tudo visual. A extensão no VSCode continua disponível para uso avançado.</li><li><strong>A geração de IA depende da chave Anthropic</strong> estar configurada no painel (<em>Configurações</em>). Sem ela, o conteúdo vem rotulado <code>SIMULADO</code>.</li><li><strong>Renders de ad (PNG) e vídeo (MP4) saem REAIS</strong> e ficam na pasta — não dependem de chave externa.</li><li><strong>Research e Supabase rodam simulados</strong> — os outputs são gerados, mas vêm com <code>_simulated: true</code> marcado. Use-os como se fossem reais para revisão, <strong>mas saiba que</strong> a "pesquisa" não consultou a web e as URLs do Supabase são fake.</li><li><strong>Posting real não acontece</strong> — o sistema sempre para no Publish MD / na aprovação pra revisão humana. Você ainda pode postar manualmente copiando o texto.</li><li><strong>Persistência garantida localmente</strong> via commits automáticos a cada mudança (hook <code>post-commit</code>). Persistência <strong>remota</strong> ainda exige <code>git remote add origin &lt;URL&gt;</code> — passo a passo em <code>GIT_REMOTE_SETUP.md</code>.</li></ol>
-    <p>Para destravar os caminhos reais, ver seção 18.</p>
-    <hr>
-    <h2 id="8-setup--painel-web-principal-e-extensão-vscode-secundário">8. Setup — Painel web (principal) e extensão VSCode (secundário)</h2>
-    <blockquote><p><strong>Importante:</strong> o projeto <strong>roda na VPS</strong> — não localmente. A pasta <code>Claude Equipe de Marketing - 6 Agentes/</code> mora no servidor remoto. Os dois caminhos começam do mesmo jeito: você se conecta à VPS via Área de Trabalho Remota (RDP) e trabalha <strong>dentro da sessão da VPS</strong>.</p></blockquote>
-    <h3 id="conectar-à-vps-rdp--comum-aos-dois-caminhos">Conectar à VPS (RDP) — comum aos dois caminhos</h3>
-    <div class="table-wrap"><table>
-<thead><tr><th>Campo</th><th>Valor</th></tr></thead>
-<tbody>
-<tr><td><strong>IP da VPS</strong></td><td><code>143.14.247.176</code></td></tr>
-<tr><td><strong>Usuário</strong></td><td><code>administrator</code></td></tr>
-<tr><td><strong>Senha</strong></td><td><em>consulte com seu gestor / gerenciador de senhas — <strong>não está documentada aqui</strong> por segurança</em></td></tr>
-<tr><td><strong>Porta RDP</strong></td><td><code>3389</code> (padrão)</td></tr>
-</tbody></table></div>
-    <ol><li><strong>Abrir o cliente RDP</strong> (Windows: <code>Win + R</code> → <code>mstsc</code> → Enter). Em Mac: "Microsoft Remote Desktop"; Linux: Remmina.</li><li>Em <strong>Computador</strong>, digite o <strong>IP da VPS</strong> (<code>143.14.247.176</code>) → <strong>Conectar</strong>.</li><li>Faça login com usuário (<code>administrator</code>) e a senha (do seu gerenciador).</li><li>Aguarde a <strong>área de trabalho do servidor</strong> abrir — a partir daqui tudo acontece dentro dela.</li></ol>
-    <blockquote><p>⚠️ <strong>Segurança:</strong> <strong>nunca</strong> registre a senha neste guia, em README, em commits ou em prints. Mantenha-a em gerenciador de senhas. Se vazar, peça rotação imediata ao gestor. Aviso de "certificado não confiável" na 1ª vez: confirme o nome do servidor com o gestor antes de aceitar.</p></blockquote>
-    <hr>
-    <h3 id="81-caminho-principal--painel-web-httplocalhost4500">8.1 Caminho principal — Painel web (<code>http://localhost:4500</code>)</h3>
-    <p>Recomendado para todo o time. Visual, sem prompt.</p>
-    <p><strong>Passo 1 — Iniciar o painel</strong> (uma vez por sessão de servidor). No terminal da VPS:</p>
-    <pre class="code" data-lang="bash"><code>cd "C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes\interface"
-npm install   # só na primeiríssima vez
-npm start</code></pre>
-    <p>Deixe esse terminal aberto — é o servidor do painel.</p>
-    <p><strong>Passo 2 — Abrir no navegador.</strong> Acesse <strong><code>http://localhost:4500</code></strong>. Você verá o Dashboard.</p>
-    <p><strong>Passo 3 — Configurar a IA (1ª vez).</strong> Menu lateral → <strong>Configurações</strong> → cole a <strong>chave Anthropic</strong> (<code>sk-ant-...</code>) → <em>Salvar chave</em> → <em>Testar conexão</em>. A chave é gravada só em <code>interface/.env</code> (fora do git). Escolha o modelo (padrão: Sonnet 4.6). O selo lateral deve indicar <strong>"IA conectada"</strong>.</p>
-    <p><strong>Passo 4 — Usar no dia a dia:</strong></p>
-    <ul><li><strong>Campanhas</strong> → <em>Nova campanha</em>: nome, objetivo, ângulo, pilar e mensagens-chave.</li><li><strong>Criar Conteúdo</strong>: escolha a campanha + o tipo, preencha o brief e <strong>Gerar com IA</strong>; refine se quiser; <strong>Salvar</strong>.</li><li><strong>Conteúdo</strong> → abra a peça → <strong>preview</strong> → <strong>Aprovar</strong> / <strong>Rejeitar</strong> (versiona em <code>outputs/approved/</code> com hash).</li><li><strong>Aprovados</strong>: biblioteca das peças versionadas, com download.</li><li><strong>Assistente IA</strong> (topo): tira dúvidas de uso do painel e sugere conteúdo no tom da marca.</li></ul>
-    <blockquote><p>Detalhes do painel em <code>interface/README.md</code>. Para reabrir uma peça aprovada e editar, use <strong>Reabrir p/ edição (rework)</strong> na própria peça — nunca edite <code>outputs/approved/</code> na mão.</p></blockquote>
-    <hr>
-    <h3 id="82-caminho-secundário-avançado--extensão-claude-code-no-vscode">8.2 Caminho secundário (avançado) — extensão Claude Code no VSCode</h3>
-    <p>Para controle total: conversar direto com os agentes, rodar a <strong>pipeline completa</strong>, scripts e automações que ainda não estão no painel. Conecte-se à VPS (acima) e, <strong>dentro da sessão</strong>, abra o projeto no VSCode com a extensão Claude Code.</p>
-    <h3 id="pré-requisitos">Pré-requisitos</h3>
-    <div class="table-wrap"><table>
-<thead><tr><th>Item</th><th>Detalhes</th></tr></thead>
-<tbody>
-<tr><td><strong>Cliente RDP</strong></td><td>Já vem com Windows ("Conexão de Área de Trabalho Remota" / <code>mstsc.exe</code>). Em Mac: "Microsoft Remote Desktop" (App Store). Em Linux: Remmina ou similar.</td></tr>
-<tr><td><strong>Acesso à rede da VPS</strong></td><td>Tem que conseguir alcançar o IP da VPS (rede aberta ou VPN, conforme o setup da empresa).</td></tr>
-<tr><td><strong>Credenciais da VPS</strong></td><td>IP, usuário e senha — armazene em <strong>gerenciador seguro</strong> (1Password, Bitwarden, etc.). <strong>NÃO</strong> salve em arquivo no projeto.</td></tr>
-<tr><td><strong>Na VPS (já instalado)</strong></td><td>VSCode + extensão Claude Code + Node.js 24+ + Remotion + Playwright. Nada pra fazer ali.</td></tr>
-</tbody></table></div>
-    <blockquote><p>Credenciais e passos de conexão RDP: ver a seção <strong>"Conectar à VPS (RDP)"</strong> acima (comum aos dois caminhos).</p></blockquote>
-    <h3 id="passo-a-passo--abrir-o-projeto-e-usar-o-claude-code">Passo a passo — abrir o projeto e usar o Claude Code</h3>
-    <p>(Tudo abaixo é feito <strong>dentro da sessão da VPS</strong>.)</p>
-    <h4 id="1-abrir-o-vscode">1) Abrir o VSCode</h4>
-    <p>Atalho na área de trabalho da VPS ou menu Iniciar → "Visual Studio Code". Já está autenticado na extensão Claude Code.</p>
-    <h4 id="2-abrir-a-pasta-do-projeto">2) Abrir a pasta do projeto</h4>
-    <p><code>File → Open Folder</code> → navegar até: <code>C:\Users\Administrator\Documents\Agentes_Marketing_4Selet\Claude Equipe de Marketing - 6 Agentes</code></p>
-    <h4 id="3-aguardar-o-claude-code-reconhecer-o-projeto">3) Aguardar o Claude Code reconhecer o projeto</h4>
-    <p>Assim que abre, o Claude Code lê automaticamente:</p>
-    <ul><li><code>CLAUDE.md</code> — contexto técnico principal.</li><li>Cada <code>skills/&lt;nome&gt;/SKILL.md</code> — a definição dos agentes (7 skills no total).</li><li>Os arquivos em <code>knowledge/</code> — a fonte de verdade da marca.</li></ul>
-    <p>O painel da extensão indica quantas skills foram carregadas.</p>
-    <h4 id="4-conferir-que-as-7-skills-estão-disponíveis">4) Conferir que as 7 skills estão disponíveis</h4>
-    <p>Procure no painel a lista de skills. Devem aparecer:</p>
-    <ul><li><code>marketing-research-agent</code></li><li><code>ad-creative-designer</code></li><li><code>video-ad-specialist</code></li><li><code>copywriter-agent</code></li><li><code>distribution-agent</code></li><li><code>orchestrator</code></li><li><code>task-promoter</code> <em>(novo — workflow de aprovação)</em></li></ul>
-    <p>Se faltar alguma, cheque se o <code>SKILL.md</code> correspondente existe em <code>skills/&lt;nome&gt;/</code>.</p>
-    <h4 id="5-fazer-o-primeiro-pedido">5) Fazer o primeiro pedido</h4>
-    <ul><li>Clique no campo de input do painel.</li><li>Digite ou cole o prompt (use o Quickstart da seção 4, ou a biblioteca da seção 12).</li><li>Pressione Enter.</li></ul>
-    <h4 id="6-aprovar-as-permissões">6) Aprovar as permissões</h4>
-    <p>Para cada ação com efeito colateral (ler arquivo, escrever arquivo, executar script), o Claude <strong>pede permissão</strong>. Você vê:</p>
-    <ul><li>O que ele quer fazer (ex.: "escrever em <code>outputs/.../caption.txt</code>")</li><li>O conteúdo / comando exato</li><li>Botões: <strong>Allow</strong> / <strong>Deny</strong></li></ul>
-    <blockquote><p><strong>Dica:</strong> aceite tudo na primeira vez para entender o fluxo. Você pode revogar e ajustar a confiança depois.</p></blockquote>
-    <h4 id="7-ver-as-saídas">7) Ver as saídas</h4>
-    <ul><li>Outputs vão para <code>outputs/&lt;task_name&gt;_&lt;data&gt;/</code> (ou onde você pediu) <strong>na VPS</strong>.</li><li>Use o explorador do VSCode pra navegar.</li><li>PNGs/MP4s o VSCode abre direto. JSON/MD/HTML também.</li></ul>
-    <h3 id="boas-práticas-de-uso-remoto">Boas práticas de uso remoto</h3>
-    <ul><li><strong>Não copie arquivos pra sua máquina local</strong> sem motivo — o projeto inteiro mora na VPS. Edições locais não voltam pra lá automaticamente.</li><li><strong>Não rode duas sessões RDP simultâneas</strong> com o mesmo usuário — uma vai expulsar a outra; trabalho não-salvo pode ser perdido.</li><li><strong>Encerre a sessão pelo menu Iniciar → Desconectar</strong> (não feche só no <code>X</code> da janela — isso pode deixar processos rodando indefinidamente).</li><li><strong>Mantenha a senha em gerenciador.</strong> Se vazar, rotacione imediatamente.</li><li><strong>Para trabalho offline</strong> ou edição via terminal: peça acesso por SSH ao gestor, ou aguarde o git ser instalado (seção 18) pra clonar.</li><li><strong>Sessão expirando?</strong> O Windows Server desconecta sessões ociosas após um tempo. Salve seu trabalho de tempos em tempos.</li></ul>
-    <h3 id="dicas-operacionais-mesmas-do-uso-local">Dicas operacionais (mesmas do uso local)</h3>
-    <ul><li><strong>Skill não disparou?</strong> Mencione-a pelo nome no prompt: <em>"Use a skill <code>ad-creative-designer</code> para..."</em>.</li><li><strong>Quer ver o que ele está fazendo?</strong> Deixe o painel da extensão aberto — ele lista cada <em>tool call</em> (read/write/bash) antes de executar.</li><li><strong>Quer agilizar?</strong> Em pedidos comuns o Claude já sabe que precisa ler os knowledge files; em pedidos novos, lembre-o: <em>"Antes de gerar, leia <code>knowledge/brand_identity.md</code>..."</em>.</li><li><strong>Quer rodar script direto?</strong> Use o terminal integrado do VSCode (PowerShell) na sessão da VPS. Ver seção 13.</li></ul>
-    <hr>
-    <h2 id="9-como-funciona-uma-sessão-na-prática">9. Como funciona uma sessão na prática</h2>
-    <p>Pra você ver "por dentro" o que acontece quando digita um prompt.</p>
-    <h3 id="anatomia-de-uma-sessão">Anatomia de uma sessão</h3>
-    <pre class="code"><code>Você → digita prompt no chat do Claude
-   ↓
-Claude → identifica a SKILL (pela trigger phrase ou referência direta)
-   ↓
-Claude → carrega o SKILL.md daquele agente
-   ↓
-Claude → carrega os KNOWLEDGE FILES indicados no SKILL.md
-   ↓
-Claude → segue os STEPS do SKILL.md (1, 2, 3...)
-   ↓
-Para cada AÇÃO com efeito colateral:
-   ↓
-   Claude → pede PERMISSÃO (Read, Write, Bash)
-   ↓
-   Você → aprova / nega
-   ↓
-   Claude → executa (ou pula se negado)
-   ↓
-Claude → roda o QUALITY CHECKLIST do SKILL.md
-   ↓
-Claude → entrega o output em `outputs/&lt;task&gt;_&lt;data&gt;/`
-   ↓
-Claude → reporta o que fez no chat (resumo + caminhos)</code></pre>
-    <h3 id="exemplo-na-prática">Exemplo na prática</h3>
-    <p><strong>Você cola:</strong></p>
-    <blockquote><p><em>"Crie um ad estático 1080×1080 da Taxa Zero, layout product_focus, ancorado em 'Migração sem perder margem'. task_name: teste_ad, task_date: 2026-06-01."</em></p></blockquote>
-    <p><strong>O que acontece (em 4 movimentos):</strong></p>
-    <ol><li><strong>Claude entende o pedido</strong> → reconhece "ad estático" e ativa o designer (<code>ad-creative-designer</code>).</li><li><strong>Lê as regras da marca</strong> → carrega os 3 knowledge files. Você aprova com um clique.</li><li><strong>Cria os arquivos</strong> → especificação do design, HTML/CSS, e gera o PNG. Você aprova cada um conforme ele vai criando.</li><li><strong>Confere o resultado</strong> → abre o PNG gerado e te avisa: <em>"Pronto. Headline 'Migração sem perder margem' em destaque, '0%' em azul Selet, CTA 'Solicitar convite' no botão, paleta oficial."</em></li></ol>
-    <p><strong>Você abre o PNG no VSCode, vê o ad pronto.</strong> Toda a parte técnica (qual fonte, qual cor, em que pasta salvar) ele resolveu seguindo as regras dos knowledge files.</p>
-    <blockquote><p>🔧 <strong>Por dentro (pra quem quer entender):</strong> o Claude faz dezenas de ações pequenas (ler arquivo, escrever arquivo, executar script) e te pede permissão pra cada uma. Você aceita ou nega. Tudo aparece listado no painel — nada acontece sem você ver e aprovar.</p></blockquote>
-    <h3 id="o-que-mais-pode-acontecer">O que mais pode acontecer</h3>
-    <ul><li>Se Claude <strong>não encontrar</strong> o knowledge file que precisa, ele <strong>pergunta</strong>.</li><li>Se você <strong>negar</strong> uma permissão, ele <strong>pula</strong> essa parte e segue (ou para se for crítica).</li><li>Se o checklist final falhar (ex.: número errado da Taxa Zero), ele <strong>se corrige antes de entregar</strong>.</li></ul>
-    <hr>
-    <h2 id="10-fluxos-de-uso-cenários-reais">10. Fluxos de uso (cenários reais)</h2>
-    <h3 id="fluxo-a--preciso-de-uma-caption-agora">Fluxo A — "Preciso de UMA caption agora"</h3>
-    <p><em>Dia a dia: post de Instagram pra publicar logo.</em></p>
-    <ol><li>Abra o Claude Code no projeto.</li><li>Cole o prompt da seção <a href="#124-copy-multi-plataforma-copywriter-agent">12.4</a>, trocando <code>&lt;nome&gt;</code> e a data.</li><li>Aprove as permissões.</li><li>Abra <code>outputs/&lt;nome&gt;_&lt;data&gt;/copy/instagram_caption.txt</code>.</li><li>Copie a caption pro seu app de publicação. Posta.</li></ol>
-    <p>⏱️ <strong>Tempo:</strong> ~1 minuto.</p>
-    <h3 id="fluxo-b--quero-o-pacote-inteiro-de-uma-campanha">Fluxo B — "Quero o pacote inteiro de uma campanha"</h3>
-    <p><em>Lançamento de uma nova investida da Taxa Zero, com ad + vídeo + copy + Publish MD.</em></p>
-    <ol><li>Defina o <strong>payload</strong> (seção 12.6) — nome, data, plataformas alvo.</li><li>No Claude: <em>"Rode o pipeline completo com este payload: [cole o JSON]"</em>.</li><li>Aprove cada etapa (são várias — o Claude executa research → ad + vídeo + copy → distribution na ordem).</li><li>Ao final, revise o <code>Publish &lt;task&gt; &lt;data&gt;.md</code>.</li><li>Publique manualmente nas redes (ou mantenha em dry-run pra ajustes).</li></ol>
-    <p>⏱️ <strong>Tempo:</strong> ~5–10 minutos dependendo de quantos formatos.</p>
-    <h3 id="fluxo-c--quero-algo-apresentável-pra-mostrar-a-um-clienteparceiro">Fluxo C — "Quero algo apresentável pra mostrar a um cliente/parceiro"</h3>
-    <p><em>Demo profissional, sem deixar nada na metade.</em></p>
-    <p>Use o prompt da seção <a href="#127-campanha-demo-apresentável">12.7</a>. Gera:</p>
-    <ul><li>Ads em 4 formatos (1080×1080, 1080×1350, 1080×1920, 1280×720)</li><li>Vídeo <code>.mp4</code> real (1080×1920)</li><li>Copy nas 4 plataformas</li><li>Publish MD</li><li><code>README.md</code> índice</li><li>Tudo em <code>tests/campanha-demo/</code> (preserva entre sessões)</li></ul>
-    <p>⏱️ <strong>Tempo:</strong> ~10–15 minutos.</p>
-    <h3 id="fluxo-d--quero-auditar-um-asset-que-alguém-me-mandou">Fluxo D — "Quero auditar um asset que alguém me mandou"</h3>
-    <p><em>Alguém te mandou um ad/caption pra revisar — quer saber se está on-brand.</em></p>
-    <p>Use o prompt da seção <a href="#129-revisão-e-correção">12.9</a>:</p>
-    <blockquote><p><em>"Audite o arquivo X contra os knowledge files..."</em></p></blockquote>
-    <p>Claude vai apontar: cores off-brand, fontes erradas, números errados da Taxa Zero, CTAs proibidos, concorrentes citados, hashtags banidas, etc.</p>
-    <p>⏱️ <strong>Tempo:</strong> ~30 segundos.</p>
-    <h3 id="fluxo-e--quero-rodar-um-script-via-terminal">Fluxo E — "Quero rodar um script via terminal"</h3>
-    <p><em>Você sabe o que quer (rodar <code>render_ad.js</code> num HTML específico, por exemplo) — não precisa da camada do chat.</em></p>
-    <p>Abra o terminal integrado (PowerShell) e use os comandos da seção 13.</p>
-    <p>⏱️ <strong>Tempo:</strong> segundos.</p>
-    <hr>
-    <h2 id="11-anatomia-de-um-bom-prompt">11. Anatomia de um bom prompt</h2>
-    <p>Um prompt bem-feito faz três coisas: <strong>invoca a skill certa</strong>, <strong>passa os parâmetros</strong>, <strong>diz onde salvar</strong>.</p>
-    <h3 id="a-receita">A receita</h3>
-    <pre class="code"><code>[AÇÃO] [TIPO DE ATIVO] [DETALHES DA MARCA/CAMPANHA].
-task_name: &lt;nome&gt;, task_date: &lt;YYYY-MM-DD&gt;.
-[ONDE SALVAR / O QUE INSPECIONAR].</code></pre>
-    <h3 id="componentes-explicados">Componentes explicados</h3>
-    <div class="table-wrap"><table>
-<thead><tr><th>Componente</th><th>Pra que serve</th><th>Exemplos</th></tr></thead>
-<tbody>
-<tr><td><strong>Ação</strong></td><td>Verbo que diz o que fazer</td><td><em>"Crie"</em>, <em>"Gere"</em>, <em>"Escreva"</em>, <em>"Renderize"</em>, <em>"Rode"</em>, <em>"Audite"</em></td></tr>
-<tr><td><strong>Tipo de ativo</strong></td><td>Define a skill que vai entrar</td><td><em>"ad estático"</em>, <em>"Reels"</em>, <em>"caption"</em>, <em>"pipeline"</em></td></tr>
-<tr><td><strong>Detalhes</strong></td><td>Específica formato, plataforma, ângulo, layout</td><td><em>"1080×1080 para Instagram, layout product_focus, ângulo 'X'"</em></td></tr>
-<tr><td><strong>task_name + task_date</strong></td><td>Identifica a task (sem isso o sistema não sabe onde salvar)</td><td><em>"task_name: teste_ad, task_date: 2026-06-01"</em></td></tr>
-<tr><td><strong>Onde salvar</strong></td><td>Caminho de saída (opcional — Claude usa o padrão se não disser)</td><td><em>"Salve em outputs/teste_ad_2026-06-01/ads/"</em></td></tr>
-</tbody></table></div>
-    <h3 id="exemplo-bom-vs-ruim">Exemplo bom vs ruim</h3>
-    <p>❌ <strong>Ruim:</strong></p>
-    <blockquote><p><em>"faz um post pra 4selet"</em></p></blockquote>
-    <p>(Sem ação clara, tipo vago, sem task, sem ângulo, sem plataforma.)</p>
-    <p>✅ <strong>Bom:</strong></p>
-    <blockquote><p><em>"Escreva uma caption de Instagram da Taxa Zero, ângulo 'Migração sem perder margem'. task_name: lancamento_q2, task_date: 2026-06-01. Salve em outputs/lancamento_q2_2026-06-01/copy/."</em></p></blockquote>
-    <p>(Verbo claro, tipo específico, plataforma definida, ângulo nomeado, task identificada, destino explícito.)</p>
-    <h3 id="quando-o-claude-não-acertar-a-skill">Quando o Claude não acertar a skill</h3>
-    <p>Se ele entrar com a skill errada, <strong>mencione pelo nome</strong>:</p>
-    <blockquote><p><em>"Use a skill <code>ad-creative-designer</code> para criar um ad..."</em></p></blockquote>
-    <p>Isso força o trigger.</p>
-    <h3 id="para-pedidos-longos--múltiplas-tarefas">Para pedidos longos / múltiplas tarefas</h3>
-    <p>Quebre em passos numerados:</p>
-    <blockquote><p><em>"Faça o seguinte:</em> <em>1. Gere o scene JSON do Reels da Taxa Zero (15s, limited_offer).</em> <em>2. Salve em outputs/X_Y/video/scenes.json.</em> <em>3. Depois renderize o vídeo via npm run render, salvando como outputs/X_Y/video/ad.mp4."</em></p></blockquote>
-    <hr>
-    <h2 id="12-biblioteca-de-prompts-paste-ready">12. Biblioteca de prompts (paste-ready)</h2>
-    <blockquote><p>🟡 <strong>Convenção:</strong> tudo que aparecer entre <code>&lt;...&gt;</code> nos prompts (ex.: <code>&lt;nome&gt;</code>, <code>&lt;YYYY-MM-DD&gt;</code>, <code>&lt;angulo&gt;</code>, <code>&lt;plataformas&gt;</code>, <code>&lt;caminho&gt;</code>) é <strong>placeholder</strong> — você troca pelo valor real antes de enviar. O resto pode ficar como está. <strong>No HTML do guia esses campos aparecem destacados em amarelo</strong> para facilitar visualizar onde editar.</p></blockquote>
-    <p><code>task_name</code> é um identificador curto em snake_case (ex.: <code>lancamento_junho</code>); <code>task_date</code> é <code>YYYY-MM-DD</code> (geralmente hoje).</p>
-    <p><strong>Checklist mínimo a trocar antes de enviar qualquer prompt:</strong></p>
-    <ul><li>[ ] <code>&lt;nome&gt;</code> / <code>&lt;task_name&gt;</code> → seu identificador da task</li><li>[ ] <code>&lt;YYYY-MM-DD&gt;</code> / <code>&lt;data&gt;</code> → data atual ou da campanha</li><li>[ ] <code>&lt;angulo&gt;</code> → ângulo da campanha (ou deixe o agente escolher)</li><li>[ ] <code>&lt;plataformas&gt;</code> → quais redes (instagram, threads, youtube, linkedin)</li><li>[ ] Para audit/correção: <code>&lt;caminho&gt;</code> → arquivo a auditar</li><li>[ ] Para scripts: <code>&lt;input.html&gt;</code>, <code>&lt;output.png&gt;</code>, <code>&lt;largura&gt;</code>, <code>&lt;altura&gt;</code> → caminhos/dimensões reais</li></ul>
-    <h3 id="121-pesquisa-de-mercado-marketing-research-agent">12.1 Pesquisa de mercado (<code>marketing-research-agent</code>)</h3>
-    <pre class="code"><code>Rode o marketing-research-agent para a campanha Taxa Zero da 4Selet, público
-produtor estabelecido (R$ 50k+/mês). task_name: &lt;nome&gt;, task_date: &lt;YYYY-MM-DD&gt;.
-Sem chave Tavily, opere em modo SIMULADO ancorado nos knowledge files. Gere os
-3 deliverables (research_results.json + research_brief.md + interactive_report.html)
-em outputs/&lt;nome&gt;_&lt;data&gt;/.</code></pre>
-    <h3 id="122-ad-estático-ad-creative-designer">12.2 Ad estático (<code>ad-creative-designer</code>)</h3>
-    <pre class="code"><code>Crie um ad estático 1080×1080 da Taxa Zero para Instagram, layout product_focus,
-ancorado no ângulo "&lt;angulo&gt;" (ex.: "Migração sem perder margem"). task_name: &lt;nome&gt;,
-task_date: &lt;YYYY-MM-DD&gt;. Gere layout.json + ad.html + styles.css e renderize via
-render_ad.js. Inspecione o PNG antes de finalizar.</code></pre>
-    <p><strong>Variações de formato</strong> (mude o tamanho passado ao <code>render_ad.js</code>):</p>
-    <ul><li>Feed 4:5 → <code>1080 1350</code></li><li>Story 9:16 → <code>1080 1920</code> (texto na zona segura central)</li><li>YouTube thumbnail 16:9 → <code>1280 720</code> (headline ≤ 6 palavras, alto contraste)</li></ul>
-    <p><strong>Variações de layout</strong> (campo <code>layout_type</code> no <code>layout.json</code>):</p>
-    <ul><li><code>product_focus</code> — eyebrow + headline grande + subtext + CTA (oferta direta).</li><li><code>split</code> — texto de um lado, número-âncora/mockup do outro (comparativo).</li><li><code>lifestyle</code> — full-bleed (gradiente + Selet Dots) com headline + CTA (institucional).</li></ul>
-    <h3 id="123-vídeo-video-ad-specialist">12.3 Vídeo (<code>video-ad-specialist</code>)</h3>
-    <pre class="code"><code>Gere o scene JSON de um Reels da Taxa Zero, estratégia limited_offer, plataforma
-instagram_reels, duração 15–20s. Ancore no Conceito &lt;X&gt; de product_campaign.md
-("Os 4 Números" / "Vs. Mercado" / "O Convite" / "Migração Sem Trauma").
-task_name: &lt;nome&gt;, task_date: &lt;YYYY-MM-DD&gt;. Salve apenas JSON válido em
-outputs/&lt;nome&gt;_&lt;data&gt;/video/scenes.json (sem texto fora do bloco).</code></pre>
-    <p><strong>Para renderizar o <code>.mp4</code></strong> (após gerar o scenes.json):</p>
-    <pre class="code"><code>Renderize o vídeo da task &lt;nome&gt; reaproveitando a composition AdVideo em src/.
-Adapte o conteúdo das scenes ao ângulo da campanha (1080×1920). Salve em
-outputs/&lt;nome&gt;_&lt;data&gt;/video/&lt;nome&gt;.mp4 + preview_frame.png. Use `npm run render`.</code></pre>
-    <h3 id="124-copy-multi-plataforma-copywriter-agent">12.4 Copy multi-plataforma (<code>copywriter-agent</code>)</h3>
-    <pre class="code"><code>Escreva a copy da Taxa Zero para &lt;plataformas&gt;. Se existir
-outputs/&lt;nome&gt;_&lt;data&gt;/research_results.json, use o selected_campaign_angle.
-Senão, ancore nos knowledge files. task_name: &lt;nome&gt;, task_date: &lt;YYYY-MM-DD&gt;.
-Gere copy.json + os arquivos por plataforma em outputs/&lt;nome&gt;_&lt;data&gt;/copy/.</code></pre>
-    <p>Plataformas suportadas: <code>instagram</code>, <code>threads</code>, <code>youtube</code>, <code>linkedin</code>.</p>
-    <h3 id="125-distribuição-distribution-agent">12.5 Distribuição (<code>distribution-agent</code>)</h3>
-    <pre class="code"><code>Prepare a distribuição da task &lt;nome&gt; em modo dry-run (NÃO POSTAR).
-task_date: &lt;YYYY-MM-DD&gt;. Suba a mídia em modo simulado (sem Supabase → URLs
-placeholder com _simulated: true), monte metadata por plataforma a partir do
-copy.json, e gere "Publish &lt;nome&gt; &lt;data&gt;.md" com URLs + metadata + agendamento
-sugerido + status do gate.</code></pre>
-    <h3 id="126-pipeline-completo-orchestrator">12.6 Pipeline completo (<code>orchestrator</code>)</h3>
-    <p><strong>Job payload modelo:</strong></p>
-    <pre class="code" data-lang="json"><code>{
-  "task_name": "&lt;nome_curto_snake&gt;",
-  "task_date": "&lt;YYYY-MM-DD&gt;",
-  "platform_targets": ["instagram", "youtube"],
-  "user_flags": { "skip_research": false, "skip_image": false, "skip_video": false },
-  "source_folder": null,
-  "dry_run": true
-}</code></pre>
-    <p><strong>Prompt:</strong></p>
-    <pre class="code"><code>Rode o pipeline completo da equipe de marketing com este payload:
-&lt;cole o JSON acima&gt;
+    <h2 id="11-caminho-avançado">11. Caminho avançado<a class="anchor" href="#11-caminho-avançado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Para quem opera pela extensão Claude Code e por linha de comando.</p>
+    <h3 id="111-scripts-do-workflow">11.1 Scripts do workflow<a class="anchor" href="#111-scripts-do-workflow" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <pre class="code" data-lang="bash"><code># criar a task
+node scripts/orchestrator.js --task &lt;nome&gt; --date AAAA-MM-DD --platforms instagram,linkedin
 
-Execute: orchestrate.js (gera plano + logs) → research → ad + video + copy →
-distribution. Tudo dry-run; nenhum posting real. Reporte cada etapa.</code></pre>
-    <p><strong>Variações úteis de payload:</strong></p>
-    <p>Pular só o vídeo:</p>
-    <pre class="code" data-lang="json"><code>"user_flags": { "skip_research": false, "skip_image": false, "skip_video": true }</code></pre>
-    <p>Pular research (exige <code>assets/&lt;task_name&gt;/</code> populada <strong>antes</strong>):</p>
-    <pre class="code" data-lang="json"><code>"user_flags": { "skip_research": true, "skip_image": false, "skip_video": false },
-"source_folder": "assets/&lt;task_name&gt;"</code></pre>
-    <p>4 plataformas:</p>
-    <pre class="code" data-lang="json"><code>"platform_targets": ["instagram", "threads", "youtube", "linkedin"]</code></pre>
-    <h3 id="127-campanha-demo-apresentável">12.7 Campanha-demo (apresentável)</h3>
-    <pre class="code"><code>Crie uma CAMPANHA-DEMO COMPLETA da Taxa Zero dentro de tests/campanha-demo/.
-Selecione UM ângulo (ex.: "Migração sem perder margem") e mantenha consistente
-em ad + vídeo + copy. Entregue:
-- research (3 deliverables, simulado)
-- ads em 4 formatos (1080×1080, 1080×1350, 1080×1920, 1280×720) RENDERIZADOS via Playwright e inspecionados
-- vídeo .mp4 REAL via Remotion (1080×1920, reaproveitando AdVideo)
-- copy para IG, Threads, YouTube, LinkedIn
-- Publish MD (dry-run, gate fechado)
-- README.md índice
-Não toque em outputs/.</code></pre>
-    <h3 id="128-variações-específicas-campanha">12.8 Variações específicas (campanha)</h3>
-    <p><strong>Comparativo "vs. mercado" (sem citar concorrentes):</strong></p>
-    <pre class="code"><code>Cria um ad split (1080×1080) comparando taxa de mercado (~7,9%, em abstrato)
-vs Taxa Zero da 4Selet. Use "split" como layout_type. Nenhum concorrente
-nominal. CTA: "Calcular minha economia".</code></pre>
-    <p><strong>Story 9:16 com número-âncora:</strong></p>
-    <pre class="code"><code>Cria um ad instagram_story 1080×1920 da Taxa Zero, layout product_focus,
-liderando com "95% de aprovação no cartão". Texto na zona segura central.
-CTA: "Solicitar convite".</code></pre>
-    <p><strong>Reels institucional "O Convite":</strong></p>
-    <pre class="code"><code>Gera o scene JSON de um Reels (15s) ancorado no Conceito "O Convite" do
-product_campaign.md, estratégia product_showcase, plataforma instagram_reels.
-Inclua uma scene proof com "95% de aprovação no cartão".</code></pre>
-    <p><strong>Caption + Story sequenciados (mesma campanha):</strong></p>
-    <pre class="code"><code>Para a task &lt;nome&gt; (já existente), gere:
-1) copy/instagram_caption.txt — caption de feed (com CTA "Solicitar convite")
-2) ads/story.html + story.png — story 9:16 com a mesma headline da caption
-Mantenha o mesmo selected_campaign_angle entre os dois.</code></pre>
-    <h3 id="129-revisão-e-correção">12.9 Revisão e correção</h3>
-    <p><strong>Auditar um asset existente contra a marca:</strong></p>
-    <pre class="code"><code>Audite o arquivo &lt;caminho&gt; contra os knowledge files (brand_identity,
-product_campaign, platform_guidelines). Aponte: cores off-brand, fontes erradas,
-números da Taxa Zero incorretos, CTAs proibidos, concorrentes citados, hype/
-emojis banidos. Sugira correções.</code></pre>
-    <p><strong>Corrigir um asset:</strong></p>
-    <pre class="code"><code>Reescreva &lt;caminho&gt; aplicando as correções da auditoria acima. Mantenha o
-campaign_angle. Salve como &lt;caminho&gt;.v2.</code></pre>
-    <h3 id="1210-exemplos-preenchidos-referência-rápida">12.10 Exemplos preenchidos (referência rápida)</h3>
-    <p>Os prompts em 12.1–12.9 são <strong>templates com placeholders</strong> (<code>&lt;...&gt;</code>). Aqui estão <strong>versões reais e preenchidas</strong> dos 6 casos mais comuns — prontas pra copiar-colar e adaptar minimamente.</p>
-    <p><strong>A) Caption do Instagram (<code>copywriter-agent</code>)</strong></p>
-    <pre class="code"><code>Escreva uma caption de Instagram da Taxa Zero, ângulo "Migração sem perder margem".
-task_name: lancamento_junho, task_date: 2026-06-15. Salve em
-outputs/lancamento_junho_2026-06-15/copy/instagram_caption.txt.</code></pre>
-    <p><strong>B) Ad estático 1080×1080 (<code>ad-creative-designer</code>)</strong></p>
-    <pre class="code"><code>Crie um ad estático 1080×1080 da Taxa Zero para Instagram Feed, layout product_focus,
-ancorado no ângulo "Migração sem perder margem". task_name: ad_migracao,
-task_date: 2026-06-15. Gere layout.json + ad.html + styles.css e renderize via
-render_ad.js. Inspecione o PNG antes de finalizar.</code></pre>
-    <p><strong>C) Story 9:16 com prova-âncora (variação)</strong></p>
-    <pre class="code"><code>Crie um ad instagram_story 1080×1920 da Taxa Zero, layout product_focus,
-liderando com "95% de aprovação no cartão". Texto na zona segura central.
-CTA: "Solicitar convite". task_name: story_aprovacao, task_date: 2026-06-15.</code></pre>
-    <p><strong>D) Reels 15s — gerar scene JSON (<code>video-ad-specialist</code>)</strong></p>
-    <pre class="code"><code>Gere o scene JSON de um Reels (15s) da Taxa Zero, estratégia limited_offer,
-plataforma instagram_reels. Ancore no Conceito "Os 4 Números" do
-product_campaign.md. task_name: reels_4numeros, task_date: 2026-06-15.
-Salve em outputs/reels_4numeros_2026-06-15/video/scenes.json (apenas JSON válido).</code></pre>
-    <p><strong>E) Renderizar o <code>.mp4</code> do Reels acima</strong></p>
-    <pre class="code"><code>Renderize o vídeo da task reels_4numeros reaproveitando a composition AdVideo
-em src/. Adapte o conteúdo das scenes ao Conceito "Os 4 Números" (1080×1920).
-Salve em outputs/reels_4numeros_2026-06-15/video/reels.mp4 + preview_frame.png.
-Use `npm run render`.</code></pre>
-    <p><strong>F) Pipeline completo IG + YouTube (<code>orchestrator</code>)</strong></p>
-    <p>Payload pronto:</p>
-    <pre class="code" data-lang="json"><code>{
-  "task_name": "campanha_junho_completa",
-  "task_date": "2026-06-15",
-  "platform_targets": ["instagram", "youtube"],
-  "user_flags": { "skip_research": false, "skip_image": false, "skip_video": false },
-  "source_folder": null,
-  "dry_run": true
-}</code></pre>
-    <p>Prompt:</p>
-    <pre class="code"><code>Rode o pipeline completo da equipe de marketing com este payload:
-[cole o JSON acima]
+# gerar preview e mover para revisão
+node scripts/generate_preview.js --task &lt;nome&gt; --date AAAA-MM-DD
 
-Execute: orchestrate.js (gera plano + logs) → research → ad + video + copy →
-distribution. Tudo dry-run; nenhum posting real. Reporte cada etapa.</code></pre>
-    <p><strong>G) Auditoria rápida de um asset existente</strong></p>
-    <pre class="code"><code>Audite o arquivo outputs/lancamento_junho_2026-06-15/copy/instagram_caption.txt
-contra os knowledge files (brand_identity, product_campaign, platform_guidelines).
-Aponte: cores off-brand, fontes erradas, números da Taxa Zero incorretos, CTAs
-proibidos, concorrentes citados, hype/emojis banidos. Sugira correções.</code></pre>
-    <blockquote><p><strong>Para adaptar:</strong> troque <code>task_name</code>, <code>task_date</code>, e — quando aplicável — o <strong>ângulo da campanha</strong>, <strong>plataforma</strong> ou <strong>formato</strong>. O resto pode ficar como está.</p></blockquote>
+# aprovar
+node scripts/promote_task.js --task &lt;nome&gt; --date AAAA-MM-DD --to approved --by "&lt;aprovador&gt;"
+
+# verificar o gate antes de publicar
+node scripts/check_approval_gate.js --task &lt;nome&gt; --date AAAA-MM-DD
+
+# auditorias periódicas
+node scripts/check_approved_integrity.js --auto-revert
+node scripts/validate_status.js</code></pre>
+    <h3 id="112-pipeline-executável">11.2 Pipeline executável<a class="anchor" href="#112-pipeline-executável" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>O pipeline roda os agentes de ponta a ponta. Por padrão é <strong>sequencial</strong>; com uma fila configurada (Seção 13), passa a rodar de forma <strong>assíncrona</strong>.</p>
+    <pre class="code" data-lang="bash"><code>npm run pipeline:run                       # payload padrão
+npm run pipeline:run:payload &lt;arquivo.json&gt;  # payload específico
+npm run pipeline:worker                    # worker da fila (terminal separado)</code></pre>
     <hr>
-    <h2 id="13-rodar-via-terminal-powershell">13. Rodar via terminal (PowerShell)</h2>
-    <p>Para os casos em que você prefere bypassar o chat do Claude e rodar scripts direto (útil pra automação, testes rápidos, etc.).</p>
-    <pre class="code" data-lang="powershell"><code># Render de vídeo (composition AdVideo)
-npm run render
-# → outputs/remotion_test_video/video.mp4
-
-# Render de ad estático (Playwright)
-node skills/ad-creative-designer/scripts/render_ad.js `
-  &lt;input.html&gt; &lt;output.png&gt; &lt;largura&gt; &lt;altura&gt;
-
-# Research (modo simulado sem TAVILY_API_KEY)
-node skills/marketing-research-agent/scripts/research.js `
-  --task &lt;task&gt; --date &lt;data&gt; --topic "&lt;topico&gt;" --out outputs/&lt;task&gt;_&lt;data&gt;
-
-# Upload simulado de mídia
-node skills/distribution-agent/scripts/upload_supabase.js `
-  --task &lt;task&gt; --date &lt;data&gt; --out outputs/&lt;task&gt;_&lt;data&gt;
-
-# Validar payload + gerar plano de pipeline
-node skills/orchestrator/scripts/orchestrate.js --file &lt;payload.json&gt;
-# Ou inline:
-node skills/orchestrator/scripts/orchestrate.js --payload '&lt;json inline&gt;'</code></pre>
-    <blockquote><p>O acento grave `<code> </code> `` no PowerShell é continuação de linha.</p></blockquote>
-    <hr>
-    <h2 id="14-anatomia-de-uma-campanha-o-que-cada-arquivo-significa">14. Anatomia de uma campanha (o que cada arquivo significa)</h2>
-    <p><strong>Em palavras simples:</strong> quando uma campanha completa termina, você recebe uma <strong>pasta com 5 grupos de arquivos</strong> — a pesquisa, as imagens, o vídeo, os textos e o "pacote de publicação" final. Os outros arquivos (logs, planos) são internos do sistema; você normalmente só olha os 5 grupos principais.</p>
-    <p>A árvore técnica:</p>
-    <pre class="code"><code>outputs/&lt;task_name&gt;_&lt;YYYY-MM-DD&gt;/
-│
-├── research_results.json        ← O "contrato": dados estruturados
-│                                  consumidos por todos
-├── research_brief.md            ← Resumo humano da pesquisa (+ Mermaid)
-├── interactive_report.html      ← Dashboard com gráficos (Chart.js)
-│
-├── ads/
-│   ├── layout.json              ← Blueprint do design (template, paleta)
-│   ├── ad.html                  ← Materialização em HTML
-│   ├── styles.css               ← Estilos do ad
-│   └── instagram_ad.png         ← A IMAGEM FINAL renderizada (Playwright)
-│
-├── video/
-│   ├── scenes.json              ← Roteiro estruturado (composition/props)
-│   └── ad.mp4                   ← O VÍDEO FINAL (Remotion)
-│
-├── copy/
-│   ├── copy.json                ← Estruturado, todas as plataformas
-│   ├── instagram_caption.txt    ← Caption pronta
-│   ├── threads_post.txt         ← Post Threads (se em platform_targets)
-│   ├── linkedin_post.txt        ← Post LinkedIn (se em platform_targets)
-│   └── youtube_metadata.json    ← Title + description + tags
-│
-├── logs/                        ← Log por agente (se via orchestrator)
-│   ├── research_agent.log
-│   ├── ad_creative_designer.log
-│   ├── video_ad_specialist.log
-│   ├── copywriter_agent.log
-│   └── distribution_agent.log
-│
-├── pipeline_plan.json           ← Plano de execução (dependências, status)
-├── media_urls.json              ← URLs da mídia (Supabase ou placeholders)
-├── Publish &lt;task&gt; &lt;data&gt;.md     ← PACOTE FINAL pra revisão e publicação
-├── preview.html                 ← REVIEW CONSOLIDADO (workflow Seção 23)
-└── status.json                  ← ESTADO da task (workflow Seção 23)</code></pre>
-    <blockquote><p><strong>Após aprovação</strong> (ver Seção 23), a pasta inteira é movida pra <code>outputs/approved/&lt;task&gt;_&lt;data&gt;/</code>. Rejeitadas vão pra <code>outputs/archive/</code>.</p></blockquote>
-    <h3 id="o-que-abrir-primeiro">O que abrir primeiro</h3>
-    <p>Se você for revisar uma campanha gerada:</p>
-    <ol><li><strong><code>Publish &lt;task&gt; &lt;data&gt;.md</code></strong> — vê o resumo + agendamento + status do gate.</li><li><strong><code>ads/instagram_ad.png</code></strong> (e outros formatos) — vê os criativos.</li><li><strong><code>video/ad.mp4</code></strong> — vê o vídeo.</li><li><strong><code>copy/instagram_caption.txt</code></strong> (e outros) — lê o texto.</li><li><strong><code>research_brief.md</code></strong> — confirma o ângulo escolhido.</li></ol>
-    <h3 id="o-que-checar-revisão-rápida">O que checar (revisão rápida)</h3>
-    <ul><li>Os números da Taxa Zero estão corretos? (0% · 3 meses ou R$ 300 mil · R$ 1,99 · D+10 · D+30 · 95%)</li><li>Nenhum concorrente foi citado nominalmente?</li><li>O CTA é um dos aprovados?</li><li>A paleta visual está oficial (sem branco/preto puro, sem Playfair)?</li><li>O <code>campaign_angle</code> aparece coerente no ad, no vídeo e na copy?</li></ul>
-    <p>Se sim em tudo: publica. Se não: peça correção (seção 12.9).</p>
-    <blockquote><p><strong>Persistência:</strong> com git instalado (v2.54.0) e hook <code>post-commit</code> ativo, cada mudança em <code>outputs/</code> é versionada localmente automaticamente. Para backup <strong>fora da VPS</strong>, configure o <code>git remote</code> (ver <code>GIT_REMOTE_SETUP.md</code> e Seção 18). A cópia para <code>tests/</code> segue válida como atalho informal.</p></blockquote>
-    <hr>
-    <h2 id="15-gabarito-de-marca--faz--não-faz">15. Gabarito de marca — faz / não faz</h2>
-    <p>Resumo do que está em <code>knowledge/brand_identity.md</code> + <code>product_campaign.md</code> + <code>platform_guidelines.md</code>. Use como checklist rápido.</p>
-    <h3 id="✅-sempre">✅ Sempre</h3>
-    <ul><li><strong>Paleta oficial:</strong> Selet Darker <code>#07212B</code> · Navy <code>#003554</code> · Blue <code>#006494</code> · Sky <code>#5499B5</code> · Mist <code>#AFBCC9</code> · Cloud <code>#D9DCD6</code>. Selet Blue aparece em toda peça.</li><li><strong>Tipografia:</strong> Inter (display/body/UI) + JetBrains Mono (snippets técnicos, dados/prazos).</li><li><strong>Números da Taxa Zero:</strong> 0% pela plataforma por <strong>3 meses OU até R$ 300 mil</strong> (o que vier primeiro) · R$ 1,99 por transação · PIX <strong>D+10</strong> · cartão <strong>D+30</strong> · 95% aprovação · acesso <strong>por convite</strong>.</li><li><strong>CTAs aprovados:</strong> <em>Solicitar convite</em> · <em>Ver condições</em> · <em>Falar com o time</em> · <em>Conhecer a plataforma</em> · <em>Migrar minha operação</em> · <em>Calcular minha economia</em>.</li><li><strong>Hashtags Instagram (3–5):</strong> <code>#4Selet</code> (obrigatória) + <code>#TaxaZero</code> + produto (<code>#PlataformaDePagamentos</code>/<code>#Infoproduto</code>/<code>#AreaDeMembros</code>) + nicho (<code>#ProdutorDigital</code>/<code>#DigitalSerio</code>).</li><li><strong>Frases-tag oficiais:</strong> <em>"Para quem sabe que é Selet."</em> · <em>"A escolha de quem já performa."</em> · <em>"Produtor não é número. É parceiro."</em></li></ul>
-    <h3 id="❌-nunca">❌ Nunca</h3>
-    <ul><li>Branco puro / preto puro / neon / gradiente quente / bege editorial.</li><li>Playfair, DM Sans, Arial, Roboto, system fonts.</li><li>Citar concorrentes nominalmente: Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay. Mercado só em abstrato (<code>~7,9%</code>).</li><li>"0% pra sempre" / "100% grátis" / saque no mesmo dia.</li><li>Emojis de hype 🔥 ⚡ 🚀 💸 💰 😱 ; hashtags banidas <code>#Sucesso</code> <code>#DinheiroFacil</code> <code>#MentorDoSucesso</code>.</li><li>CTAs proibidos: <em>"Compre já!"</em> · <em>"Última chance!"</em> · <em>"Garanta sua vaga gratuita!"</em>.</li><li>Personagens fictícios / depoimentos inventados (na dúvida, use a scene <code>proof</code> com o 95% de aprovação).</li><li>Estética guru / hype / motivacional vazio.</li></ul>
-    <blockquote><p><strong>Regra de ouro:</strong> brand guidelines vencem qualquer prompt do usuário. Se um pedido conflitar com os knowledge files, o agente <strong>corrige ou recusa</strong> — não obedece cego.</p></blockquote>
-    <hr>
-    <h2 id="16-troubleshooting">16. Troubleshooting</h2>
-    <h3 id="erros-e-mensagens">Erros e mensagens</h3>
+    <h2 id="12-renderização-de-mídia">12. Renderização de mídia<a class="anchor" href="#12-renderização-de-mídia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
     <div class="table-wrap"><table>
-<thead><tr><th>Sintoma</th><th>Causa provável</th><th>Solução</th></tr></thead>
+<thead><tr><th>Tipo de peça</th><th>Motor</th><th>Saída</th></tr></thead>
 <tbody>
-<tr><td><code>Cannot find module '@tavily/core'</code></td><td>SDK não instalado</td><td>Modo simulado já cobre — só rotule <code>_simulated: true</code>. Para busca real: <code>npm i @tavily/core</code> + setar <code>TAVILY_API_KEY</code></td></tr>
-<tr><td><code>TAVILY_API_KEY ausente</code></td><td>Sem chave</td><td><strong>Esperado</strong> — modo simulado, output rotulado</td></tr>
-<tr><td><code>SUPABASE_URL/KEY ausente</code></td><td>Sem config</td><td><strong>Esperado</strong> — <code>media_urls.json</code> com placeholders</td></tr>
-<tr><td><code>Cannot find module 'bullmq'</code></td><td><code>pipeline/</code> real não construído</td><td>Use o modo <strong>sequencial</strong> (<code>orchestrate.js</code> planeja, Claude dispara as skills em ordem)</td></tr>
-<tr><td><code>orchestrate.js</code> retorna exit 1 (<code>BLOQUEADO</code>)</td><td><code>skip_research: true</code> sem <code>assets/&lt;task&gt;/</code></td><td>Crie <code>assets/&lt;task_name&gt;/</code> com pelo menos 1 arquivo, ou desligue <code>skip_research</code></td></tr>
+<tr><td>Imagem, Feed, Carrossel</td><td>Playwright (HTML para PNG)</td><td>PNG (ex.: 1080x1080; um PNG por slide no carrossel)</td></tr>
+<tr><td>Vídeo</td><td>Remotion (React)</td><td><code>video/video.mp4</code></td></tr>
 </tbody></table></div>
-    <h3 id="comportamento-estranho">Comportamento estranho</h3>
+    <p>No painel, a renderização acontece ao salvar/aprovar a peça visual. O vídeo é renderizado pela composition <code>BrandStory</code> do projeto Remotion em <code>src/</code>.</p>
+    <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>A primeira renderização de vídeo após subir o servidor é mais lenta (o motor monta o bundle a frio). As seguintes são rápidas. Pela linha de comando, <code>npm run render</code> renderiza a composition padrão do projeto.</p></div></div>
+    <hr>
+    <h2 id="13-integrações-externas">13. Integrações externas<a class="anchor" href="#13-integrações-externas" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Estas integrações são <strong>opcionais</strong>. Sem elas, os módulos correspondentes rodam em modo simulado e o painel continua funcionando normalmente.</p>
     <div class="table-wrap"><table>
-<thead><tr><th>Sintoma</th><th>Causa provável</th><th>Solução</th></tr></thead>
+<thead><tr><th>Integração</th><th>Habilita</th><th>Status sem a chave</th></tr></thead>
 <tbody>
-<tr><td>Fontes serifadas / erradas no PNG</td><td>Google Fonts não carregou antes do screenshot</td><td><code>&lt;link&gt;</code> no <code>&lt;head&gt;</code> do <code>ad.html</code>; o <code>render_ad.js</code> aguarda <code>document.fonts.ready</code></td></tr>
-<tr><td>PNG cortado / tamanho errado</td><td>Viewport ≠ formato</td><td>Passe <code>width height</code> correto ao <code>render_ad.js</code>; <code>.ad-container</code> com dimensões exatas e <code>overflow: hidden</code></td></tr>
-<tr><td>Skill não disparou</td><td>Claude não detectou trigger</td><td>Mencione a skill pelo nome no prompt: <em>"Use a skill <code>&lt;nome&gt;</code>…"</em></td></tr>
-<tr><td>Output sumiu entre sessões</td><td>Persistência remota não configurada (git local OK, falta <code>git remote</code>)</td><td>Configure o remoto (<code>GIT_REMOTE_SETUP.md</code>) ou copie para <code>tests/</code> como atalho informal</td></tr>
-<tr><td><code>outputs/&lt;task&gt;/logs/&lt;agente&gt;.log</code> vazio</td><td>Agente não rodou (dependência)</td><td>Cheque ordem: research 1º; distribution último; revisar <code>pipeline_plan.json</code></td></tr>
-<tr><td>Vídeo Remotion não renderiza</td><td>Composition <code>AdVideo</code> precisa de props que faltam</td><td>Cheque <code>src/AdVideo.tsx</code> — adapte o conteúdo das scenes ao ângulo antes de rodar <code>npm run render</code></td></tr>
-<tr><td>Claude entrou com a skill errada</td><td>Trigger phrase ambígua</td><td>Mencione a skill pelo nome explicitamente</td></tr>
-<tr><td>Caption com 3 emojis</td><td>Generic prompting (sem ler brand_identity)</td><td>Force a leitura: <em>"Antes de gerar, leia <code>knowledge/brand_identity.md</code> (regras de emoji)..."</em></td></tr>
-<tr><td>Citou um concorrente</td><td>Idem</td><td>Force a leitura do knowledge file. Se persistir, é prompt ambíguo — peça explicitamente "sem nomes"</td></tr>
-<tr><td>Headline com 8 palavras</td><td>Não leu a regra de ≤4 palavras</td><td>Diga: <em>"Headline com no máximo 4 palavras, liderando com número-âncora"</em></td></tr>
+<tr><td>Chave da Anthropic</td><td>Geração de conteúdo com IA real</td><td><span class="st st-pending"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Pendente — geração simulada</td></tr>
+<tr><td>Pesquisa (Tavily)</td><td>Pesquisa de mercado real</td><td><span class="st st-pending"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Pendente — pesquisa simulada</td></tr>
+<tr><td>Armazenamento (Supabase)</td><td>Hosting de mídia e URLs públicas</td><td><span class="st st-pending"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Pendente — hosting simulado</td></tr>
+<tr><td>Fila (Redis)</td><td>Pipeline assíncrono (fila)</td><td><span class="st st-pending"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Pendente — roda sequencial</td></tr>
+<tr><td>Publicação (Instagram / YouTube)</td><td>Publicação automática</td><td><span class="st st-pending"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Pendente — publicação assistida</td></tr>
+</tbody></table></div>
+    <div class="callout callout-tip"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><span>Dica</span></div><div class="callout-body"><p>Comece só com a chave da Anthropic. As demais integrações podem ser ativadas depois, conforme a necessidade.</p></div></div>
+    <hr>
+    <h2 id="14-resolução-de-problemas">14. Resolução de problemas<a class="anchor" href="#14-resolução-de-problemas" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <div class="table-wrap"><table>
+<thead><tr><th>Sintoma</th><th>Causa provável</th><th>O que fazer</th></tr></thead>
+<tbody>
+<tr><td>Conteúdo sai rotulado como "simulado"</td><td>Chave da IA não configurada</td><td>Configure a chave em Configurações (Seção 4.2).</td></tr>
+<tr><td>Aviso de limite de requisições (429)</td><td>Muitas chamadas em pouco tempo</td><td>Aguarde alguns segundos e tente de novo; o painel mostra um aviso e libera o botão.</td></tr>
+<tr><td>"Chave inválida" ao gerar</td><td>Chave incorreta ou revogada</td><td>Revise a chave em Configurações; gere uma nova se necessário.</td></tr>
+<tr><td>Ajuste bloqueado por regra de marca</td><td>A IA produziu algo fora das regras</td><td>Reescreva a orientação do ajuste e tente de novo.</td></tr>
+<tr><td>Render de vídeo demorou e falhou</td><td>Primeira renderização a frio</td><td>Tente novamente; a partir da segunda fica rápido.</td></tr>
+<tr><td>Peça aprovada some da edição</td><td>Comportamento esperado</td><td>Use o rework para reabrir (Seção 10.3).</td></tr>
+<tr><td>Painel não responde</td><td>Serviço caiu</td><td><code>pm2 restart painel-4selet --update-env</code> e verifique <code>pm2 logs</code>.</td></tr>
 </tbody></table></div>
     <hr>
-    <h2 id="17-perguntas-frequentes-faq">17. Perguntas frequentes (FAQ)</h2>
-    <h3 id="eu-preciso-programar-pra-usar">"Eu preciso programar pra usar?"</h3>
-    <p><strong>Não.</strong> Tudo o que você faz é escrever em português no chat. As partes técnicas (renderizar PNG/MP4, executar scripts) acontecem automaticamente quando o Claude pede permissão e você aprova.</p>
-    <h3 id="e-se-eu-pedir-algo-que-conflite-com-a-marca">"E se eu pedir algo que conflite com a marca?"</h3>
-    <p>O agente vai <strong>corrigir ou recusar</strong>. Ex.: se você pedir "0% pra sempre", ele responde explicando que é 0% por 3 meses ou R$ 300 mil, e reescreve. Ele <strong>não obedece cego</strong>.</p>
-    <h3 id="posso-usar-esses-agentes-pra-outra-marca">"Posso usar esses agentes pra outra marca?"</h3>
-    <p><strong>Não</strong> sem reescrever os knowledge files. Tudo é 4Selet-specific — paleta, voz, números da Taxa Zero, frases-tag, lista de concorrentes proibidos. Se quiser adaptar pra outra marca, é um trabalho de reescrita dos <code>knowledge/*.md</code>.</p>
-    <h3 id="por-que-o-research-diz-_simulated-true">"Por que o research diz <code>_simulated: true</code>?"</h3>
-    <p>Porque não tem <code>TAVILY_API_KEY</code> configurada. O agente, em vez de chamar a Tavily, sintetiza a inteligência a partir dos knowledge files e rotula como simulado. <strong>Funciona</strong> — só não é uma busca web real. Pra ativar busca real, ver seção 18.</p>
-    <h3 id="por-que-outputs-some-entre-sessões">"Por que <code>outputs/</code> some entre sessões?"</h3>
-    <p>Não some mais — <strong>git está instalado (v2.54.0)</strong> com hook <code>post-commit</code> ativo, versionando cada mudança localmente. O que ainda <strong>não</strong> existe é o <strong>remoto</strong> (backup fora da VPS) — se a VPS falhar, perde-se tudo. Configure via <code>GIT_REMOTE_SETUP.md</code> (Seção 18). Como atalho informal, copiar pra <code>tests/</code> segue válido.</p>
-    <h3 id="o-sistema-publica-sozinho">"O sistema publica sozinho?"</h3>
-    <p><strong>Não.</strong> Por design. O <code>distribution-agent</code> tem um <em>gate</em> que só destrava com referência explícita ao Publish MD pelo nome <strong>+</strong> fora de dry-run <strong>+</strong> tokens das plataformas. Mesmo cumprindo as 3 condições, é uma decisão consciente sua.</p>
-    <h3 id="e-se-o-vídeo-mp4-ficar-feio">"E se o vídeo <code>.mp4</code> ficar feio?"</h3>
-    <p>A composition <code>AdVideo</code> é fixa (5 cenas, 1080×1920). Pra adaptar a outro ângulo, você precisa editar o conteúdo das scenes em <code>src/scenes/*.tsx</code> e re-renderizar. Para ajustes pequenos, peça ao Claude:</p>
-    <blockquote><p><em>"Edite src/scenes/Hook.tsx para usar o texto 'X' em vez do atual, e renderize de novo."</em></p></blockquote>
-    <h3 id="como-eu-sei-se-o-agente-leu-mesmo-os-knowledge-files">"Como eu sei se o agente leu mesmo os knowledge files?"</h3>
-    <p>Você vê no painel da extensão cada <strong>Read</strong> que ele faz, antes de aprovar. Se ele NÃO leu, peça explicitamente: <em>"Antes de gerar, leia knowledge/brand_identity.md e knowledge/product_campaign.md."</em></p>
-    <h3 id="quantos-agentes-posso-rodar-ao-mesmo-tempo">"Quantos agentes posso rodar ao mesmo tempo?"</h3>
-    <p>Em modo sequencial (atual), <strong>um por vez</strong>. O orchestrator paraleliza conceitualmente (ad + vídeo + copy podem rodar em qualquer ordem), mas o Claude executa um após o outro. Quando o BullMQ for instalado (seção 18), aí sim paraleliza de verdade em workers separados.</p>
-    <h3 id="o-que-é-o-pipeline_planjson">"O que é o <code>pipeline_plan.json</code>?"</h3>
-    <p>É o plano de execução que o <code>orchestrator.js</code> gera ao receber um payload. Lista cada job, sua dependência (ex.: <code>ad_creative_designer</code> depende de <code>research_agent</code>), seu status (<code>queued</code>/<code>running</code>/<code>complete</code>/<code>skipped</code>/<code>blocked</code>) e notas. Útil pra debug quando algo trava.</p>
-    <h3 id="posso-editar-um-output-e-re-renderizar">"Posso editar um output e re-renderizar?"</h3>
-    <p>Sim. Por exemplo: você gerou um ad, não gostou do texto. Edite o <code>ad.html</code> à mão e rode:</p>
-    <pre class="code" data-lang="powershell"><code>node skills/ad-creative-designer/scripts/render_ad.js outputs/&lt;task&gt;/ads/ad.html outputs/&lt;task&gt;/ads/instagram_ad.png 1080 1080</code></pre>
-    <p>Que ele re-renderiza o PNG com a sua edição.</p>
-    <h3 id="tem-como-criar-um-novo-agente">"Tem como criar um novo agente?"</h3>
-    <p>Sim, mas é trabalho. Veja como os existentes estão estruturados em <code>skills/&lt;nome&gt;/SKILL.md</code> (frontmatter + steps + examples + troubleshooting + checklist) e replique o padrão. Mantenha o vínculo com os knowledge files.</p>
-    <h3 id="como-contribuir--melhorar-este-guia">"Como contribuir / melhorar este guia?"</h3>
-    <p>Edite o <code>GUIA_DE_USO.md</code> direto no projeto. A versão HTML pode ser regenerada por qualquer pessoa do time pedindo:</p>
-    <blockquote><p><em>"Regere o GUIA_DE_USO.html a partir do GUIA_DE_USO.md."</em></p></blockquote>
-    <hr>
-    <h2 id="18-próximos-passos-do-projeto">18. Próximos passos do projeto</h2>
-    <p>O que <strong>falta providenciar</strong> para destravar os caminhos reais, em ordem de prioridade. Itens 1–2 dependem só de você; 3–6 são chaves/contas externas.</p>
-    <h3 id="1-configurar-a-chave-anthropic-no-painel-⭐-o-mais-importante-para-o-dia-a-dia">1) Configurar a chave Anthropic no painel ⭐ (o mais importante para o dia a dia)</h3>
-    <p><strong>Por quê:</strong> É o que liga a geração <strong>real</strong> de conteúdo no painel. Sem ela, tudo sai rotulado <code>SIMULADO</code>. <strong>Como:</strong> abrir o painel → <strong>Configurações</strong> → colar <code>sk-ant-...</code> → <em>Salvar chave</em> → <em>Testar conexão</em>. Grava em <code>interface/.env</code> (fora do git). Já existe uma chave configurada — só repetir se precisar trocar/rotacionar.</p>
-    <h3 id="2-criar-repositório-remoto-e-configurar-git-remote">2) Criar repositório remoto e configurar <code>git remote</code></h3>
-    <p><strong>Por quê:</strong> Git local <strong>já está instalado</strong> (v2.54.0) com hook <code>post-commit</code> ativo empurrando em background. Falta apenas o <strong>remoto</strong> para backup fora da VPS — sem isso, falha de disco apaga <code>history[]</code>, <code>content_hashes</code> e decisões de aprovador. <strong>Como:</strong> criar repo <strong>privado</strong> (GitHub/GitLab/Bitbucket), depois <code>git remote add origin &lt;URL&gt;</code> + <code>git push -u origin main</code>. Passo a passo + fallback cron de 5 min em <code>GIT_REMOTE_SETUP.md</code>.</p>
-    <h3 id="3-configurar-tavily_api_key">3) Configurar <code>TAVILY_API_KEY</code></h3>
-    <p><strong>Por quê:</strong> Desliga o modo simulado da pesquisa, libera as 5 buscas web reais (tendências, concorrentes, audiência, hooks, virais). <strong>Como:</strong> <code>npm i @tavily/core</code>, criar conta na Tavily, gerar API key, setar como variável de ambiente <code>TAVILY_API_KEY=...</code> (no <code>.env</code> ou no shell).</p>
-    <h3 id="4-configurar-supabase">4) Configurar Supabase</h3>
-    <p><strong>Por quê:</strong> Desliga o modo simulado do hosting de mídia, gera URLs públicas reais consumíveis pelas APIs do Instagram/YouTube. <strong>Como:</strong> <code>npm i @supabase/supabase-js</code>, criar projeto no Supabase, criar bucket <code>campaign-uploads</code> público, pegar <code>SUPABASE_URL</code> e <code>SUPABASE_KEY</code> (service role), setar como env vars.</p>
-    <h3 id="5-configurar-redis_url-para-a-fila-bullmq">5) Configurar <code>REDIS_URL</code> para a fila BullMQ</h3>
-    <p><strong>Por quê:</strong> A pasta <strong><code>pipeline/</code> já existe</strong> (orchestrator + worker + agents, entregue). Hoje roda <strong>sequencial</strong>; com Redis ela vira execução <strong>enfileirada/assíncrona</strong> — paraleliza ad/vídeo/copy, retry automático, agendamento. <strong>Como:</strong> provisionar um Redis (Upstash funciona bem como serviço gerenciado), setar <code>REDIS_URL=...</code> e rodar <code>npm run pipeline:run</code> + o worker. <em>(A construção da pasta <code>pipeline/</code> já está concluída — só falta a chave do Redis.)</em></p>
-    <h3 id="6-oauth-youtube--token-instagram">6) OAuth YouTube + token Instagram</h3>
-    <p><strong>Por quê:</strong> Habilita posting real (sempre <strong>atrás do gate</strong> de aprovação manual). <strong>Como:</strong> seguir docs do YouTube Data API (OAuth refresh token) e do Instagram Graph API (token de Business Account). Adicionar credenciais ao distribution-agent.</p>
-    <hr>
-    <h2 id="19-arquivos-importantes-do-projeto">19. Arquivos importantes do projeto</h2>
+    <h2 id="15-referência-rápida">15. Referência rápida<a class="anchor" href="#15-referência-rápida" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <h3 id="151-estrutura-do-projeto">15.1 Estrutura do projeto<a class="anchor" href="#151-estrutura-do-projeto" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
     <div class="table-wrap"><table>
-<thead><tr><th>Arquivo</th><th>Para que serve</th></tr></thead>
+<thead><tr><th>Pasta</th><th>Conteúdo</th></tr></thead>
 <tbody>
-<tr><td><code>CLAUDE.md</code></td><td>Contexto técnico principal — auto-carregado pela extensão Claude Code</td></tr>
-<tr><td><code>STATUS_PROJETO.md</code></td><td>Estado atual (o que está pronto / pendente)</td></tr>
-<tr><td><strong><code>GUIA_DE_USO.md</code></strong></td><td><strong>Este documento</strong> — como operar o sistema no dia a dia</td></tr>
-<tr><td><strong><code>GUIA_DE_USO.html</code></strong></td><td>Versão estilizada do guia (mesma informação, para abrir no browser)</td></tr>
-<tr><td><strong><code>interface/</code></strong></td><td><strong>Painel web (caminho principal)</strong> — <code>npm start</code> → <code>http://localhost:4500</code>. Server Express + SPA</td></tr>
-<tr><td><strong><code>interface/README.md</code></strong></td><td>Como rodar e usar o painel (configurar IA, fluxo de campanhas/conteúdo)</td></tr>
-<tr><td><code>pipeline/</code></td><td>Orquestrador executável (sequencial + BullMQ): <code>orchestrator.js</code>, <code>worker.js</code>, <code>agents.js</code></td></tr>
-<tr><td><code>knowledge/brand_identity.md</code></td><td>Identidade visual + voz + governance (v1.1)</td></tr>
-<tr><td><code>knowledge/product_campaign.md</code></td><td>Taxa Zero, números, 9 diferenciais, 4 conceitos de vídeo (v1.2)</td></tr>
-<tr><td><code>knowledge/platform_guidelines.md</code></td><td>Specs e tom por plataforma (v1.1)</td></tr>
-<tr><td><code>skills/&lt;nome&gt;/SKILL.md</code></td><td>Definição de cada agente (steps, examples, checklist)</td></tr>
-<tr><td><code>skills/&lt;nome&gt;/scripts/*.js</code></td><td>Scripts auxiliares (render, research, upload, orchestrate)</td></tr>
-<tr><td><code>src/AdVideo.tsx</code> + <code>src/scenes/*</code></td><td>Composition Remotion (vídeo)</td></tr>
-<tr><td><code>assets/</code></td><td>Logos oficiais, kit de identidade, vídeos de referência</td></tr>
-<tr><td><code>SPEC_WORKFLOW_APROVACAO.md</code></td><td>Spec técnica do Workflow de Aprovação (v1.1 pós-implementação com changelog + issues fechadas/abertas)</td></tr>
-<tr><td><code>VALIDACAO_E_AJUSTES_WORKFLOW.md</code></td><td>Relatório da auditoria inicial + prompt de ajustes pra VPS (referência histórica)</td></tr>
-<tr><td><code>VALIDACAO_FINAL_v1.1.md</code></td><td>Validação final pós-v1.1+ (3 críticos fechados, B.2 runtime, decisões abertas)</td></tr>
-<tr><td><code>GIT_REMOTE_SETUP.md</code></td><td>Passo a passo pra configurar repo remoto + push automatizado + cron de fallback</td></tr>
-<tr><td><code>Skills dos Agentes Detalhado.md</code></td><td>Documento-fonte original (escopo) — referência histórica, <strong>não editar</strong></td></tr>
+<tr><td><code>interface/</code></td><td>Painel web (caminho principal)</td></tr>
+<tr><td><code>skills/</code></td><td>As sete skills (cinco agentes + orchestrator + task-promoter)</td></tr>
+<tr><td><code>pipeline/</code></td><td>Orchestrator, worker e agentes executáveis</td></tr>
+<tr><td><code>scripts/</code></td><td>Workflow de aprovação e utilitários</td></tr>
+<tr><td><code>src/</code></td><td>Projeto Remotion (vídeo)</td></tr>
+<tr><td><code>knowledge/</code></td><td>Fonte de verdade da marca</td></tr>
+<tr><td><code>assets/</code></td><td>Logos, kit de identidade e vídeos de referência</td></tr>
+<tr><td><code>outputs/</code></td><td>Peças geradas; <code>approved/</code> e <code>archive/</code> versionados</td></tr>
+<tr><td><code>docs/</code></td><td>Material de aula e histórico</td></tr>
 </tbody></table></div>
-    <p>&lt;!-- test/TESTES_AGENTES.md (spec dos 17 testes) e test/RESULTADOS_TESTES.md      (relatório antigo, parcial) existem em test/ mas foram removidos desta      tabela. Re-adicionar quando os 17 testes forem re-executados sob a      v1.1 (R5 + B.2 + content_hash) e o relatório for regenerado. --&gt;</p>
+    <h3 id="152-comandos-essenciais">15.2 Comandos essenciais<a class="anchor" href="#152-comandos-essenciais" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <pre class="code" data-lang="bash"><code>cd interface &amp;&amp; npm start            # subir o painel
+pm2 restart painel-4selet            # reiniciar como serviço
+npm run pipeline:run                 # rodar o pipeline
+node scripts/validate_status.js      # auditar estados das tasks</code></pre>
+    <h3 id="153-documentos-relacionados">15.3 Documentos relacionados<a class="anchor" href="#153-documentos-relacionados" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <div class="table-wrap"><table>
+<thead><tr><th>Documento</th><th>Para quê</th></tr></thead>
+<tbody>
+<tr><td><code>STATUS_PROJETO.md</code></td><td>Estado atual do projeto</td></tr>
+<tr><td><code>CLAUDE.md</code></td><td>Contexto técnico e arquitetura</td></tr>
+<tr><td><code>SPEC_WORKFLOW_APROVACAO.md</code></td><td>Contrato técnico do workflow</td></tr>
+<tr><td><code>README.md</code></td><td>Visão geral e início rápido</td></tr>
+<tr><td><code>interface/README.md</code></td><td>Detalhes do painel</td></tr>
+</tbody></table></div>
     <hr>
-    <h2 id="20-casos-de-uso-comuns-prompts-diários">20. Casos de uso comuns (prompts diários)</h2>
-    <p>Esta seção é um <strong>índice por necessidade</strong> — você sabe o que quer fazer, ela mostra qual prompt usar. Para a referência completa <strong>por agente</strong>, ver Seção 12.</p>
-    <h3 id="🟢-quero-fazer-um-post-de-instagram-feed">🟢 "Quero fazer UM post de Instagram (feed)"</h3>
-    <p><strong>Receita:</strong> ad estático + caption.</p>
-    <ol><li>Crie o ad: Seção 12.2 (formato 1080×1080 quadrado, ou 1080×1350 para 4:5).</li><li>Escreva a caption: Seção 12.4 (plataforma <code>instagram</code>).</li></ol>
-    <h3 id="🟢-quero-fazer-um-story">🟢 "Quero fazer UM Story"</h3>
-    <p><strong>Receita:</strong> ad estático no formato story.</p>
-    <ul><li>Seção 12.2 com tamanho <strong>1080×1920</strong> (<code>instagram_story</code>). Cuide pra texto ficar na <strong>zona segura central</strong> (~60% do meio — em torno do logo do perfil em cima e da barra de "Enviar mensagem" embaixo).</li><li>Stories geralmente não levam caption longa — coloque a copy-chave no próprio visual.</li></ul>
-    <h3 id="🟢-quero-fazer-um-reels-vídeo-curto">🟢 "Quero fazer UM Reels (vídeo curto)"</h3>
-    <p><strong>Receita:</strong> roteiro + render.</p>
-    <ol><li>Gere o scene JSON: Seção 12.3 (plataforma <code>instagram_reels</code>).</li><li>Renderize o <code>.mp4</code>: Seção 12.3 (prompt do render).</li><li>Opcional: caption pro Reels via Seção 12.4.</li></ol>
-    <h3 id="🟡-quero-um-carrossel-pro-instagram">🟡 "Quero um carrossel pro Instagram"</h3>
-    <p><strong>⚠️ Limitação conhecida:</strong> o <code>ad-creative-designer</code> gera <strong>UMA imagem por vez</strong>. Carrossel é uma <strong>sequência</strong>. Workflow:</p>
-    <ol><li>Defina <strong>quantos slides</strong> (3 a 5 é o ideal) e o <strong>arco narrativo</strong>:<ul><li>Slide 1: hook (número-âncora ou pergunta)</li><li>Slides 2 a N−1: desenvolvimento</li><li>Slide N: CTA</li></ul></li><li>Rode Seção 12.2 <strong>uma vez para cada slide</strong>, mantendo o <code>task_name</code> e variando o conteúdo: ``<code> Crie ad slide 1 da Taxa Zero, layout product_focus, 1080×1080, hook "0% de taxa". task_name: carrossel_junho, task_date: 2026-06-15. Salve como outputs/carrossel_junho_2026-06-15/ads/slide_1.png. </code>`<code> </code>`<code> Crie ad slide 2 da Taxa Zero, layout product_focus, 1080×1080, "Por 3 meses ou até R$ 300 mil em vendas". task_name: carrossel_junho... Salve como slide_2.png. MESMO layout e MESMA paleta do slide 1 (coerência visual). </code>``</li><li>Escreva a caption do carrossel via Seção 12.4.</li><li><strong>No Instagram, faça upload manual dos N PNGs</strong> na ordem. (Não há automação de carrossel hoje — Meta API permite, mas não está implementado — ver Seção 22.)</li></ol>
-    <h3 id="🟢-quero-uma-thumbnail-de-youtube">🟢 "Quero uma thumbnail de YouTube"</h3>
-    <p><strong>Receita:</strong> ad estático no formato 16:9.</p>
-    <ul><li>Seção 12.2 com tamanho <strong>1280×720</strong>. Headline com até <strong>6 palavras</strong>, alto contraste Navy/Darker, foco em UM número-âncora.</li></ul>
-    <h3 id="🟢-quero-adaptar-um-post-de-feed-para-story">🟢 "Quero adaptar um post de feed para Story"</h3>
-    <p><strong>Mesma campanha, formato diferente:</strong></p>
-    <pre class="code"><code>Para a task &lt;nome_existente&gt; (já criada), gere uma versão Story (1080×1920) do ad.
-Mantenha o mesmo selected_campaign_angle e o mesmo headline. Reposicione o texto
-na zona segura central. Salve em outputs/&lt;nome&gt;/ads/story.png.</code></pre>
-    <h3 id="🟢-quero-várias-variações-do-mesmo-ad-pra-testar-ab">🟢 "Quero várias variações do mesmo ad pra testar A/B"</h3>
-    <pre class="code"><code>Crie 3 variações do ad da Taxa Zero (1080×1080, product_focus), cada uma com um
-ângulo diferente: (1) Migração sem trauma, (2) 95% de aprovação no cartão,
-(3) 0% por 3 meses pra medir a diferença. task_name: teste_ab_junho,
-task_date: 2026-06-15. Salve como variacao_1.png, variacao_2.png, variacao_3.png
-em outputs/teste_ab_junho_2026-06-15/ads/.</code></pre>
-    <h3 id="🟢-quero-o-conjunto-de-uma-semana-inteira-cronograma">🟢 "Quero o conjunto de uma semana inteira (cronograma)"</h3>
-    <p>Use o pipeline completo (Seção 12.6) <strong>e depois</strong> peça as adaptações por dia da semana:</p>
-    <ol><li>Rode a pipeline (research + ad + vídeo + copy + Publish MD).</li><li>A partir da pasta gerada, peça versões adicionais (story do ad, thumbnail, carrossel) reaproveitando o <code>selected_campaign_angle</code>.</li><li>O Publish MD vai trazer o <strong>sequenciamento sugerido</strong> (Seg LinkedIn → Ter IG Feed → Qua YouTube → Qui Reels+Threads → Sex Story).</li></ol>
-    <h3 id="🟢-quero-auditar-um-conteúdo-antes-de-publicar">🟢 "Quero auditar um conteúdo antes de publicar"</h3>
-    <p><strong>Seção 12.9 (Auditoria de marca).</strong> Envie o caminho do arquivo, o sistema aponta o que está off-brand (cores, fontes, números, CTAs, concorrentes citados, hype).</p>
-    <h3 id="🟢-quero-a-campanha-completa-tudo-de-uma-vez">🟢 "Quero a campanha COMPLETA (tudo de uma vez)"</h3>
-    <p><strong>Seção 12.6 (Pipeline completo).</strong> Um payload, todos os agentes rodam em ordem. Saída em <code>outputs/&lt;task&gt;_&lt;data&gt;/</code> com tudo organizado.</p>
-    <blockquote><p><strong>Dúvida frequente:</strong> "qual agente eu uso para X?" Se não souber, use o <strong>prompt em linguagem natural</strong> descrevendo o resultado que quer ("uma imagem pro Instagram", "um vídeo de 15s") — o Claude detecta o agente certo pela trigger phrase. Se acertar a skill errada, mencione-a pelo nome: <em>"Use a skill <code>&lt;nome&gt;</code>..."</em>.</p></blockquote>
-    <hr>
-    <h2 id="21-como-criar--adaptar-uma-campanha">21. Como criar / adaptar uma campanha</h2>
-    <p>A 4Selet hoje tem <strong>Taxa Zero</strong> como campanha principal. Mas você vai precisar de variações eventualmente. Três níveis — escolha o que cabe no seu caso:</p>
-    <h3 id="nível-1--mesmo-guarda-chuva-ângulo-diferente-trivial">Nível 1 — Mesmo guarda-chuva, ângulo diferente (TRIVIAL)</h3>
-    <p><em>Exemplo: dentro de Taxa Zero, focar em "95% de aprovação" em vez de "0% por 3 meses".</em></p>
-    <p><strong>Como fazer:</strong> <strong>só trocar o <code>&lt;angulo&gt;</code> no prompt.</strong> O agente já tem todos os fatos da Taxa Zero no <code>product_campaign.md</code> — você só escolhe a ênfase.</p>
-    <pre class="code"><code>Crie um ad estático 1080×1080 da Taxa Zero, layout product_focus,
-ancorado no ângulo "95% de aprovação no cartão = mais receita líquida".
-task_name: campanha_aprovacao, task_date: 2026-06-15.</code></pre>
-    <p>⏱️ Tempo: instantâneo. <strong>Nada técnico precisa mudar.</strong></p>
-    <h3 id="nível-2--sub-campanha-nova-da-4selet-médio">Nível 2 — Sub-campanha NOVA da 4Selet (MÉDIO)</h3>
-    <p><em>Exemplo: lançar "Indique e Ganhe", "Aniversário Selet", "Black Friday Selet".</em></p>
-    <p><strong>Duas opções, dependendo se é pontual ou recorrente:</strong></p>
-    <p><strong>🅐 Opção A — Pontual (uma vez só):</strong> descreva a campanha no próprio prompt, com <strong>mais contexto</strong> que o normal. O agente trabalha em cima do <code>brand_identity.md</code> geral e adapta:</p>
-    <pre class="code"><code>Crie um ad estático 1080×1080 para a campanha "Indique e Ganhe" da 4Selet.
-Mecânica: produtor estabelecido que indica outro produtor estabelecido ganha
-30 dias adicionais de Taxa Zero. Use o tom sóbrio da marca, paleta oficial,
-CTA "Indicar agora". task_name: indique_e_ganhe, task_date: 2026-06-15.</code></pre>
-    <p>⏱️ Tempo: minutos. <strong>Nada permanente muda.</strong></p>
-    <p><strong>🅑 Opção B — Permanente (várias peças ao longo do tempo):</strong> peça pra <strong>atualizar o <code>product_campaign.md</code></strong> adicionando uma seção sobre a nova campanha. A partir daí, ela faz parte do knowledge base e o sistema usa naturalmente:</p>
-    <pre class="code"><code>Adicione ao knowledge/product_campaign.md uma nova seção (após a Taxa Zero)
-descrevendo a campanha "Indique e Ganhe": mecânica, números, headlines aprovadas,
-conceitos de vídeo, CTAs. Mantenha o tom e a estrutura das outras seções.</code></pre>
-    <p>Depois disso, <strong>qualquer prompt</strong> ("crie um ad da Indique e Ganhe...") aciona os fatos corretos automaticamente — sem precisar repetir contexto.</p>
-    <p>⏱️ Tempo: ~15-30 min (uma edição do knowledge file + revisão).</p>
-    <h3 id="nível-3--marca-diferente-grande">Nível 3 — Marca diferente (GRANDE)</h3>
-    <p><em>Exemplo: usar o sistema pra produzir conteúdo de outra empresa.</em></p>
-    <p><strong>Não é o caso de uso esperado.</strong> Os knowledge files são totalmente 4Selet-specific — paleta, voz, números, frases-tag, lista de concorrentes proibidos.</p>
-    <p><strong>Tecnicamente possível</strong> reescrever os 3 arquivos <code>knowledge/*.md</code> pra outra marca, mas isso é <strong>um projeto à parte</strong> — clone a estrutura num diretório novo, refaça <code>brand_identity</code> / <code>product_campaign</code> / <code>platform_guidelines</code>, ajuste os exemplos nos <code>SKILL.md</code>.</p>
-    <p>⏱️ Tempo: dias/semana. <strong>Trabalho real de adaptação.</strong></p>
-    <blockquote><p><strong>Resumo prático:</strong> Nível 1 e 2 cobrem 99% dos casos. Nível 3 é refazer o projeto pra outra marca — discuta com o time antes.</p></blockquote>
-    <hr>
-    <h2 id="22-integrar-a-api-da-meta-para-postagens-automatizadas">22. Integrar a API da Meta para postagens automatizadas</h2>
-    <h3 id="⚠️-antes-de-mais-nada--duas-verdades-importantes">⚠️ Antes de mais nada — duas verdades importantes</h3>
-    <p><strong>Verdade 1:</strong> o sistema foi desenhado pra <strong>PROTEGER você</strong> de postar sem revisão. O <strong>gate</strong> do <code>distribution-agent</code> <strong>continua existindo</strong> mesmo com a API da Meta configurada. Você ainda precisa dizer <em>"publica usando Publish X.md"</em> pra cada peça. Isso é proteção contra erros caros (texto errado, número errado, momento errado).</p>
-    <p><strong>Verdade 2:</strong> "<strong>postar sem fazer mais nada</strong>" — automação 100%, sem revisão humana — <strong>NÃO é recomendado</strong>. Já vimos marcas postando conteúdo errado de bot sem ninguém olhar. Pra a 4Selet, que tem voz sóbria e regras estritas de marca, é alto risco de <strong>queimar reputação por economizar 30 segundos</strong>.</p>
-    <h3 id="o-que-muda-com-a-api-configurada-caminho-recomendado">O que muda com a API configurada (caminho recomendado)</h3>
-    <div class="table-wrap"><table>
-<thead><tr><th>Hoje (sem API)</th><th>Com Meta API</th></tr></thead>
-<tbody>
-<tr><td>Gera a campanha → revisa Publish MD → <strong>copia caption à mão, faz upload da imagem no app, posta</strong></td><td>Gera a campanha → revisa Publish MD → <strong>"publica usando Publish X.md"</strong> → sistema posta automaticamente</td></tr>
-</tbody></table></div>
-    <p><strong>O que economiza:</strong> o trabalho <strong>manual</strong> de upload + cópia. <strong>O que NÃO economiza:</strong> a <strong>revisão</strong>. E é assim por design.</p>
-    <h3 id="o-fluxo-do-usuário-comparado">O fluxo do usuário, comparado</h3>
-    <p><strong>Hoje</strong> (gate fechado, sem API):</p>
-    <ol><li>Rodar pipeline ou peça única</li><li>Revisar o Publish MD</li><li><strong>Copiar a caption no Instagram à mão</strong></li><li><strong>Fazer upload do PNG no Instagram à mão</strong></li><li><strong>Publicar manualmente</strong></li></ol>
-    <p><strong>Com Meta API + Supabase configurados</strong> (gate fechado, posting automatizado):</p>
-    <ol><li>Rodar pipeline ou peça única</li><li>Revisar o Publish MD</li><li><em>"Publica usando Publish taxa_zero_maio 2026-05-29.md"</em></li><li><strong>Sistema posta automaticamente</strong> e devolve <code>post_id</code> + URL pública</li></ol>
-    <p>Passos 1, 2 e 3 continuam exigindo você. O passo 4 substitui upload manual.</p>
-    <h3 id="o-que-precisa-ser-configurado-trabalho-de-devadmin-não-do-usuário">O que precisa ser configurado (trabalho de dev/admin, não do usuário)</h3>
-    <p><strong>Do lado da Meta:</strong></p>
-    <ul><li>Conta <strong>Facebook Business</strong> ativa.</li><li><strong>Página do Facebook</strong> conectada à conta <strong>Instagram Business</strong> (Instagram pessoal <strong>não</strong> funciona).</li><li>App no <strong>Facebook Developers</strong> com as permissões: <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>pages_read_engagement</code>, <code>pages_manage_posts</code>.</li><li>App pode precisar passar por <strong>App Review</strong> da Meta — pode levar dias ou semanas, dependendo do tipo de uso e da documentação enviada.</li><li><strong>Long-lived access token</strong> (<code>IG_ACCESS_TOKEN</code>).</li><li>ID da conta business (<code>IG_BUSINESS_ACCOUNT_ID</code>).</li></ul>
-    <p><strong>Do lado do projeto 4Selet:</strong></p>
-    <ul><li>Configurar <strong>Supabase</strong> (ou outro hosting) — Instagram <strong>exige URLs públicas</strong> pra publicar a partir de mídia externa.</li><li>Setar variáveis de ambiente: <code>IG_ACCESS_TOKEN</code>, <code>IG_BUSINESS_ACCOUNT_ID</code>.</li><li>Implementar as chamadas Graph API no <code>distribution-agent</code> (já existe um esqueleto no <code>SKILL.md</code> descrevendo o alvo — falta o código real).</li></ul>
-    <p><strong>YouTube</strong> segue padrão similar mas com <strong>OAuth 2.0</strong> (mais complicado de obter, porque exige tela de consentimento do Google e armazenamento seguro do refresh token).</p>
-    <h3 id="plataformas-e-limites">Plataformas e limites</h3>
-    <div class="table-wrap"><table>
-<thead><tr><th>Plataforma</th><th>API</th><th>Limite/dia</th><th>Status do projeto</th></tr></thead>
-<tbody>
-<tr><td>Instagram (Feed + Reels)</td><td>Graph API</td><td>~25 posts</td><td>Implementável (gate + Supabase necessários)</td></tr>
-<tr><td>YouTube (Shorts + Long-form)</td><td>Data API v3</td><td>~6 uploads</td><td>Implementável (OAuth necessário)</td></tr>
-<tr><td>Threads / X</td><td>—</td><td>—</td><td><strong>Sem API pública estável</strong> → continua post manual</td></tr>
-<tr><td>LinkedIn</td><td>—</td><td>—</td><td><strong>Sem API pública estável</strong> pra orgânico → continua post manual</td></tr>
-</tbody></table></div>
-    <h3 id="se-quiser-desabilitar-o-gate-autopublicação-100">Se quiser desabilitar o gate (autopublicação 100%)</h3>
-    <p><strong>Tecnicamente possível, mas:</strong> você assume o risco de publicar conteúdo errado <strong>sem nenhuma revisão humana</strong>. Pra desabilitar, modificaria-se o <code>distribution-agent</code> removendo a checagem do gate.</p>
-    <p><strong>Recomendação:</strong> <strong>NÃO faça.</strong> O ganho de "uma frase a menos" não compensa o risco de queimar a marca com um post errado. Se for absolutamente necessário (ex.: uma automação noturna agendada), implemente um <strong>gate condicional</strong> (só auto-posta se o conteúdo passou no Brand Governance checklist <strong>sem nenhum aviso</strong>). Mas isso é design fino — vale discutir com o time antes.</p>
-    <h3 id="resumo-executivo">Resumo executivo</h3>
-    <ul><li>✅ <strong>Pode automatizar o upload e a chamada de API</strong> (esse é o ganho real, e é seguro).</li><li>❌ <strong>Não recomendamos automatizar a APROVAÇÃO</strong> (perde-se a revisão humana — a marca paga o preço se sair errado).</li><li>🔧 <strong>É trabalho de dev/admin</strong>, não de usuário. Discuta com o time técnico antes de iniciar.</li><li>📅 <strong>Pré-requisito:</strong> Supabase configurado (sem isso, não dá pra postar via API).</li></ul>
-    <hr>
-    <h2 id="23-workflow-de-aprovação-preview-aprovar-arquivar">23. Workflow de aprovação: preview, aprovar, arquivar</h2>
-    <p>Máquina de estados explícita para cada campanha (task), com <code>status.json</code> como fonte da verdade versionada em git. Implementado na v1.1 (R5 gate duplo + content_hash SHA-256 + B.2 runtime validados).</p>
-    <h3 id="231-estados">23.1 Estados</h3>
-    <div class="table-wrap"><table>
-<thead><tr><th>Estado</th><th>Pasta</th><th>Quem pode escrever</th><th>Significado</th></tr></thead>
-<tbody>
-<tr><td><code>draft</code></td><td><code>outputs/&lt;task&gt;_&lt;date&gt;/</code></td><td>agentes de conteúdo</td><td>task criada; agentes produzindo</td></tr>
-<tr><td><code>in_review</code></td><td><code>outputs/&lt;task&gt;_&lt;date&gt;/</code></td><td>nenhum agente (só humano)</td><td>preview gerado, aguarda decisão</td></tr>
-<tr><td><code>approved</code></td><td><code>outputs/approved/&lt;task&gt;_&lt;date&gt;/</code></td><td><strong>ninguém</strong> (auto-revert se editar)</td><td>aprovada; <code>content_hashes</code> SHA-256 registradas</td></tr>
-<tr><td><code>rejected</code></td><td><code>outputs/archive/&lt;task&gt;_&lt;date&gt;/</code></td><td>agentes via rework</td><td>rejeitada com <code>reason</code></td></tr>
-</tbody></table></div>
-    <h3 id="232-transições-legais">23.2 Transições legais</h3>
-    <pre class="code"><code>null      → draft         (orchestrator: bootstrap)
-draft     → in_review     (distribution-agent: gera preview)
-in_review → approved      (humano via task-promoter, exige --by)
-in_review → rejected      (humano via task-promoter, recomenda --reason)
-approved  → in_review     (rework manual ou auto-revert)
-rejected  → in_review     (rework)</code></pre>
-    <p>Tentativas fora dessa matriz → <code>E_INVALID_TRANSITION</code> (exit 1).</p>
-    <h3 id="233-comandos-essenciais">23.3 Comandos essenciais</h3>
-    <p><strong>Criar uma task nova:</strong></p>
-    <pre class="code" data-lang="bash"><code>node scripts/orchestrator.js --task minha_campanha --date 2026-06-15 --platforms instagram,youtube</code></pre>
-    <p><strong>Gerar preview + promover para revisão:</strong></p>
-    <pre class="code" data-lang="bash"><code>node scripts/generate_preview.js --task minha_campanha --date 2026-06-15
-# abre outputs/minha_campanha_2026-06-15/preview.html no navegador</code></pre>
-    <p><strong>Aprovar:</strong></p>
-    <pre class="code" data-lang="bash"><code>node scripts/promote_task.js --task minha_campanha --date 2026-06-15 --to approved --by "Hugo"</code></pre>
-    <p><strong>Rejeitar com motivo:</strong></p>
-    <pre class="code" data-lang="bash"><code>node scripts/promote_task.js --task minha_campanha --date 2026-06-15 --to rejected --reason "claim fora da marca" --by "Hugo"</code></pre>
-    <p><strong>Rework (voltar para revisão):</strong></p>
-    <pre class="code" data-lang="bash"><code>node scripts/promote_task.js --task minha_campanha --date 2026-06-15 --to in_review</code></pre>
-    <h3 id="234-auditoria-e-integridade">23.4 Auditoria e integridade</h3>
-    <pre class="code" data-lang="bash"><code># Validar todos os status.json (schema, zona vs status, hashes em approved)
-node scripts/validate_status.js
-
-# Verificar integridade SHA-256 de outputs/approved/ (exclui status.json e preview.html)
-node scripts/check_approved_integrity.js                # só relata
-node scripts/check_approved_integrity.js --auto-revert  # move para draft se editado
-
-# Regenerar INDEX.md (auto-disparado por approve/reject; manual se necessário)
-node scripts/refresh_index.js
-
-# Migrar tasks pré-Workflow (sem status.json)
-node scripts/migrate_legacy.js --dry-run                # lista o que faria
-node scripts/migrate_legacy.js                          # executa
-node scripts/migrate_legacy.js --include-test           # inclui test/campanha-demo/</code></pre>
-    <h3 id="234a-gate-duplo-de-publicação-r5-⚠️">23.4a Gate duplo de publicação (R5) ⚠️</h3>
-    <p><strong>OBRIGATÓRIO antes de qualquer post real (IG Graph, YouTube Data API).</strong> Verifica em runtime que:</p>
-    <ol><li><code>status.status === "approved"</code> (não basta pasta em <code>outputs/approved/</code> — pode ser órfã)</li><li><code>content_hashes</code> batem com SHA-256 do conteúdo atual (não basta pasta intacta — pode ter sido editada)</li></ol>
-    <pre class="code" data-lang="bash"><code># Como CLI (uma task):
-node scripts/check_approval_gate.js --task &lt;name&gt; --date &lt;date&gt;
-# Exit 0 → OK publicar. Exit 1 → bloqueado (ler stderr para código)
-
-# Como módulo (no código do publisher):
-const { assertPublishApproved } = require('./scripts/check_approval_gate');
-assertPublishApproved({ taskName: 'x', date: '2026-06-02' });  // lança em violação</code></pre>
-    <p><code>content_hashes</code> exclui <code>status.json</code> (mutável por design) e <code>preview.html</code> (artefato gerado). Tasks sem conteúdo real (só status + preview) → <code>content_hashes = {}</code> → gate bloqueia com <code>E_GATE_NO_HASHES</code> (proteção contra task vazia bypass).</p>
-    <h3 id="235-o-que-a-previewhtml-mostra">23.5 O que a <code>preview.html</code> mostra</h3>
-    <p>Single-file HTML (sem deps; Google Fonts via CDN):</p>
-    <ul><li><strong>Header sticky</strong> com nome da campanha, <code>.status-badge</code>, ângulo, data e plataformas.</li><li><strong>Nav âncora</strong>: Ads · Vídeo · Captions · Research · Publish · Checklist.</li><li><strong>Seções 1–5</strong>: thumbnails dos ads, player do vídeo, captions com contador de caracteres, research brief colapsável, Publish MD renderizado.</li><li><strong>Seção 6 — Checklist de marca</strong> (6 regras automáticas):<ul><li>a) Números Taxa Zero (<code>0%</code>, <code>3 meses</code>, <code>R$ 300 mil</code>, <code>R$ 1,99</code>, <code>D+10</code>, <code>D+30</code>, <code>95%</code>)</li><li>b) CTAs aprovados (<code>Solicitar convite</code>, <code>Falar com o time</code>, etc.)</li><li>c) Paleta oficial + tipografia (sem <code>#fff</code>/<code>#000</code>/Playfair/Arial)</li><li>d) Concorrentes nominais (lista negra: Hotmart/Kiwify/Eduzz/Ticto/etc.)</li><li>e) Emoji ≤1 funcional por caption (banidos: 🔥⚡🚀💸💰😱)</li><li>f) Hashtags válidas (<code>#4Selet</code> obrigatória; banidas: <code>#Sucesso</code>/<code>#DinheiroFacil</code>/<code>#MentorDoSucesso</code>)</li></ul></li></ul>
-    <p>Cada regra: ✅ (ok) · ⚠️ (warn, com evidência textual) · ❌ (fail).</p>
-    <h3 id="236-códigos-de-erro">23.6 Códigos de erro</h3>
-    <p><strong>Transições e bootstrap (<code>promote_task.js</code>, <code>orchestrator.js</code>, <code>generate_preview.js</code>):</strong></p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Código</th><th>Exit</th><th>Causa típica</th><th>Como recuperar</th></tr></thead>
-<tbody>
-<tr><td><code>E_INVALID_TRANSITION</code></td><td>1</td><td>Transição fora da matriz</td><td>Mensagem sugere rota legal</td></tr>
-<tr><td><code>E_MISSING_APPROVER</code></td><td>1</td><td><code>--by</code> ausente em <code>approved</code></td><td>Adicionar <code>--by "&lt;nome&gt;"</code></td></tr>
-<tr><td><code>E_UNKNOWN_STATE</code></td><td>1</td><td><code>--to &lt;x&gt;</code> com <code>&lt;x&gt;</code> fora do enum</td><td>Usar `draft</td><td>in_review</td><td>approved</td><td>rejected`</td></tr>
-<tr><td><code>E_STATUS_PARSE</code></td><td>2</td><td><code>status.json</code> corrompido (JSON inválido)</td><td>Restaurar do git: <code>git checkout HEAD -- outputs/.../status.json</code></td></tr>
-<tr><td><code>E_DUPLICATE_LOCATION</code></td><td>2</td><td>Task em múltiplas zonas (outputs/, approved/, archive/)</td><td>Decidir manualmente qual é canônica, apagar as outras</td></tr>
-<tr><td><code>E_REBOOTSTRAP_BLOCKED</code></td><td>1</td><td><code>orchestrator.js</code> chamado em task aprovada/rejeitada</td><td>Rodar <code>--to in_review</code> antes</td></tr>
-</tbody></table></div>
-    <p><strong>Gate duplo de publicação (<code>check_approval_gate.js</code> — R5):</strong></p>
-    <div class="table-wrap"><table>
-<thead><tr><th>Código</th><th>Exit</th><th>Causa típica</th><th>Como recuperar</th></tr></thead>
-<tbody>
-<tr><td><code>E_TASK_NOT_FOUND</code></td><td>1</td><td><code>outputs/approved/&lt;task&gt;_&lt;date&gt;/</code> ausente</td><td>Task nunca foi aprovada; checar com <code>validate_status.js</code></td></tr>
-<tr><td><code>E_INVALID_STATE</code></td><td>1</td><td>Pasta em <code>approved/</code> mas <code>status.status !== "approved"</code> (órfã)</td><td>Reconciliar via <code>promote_task.js</code>; investigar como ficou inconsistente</td></tr>
-<tr><td><code>E_GATE_NO_HASHES</code></td><td>1</td><td>Task aprovada <strong>sem</strong> <code>content_hashes</code> (legacy ou pre-A.2 ou task vazia)</td><td>Re-promover (<code>--to in_review</code> → <code>--to approved</code>) ou migrar via <code>migrate_legacy.js</code>. <strong>Bypass para task vazia é NEGADO por design.</strong></td></tr>
-<tr><td><code>E_HASH_MISMATCH</code></td><td>1</td><td>Conteúdo alterado pós-aprovação</td><td><code>check_approved_integrity.js --auto-revert</code>, reaprovar</td></tr>
-</tbody></table></div>
-    <h3 id="237-gate-de-posting-inalterado">23.7 Gate de POSTING (inalterado)</h3>
-    <p>O Workflow <strong>não</strong> mudou o gate de POSTING. Publicação real exige <strong>TODAS</strong> as condições:</p>
-    <ol><li>Usuário referencia o Publish MD <strong>pelo nome</strong> (<code>Publish &lt;task&gt; &lt;date&gt;.md</code>).</li><li><code>dry_run: false</code>.</li><li>Tokens presentes (IG Graph, YouTube OAuth).</li><li><strong>R5 (Step 5a):</strong> <code>assertPublishApproved({ taskName, date })</code> retorna sucesso → <code>status.status === "approved"</code> E <code>content_hashes</code> batem em runtime.</li></ol>
-    <p>Em modo dry-run / sem tokens → fica no Publish MD para post manual.</p>
-    <h3 id="238-regra-critical-re-aprovação">23.8 Regra CRITICAL Re-aprovação</h3>
-    <p>Os 4 agentes de conteúdo (research, ad, video, copy) têm a regra CRITICAL no início do <code>SKILL.md</code>: <strong>se o caminho começa com <code>outputs/approved/</code>, PARAR</strong>. Para editar, rodar <code>promote_task --to in_review</code> primeiro.</p>
-    <p>Como contracheque automático: <code>scripts/check_approved_integrity.js</code> calcula SHA-256 dos arquivos no momento da aprovação (<code>status.content_hashes</code>); divergência detectada (edição manual via VSCode, script, etc.) → com <code>--auto-revert</code>, a task volta para <code>draft</code> com <code>event_type: "edit_revert"</code> no history e <code>previous_approval</code> preservado.</p>
-    <h3 id="239-testes-que-validam-o-workflow">23.9 Testes que validam o Workflow</h3>
-    <ul><li><strong>10/10 caminhos felizes</strong> (bootstrap → preview → approve → rework → reject)</li><li><strong>7/7 adversariais B.1</strong> (B.1.1–B.1.7): transições inválidas, <code>--by</code> ausente, estado fora do enum, <code>status.json</code> corrompido, task em múltiplas zonas, idempotência do <code>generate_preview</code></li><li><strong>3/3 runtime B.2</strong> (B.2.1–B.2.3): edit detection sem mutação · <code>--auto-revert</code> restaura com <code>previous_approval</code> preservado · gate bloqueia task vazia com <code>E_GATE_NO_HASHES</code></li></ul>
-    <p>Ver <code>SPEC_WORKFLOW_APROVACAO.md</code> v1.1 para o contrato técnico completo.</p>
+    <h2 id="16-manutenção-deste-guia">16. Manutenção deste guia<a class="anchor" href="#16-manutenção-deste-guia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
+    <p>Este guia tem duas formas: a fonte em <code>GUIA_DE_USO.md</code> e a versão estilizada em <code>GUIA_DE_USO.html</code>, gerada a partir da fonte.</p>
+    <p>Para regenerar o HTML após editar o <code>.md</code>:</p>
+    <pre class="code" data-lang="bash"><code>node scripts/build_guide_html.js</code></pre>
+    <p>O gerador converte o Markdown em HTML com a paleta 4Selet, ícones no lugar de emojis e os blocos de destaque (<code>[!NOTE]</code>, <code>[!TIP]</code>, <code>[!WARNING]</code>, <code>[!CAUTION]</code>). Abra o <code>GUIA_DE_USO.html</code> com duplo-clique no navegador.</p>
+    <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>Mantenha a fonte <code>.md</code> como original e regenere o HTML — não edite o HTML à mão, pois ele é sobrescrito a cada geração.</p></div></div>
     <p class="foot">Documento gerado a partir de <code>GUIA_DE_USO.md</code> · paleta oficial 4Selet · regenere com <code>node scripts/build_guide_html.js</code>.</p>
   </main>
 </body>
