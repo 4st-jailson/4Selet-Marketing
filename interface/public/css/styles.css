@@ -461,6 +461,37 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* #6 — pré-visualização de HTML (ex.: preview.html) num modal amplo e responsivo */
 .lightbox-frame { width: min(95vw, 1100px); height: 90vh; border: 0; border-radius: var(--r-sm); background: #fff; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .lightbox-loading { color: #fff; font-size: 14px; display: flex; align-items: center; gap: 10px; padding: var(--s7); }
+/* #7 — botão "abrir em nova aba" (HTML preview) ao lado do "Baixar" */
+.lightbox-newtab { position: absolute; top: 24px; left: 112px; }
+/* #7 — leitor de texto/JSON dentro do lightbox */
+.lightbox-pre { margin: auto; max-width: min(92vw, 960px); max-height: 84vh; overflow: auto; padding: var(--s6); border-radius: var(--r-sm); background: #0d1f29; color: #d9dcd6; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+
+/* #4 — selo "Novo" inline na lista da biblioteca */
+.lr-new { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 1px 7px; border-radius: var(--r-pill); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; background: var(--ok-soft); color: var(--ok); }
+
+/* #6 — chave de API em estado bloqueado/edição (Configurações) */
+.key-locked { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 13px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); }
+.key-lock { flex: 0 0 auto; opacity: .7; }
+.key-mask { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; color: var(--text-2); letter-spacing: .04em; }
+.key-edit { display: flex; flex-direction: column; gap: 9px; }
+
+/* #2 — mockup de pré-visualização social (LinkedIn / Threads) */
+.social-mock-box { margin-top: var(--s5); }
+.social-mock-box > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+.social-mock { display: flex; justify-content: center; }
+.sm-card { width: 100%; max-width: 420px; background: #fff; color: #0d1f29; border: 1px solid #e2e6ea; border-radius: 12px; padding: 16px; box-shadow: 0 4px 18px rgba(0,0,0,.12); }
+.sm-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.sm-avatar { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: var(--navy, #003554); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+.sm-id { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.sm-name { font-weight: 700; font-size: 14px; color: #0d1f29; }
+.sm-handle { font-size: 12px; color: #5b6b76; }
+.sm-body { font-size: 14px; line-height: 1.5; color: #1a2c36; white-space: pre-wrap; word-break: break-word; }
+.sm-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.sm-tag { font-size: 12px; color: #006494; font-weight: 600; }
+.sm-actions { display: flex; gap: 18px; margin-top: 14px; padding-top: 11px; border-top: 1px solid #eceef1; font-size: 12.5px; color: #5b6b76; }
+.sm-threads { background: #fff; color: #0d1f29; }
+.sm-threads .sm-avatar { background: #000; }
+.sm-linkedin .sm-avatar { background: #0a66c2; }
 
 /* ---- #5 tags ---- */
 .cc-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 1px; }

@@ -230,6 +230,20 @@ function setTitle(folder, title) {
   return true;
 }
 
+// #8 — Grava a variante de template visual escolhida (render.json) como default
+// da arte, SEM renderizar. So vale para pecas estaticas (image/feed/carousel).
+const VALID_TEMPLATES = ["editorial", "bold", "split"];
+function setTemplate(folder, template) {
+  if (!VALID_TEMPLATES.includes(String(template))) return false;
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "render.json");
+  const cur = readJsonSafe(p) || {};
+  cur.template = String(template);
+  fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
+  return true;
+}
+
 // #5 — Normaliza tags: trim, minusculas, sem vazios/duplicatas, limite de 12.
 function normalizeTags(tags) {
   const arr = Array.isArray(tags) ? tags : String(tags || "").split(",");
@@ -308,5 +322,5 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  setCampaignId, setTitle, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
+  setCampaignId, setTitle, setTemplate, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

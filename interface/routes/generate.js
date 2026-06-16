@@ -198,6 +198,10 @@ router.post("/save", async (req, res, next) => {
     // 2b) grava o titulo de exibicao humanizado (separado do slug tecnico)
     if (body.title) content.setTitle(folder, body.title);
 
+    // 2c) #8 — semente da variante visual escolhida no brief (default da arte;
+    // ignora "auto"/vazio para deixar a rotacao automatica por slug atuar).
+    if (body.template_variant) content.setTemplate(folder, body.template_variant);
+
     // 3) grava o arquivo de conteudo
     const text = formatContentFile(ct, parsed, body.raw);
     let rel;

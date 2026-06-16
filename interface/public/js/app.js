@@ -200,7 +200,7 @@ async function viewDashboard() {
 function taskRow(t) {
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
     <span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>
-    <div class="lr-main"><div class="lr-title">${esc(displayName(t))}</div>
+    <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${!t.first_viewed_at ? ' <span class="lr-new">Novo</span>' : ""}</div>
     <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.platforms || []).length ? " · " + esc(t.platforms.join(", ")) : ""}</div></div>
     ${statusBadge(t.status)}</a>`;
 }
@@ -432,7 +432,7 @@ function fileRow(folder, f) {
     ? `<button class="btn btn-sm" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','${f.isVideo ? "video" : "image"}','${API.downloadUrl(folder, f.rel)}')">ver</button>`
     : isHtml
       ? `<button class="btn btn-sm" onclick="openHtmlLightbox('${esc(folder)}','${esc(f.rel)}','${API.downloadUrl(folder, f.rel)}')">ver</button>`
-      : `<button class="btn btn-sm" onclick="openFile('${esc(folder)}','${esc(f.rel)}')">ver</button>`;
+      : `<button class="btn btn-sm" onclick="openTextLightbox('${esc(folder)}','${esc(f.rel)}','${API.downloadUrl(folder, f.rel)}')">ver</button>`;
   return `<div class="list-row"><div class="lr-main"><div class="lr-title">${esc(f.rel)}</div><div class="lr-meta">${f.size} bytes</div></div>
     <div class="flex">${viewBtn}<a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div></div>`;
 }
@@ -467,17 +467,18 @@ function renderPanel(folder, task) {
   if (!isMediaKind(task.kind)) return "";
   const hasMedia = task.files.some((f) => f.isImage || f.isVideo);
   if (task.zone !== "active") {
-    return `<div class="card"><h3>Renderização</h3><p class="muted mt">A peça está em <strong>${esc(zoneLabel(task.zone))}</strong>. Para re-renderizar, reabra para edição (rework).</p></div>`;
+    return `<div class="card"><h3>Arte final</h3><p class="muted mt">A peça está em <strong>${esc(zoneLabel(task.zone))}</strong>. Para gerar a arte novamente, reabra para edição (rework).</p></div>`;
   }
-  const label = task.kind === "video" ? "Renderizar vídeo (MP4)" : "Renderizar imagem (PNG)";
+  const label = task.kind === "video" ? "Gerar vídeo final (MP4)" : "Gerar arte final";
+  const reLabel = task.kind === "video" ? "Gerar nova versão do vídeo" : "Gerar nova versão da arte";
   const note = task.kind === "video"
     ? "Gera o MP4 9:16 via Remotion a partir do roteiro de cenas. Pode levar alguns minutos."
-    : "Gera a arte final no padrão da marca via Playwright.";
+    : "Gera a arte final no padrão da marca automaticamente.";
   return `<div class="card">
-    <h3>Renderização de mídia</h3>
+    <h3>Arte final</h3>
     <p class="muted mt">${note}</p>
     ${templatePicker(task)}
-    <div class="flex mt"><button class="btn btn-primary" id="btn-render" data-kind="${esc(task.kind)}">${hasMedia ? "Re-renderizar" : label}</button><span id="render-out" class="muted"></span></div>
+    <div class="flex mt"><button class="btn btn-primary" id="btn-render" data-kind="${esc(task.kind)}">${hasMedia ? reLabel : label}</button><span id="render-out" class="muted"></span></div>
   </div>`;
 }
 
@@ -488,9 +489,19 @@ const VISUAL_TEMPLATES = [
   { id: "split", name: "Split", desc: "Faixa clara (logo) + faixa escura (headline)" },
 ];
 
+// #8 — variação visual automática: quando a peça ainda não tem template salvo,
+// escolhe uma variante por hash do slug (rotação determinística) para evitar que
+// todas as gerações fiquem visualmente idênticas. O usuário ainda pode trocar.
+function autoVariant(folder) {
+  const s = String(folder || "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return VISUAL_TEMPLATES[h % VISUAL_TEMPLATES.length].id;
+}
+
 function templatePicker(task) {
   if (task.kind === "video") return ""; // video usa a composition BrandStory
-  const current = task.template || "editorial";
+  const current = task.template || autoVariant(task.folder);
   const opts = VISUAL_TEMPLATES.map((t) => `
     <label class="tpl-opt${t.id === current ? " is-active" : ""}" data-tpl="${t.id}">
       <input type="radio" name="render-tpl" value="${t.id}"${t.id === current ? " checked" : ""} />
@@ -515,9 +526,9 @@ function refineCard(task) {
   const ct = (State.meta.content_types || []).find((c) => c.kind === task.kind);
   if (!ct) return "";
   const note = autoRenders(task.kind)
-    ? "A IA ajusta o conteúdo e <strong>re-renderiza a mídia automaticamente</strong>."
+    ? "A IA ajusta o conteúdo e <strong>a arte é atualizada automaticamente</strong>."
     : (task.kind === "video"
-      ? "A IA ajusta o roteiro; depois clique em <strong>Re-renderizar</strong> (vídeo é mais lento)."
+      ? "A IA ajusta o roteiro; depois clique em <strong>Gerar nova versão do vídeo</strong> (vídeo é mais lento)."
       : "A IA ajusta o texto desta peça mantendo o resto.");
   return `<div class="card mt">
     <h3>Ajustar com IA</h3>
@@ -551,10 +562,10 @@ async function refineTask(folder, task) {
     if (autoRenders(task.kind)) {
       btn.innerHTML = '<span class="spinner"></span> re-renderizando…';
       const rr = await API.renderMedia(folder, task.kind, selectedTemplate());
-      if (!rr.ok) toast("Ajustado, mas falhou a re-renderização: " + (rr.stderr || rr.error || "erro"), "warn");
-      else toast("Ajustado e re-renderizado", "success");
+      if (!rr.ok) toast("Ajustado, mas falhou a geração da arte: " + (rr.stderr || rr.error || "erro"), "warn");
+      else toast("Ajustado e arte atualizada", "success");
     } else if (task.kind === "video") {
-      toast("Roteiro ajustado — clique em Re-renderizar para atualizar o vídeo", "success");
+      toast("Roteiro ajustado — clique em Gerar nova versão do vídeo", "success");
     } else {
       toast("Conteúdo ajustado", "success");
     }
@@ -717,6 +728,12 @@ window.openFile = openFile;
 
 /* ---- Lightbox ---- */
 let _lbBlobUrl = null;
+// Mostra/oculta o botão "abrir em nova aba" do lightbox (só faz sentido p/ HTML).
+function setLightboxNewTab(url) {
+  const nt = $("#lightbox-newtab");
+  if (!nt) return;
+  if (url) { nt.href = url; nt.style.display = ""; } else { nt.style.display = "none"; nt.removeAttribute("href"); }
+}
 function openLightbox(url, type, dlUrl) {
   const lb = $("#lightbox");
   const stage = $("#lightbox-stage");
@@ -724,11 +741,32 @@ function openLightbox(url, type, dlUrl) {
   stage.innerHTML = type === "video"
     ? `<video src="${url}" controls autoplay playsinline></video>`
     : `<img src="${url}" alt="" />`;
+  setLightboxNewTab(null);
   const dl = $("#lightbox-dl");
   if (dl) { dl.href = dlUrl || url; dl.style.display = dlUrl ? "" : "none"; }
   lb.classList.add("open");
   lb.setAttribute("aria-hidden", "false");
   document.body.classList.add("no-scroll");
+}
+// #7 — Pré-visualiza .json/.txt num modal amplo com <pre> mono, scroll interno.
+async function openTextLightbox(folder, rel, dlUrl) {
+  const lb = $("#lightbox");
+  const stage = $("#lightbox-stage");
+  if (!lb || !stage) { window.open(API.rawUrl(folder, rel), "_blank"); return; }
+  stage.innerHTML = '<div class="lightbox-loading"><span class="spinner"></span> carregando…</div>';
+  setLightboxNewTab(null);
+  lb.classList.add("open");
+  lb.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+  const dl = $("#lightbox-dl");
+  if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
+  try {
+    let text = await API.taskFile(folder, rel);
+    if (/\.json$/i.test(rel)) { try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* mantém cru */ } }
+    stage.innerHTML = `<pre class="lightbox-pre">${esc(text)}</pre>`;
+  } catch (e) {
+    stage.innerHTML = '<div class="lightbox-loading">Não foi possível abrir: ' + esc(e.message) + "</div>";
+  }
 }
 // #6 — Pré-visualiza HTML (ex.: preview.html) num modal amplo e responsivo.
 async function openHtmlLightbox(folder, rel, dlUrl) {
@@ -736,6 +774,7 @@ async function openHtmlLightbox(folder, rel, dlUrl) {
   const stage = $("#lightbox-stage");
   if (!lb || !stage) { window.open(API.rawUrl(folder, rel), "_blank"); return; }
   stage.innerHTML = '<div class="lightbox-loading"><span class="spinner"></span> carregando…</div>';
+  setLightboxNewTab(null);
   lb.classList.add("open");
   lb.setAttribute("aria-hidden", "false");
   document.body.classList.add("no-scroll");
@@ -744,6 +783,7 @@ async function openHtmlLightbox(folder, rel, dlUrl) {
     if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
     _lbBlobUrl = URL.createObjectURL(new Blob([text], { type: "text/html" }));
     stage.innerHTML = `<iframe class="lightbox-frame" src="${_lbBlobUrl}" title="${esc(rel)}"></iframe>`;
+    setLightboxNewTab(_lbBlobUrl);
     const dl = $("#lightbox-dl");
     if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
   } catch (e) {
@@ -757,6 +797,7 @@ function closeLightbox() {
   lb.setAttribute("aria-hidden", "true");
   const stage = $("#lightbox-stage");
   if (stage) stage.innerHTML = "";
+  setLightboxNewTab(null);
   if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
   document.body.classList.remove("no-scroll");
 }
@@ -770,6 +811,7 @@ function setupLightbox() {
 }
 window.openLightbox = openLightbox;
 window.openHtmlLightbox = openHtmlLightbox;
+window.openTextLightbox = openTextLightbox;
 window.closeLightbox = closeLightbox;
 
 /* =====================================================================
@@ -804,6 +846,9 @@ async function viewCreate(arg, query) {
         <div class="row">
           <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
           <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
+        </div>
+        <div class="field"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
+          <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Split — faixa clara (logo) + faixa escura</option></select>
         </div>
         <div class="field"><label>Referência visual / mood (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
         <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
@@ -864,6 +909,7 @@ async function runGenerate() {
     mood: ($("#g-mood") && $("#g-mood").value.trim()) || undefined,
     extra: $("#g-extra").value.trim() || undefined,
     research: ($("#g-research") && $("#g-research").checked) || undefined,
+    template_variant: ($("#g-style") && $("#g-style").value) || undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   try {
@@ -901,9 +947,18 @@ function renderGenResult(r) {
          <button class="btn btn-ghost btn-sm" id="g-json-apply" type="button">Aplicar JSON aos campos</button>
        </details>`
     : `<div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>`;
+  // #2 — pré-visualização ao vivo (mockup do card da rede) para LinkedIn e Threads/X.
+  const mockKind = r.content_type === "linkedin_post" ? "linkedin" : (r.content_type === "threads_post" ? "threads" : null);
+  const mockHtml = mockKind
+    ? `<details class="social-mock-box mt" open><summary>Pré-visualização do post (${mockKind === "linkedin" ? "LinkedIn" : "Threads / X"})</summary>
+         <div id="g-mock" class="social-mock">${socialMock(mockKind, editorVal)}</div>
+         <p class="muted" style="font-size:12px">Mockup ilustrativo — atualiza conforme você edita o texto acima.</p>
+       </details>`
+    : "";
   $("#g-result").innerHTML = `
     ${researchHtml}
     ${editorBlock}
+    ${mockHtml}
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
       <label>Ajustar com IA <span class="hint">(descreva o que mudar; o resto é mantido)</span></label>
@@ -918,6 +973,31 @@ function renderGenResult(r) {
     bindStructuredEditor();
     if ($("#g-json-apply")) $("#g-json-apply").onclick = () => applyJsonToStructured(r.content_type);
   }
+  // #2 — liga o mockup ao vivo ao textarea de conteúdo.
+  if (mockKind && $("#g-edit")) {
+    $("#g-edit").addEventListener("input", () => { const m = $("#g-mock"); if (m) m.innerHTML = socialMock(mockKind, $("#g-edit").value); });
+  }
+}
+
+// #2 — gera o HTML do mockup de post social a partir do texto atual.
+function socialMock(kind, text) {
+  const raw = String(text || "").trim();
+  const tags = (raw.match(/#[\p{L}0-9_]+/gu) || []);
+  const body = raw.replace(/\s*#[\p{L}0-9_]+/gu, "").trim() || "—";
+  const bodyHtml = esc(body).replace(/\n/g, "<br>");
+  const tagsHtml = tags.length ? `<div class="sm-tags">${tags.map((t) => '<span class="sm-tag">' + esc(t) + "</span>").join(" ")}</div>` : "";
+  if (kind === "threads") {
+    return `<div class="sm-card sm-threads">
+      <div class="sm-head"><span class="sm-avatar">4S</span><div class="sm-id"><span class="sm-name">4selet</span><span class="sm-handle">@4selet · agora</span></div></div>
+      <div class="sm-body">${bodyHtml}</div>${tagsHtml}
+      <div class="sm-actions"><span>♡</span><span>↺</span><span>↪</span></div>
+    </div>`;
+  }
+  return `<div class="sm-card sm-linkedin">
+    <div class="sm-head"><span class="sm-avatar">4S</span><div class="sm-id"><span class="sm-name">4Selet</span><span class="sm-handle">Plataforma de pagamentos · Patrocinado</span></div></div>
+    <div class="sm-body">${bodyHtml}</div>${tagsHtml}
+    <div class="sm-actions"><span>👍 Gostei</span><span>💬 Comentar</span><span>↪ Compartilhar</span></div>
+  </div>`;
 }
 
 async function refineGenerated() {
@@ -1123,7 +1203,8 @@ function showSaveBanner(folder) {
   el.className = "save-banner mb";
   el.innerHTML = `<div class="save-banner-main"><span class="save-banner-ico">✓</span>
       <div><strong>Peça salva com sucesso.</strong><div class="muted">Redirecionando para aprovação em <span class="save-count">3</span>s…</div></div></div>
-    <div class="save-banner-actions"><button class="btn btn-ghost btn-sm" data-sb="stay">Ficar aqui</button>
+    <div class="save-banner-actions"><button class="btn btn-ghost btn-sm" data-sb="new">Criar novo conteúdo</button>
+      <button class="btn btn-ghost btn-sm" data-sb="stay">Ficar aqui</button>
       <a class="btn btn-primary" href="${url}">Abrir peça →</a></div>`;
   host.insertAdjacentElement("afterbegin", el);
   el.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1131,6 +1212,8 @@ function showSaveBanner(folder) {
   const countEl = el.querySelector(".save-count");
   const stop = () => { cancelled = true; clearInterval(timer); const sub = el.querySelector(".muted"); if (sub) sub.textContent = "Use o botão para abrir quando quiser."; };
   el.querySelector('[data-sb="stay"]').onclick = stop;
+  // #1 — "Criar novo conteúdo": cancela o redirect e recarrega o formulário limpo.
+  el.querySelector('[data-sb="new"]').onclick = () => { stop(); LAST_GEN = null; viewCreate(null, {}); };
   const timer = setInterval(() => {
     if (cancelled) return;
     n -= 1;
@@ -1156,16 +1239,21 @@ async function saveGenerated() {
   if (ct.format === "json") { try { parsed = JSON.parse(editVal); } catch (e) { toast("JSON inválido no editor: " + e.message, "error"); return; } }
   const payload = Object.assign({}, LAST_GEN.req, { task_name: task, title, task_date: date, parsed, raw });
   const btn = $("#g-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando…';
+  let saved = false;
   try {
     const r = await API.save(payload);
     $("#g-gov").innerHTML = govHtml(r.governance);
     toast("Salvo em " + r.folder + "/" + r.file, "success");
+    saved = true;
+    // #1 — trava o botão após sucesso (evita salvar/duplicar de novo) e mostra "✓ Salvo".
+    btn.disabled = true; btn.textContent = "✓ Salvo";
+    const regen = $("#g-regen"); if (regen) regen.style.display = "none";
     showSaveBanner(r.folder);
   } catch (e) {
     if (e.status === 422 && e.data && e.data.governance) { $("#g-gov").innerHTML = govHtml(e.data.governance); toast("Bloqueado por regra de marca — corrija o conteúdo.", "error"); }
     else if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); }
     else toast(e.message, "error");
-  } finally { btn.disabled = false; btn.textContent = "Salvar na campanha"; }
+  } finally { if (!saved) { btn.disabled = false; btn.textContent = "Salvar na campanha"; } }
 }
 
 /* =====================================================================
@@ -1186,11 +1274,25 @@ async function viewSettings() {
     <div class="card" style="max-width:660px">
       <h3>Inteligência Artificial (Claude)</h3>
       <p class="muted mt">Cole sua chave da Anthropic. Ela é salva apenas localmente em <span class="codeblock">interface/.env</span> (fora do git) e nunca é exposta no front.</p>
-      <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)
-        ${s.has_key ? '<span class="key-badge ok">✓ Chave configurada</span>' : '<span class="key-badge none">Nenhuma chave</span>'}</label>
-        <input id="s-key" class="${s.has_key ? "has-key" : ""}" type="password" placeholder="${s.has_key ? "configurada: " + esc(s.masked_key) + " — cole para substituir" : "sk-ant-..."}" />
+      <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)</label>
+        ${s.has_key ? `
+        <div id="s-key-locked" class="key-locked">
+          <span class="key-lock" aria-hidden="true">🔒</span>
+          <span class="key-mask">${esc(s.masked_key)}</span>
+          <span class="badge ok">Ativa</span>
+          <button class="btn btn-sm btn-ghost" id="s-change-key" type="button">Trocar chave</button>
+        </div>
+        <div id="s-key-edit" class="key-edit mt" style="display:none">
+          <input id="s-key" type="password" placeholder="Cole a nova chave aqui..." />
+          <div class="flex mt"><button class="btn btn-primary" id="s-save-key" disabled>Salvar nova chave</button><button class="btn btn-ghost" id="s-cancel-key" type="button">Cancelar</button></div>
+        </div>` : `
+        <div class="key-edit">
+          <p class="muted" style="margin:0 0 8px">Nenhuma chave configurada — adicione sua chave Anthropic para ativar a IA.</p>
+          <input id="s-key" type="password" placeholder="sk-ant-..." />
+          <div class="flex mt"><button class="btn btn-primary" id="s-save-key" disabled>Salvar chave</button></div>
+        </div>`}
       </div>
-      <div class="flex"><button class="btn btn-primary" id="s-save-key">Salvar chave</button><button class="btn" id="s-test">Testar conexão</button><span id="s-test-out" class="muted"></span></div>
+      <div class="flex"><button class="btn" id="s-test">Testar conexão</button><span id="s-test-out" class="muted"></span></div>
       <hr class="sep" />
       <div class="field"><label>Modelo</label><select id="s-model">${models.map((m) => `<option value="${m.id}" ${s.model === m.id ? "selected" : ""}>${esc(m.label)}</option>`).join("")}</select></div>
       <button class="btn" id="s-save-model">Salvar modelo</button>
@@ -1234,20 +1336,33 @@ async function viewSettings() {
   const markAccent = () => { const cur = currentAccent(); $$("#accent-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.accentId === cur)); };
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
-  $("#s-save-key").onclick = async () => {
-    const key = $("#s-key").value.trim();
+  // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
+  const keyInput = $("#s-key");
+  const saveKeyBtn = $("#s-save-key");
+  if (keyInput && saveKeyBtn) keyInput.addEventListener("input", () => { saveKeyBtn.disabled = keyInput.value.trim().length < 10; });
+  if ($("#s-change-key")) $("#s-change-key").onclick = () => {
+    $("#s-key-locked").style.display = "none";
+    $("#s-key-edit").style.display = "";
+    if (keyInput) keyInput.focus();
+  };
+  if ($("#s-cancel-key")) $("#s-cancel-key").onclick = () => {
+    if (keyInput) keyInput.value = "";
+    if (saveKeyBtn) saveKeyBtn.disabled = true;
+    $("#s-key-edit").style.display = "none";
+    $("#s-key-locked").style.display = "";
+  };
+  if (saveKeyBtn) saveKeyBtn.onclick = async () => {
+    const key = keyInput.value.trim();
     if (key.length < 10) { toast("Chave muito curta.", "error"); return; }
-    if (s.has_key) {
-      const ok = await uiConfirm("Já existe uma chave configurada (" + s.masked_key + "). Deseja substituí-la pela nova chave?", { title: "Substituir chave", confirmText: "Substituir", confirmKind: "danger" });
-      if (!ok) return;
-    }
-    try { await API.saveKey(key); toast("Chave salva", "success"); await refreshKeyStatus(); viewSettings(); } catch (e) { toast(e.message, "error"); }
+    saveKeyBtn.disabled = true; saveKeyBtn.innerHTML = '<span class="spinner"></span> salvando…';
+    try { await API.saveKey(key); toast("Chave salva", "success"); await refreshKeyStatus(); viewSettings(); }
+    catch (e) { toast(e.message, "error"); saveKeyBtn.disabled = false; saveKeyBtn.textContent = s.has_key ? "Salvar nova chave" : "Salvar chave"; }
   };
   $("#s-save-model").onclick = async () => { await API.saveModel($("#s-model").value); toast("Modelo salvo", "success"); await refreshKeyStatus(); };
   $("#s-test").onclick = async () => {
     const out = $("#s-test-out"); out.innerHTML = '<span class="spinner"></span> testando…';
-    try { const r = await API.testKey(); out.innerHTML = r.ok ? '✓ conectado (' + esc(r.model) + ")" : "✕ " + esc(r.error); }
-    catch (e) { out.textContent = "✕ " + (e.data && e.data.error || e.message); }
+    try { const r = await API.testKey(); out.innerHTML = r.ok ? '✅ Conexão bem-sucedida com ' + esc(r.model) : "❌ " + (esc(r.error) || "Chave inválida ou sem acesso"); }
+    catch (e) { out.textContent = "❌ " + (e.data && e.data.error || "Chave inválida ou sem acesso"); }
   };
 }
 
