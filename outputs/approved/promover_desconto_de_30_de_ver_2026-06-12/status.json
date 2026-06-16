@@ -1,0 +1,40 @@
+{
+  "task_name": "promover_desconto_de_30_de_ver",
+  "task_date": "2026-06-12",
+  "status": "approved",
+  "created_at": "2026-06-12T16:08:36-03:00",
+  "last_updated_at": "2026-06-12T16:09:34-03:00",
+  "approved_by": "Jailson Junior",
+  "approved_at": "2026-06-12T16:09:34-03:00",
+  "campaign_angle": "Aproveite o verão com condições exclusivas - até 30% de desconto",
+  "platforms": [
+    "instagram"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "draft",
+      "at": "2026-06-12T16:08:36-03:00",
+      "by": "orchestrator",
+      "event_type": "first_creation"
+    },
+    {
+      "from": "draft",
+      "to": "in_review",
+      "at": "2026-06-12T16:09:05-03:00",
+      "by": "distribution-agent",
+      "event_type": "transition"
+    },
+    {
+      "from": "in_review",
+      "to": "approved",
+      "at": "2026-06-12T16:09:34-03:00",
+      "by": "Jailson Junior",
+      "event_type": "promoted"
+    }
+  ],
+  "campaign_id": "campanha-verao-2026",
+  "content_hashes": {
+    "copy/instagram_caption.txt": "cb3a67c3001d39a168a1b039e4d2c4ca473eee02c8b78da28eea8da70a061fba"
+  }
+}

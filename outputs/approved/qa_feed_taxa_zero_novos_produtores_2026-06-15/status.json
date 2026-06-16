@@ -1,0 +1,46 @@
+{
+  "task_name": "qa_feed_taxa_zero_novos_produtores",
+  "task_date": "2026-06-15",
+  "status": "approved",
+  "created_at": "2026-06-15T11:18:16-03:00",
+  "last_updated_at": "2026-06-15T11:32:31-03:00",
+  "approved_by": "QA Tester",
+  "approved_at": "2026-06-15T11:32:31-03:00",
+  "campaign_angle": "Taxa Zero - 0% por 3 meses",
+  "platforms": [
+    "instagram",
+    "linkedin"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "draft",
+      "at": "2026-06-15T11:18:16-03:00",
+      "by": "orchestrator",
+      "event_type": "first_creation"
+    },
+    {
+      "from": "draft",
+      "to": "in_review",
+      "at": "2026-06-15T11:31:42-03:00",
+      "by": "distribution-agent",
+      "event_type": "transition"
+    },
+    {
+      "from": "in_review",
+      "to": "approved",
+      "at": "2026-06-15T11:32:31-03:00",
+      "by": "QA Tester",
+      "event_type": "promoted"
+    }
+  ],
+  "campaign_id": "taxa-zero-junho-2026",
+  "title": "QA Feed - Taxa Zero Novos Produtores",
+  "first_viewed_at": "2026-06-15T14:18:19.364Z",
+  "tags": [],
+  "content_hashes": {
+    "ads/feed.html": "7307ef6675afdaef5be5ee6f7e64041da7314742a12f4f1c8857d6a2dea4c18c",
+    "ads/feed.png": "83375d709535f2c45308fd0a7e9892cbaa0e1853167f06849d208bc1ec9ed650",
+    "copy/instagram_caption.txt": "b7247e2be6dd63386091357516ef543fec96f0b53a82683a8387a3a055a2ee1b"
+  }
+}

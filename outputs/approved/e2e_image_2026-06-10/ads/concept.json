@@ -1,0 +1,8 @@
+{
+  "headline": "Zero taxa. Três meses.",
+  "subtext": "0% pela plataforma nos primeiros 3 meses ou até R$ 300 mil em vendas. R$ 1,99 por transação. PIX em D+10, cartão em D+30.",
+  "cta": "Solicitar convite",
+  "layout_type": "Product Focus",
+  "visual_direction": "Fundo Selet Darker (#07212B) ocupando 100% do canvas 1080x1080. Selet Dots (pontos azuis, opacidade 8%) como textura de fundo. Número '0%' em Inter Black, ~320pt, cor Selet Cloud (#D9DCD6), centralizado verticalmente no terço superior — ocupa a maior parte da hierarquia visual. Abaixo do número, label em Inter Medium ALL CAPS, letter-spacing +0.4px, cor Selet Sky (#5499B5): 'TAXA DE PLATAFORMA · 3 MESES'. Bloco de subtext em Inter Regular 17pt, cor Selet Mist (#AFBCC9), alinhado à esquerda, margem de 64px nas laterais, no terço central. Linha divisória horizontal fina em Selet Blue (#006494) separando o subtext do CTA. Botão-CTA com fundo Selet Blue (#006494), texto Inter SemiBold em Selet Cloud, cantos arredondados (raio 8px), posicionado no terço inferior. Logo light (logo-4selet-light.png) no rodapé, alinhado à esquerda, com espaço mínimo de 64px.",
+  "notes": "O número '0%' assume o papel de âncora visual absoluta — o produtor estabelecido qualifica a oferta em menos de dois segundos. A paleta escura (Darker + Dots) posiciona a peça como premium e sóbria, coerente com o arquétipo Governante da marca; o Selet Blue no CTA e na divisória conduz o olhar sem urgência fabricada."
+}
