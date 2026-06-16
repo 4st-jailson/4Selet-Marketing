@@ -38,6 +38,8 @@ function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
 function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video"; }
 function tag(text) { return '<span class="badge plain">' + esc(text) + "</span>"; }
+function plural(n, sing, plur) { return n + " " + (n === 1 ? sing : plur); }
+function platformLabel(p) { const m = { x: "Threads/X", threads: "Threads/X", instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok", youtube: "YouTube", whatsapp: "WhatsApp", email: "E-mail" }; return m[String(p || "").toLowerCase()] || p; }
 
 /* ---- rótulos PT (status, zona) ---- */
 const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", rejected: "Rejeitado", active: "Ativa", paused: "Pausada", done: "Concluída" };
@@ -57,6 +59,28 @@ function displayName(t) {
   const explicit = t.title || (t.status && t.status.title);
   if (explicit) return String(explicit);
   return humanize(t.task_name || (t.status && t.status.task_name) || "");
+}
+
+/* ---- nome amigável de arquivo + tamanho legível (esconde o slug técnico) ---- */
+function fileLabel(rel) {
+  const base = String(rel == null ? "" : rel).split("/").pop();
+  const lower = base.toLowerCase();
+  const slide = lower.match(/^slide_0*(\d+)\.png$/);
+  if (slide) return "Slide " + slide[1];
+  const named = { "render.json": "Instruções de geração", "status.json": "Dados da peça (interno)" };
+  if (named[lower]) return named[lower];
+  if (/\.html?$/.test(lower)) return "Prévia (HTML)";
+  if (/\.(mp4|mov|webm)$/.test(lower)) return "Vídeo";
+  if (/\.(png|jpe?g|webp|gif)$/.test(lower)) return "Imagem";
+  if (/\.(txt|md)$/.test(lower)) return "Texto / legenda";
+  if (/\.json$/.test(lower)) return "Dados (JSON)";
+  return base;
+}
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
 }
 
 /* ---- nome legível da campanha (resolve id técnico → nome cadastrado) ---- */
@@ -211,7 +235,7 @@ function taskRow(t) {
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
     <span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>
     <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${!t.first_viewed_at ? ' <span class="lr-new">Novo</span>' : ""}</div>
-    <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.platforms || []).length ? " · " + esc(t.platforms.join(", ")) : ""}</div></div>
+    <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.platforms || []).length ? " · " + esc(t.platforms.map(platformLabel).join(", ")) : ""}</div></div>
     ${statusBadge(t.status)}</a>`;
 }
 
@@ -232,14 +256,14 @@ function campCard(c) {
   return `<div class="card card-link" onclick="location.hash='#/campaign/${encodeURIComponent(c.id)}'">
     <div class="flex-between"><h3>${esc(c.name)}</h3>${statusBadge(c.status)}</div>
     <p class="muted mt">${esc(c.objective || c.angle || "—")}</p>
-    <div class="chips mt">${(c.platforms || []).map((p) => tag(p)).join("")}${c.pillar ? tag(c.pillar) : ""}</div>
-    <div class="muted mt">${(c.content_ids || []).length} peça(s) vinculada(s)</div>
+    <div class="chips mt">${(c.platforms || []).map((p) => tag(platformLabel(p))).join("")}${c.pillar ? tag(c.pillar) : ""}</div>
+    <div class="muted mt">${plural((c.content_ids || []).length, "peça vinculada", "peças vinculadas")}</div>
   </div>`;
 }
 
 function renderCampaignForm(existing) {
   const c = existing || {};
-  const plats = State.meta.platforms.map((p) => checkPill("plat", p, (c.platforms || []).includes(p))).join("");
+  const plats = State.meta.platforms.map((p) => checkPill("plat", p, (c.platforms || []).includes(p), platformLabel(p))).join("");
   const pillars = State.meta.pillars.map((p) => `<option ${c.pillar === p ? "selected" : ""}>${esc(p)}</option>`).join("");
   const wrap = $("#camp-form-wrap") || $("#view");
   wrap.innerHTML = `<div class="card mb">
@@ -290,7 +314,7 @@ async function viewCampaignDetail(id) {
   setTitle(c.name);
   setView(`
     <div class="flex-between mb flex-wrap">
-      <div class="flex flex-wrap">${statusBadge(c.status)}${c.pillar ? tag(c.pillar) : ""}${(c.platforms || []).map((p) => tag(p)).join("")}</div>
+      <div class="flex flex-wrap">${statusBadge(c.status)}${c.pillar ? tag(c.pillar) : ""}${(c.platforms || []).map((p) => tag(platformLabel(p))).join("")}</div>
       <div class="flex"><button class="btn btn-sm" id="edit-camp">Editar</button><button class="btn btn-sm btn-primary" id="create-here">＋ Criar conteúdo</button><button class="btn btn-sm btn-danger" id="del-camp">Excluir</button></div>
     </div>
     <div class="grid grid-2">
@@ -299,7 +323,7 @@ async function viewCampaignDetail(id) {
         <div class="kv mt">
           <div class="k">Objetivo</div><div>${esc(c.objective || "—")}</div>
           <div class="k">Ângulo</div><div>${esc(c.angle || "—")}</div>
-          <div class="k">Plataformas</div><div>${(c.platforms || []).join(", ") || "—"}</div>
+          <div class="k">Plataformas</div><div>${(c.platforms || []).map(platformLabel).join(", ") || "—"}</div>
           <div class="k">Período</div><div>${esc(c.start_date || "—")} ${c.end_date ? "→ " + esc(c.end_date) : ""}</div>
           <div class="k">Notas</div><div>${esc(c.notes || "—")}</div>
         </div>
@@ -389,6 +413,7 @@ async function viewContent(arg, query) {
     let shown = active.slice();
     if (st.kind !== "all") shown = shown.filter((t) => t.kind === st.kind);
     if (st.status !== "all") shown = shown.filter((t) => t.status === st.status);
+    else shown = shown.filter((t) => t.status !== "rejected");
     if (st.camp !== "all") shown = shown.filter((t) => (t.campaign_id || "") === st.camp);
     if (st.tag !== "all") shown = shown.filter((t) => (t.tags || []).indexOf(st.tag) !== -1);
     if (st.q) { const q = st.q.toLowerCase(); shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "") + " " + (t.tags || []).join(" ")).toLowerCase().includes(q)); }
@@ -442,7 +467,7 @@ async function approvedPieces(query) {
     </div>`).join("");
   setView(`
     ${approvedTabs("pieces")}
-    <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${approved.length} peça(s) aprovada(s)</span></div>
+    <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${plural(approved.length, "peça aprovada", "peças aprovadas")}</span></div>
     ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
     ${shown.length ? groups : '<div class="empty">Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.</div>'}`);
   $$(".filter-bar .chip-filter").forEach((b) => { b.onclick = () => { location.hash = "#/approved?campaign=" + encodeURIComponent(b.dataset.camp); }; });
@@ -472,7 +497,7 @@ function collectionTile(c) {
     : `<span class="coll-ph">${FOLDER_ICON}</span>`;
   return `<a class="coll-tile" href="#/approved?collection=${encodeURIComponent(c.id)}">
     <div class="coll-cover ${c.cover ? "" : "is-empty"}">${cover}</div>
-    <div class="coll-tbody"><div class="coll-name">${esc(c.name)}</div><div class="coll-count">${c.count} peça(s)</div></div></a>`;
+    <div class="coll-tbody"><div class="coll-name">${esc(c.name)}</div><div class="coll-count">${plural(c.count, "peça", "peças")}</div></div></a>`;
 }
 
 async function openCollection(id) {
@@ -493,7 +518,7 @@ async function openCollection(id) {
       <div>
         <h2 class="mt0">${esc(c.name)}</h2>
         ${c.description ? '<p class="muted">' + esc(c.description) + "</p>" : ""}
-        <span class="dim">${items.length} peça(s)${data.orphans ? " · " + data.orphans + " indisponível(is)" : ""}</span>
+        <span class="dim">${plural(items.length, "peça", "peças")}${data.orphans ? " · " + plural(data.orphans, "indisponível", "indisponíveis") : ""}</span>
       </div>
       <div class="flex flex-wrap">
         <div class="seg-group sm">
@@ -600,7 +625,7 @@ async function addPiecesFlow(c) {
   if (!picked || !picked.length) return;
   try {
     for (const f of picked) await API.addToCollection(c.id, f);
-    toast(picked.length + " peça(s) adicionada(s)", "success");
+    toast(plural(picked.length, "peça adicionada", "peças adicionadas"), "success");
     openCollection(c.id);
   } catch (e) { toast(e.message, "error"); }
 }
@@ -673,7 +698,7 @@ function chooseCollectionModal(collections, folder) {
     const rows = collections.length
       ? collections.map((c) => {
           const has = (c.item_ids || []).includes(folder);
-          return `<button class="coll-choose" data-cid="${esc(c.id)}" ${has ? "disabled" : ""}>${esc(c.name)} <span class="dim">${has ? "(já contém)" : c.count + " peça(s)"}</span></button>`;
+          return `<button class="coll-choose" data-cid="${esc(c.id)}" ${has ? "disabled" : ""}>${esc(c.name)} <span class="dim">${has ? "(já contém)" : plural(c.count, "peça", "peças")}</span></button>`;
         }).join("")
       : '<p class="muted">Nenhuma coleção ainda. Crie uma abaixo.</p>';
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
@@ -709,7 +734,7 @@ function fileRow(folder, f) {
     : isHtml
       ? `<button class="btn btn-sm" onclick="openHtmlLightbox('${esc(folder)}','${esc(f.rel)}','${API.downloadUrl(folder, f.rel)}')">ver</button>`
       : `<button class="btn btn-sm" onclick="openTextLightbox('${esc(folder)}','${esc(f.rel)}','${API.downloadUrl(folder, f.rel)}')">ver</button>`;
-  return `<div class="list-row"><div class="lr-main"><div class="lr-title">${esc(f.rel)}</div><div class="lr-meta">${f.size} bytes</div></div>
+  return `<div class="list-row"><div class="lr-main"><div class="lr-title">${esc(fileLabel(f.rel))}</div><div class="lr-meta"><span class="codeblock">${esc(f.rel)}</span> · ${esc(fmtBytes(f.size))}</div></div>
     <div class="flex">${viewBtn}<a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div></div>`;
 }
 
@@ -863,7 +888,7 @@ async function viewTaskDetail(folder) {
   const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">identificador: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
   setView(`
     <div class="flex-between mb flex-wrap">
-      <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(p)).join("")}${techSlug}</div>
+      <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
       <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
     </div>
     ${task.kind === "carousel" ? carouselStrip(folder, task) : ""}
@@ -1128,15 +1153,18 @@ async function viewCreate(arg, query) {
         <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" /><div class="field-error" id="e-title"></div></div>
         <div class="field"><label>Tema / objetivo da peça</label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos"></textarea><div class="field-error" id="e-brief"></div></div>
         <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
-        <div class="row">
-          <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
-          <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
-        </div>
-        <div class="field"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
-          <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option></select>
-        </div>
-        <div class="field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
-        <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
+        <details class="adv-block">
+          <summary>Ajustes opcionais — tom, oferta, estilo visual e referências</summary>
+          <div class="row">
+            <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
+            <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
+          </div>
+          <div class="field"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
+            <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option></select>
+          </div>
+          <div class="field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
+          <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
+        </details>
         <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
         <details class="adv-block">
           <summary>Identificador técnico (avançado)</summary>
@@ -1154,7 +1182,7 @@ async function viewCreate(arg, query) {
   const campMap = {}; campaigns.forEach((c) => { campMap[c.id] = c; });
   function renderPlats(selected, inherited) {
     const set = (selected && selected.length) ? selected : ["instagram"];
-    $("#g-plats").innerHTML = State.meta.platforms.map((p) => checkPill("gplat", p, set.includes(p))).join("");
+    $("#g-plats").innerHTML = State.meta.platforms.map((p) => checkPill("gplat", p, set.includes(p), platformLabel(p))).join("");
     bindCheckPills($("#g-plats"));
     $("#g-plats-hint").textContent = inherited ? "(herdadas da campanha — ajuste se quiser)" : "";
   }
@@ -1654,8 +1682,8 @@ async function viewSettings() {
 /* =====================================================================
    componentes reutilizáveis (checkbox pills)
    ===================================================================== */
-function checkPill(group, value, on) {
-  return `<label class="check ${on ? "on" : ""}"><input type="checkbox" data-group="${group}" value="${esc(value)}" ${on ? "checked" : ""} /> ${esc(value)}</label>`;
+function checkPill(group, value, on, label) {
+  return `<label class="check ${on ? "on" : ""}"><input type="checkbox" data-group="${group}" value="${esc(value)}" ${on ? "checked" : ""} /> ${esc(label == null ? value : label)}</label>`;
 }
 function bindCheckPills(root) {
   $$(".check input", root).forEach((inp) => {

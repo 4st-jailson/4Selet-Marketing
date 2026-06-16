@@ -290,7 +290,7 @@ a.stat:hover::after { opacity: 1; transform: translateX(2px); }
 
 /* pesquisa de mercado ao vivo (Tavily) na geração */
 .research-toggle { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); cursor: pointer; font-size: 13.5px; line-height: 1.45; }
-.research-toggle input { margin-top: 3px; flex: 0 0 auto; }
+.research-toggle input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 3px 0 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
 .research-box { border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); padding: 10px 13px; }
 .research-box > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-2); }
 .research-list { list-style: none; margin: 10px 0 6px; padding: 0; display: flex; flex-direction: column; gap: 7px; }
@@ -349,11 +349,13 @@ a.stat:hover::after { opacity: 1; transform: translateX(2px); }
 .field { margin-bottom: var(--s4); display: flex; flex-direction: column; gap: 6px; }
 .field > label { font-size: 13px; font-weight: 600; color: var(--text-2); display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   font-family: inherit; font-size: 14px; width: 100%; padding: 10px 12px;
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm);
   color: var(--text); transition: border-color var(--tr), box-shadow var(--tr), background var(--tr);
 }
+/* checkbox/radio nunca devem herdar a largura total dos campos de texto */
+input[type="checkbox"], input[type="radio"] { width: auto; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
 input::placeholder, textarea::placeholder { color: var(--text-mut); }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); background: var(--surface); }
 textarea { resize: vertical; line-height: 1.55; }
