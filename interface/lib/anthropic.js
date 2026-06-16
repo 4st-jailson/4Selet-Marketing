@@ -63,8 +63,8 @@ function saveModel(model) {
 }
 
 function client() {
-  // maxRetries baixo p/ falhar rapido em rate limit (UX interativa: melhor avisar
-  // e deixar o usuario re-tentar do que travar o botao em backoff por muitos segundos).
+  // maxRetries baixo de proposito: o controle de 429 fica na fila/backoff de nivel-app
+  // (createSerializedWithRetry), para nao empilhar dois backoffs (SDK + app) na mesma chamada.
   return new Anthropic({ apiKey: getApiKey(), maxRetries: 1, timeout: 90000 });
 }
 
@@ -97,6 +97,71 @@ function mapAnthropicError(e) {
   err.status = status === 429 ? 429 : (status === 401 || status === 403 ? 401 : (status && status >= 500 ? 502 : (status || 500)));
   err.code = "E_AI_" + (status || "UNKNOWN");
   return err;
+}
+
+// --- Throttle: fila serializada + auto-retry em 429 ---------------------------
+// A conta Anthropic pode ter limite baixo (Tier 1): rajadas de geracao batem 429.
+// Em vez de devolver erro ao usuario, serializamos as chamadas (uma por vez, com
+// um intervalo minimo entre os inicios) e re-tentamos sozinhos no 429 com backoff
+// exponencial, respeitando o header retry-after quando presente. Efeito: sob
+// limite a geracao fica mais LENTA, nunca quebra. Tunavel por env (AI_MIN_GAP_MS,
+// AI_MAX_429_RETRIES, AI_BACKOFF_BASE_MS, AI_BACKOFF_MAX_MS).
+const MIN_REQUEST_GAP_MS = Number(process.env.AI_MIN_GAP_MS || 1500);
+const MAX_429_RETRIES = Number(process.env.AI_MAX_429_RETRIES || 6);
+const BACKOFF_BASE_MS = Number(process.env.AI_BACKOFF_BASE_MS || 4000);
+const BACKOFF_MAX_MS = Number(process.env.AI_BACKOFF_MAX_MS || 60000);
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+let _aiChain = Promise.resolve(); // cadeia de promessas = uma chamada por vez
+let _aiLastStart = 0;             // timestamp do ultimo inicio (p/ o gap minimo)
+
+// Serializa fn na fila global e garante o intervalo minimo entre os inicios.
+function enqueue(fn) {
+  const run = _aiChain.then(async () => {
+    const wait = MIN_REQUEST_GAP_MS - (Date.now() - _aiLastStart);
+    if (wait > 0) await sleep(wait);
+    _aiLastStart = Date.now();
+    return fn();
+  });
+  _aiChain = run.then(() => undefined, () => undefined); // a cadeia nao quebra em erro
+  return run;
+}
+
+// Espera apos um 429: usa retry-after do header (se houver), senao backoff exp.
+function retryDelayFor(e, attempt) {
+  try {
+    const h = e && e.headers;
+    const v = h && (h["retry-after"] || (h.get && h.get("retry-after")));
+    const ra = v != null ? parseInt(v, 10) : NaN;
+    if (!Number.isNaN(ra)) return Math.min(ra * 1000 + 500, BACKOFF_MAX_MS);
+  } catch (_) { /* header opcional */ }
+  return Math.min(BACKOFF_BASE_MS * Math.pow(2, attempt), BACKOFF_MAX_MS);
+}
+
+// Cria a mensagem na fila, com auto-retry SOMENTE em 429 (rate limit). Outros erros
+// sobem imediatamente (mapeados pelo chamador). Segura a vaga da fila durante o
+// backoff de proposito: sob limite, disparar as proximas chamadas so geraria mais
+// 429 — melhor esperar e liberar a fila ja com a janela de limite renovada.
+function createSerializedWithRetry(params) {
+  return enqueue(async () => {
+    let attempt = 0;
+    for (;;) {
+      try {
+        return await client().messages.create(params);
+      } catch (e) {
+        const status = (e && typeof e.status === "number") ? e.status : null;
+        if (status === 429 && attempt < MAX_429_RETRIES) {
+          const delay = retryDelayFor(e, attempt);
+          attempt++;
+          console.warn("[ai] 429 rate limit — aguardando " + Math.round(delay / 1000) + "s e re-tentando (" + attempt + "/" + MAX_429_RETRIES + ")");
+          await sleep(delay);
+          continue;
+        }
+        throw e;
+      }
+    }
+  });
 }
 
 // Testa a chave com uma chamada minima. Retorna { ok, model?, error? }.
@@ -132,7 +197,7 @@ async function complete(opts) {
   console.log("[ai] req " + new Date().toISOString() + " model=" + usedModel + " in≈" + approxIn + "tok max_out=" + maxTokens);
   let msg;
   try {
-    msg = await client().messages.create({
+    msg = await createSerializedWithRetry({
       model: usedModel,
       max_tokens: maxTokens,
       system: opts.system,
