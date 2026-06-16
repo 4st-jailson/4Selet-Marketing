@@ -64,7 +64,7 @@ function htmlToPng(htmlPath, outPng, width, height) {
 // Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
 // `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
 const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
-const DEFAULT_FOOTER = "Para quem sabe que e Selet.";
+const DEFAULT_FOOTER = "Para quem sabe que é Selet.";
 
 // 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
 function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
@@ -336,7 +336,7 @@ function slideList(slide, ctx) {
 }
 // CTA de fechamento: centralizado, logo + headline + pilula de CTA.
 function slideCta(slide, ctx) {
-  const headline = slide.title || ctx.cta || "Para quem sabe que e Selet";
+  const headline = slide.title || ctx.cta || "Para quem sabe que é Selet";
   const css = `.mid.center { align-items:center; text-align:center; }
     .logo-c { height:62px; margin-bottom:40px; }
     .s-title.big { font-size:92px; }
@@ -382,7 +382,7 @@ function renderImage(folder, opts) {
   const html = tpl.build({
     width: 1080, height: 1080,
     eyebrow: concept.layout_type || concept.eyebrow || "Destaque",
-    headline: highlightHeadline(concept.headline || "Para quem sabe que e Selet."),
+    headline: highlightHeadline(concept.headline || "Para quem sabe que é Selet."),
     subtext: concept.subtext || "",
     cta: concept.cta || "Ver as condicoes",
     badge: concept.badge || "",
@@ -398,7 +398,7 @@ function renderFeed(folder, opts) {
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
-  const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que e Selet.";
+  const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que é Selet.";
   const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
   const htmlPath = path.join(loc.path, "ads", "feed.html");
   const outPng = path.join(loc.path, "ads", "feed.png");
@@ -422,7 +422,7 @@ function renderCarousel(folder, opts) {
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const slides = Array.isArray(concept.slides) && concept.slides.length
     ? concept.slides
-    : [{ title: "Para quem sabe que e Selet", body: "" }];
+    : [{ title: "Para quem sabe que é Selet", body: "" }];
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
   const rels = [];
@@ -465,7 +465,7 @@ function renderVideo(folder) {
   const loc = requireActive(folder);
   const concept = readJson(path.join(loc.path, "video", "concept.json")) || {};
   const scenes = Array.isArray(concept.scenes) && concept.scenes.length ? concept.scenes : [
-    { type: "hook", text: concept.hook || "Para quem sabe que e Selet.", visual: "" },
+    { type: "hook", text: concept.hook || "Para quem sabe que é Selet.", visual: "" },
   ];
   // Props para a composition BrandStory (src/BrandStory.tsx).
   // IMPORTANTE: o campo `visual` do conceito e DIRECAO DE ARTE (ex.: "Fundo Selet
@@ -520,7 +520,7 @@ function previewFields(ct, parsed) {
     return {
       width: 1080, height: 1080,
       eyebrow: parsed.layout_type || parsed.eyebrow || "Destaque",
-      headline: highlightHeadline(parsed.headline || "Para quem sabe que e Selet."),
+      headline: highlightHeadline(parsed.headline || "Para quem sabe que é Selet."),
       subtext: parsed.subtext || "",
       cta: parsed.cta || "Ver as condicoes",
       badge: parsed.badge || "",
@@ -528,7 +528,7 @@ function previewFields(ct, parsed) {
   }
   if (ct.kind === "feed") {
     const caption = String(parsed.body || parsed.caption || "");
-    const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que e Selet.";
+    const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que é Selet.";
     const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
     return {
       width: 1080, height: 1350,
@@ -541,7 +541,7 @@ function previewFields(ct, parsed) {
   }
   if (ct.kind === "carousel") {
     const slides = Array.isArray(parsed.slides) && parsed.slides.length
-      ? parsed.slides : [{ title: "Para quem sabe que e Selet", body: "" }];
+      ? parsed.slides : [{ title: "Para quem sabe que é Selet", body: "" }];
     const s = slides[0] || {};
     return {
       width: 1080, height: 1350,

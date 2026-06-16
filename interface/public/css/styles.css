@@ -226,8 +226,8 @@ hr.sep { border: none; border-top: 1px solid var(--border-soft); margin: var(--s
 
 /* ---- utils ---- */
 .grid { display: grid; gap: var(--s5); }
-.grid-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .flex { display: flex; align-items: center; gap: var(--s3); }
 .flex-wrap { flex-wrap: wrap; }
 .flex-between { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
@@ -603,9 +603,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 
 /* ---- responsivo ---- */
 @media (max-width: 1080px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .type-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); }
+  .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .create-result { position: static; }
 }
 @media (max-width: 820px) {
@@ -621,6 +621,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
   .row { grid-template-columns: 1fr; }
   .type-grid { grid-template-columns: 1fr; }
   .toasts { left: var(--s4); right: var(--s4); max-width: none; }
+  .assistant { width: 100%; max-width: 100%; }
 }
 
 /* Seletor de template visual (render) */

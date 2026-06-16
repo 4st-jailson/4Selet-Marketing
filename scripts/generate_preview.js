@@ -438,7 +438,7 @@ if (!publishMd) {
 // Section 6: Checklist
 const ruleCards = checklist.map((r) => {
   const cls = "rule rule--" + r.result.status;
-  const icon = r.result.status === "ok" ? "✅" : (r.result.status === "warn" ? "⚠️" : "❌");
+  const icon = r.result.status === "ok" ? "✓" : (r.result.status === "warn" ? "⚠" : "✕");
   return '<div class="' + cls + '"><span class="icon">' + icon + '</span><div class="rule-body"><h3>' + escapeHtml(r.id + ") " + r.title) + '</h3><p class="evidence">' + escapeHtml(r.result.evidence) + "</p></div></div>";
 }).join("");
 const checklistSection = '<div class="checklist">' + ruleCards + "</div>";
@@ -513,7 +513,10 @@ section h2{font-weight:700;font-size:24px;color:var(--darker);margin:0 0 18px;le
 .rule--ok{border-left-color:var(--ok);}
 .rule--warn{border-left-color:var(--warn);}
 .rule--fail{border-left-color:var(--fail);}
-.rule .icon{font-size:22px;line-height:1;}
+.rule .icon{font-size:22px;line-height:1;font-weight:700;}
+.rule--ok .icon{color:var(--ok);}
+.rule--warn .icon{color:var(--warn);}
+.rule--fail .icon{color:var(--fail);}
 .rule h3{margin:0 0 4px;font-size:14px;font-weight:600;color:var(--cloud);}
 .rule .evidence{margin:0;font-size:12px;color:var(--mist);font-family:'JetBrains Mono',monospace;line-height:1.5;word-break:break-word;}
 .empty{color:var(--sky);font-style:italic;padding:20px;text-align:center;background:rgba(175,188,201,.1);border-radius:8px;}

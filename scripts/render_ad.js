@@ -24,7 +24,21 @@ const path = require("path");
   try {
     await page.evaluate(() => document.fonts.ready);
   } catch (e) {}
-  await page.waitForTimeout(300);
+  // Aguardar todas as imagens (logo etc.) decodificarem antes do screenshot —
+  // evita capturar a arte antes de o logo carregar.
+  try {
+    await page.evaluate(async () => {
+      const imgs = Array.from(document.images);
+      await Promise.all(
+        imgs.map((img) =>
+          img.complete && img.naturalWidth > 0
+            ? Promise.resolve()
+            : img.decode().catch(() => {})
+        )
+      );
+    });
+  } catch (e) {}
+  await page.waitForTimeout(200);
   await page.screenshot({ path: outPath, clip: { x: 0, y: 0, width, height } });
   await browser.close();
   console.log("OK -> " + outPath + " (" + width + "x" + height + ")");
