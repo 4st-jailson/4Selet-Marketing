@@ -409,6 +409,18 @@ async function viewContent(arg, query) {
 
 async function viewApproved(arg, query) {
   setTitle("Aprovados");
+  if (query && query.collection) return openCollection(query.collection);
+  if (query && query.view === "collections") return collectionsHome();
+  return approvedPieces(query);
+}
+
+// Sub-navegação de Aprovados: peças aprovadas ⇄ coleções.
+function approvedTabs(active) {
+  const tab = (key, label, href) => `<a class="seg ${active === key ? "on" : ""}" href="${href}">${esc(label)}</a>`;
+  return `<div class="seg-group mb">${tab("pieces", "Peças aprovadas", "#/approved")}${tab("collections", "Coleções", "#/approved?view=collections")}</div>`;
+}
+
+async function approvedPieces(query) {
   const [{ tasks }, { campaigns }] = await Promise.all([API.content(), API.campaigns()]);
   setCampMap(campaigns);
   const approved = tasks.filter((t) => t.zone === "approved" || t.status === "approved");
@@ -429,10 +441,261 @@ async function viewApproved(arg, query) {
       <div class="content-grid">${byKind[k].map(taskCard).join("")}</div>
     </div>`).join("");
   setView(`
+    ${approvedTabs("pieces")}
     <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${approved.length} peça(s) aprovada(s)</span></div>
     ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
     ${shown.length ? groups : '<div class="empty">Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.</div>'}`);
   $$(".filter-bar .chip-filter").forEach((b) => { b.onclick = () => { location.hash = "#/approved?campaign=" + encodeURIComponent(b.dataset.camp); }; });
+}
+
+/* =====================================================================
+   COLEÇÕES (agrupamentos curados de peças, por referência, com ordem própria)
+   ===================================================================== */
+const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+
+async function collectionsHome() {
+  const { collections } = await API.collections();
+  await ensureCampMap();
+  setView(`
+    ${approvedTabs("collections")}
+    <div class="section-head"><h2>Coleções</h2><button class="btn btn-primary" id="new-coll">＋ Nova coleção</button></div>
+    <p class="muted mb">Agrupe peças aprovadas em coleções com ordem própria — úteis para sequência de postagem, destaques ou reaproveitamento. É opcional: as peças continuam onde estão; a coleção apenas aponta para elas, e a mesma peça pode estar em várias.</p>
+    ${collections.length ? '<div class="coll-grid">' + collections.map(collectionTile).join("") + "</div>" : '<div class="empty">Nenhuma coleção ainda. Crie a primeira para organizar suas peças aprovadas.</div>'}`);
+  $("#new-coll").onclick = async () => { const c = await newCollectionFlow(); if (c) location.hash = "#/approved?collection=" + encodeURIComponent(c.id); };
+}
+
+function collectionTile(c) {
+  const cover = c.cover
+    ? (c.cover.type === "video"
+        ? `<video src="${API.rawUrl(c.cover.folder, c.cover.rel)}" muted preload="metadata"></video>`
+        : `<img src="${API.rawUrl(c.cover.folder, c.cover.rel)}" alt="" loading="lazy" />`)
+    : `<span class="coll-ph">${FOLDER_ICON}</span>`;
+  return `<a class="coll-tile" href="#/approved?collection=${encodeURIComponent(c.id)}">
+    <div class="coll-cover ${c.cover ? "" : "is-empty"}">${cover}</div>
+    <div class="coll-tbody"><div class="coll-name">${esc(c.name)}</div><div class="coll-count">${c.count} peça(s)</div></div></a>`;
+}
+
+async function openCollection(id) {
+  const data = await API.collection(id).catch(() => null);
+  if (!data) { setView('<div class="empty">Coleção não encontrada. <a href="#/approved?view=collections">Voltar para Coleções</a></div>'); return; }
+  await ensureCampMap();
+  const c = data.collection, items = data.items;
+  setTitle(c.name);
+  const lm = State.collLayout === "list" ? "list" : "grid";
+  const itemsHtml = items.length
+    ? (lm === "list"
+        ? '<div class="list">' + items.map((t, i) => collItemRow(t, i, items.length)).join("") + "</div>"
+        : '<div class="content-grid coll-items">' + items.map((t, i) => collItemCard(t, i, items.length)).join("") + "</div>")
+    : '<div class="empty">Coleção vazia. Use “Adicionar peças” para incluir conteúdo aprovado.</div>';
+  setView(`
+    <div class="crumbs"><a href="#/approved?view=collections">Aprovados › Coleções</a> <span class="sep">›</span> <strong>${esc(c.name)}</strong></div>
+    <div class="flex-between mb flex-wrap">
+      <div>
+        <h2 class="mt0">${esc(c.name)}</h2>
+        ${c.description ? '<p class="muted">' + esc(c.description) + "</p>" : ""}
+        <span class="dim">${items.length} peça(s)${data.orphans ? " · " + data.orphans + " indisponível(is)" : ""}</span>
+      </div>
+      <div class="flex flex-wrap">
+        <div class="seg-group sm">
+          <button class="seg ${lm === "grid" ? "on" : ""}" data-lay="grid" title="Ver em grade">▦</button>
+          <button class="seg ${lm === "list" ? "on" : ""}" data-lay="list" title="Ver em lista">≡</button>
+        </div>
+        <button class="btn btn-sm btn-primary" id="coll-add">＋ Adicionar peças</button>
+        <button class="btn btn-sm" id="coll-edit">Renomear</button>
+        <button class="btn btn-sm btn-danger" id="coll-del">Excluir coleção</button>
+      </div>
+    </div>
+    ${data.orphans ? '<p class="muted">Algumas peças desta coleção foram descartadas e não aparecem aqui. Se forem restauradas, voltam automaticamente.</p>' : ""}
+    <div id="coll-items-wrap">${itemsHtml}</div>`);
+  $$("[data-lay]").forEach((b) => { b.onclick = () => { State.collLayout = b.dataset.lay; openCollection(id); }; });
+  $("#coll-add").onclick = () => addPiecesFlow(c);
+  $("#coll-edit").onclick = () => editCollectionFlow(c);
+  $("#coll-del").onclick = () => deleteCollectionFlow(c);
+  bindCollItemControls(c.id, items.map((t) => t.folder));
+}
+
+function collItemCtrls(t, idx, total) {
+  return `<div class="coll-ctrls">
+    <button class="cc-mini" data-cmove="up" data-folder="${esc(t.folder)}" title="Mover para cima" ${idx === 0 ? "disabled" : ""}>↑</button>
+    <button class="cc-mini" data-cmove="down" data-folder="${esc(t.folder)}" title="Mover para baixo" ${idx === total - 1 ? "disabled" : ""}>↓</button>
+    <button class="cc-mini" data-ccover data-folder="${esc(t.folder)}" title="Usar como capa">capa</button>
+    <button class="cc-mini danger" data-cremove data-folder="${esc(t.folder)}" title="Tirar da coleção">✕</button>
+  </div>`;
+}
+function collItemCard(t, idx, total) {
+  return `<div class="coll-item"><span class="coll-pos">${idx + 1}</span>${taskCard(t)}${collItemCtrls(t, idx, total)}</div>`;
+}
+function collItemRow(t, idx, total) {
+  return `<div class="list-row coll-item-row">
+    <span class="coll-pos">${idx + 1}</span>
+    <div class="lr-main"><div class="lr-title"><a href="#/task/${encodeURIComponent(t.folder)}">${esc(displayName(t))}</a></div><div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(statusLabel(t.status))}</div></div>
+    ${collItemCtrls(t, idx, total)}
+  </div>`;
+}
+
+function bindCollItemControls(collId, order) {
+  const wrap = $("#coll-items-wrap"); if (!wrap) return;
+  const reopen = () => openCollection(collId);
+  wrap.querySelectorAll("[data-cmove]").forEach((b) => b.onclick = async () => {
+    const f = b.dataset.folder, i = order.indexOf(f); if (i < 0) return;
+    const j = b.dataset.cmove === "up" ? i - 1 : i + 1; if (j < 0 || j >= order.length) return;
+    const next = order.slice(); next[i] = order[j]; next[j] = f;
+    try { await API.reorderCollection(collId, next); reopen(); } catch (e) { toast(e.message, "error"); }
+  });
+  wrap.querySelectorAll("[data-cremove]").forEach((b) => b.onclick = async () => {
+    const ok = await uiConfirm("Tirar esta peça da coleção? A peça em si não é afetada — só sai deste agrupamento.", { title: "Remover da coleção", confirmText: "Remover", confirmKind: "danger" });
+    if (!ok) return;
+    try { await API.removeFromCollection(collId, b.dataset.folder); toast("Peça removida da coleção", "warn"); reopen(); } catch (e) { toast(e.message, "error"); }
+  });
+  wrap.querySelectorAll("[data-ccover]").forEach((b) => b.onclick = async () => {
+    try { await API.updateCollection(collId, { cover: b.dataset.folder }); toast("Capa da coleção definida", "success"); } catch (e) { toast(e.message, "error"); }
+  });
+}
+
+async function newCollectionFlow() {
+  const res = await uiModal({
+    title: "Nova coleção",
+    message: "Dê um nome à coleção. As peças você adiciona depois.",
+    fields: [
+      { name: "name", label: "Nome", placeholder: "ex.: Sequência de lançamento" },
+      { name: "description", label: "Descrição (opcional)", type: "textarea", placeholder: "para que serve esta coleção" },
+    ],
+    confirmText: "Criar coleção",
+  });
+  if (!res) return null;
+  if (!res.name || res.name.length < 3) { toast("Dê um nome com ao menos 3 caracteres.", "error"); return null; }
+  try { const r = await API.createCollection({ name: res.name, description: res.description }); toast("Coleção criada", "success"); return r.collection; }
+  catch (e) { toast(e.message, "error"); return null; }
+}
+
+async function editCollectionFlow(c) {
+  const res = await uiModal({
+    title: "Editar coleção",
+    fields: [
+      { name: "name", label: "Nome", value: c.name },
+      { name: "description", label: "Descrição", type: "textarea", value: c.description || "" },
+    ],
+    confirmText: "Salvar",
+  });
+  if (!res) return;
+  if (!res.name || res.name.length < 3) { toast("Dê um nome com ao menos 3 caracteres.", "error"); return; }
+  try { await API.updateCollection(c.id, { name: res.name, description: res.description }); toast("Coleção atualizada", "success"); openCollection(c.id); }
+  catch (e) { toast(e.message, "error"); }
+}
+
+async function deleteCollectionFlow(c) {
+  const ok = await uiConfirm("Excluir a coleção “" + c.name + "”? As peças NÃO são afetadas — só o agrupamento é removido.", { title: "Excluir coleção", confirmText: "Excluir coleção", confirmKind: "danger" });
+  if (!ok) return;
+  try { await API.deleteCollection(c.id); toast("Coleção excluída", "warn"); location.hash = "#/approved?view=collections"; }
+  catch (e) { toast(e.message, "error"); }
+}
+
+async function addPiecesFlow(c) {
+  const { tasks } = await API.content();
+  const approved = tasks.filter((t) => t.zone === "approved" || t.status === "approved");
+  const already = new Set(c.item_ids || []);
+  const candidates = approved.filter((t) => !already.has(t.folder));
+  if (!candidates.length) { toast("Não há outras peças aprovadas para adicionar.", "warn"); return; }
+  const picked = await pickPiecesModal({ title: "Adicionar peças a “" + c.name + "”", candidates });
+  if (!picked || !picked.length) return;
+  try {
+    for (const f of picked) await API.addToCollection(c.id, f);
+    toast(picked.length + " peça(s) adicionada(s)", "success");
+    openCollection(c.id);
+  } catch (e) { toast(e.message, "error"); }
+}
+
+// Seletor (multi) de peças aprovadas para incluir numa coleção.
+function pickPiecesModal(opts) {
+  const candidates = opts.candidates || [];
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "modal-ov";
+    const rows = candidates.map((t) => {
+      const thumb = (t.thumb && t.thumb.rel)
+        ? (t.thumb.type === "video" ? '<video src="' + API.rawUrl(t.folder, t.thumb.rel) + '" muted preload="metadata"></video>' : '<img src="' + API.rawUrl(t.folder, t.thumb.rel) + '" alt="" loading="lazy"/>')
+        : '<span class="pick-ph">' + kindIcon(t.kind) + "</span>";
+      return `<label class="pick-row">
+        <input type="checkbox" value="${esc(t.folder)}" />
+        <span class="pick-thumb">${thumb}</span>
+        <span class="pick-main"><span class="pick-name">${esc(displayName(t))}</span><span class="pick-meta">${esc(kindLabel(t.kind))}${t.campaign_id ? " · " + esc(campLabel(t.campaign_id)) : ""}</span></span>
+      </label>`;
+    }).join("");
+    ov.innerHTML = `<div class="modal modal-lg" role="dialog" aria-modal="true">
+      <h3>${esc(opts.title || "Adicionar peças")}</h3>
+      <p class="muted mt">Marque as peças aprovadas que entram na coleção.</p>
+      <div class="pick-list">${rows}</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-mx="cancel">Cancelar</button>
+        <button class="btn btn-primary" data-mx="ok">Adicionar selecionadas</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val); };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    ov.querySelector("[data-mx='ok']").onclick = () => { const sel = $$('input[type="checkbox"]', ov).filter((x) => x.checked).map((x) => x.value); done(sel); };
+    ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    document.addEventListener("keydown", onKey);
+  });
+}
+
+// Mostra as coleções em que a peça está (no detalhe) e permite adicionar.
+async function loadTaskCollections(folder) {
+  const box = $("#task-colls"); if (!box) return;
+  try {
+    const { collections } = await API.collections();
+    const mine = collections.filter((c) => (c.item_ids || []).includes(folder));
+    box.innerHTML = mine.length
+      ? mine.map((c) => '<a class="cc-tag link" href="#/approved?collection=' + encodeURIComponent(c.id) + '">' + esc(c.name) + "</a>").join("")
+      : '<span class="muted">Esta peça não está em nenhuma coleção.</span>';
+  } catch (e) { box.innerHTML = '<span class="muted">Não foi possível carregar as coleções.</span>'; }
+}
+
+async function addToCollectionFlow(folder) {
+  let collections = [];
+  try { collections = (await API.collections()).collections; } catch (e) { toast(e.message, "error"); return; }
+  const choice = await chooseCollectionModal(collections, folder);
+  if (!choice) return;
+  try {
+    if (choice.create) { const r = await API.createCollection({ name: choice.create }); await API.addToCollection(r.collection.id, folder); }
+    else { await API.addToCollection(choice.id, folder); }
+    toast("Peça adicionada à coleção", "success");
+    loadTaskCollections(folder);
+  } catch (e) { toast(e.message, "error"); }
+}
+
+function chooseCollectionModal(collections, folder) {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "modal-ov";
+    const rows = collections.length
+      ? collections.map((c) => {
+          const has = (c.item_ids || []).includes(folder);
+          return `<button class="coll-choose" data-cid="${esc(c.id)}" ${has ? "disabled" : ""}>${esc(c.name)} <span class="dim">${has ? "(já contém)" : c.count + " peça(s)"}</span></button>`;
+        }).join("")
+      : '<p class="muted">Nenhuma coleção ainda. Crie uma abaixo.</p>';
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+      <h3>Adicionar a uma coleção</h3>
+      <div class="coll-choose-list mt">${rows}</div>
+      <hr class="sep" />
+      <div class="field"><label>Ou crie uma nova coleção</label><input data-newcoll placeholder="nome da nova coleção" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-mx="cancel">Cancelar</button>
+        <button class="btn btn-primary" data-mx="create">Criar e adicionar</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val); };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    $$("[data-cid]", ov).forEach((b) => { b.onclick = () => done({ id: b.dataset.cid }); });
+    ov.querySelector("[data-mx='create']").onclick = () => { const v = ov.querySelector("[data-newcoll]").value.trim(); if (v.length < 3) { toast("Dê um nome com ao menos 3 caracteres.", "error"); return; } done({ create: v }); };
+    ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    document.addEventListener("keydown", onKey);
+  });
 }
 
 /* =====================================================================
@@ -620,6 +883,11 @@ async function viewTaskDetail(folder) {
           <p class="muted mt">Rótulos livres para organizar e filtrar na biblioteca.</p>
         </div>
         <div class="card mt">
+          <div class="flex-between"><h3>Coleções</h3><button class="btn btn-sm" id="btn-add-coll">Adicionar a uma coleção</button></div>
+          <div class="chips mt" id="task-colls"><span class="muted">Carregando…</span></div>
+          <p class="muted mt">Coleções são agrupamentos curados (opcionais) com ordem própria. Não substituem tags nem campanhas.</p>
+        </div>
+        <div class="card mt">
           <h3>Aprovação da peça</h3>
           <div class="kv mt">
             <div class="k">Campanha</div><div>${s.campaign_id ? '<a href="#/campaign/' + esc(s.campaign_id) + '">' + esc(campLabel(s.campaign_id)) + "</a>" : "—"}</div>
@@ -637,6 +905,8 @@ async function viewTaskDetail(folder) {
     </div>`);
   bindWorkflow(task);
   if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
+  loadTaskCollections(folder);
+  if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) $("#btn-refine").onclick = () => refineTask(folder, task);
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
     el.onchange = () => {

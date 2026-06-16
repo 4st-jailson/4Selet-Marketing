@@ -15,6 +15,7 @@ const PATHS = {
   SCRIPTS_DIR: path.join(PROJECT_ROOT, "scripts"),
   ASSETS_DIR: path.join(PROJECT_ROOT, "assets"),
   CAMPAIGNS_DIR: path.join(PROJECT_ROOT, "campaigns"),
+  COLLECTIONS_DIR: path.join(PROJECT_ROOT, "collections"),
   ENV_FILE: path.join(INTERFACE_DIR, ".env"),
 };
 

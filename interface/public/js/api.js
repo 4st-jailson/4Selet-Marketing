@@ -29,6 +29,15 @@ const API = (() => {
     createCampaign: (c) => req("POST", "/api/campaigns", c),
     updateCampaign: (id, c) => req("PUT", "/api/campaigns/" + encodeURIComponent(id), c),
     deleteCampaign: (id) => req("DELETE", "/api/campaigns/" + encodeURIComponent(id)),
+    // collections (coleções curadas de peças, por referência, com ordem própria)
+    collections: () => req("GET", "/api/collections"),
+    collection: (id) => req("GET", "/api/collections/" + encodeURIComponent(id)),
+    createCollection: (c) => req("POST", "/api/collections", c),
+    updateCollection: (id, c) => req("PUT", "/api/collections/" + encodeURIComponent(id), c),
+    deleteCollection: (id) => req("DELETE", "/api/collections/" + encodeURIComponent(id)),
+    addToCollection: (id, folder) => req("POST", "/api/collections/" + encodeURIComponent(id) + "/items", { folder }),
+    removeFromCollection: (id, folder) => req("DELETE", "/api/collections/" + encodeURIComponent(id) + "/items/" + encodeURIComponent(folder)),
+    reorderCollection: (id, order) => req("PUT", "/api/collections/" + encodeURIComponent(id) + "/order", { order }),
     // content
     content: () => req("GET", "/api/content"),
     task: (folder) => req("GET", "/api/content/" + encodeURIComponent(folder)),

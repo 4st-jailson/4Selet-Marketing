@@ -615,3 +615,77 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .se-f.se-type { font-family: var(--mono); max-width: 320px; }
 .json-adv summary { cursor: pointer; color: var(--text-dim); font-size: 13px; user-select: none; }
 .json-adv[open] summary { margin-bottom: var(--s2); }
+
+/* =====================================================================
+   COLEÇÕES — abas, breadcrumb, grade de coleções e itens curados
+   ===================================================================== */
+
+/* Controle segmentado (abas Peças/Coleções e toggle grade/lista) */
+.seg-group { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border-soft); border-radius: var(--r-pill); background: var(--surface-2); }
+.seg { appearance: none; border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-mut); padding: 6px 16px; border-radius: var(--r-pill); transition: color var(--tr), background var(--tr); line-height: 1; }
+.seg:hover { color: var(--text); }
+.seg.on { background: var(--accent); color: var(--accent-ink); }
+.seg-group.sm { padding: 2px; }
+.seg-group.sm .seg { padding: 5px 10px; font-size: 14px; }
+
+/* Breadcrumb */
+.crumbs { font-size: 13px; color: var(--text-mut); margin-bottom: var(--s3); }
+.crumbs a { color: var(--text-2); }
+.crumbs a:hover { color: var(--accent-strong); }
+.crumbs .sep { margin: 0 6px; opacity: .6; }
+.crumbs strong { color: var(--text); font-weight: 600; }
+
+/* Grade de coleções (capa + nome + contagem), inspirada em álbuns/pastas */
+.coll-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s5); }
+.coll-tile { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--surface); transition: border-color var(--tr), transform var(--tr); }
+.coll-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+.coll-cover { aspect-ratio: 4 / 3; background: var(--surface-3); overflow: hidden; }
+.coll-cover img, .coll-cover video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.coll-cover.is-empty { display: flex; align-items: center; justify-content: center; }
+.coll-ph { width: 44px; height: 44px; color: var(--text-mut); opacity: .75; }
+.coll-ph svg { width: 100%; height: 100%; }
+.coll-tbody { padding: var(--s3) var(--s4); }
+.coll-name { font-weight: 600; font-size: 14px; color: var(--text); }
+.coll-count { font-size: 12px; color: var(--text-mut); margin-top: 2px; }
+
+/* Itens de uma coleção — grade: badge de posição + controles sobre o card */
+.coll-item { position: relative; }
+.coll-pos { position: absolute; top: 8px; left: 8px; z-index: 2; min-width: 20px; height: 20px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; box-shadow: var(--shadow); }
+.coll-ctrls { display: flex; gap: 4px; margin-top: var(--s2); flex-wrap: wrap; }
+.coll-item-row .coll-ctrls { margin-top: 0; }
+.cc-mini { appearance: none; cursor: pointer; font-family: inherit; font-size: 12px; line-height: 1; padding: 5px 9px; border: 1px solid var(--border-soft); border-radius: var(--r-xs); background: var(--surface-2); color: var(--text-2); transition: border-color var(--tr), color var(--tr), background var(--tr); }
+.cc-mini:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.cc-mini:disabled { opacity: .35; cursor: not-allowed; }
+.cc-mini.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err); background: var(--err-soft); }
+
+/* Itens de uma coleção — lista */
+.coll-item-row { display: flex; align-items: center; gap: var(--s3); }
+.coll-item-row .coll-pos { position: static; box-shadow: none; flex: 0 0 auto; }
+.coll-item-row .lr-main { flex: 1 1 auto; min-width: 0; }
+
+/* Seletor multi de peças (modal "Adicionar peças") */
+.modal-lg { max-width: 560px; }
+.pick-list { max-height: 52vh; overflow-y: auto; margin-top: var(--s4); display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: var(--s2); }
+.pick-row { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3); border-radius: var(--r-xs); cursor: pointer; transition: background var(--tr); }
+.pick-row:hover { background: var(--surface-2); }
+.pick-row input[type="checkbox"] { flex: 0 0 auto; width: auto; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+.pick-thumb { flex: 0 0 auto; width: 44px; height: 44px; border-radius: var(--r-xs); overflow: hidden; background: var(--surface-3); display: flex; align-items: center; justify-content: center; }
+.pick-thumb img, .pick-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.pick-ph { color: var(--text-mut); opacity: .7; display: flex; }
+.pick-ph svg { width: 20px; height: 20px; }
+.pick-main { display: flex; flex-direction: column; min-width: 0; }
+.pick-name { font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick-meta { font-size: 12px; color: var(--text-mut); }
+
+/* Escolher coleção (no detalhe da peça) */
+.coll-choose-list { display: flex; flex-direction: column; gap: 4px; }
+.coll-choose { appearance: none; cursor: pointer; text-align: left; font-family: inherit; font-size: 13.5px; color: var(--text); padding: 9px 12px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); transition: border-color var(--tr), background var(--tr); }
+.coll-choose:hover:not(:disabled) { border-color: var(--accent); }
+.coll-choose:disabled { opacity: .5; cursor: not-allowed; }
+.coll-choose .dim { color: var(--text-mut); font-size: 12px; margin-left: 4px; }
+
+/* Chip-link de coleção no detalhe da peça */
+.cc-tag.link { cursor: pointer; }
+.cc-tag.link:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.mt0 { margin-top: 0; }

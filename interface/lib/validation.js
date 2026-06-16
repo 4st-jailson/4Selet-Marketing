@@ -50,6 +50,22 @@ function validateCampaign(obj) {
   return { ok: errors.length === 0, errors };
 }
 
+// ---- Schema: Colecao -----------------------------------------------------
+function validateCollection(obj) {
+  const errors = [];
+  if (!obj || typeof obj !== "object") return { ok: false, errors: ["payload invalido"] };
+  if (!obj.name || String(obj.name).trim().length < 3) {
+    errors.push("nome da colecao e obrigatorio (min 3 caracteres)");
+  }
+  if (obj.id && !SLUG_RE.test(obj.id)) {
+    errors.push("id invalido (use slug: a-z, 0-9, hifen, underscore)");
+  }
+  if (obj.description != null && String(obj.description).length > 500) {
+    errors.push("descricao muito longa (max 500 caracteres)");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 // ---- Schema: requisicao de geracao de conteudo ---------------------------
 function validateContentRequest(obj) {
   const errors = [];
@@ -125,6 +141,7 @@ function runBrandGovernance(text, opts) {
 
 module.exports = {
   validateCampaign,
+  validateCollection,
   validateContentRequest,
   runBrandGovernance,
   countEmojis,

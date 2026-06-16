@@ -36,6 +36,7 @@ app.get("/api/meta", (req, res) => {
 
 app.use("/api/settings", require("./routes/settings"));
 app.use("/api/campaigns", require("./routes/campaigns"));
+app.use("/api/collections", require("./routes/collections"));
 app.use("/api/content", require("./routes/content"));
 app.use("/api/generate", require("./routes/generate"));
 
