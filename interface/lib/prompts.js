@@ -177,6 +177,8 @@ const PILLAR_SIM = {
     headline: "Os 4 numeros",
     subtext: "O que todo produtor estabelecido deveria medir antes de escalar.",
     badge: "Playbook",
+    threads: "Antes de escalar trafego, olhe seus 4 numeros: taxa por transacao, prazo de recebimento, aprovacao do cartao e custo de suporte. A margem mora na soma deles — nao no percentual isolado do checkout. Qual desses voce nunca mediu?",
+    linkedin: "A maioria dos produtores escolhe plataforma pela taxa percentual. E o numero errado para otimizar.\n\nRentabilidade real e a soma de quatro variaveis: taxa por transacao, prazo de recebimento, taxa de aprovacao do gateway e custo de suporte. Cortar uma e perder nas outras tres e prejuizo disfarcado de economia.\n\nO exercicio que recomendo antes de qualquer migracao: modele os quatro numeros lado a lado, com volume real de vendas. O ranking de plataformas quase sempre muda quando a conta sai do percentual e entra na margem liquida.\n\nNa 4Selet esses quatro numeros foram desenhados como operacao, nao como promessa: 95%+ de aprovacao no cartao, PIX em D+10 e gestor de conta dedicado.",
     notes: "Pilar educacional: ensina, nao vende.",
   },
   curiosidade_mercado: {
@@ -187,6 +189,8 @@ const PILLAR_SIM = {
     headline: "O custo invisivel",
     subtext: "O juro do parcelado pesa mais que a taxa do checkout.",
     badge: "Voce sabia?",
+    threads: "Curiosidade: no parcelado em 12x, o juro embutido costuma comer mais margem do que a taxa da plataforma. Quase todo mundo olha so o percentual do checkout. Voce ja calculou quanto o 12x custa de verdade na sua operacao?",
+    linkedin: "Existe um custo que quase nenhum produtor coloca na planilha: o juro do parcelado em 12x.\n\nA conversa do mercado gira em torno da taxa do checkout — 6%, 7%, 8%. Mas quando a venda e parcelada em 12x, o juro embutido pode pesar mais na margem do que a propria taxa da plataforma. O percentual do checkout vira apenas a parte visivel de um custo bem maior.\n\nNao se trata de evitar o 12x — ele converte e amplia ticket. Trata-se de precificar com consciencia de onde a margem realmente vaza, e de repassar (ou nao) com criterio.\n\nNa 4Selet o modelo de ofertas flexiveis existe justamente para que essa decisao seja estrategica, e nao automatica.",
     notes: "Pilar curiosidade: dado pouco obvio, mercado em abstrato.",
   },
   prova_plataforma: {
@@ -197,6 +201,8 @@ const PILLAR_SIM = {
     headline: "95% aprovados",
     subtext: "A prova esta na taxa de aprovacao, no prazo e no suporte.",
     badge: "Prova",
+    threads: "95% de aprovacao no cartao nao e meta de campanha — e o padrao de operacao. Some PIX em D+10 e gestor de conta dedicado: menos venda perdida na aprovacao, mais margem que fica. Qual e a sua taxa de aprovacao hoje?",
+    linkedin: "Taxa de aprovacao no cartao e a metrica que mais silenciosamente derruba faturamento — e a que menos gente acompanha.\n\nA diferenca entre 78% e 95% de aprovacao nao aparece no relatorio de taxas. Aparece nas vendas que simplesmente nao acontecem. Em volume, sao dezenas de milhares de reais por mes que evaporam antes de virarem receita.\n\nNa 4Selet, 95%+ de aprovacao e o padrao de operacao, sustentado por redundancia inteligente entre adquirentes. Some PIX em D+10, cartao em D+30 e um gestor de conta que conhece a sua operacao pelo nome.\n\nMenos venda perdida na borda. Mais margem que chega ao caixa.",
     notes: "Pilar prova: diferenciais verificaveis dos 9 oficiais.",
   },
   novidade: {
@@ -207,6 +213,8 @@ const PILLAR_SIM = {
     headline: "Caixa previsivel",
     subtext: "PIX D+10 e cartao D+30: o prazo entra no seu planejamento.",
     badge: "Novidade",
+    threads: "O jogo da previsibilidade de recebimento esta mudando. A 4Selet ja opera com PIX em D+10 e cartao em D+30 — prazo que entra direto no planejamento. O que muda na sua operacao quando o caixa fica previsivel?",
+    linkedin: "Previsibilidade de caixa deixou de ser detalhe operacional e virou vantagem competitiva no digital.\n\nQuem planeja trafego, equipe e estoque com base em quando o dinheiro realmente entra opera com uma folga que o concorrente nao tem. O problema e que prazo de recebimento costuma ser a ultima coisa que o produtor olha ao escolher plataforma — e a primeira que aperta quando a operacao cresce.\n\nA 4Selet trabalha com PIX em D+10 e cartao em D+30: prazos que entram no seu planejamento sem surpresa. Recebimento previsivel nao acelera so o caixa — acelera a decisao.\n\nQuando voce sabe quando o dinheiro chega, voce escala com menos medo.",
     notes: "Pilar novidade: movimento de mercado + leitura da 4Selet.",
   },
   motivacional: {
@@ -217,6 +225,8 @@ const PILLAR_SIM = {
     headline: "Decisoes melhores",
     subtext: "Quem ja performa escolhe parceria, nao desconto do mes.",
     badge: "Estrategia",
+    threads: "Produtor nao e numero. E parceiro. Quem opera com seriedade no digital nao troca de plataforma pela menor taxa do mes — escolhe a parceria que sustenta a operacao no ano inteiro.",
+    linkedin: "Produtor nao e numero. E parceiro. E parceiro vende junto.\n\nNo digital serio, a escolha de plataforma deixou de ser uma decisao de custo para virar uma decisao de parceria. A menor taxa do mes nao sustenta uma operacao que precisa de aprovacao alta, recebimento previsivel e suporte que entende o negocio.\n\nQuem ja performa entende a diferenca entre economizar no percentual e ganhar no ano. Entre um fornecedor que apenas processa transacao e um parceiro que divide o objetivo de vender mais.\n\nNa 4Selet o acesso e por convite — porque parceria de verdade se constroi com quem leva a operacao a serio. A escolha de quem ja performa.",
     notes: "Pilar motivacional: mentalidade ancorada em raciocinio concreto.",
   },
 };
@@ -281,7 +291,7 @@ function simulate(req) {
         notes: "Capa -> grade de numeros -> lista -> CTA (layouts variados)." + tag,
       }, null, 2);
     case "threads_post":
-      if (p) return JSON.stringify({ body: p.caption.split("\n\n")[0], hashtags: [p.hashtags[0]], notes: p.notes + tag }, null, 2);
+      if (p) return JSON.stringify({ body: p.threads || p.caption.split("\n\n")[0], hashtags: [p.hashtags[0]], notes: p.notes + " Provocacao platform-native (<=500 chars, 1 hashtag)." + tag }, null, 2);
       return JSON.stringify({
         body: "Taxa de mercado em torno de 7,9% e so parte da conta. O que define sua margem e aprovacao do cartao: 78% ou 95%?",
         hashtags: ["#4Selet"],
@@ -289,10 +299,10 @@ function simulate(req) {
       }, null, 2);
     case "linkedin_post":
       if (p) return JSON.stringify({
-        body: p.subtext + "\n\n" + p.caption.replace(/\n+/g, " ") + "\n\nNa 4Selet isso vira operacao: 95%+ de aprovacao, PIX D+10 e gestor de conta dedicado. A escolha de quem ja performa.",
+        body: p.linkedin || (p.subtext + "\n\n" + p.caption.replace(/\n+/g, " ") + "\n\nNa 4Selet isso vira operacao: 95%+ de aprovacao, PIX D+10 e gestor de conta dedicado. A escolha de quem ja performa."),
         hashtags: p.hashtags.concat(["#DigitalSerio"]).slice(0, 5),
         cta: p.cta,
-        notes: p.notes + tag,
+        notes: p.notes + " Editorial premium platform-native." + tag,
       }, null, 2);
       return JSON.stringify({
         body: "O produtor que olha apenas a taxa percentual esta olhando para o lugar errado.\n\nRentabilidade real e a soma de quatro variaveis: taxa por transacao, prazo de recebimento, taxa de aprovacao do gateway e custo de suporte. Reduzir uma e perder nas outras tres e prejuizo disfarcado de economia.\n\nNa 4Selet o cartao aprova 95%+, o PIX cai em D+10 e o suporte tem gestor de conta dedicado. " + offer + " para quem migra agora.\n\nAcesso por convite. A escolha de quem ja performa.",
