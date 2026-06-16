@@ -42,13 +42,13 @@ router.get("/integrations", (req, res) => {
   const integrations = [
     {
       id: "anthropic", name: "Anthropic (Claude)", required: true,
-      purpose: "Geracao e refino de conteudo com IA no painel.",
+      purpose: "Geração e refino de conteúdo com IA no painel.",
       configured: ai.hasKey(),
       detail: ai.hasKey() ? "Modelo atual: " + ai.getModel() : "Cole a chave Anthropic acima.",
     },
     {
       id: "tavily", name: "Tavily (pesquisa de mercado)", required: false,
-      purpose: "Pesquisa de mercado ao vivo injetada na geracao (opt-in pelo toggle ao gerar).",
+      purpose: "Pesquisa de mercado ao vivo injetada na geração (opt-in pelo toggle ao gerar).",
       configured: research.isConfigured(),
       detail: research.isConfigured()
         ? "Pronta — marque 'Pesquisar mercado com Tavily' ao gerar."
@@ -56,25 +56,25 @@ router.get("/integrations", (req, res) => {
     },
     {
       id: "redis", name: "Redis / BullMQ (fila)", required: false,
-      purpose: "Processa campanhas em fila assincrona. Sem ele, o pipeline roda sequencial.",
+      purpose: "Processa campanhas em fila assíncrona. Sem ele, o pipeline roda sequencial.",
       configured: envHas("REDIS_URL", f),
       detail: envHas("REDIS_URL", f) ? "Fila BullMQ habilitada." : "Defina REDIS_URL (Upstash) para ativar a fila.",
     },
     {
-      id: "supabase", name: "Supabase (hospedagem de midia)", required: false,
-      purpose: "Hospeda midia e gera URLs publicas — pre-requisito para publicacao real.",
+      id: "supabase", name: "Supabase (hospedagem de mídia)", required: false,
+      purpose: "Hospeda mídia e gera URLs públicas — pré-requisito para publicação real.",
       configured: supaOk,
       detail: supaOk ? "Conectado." : "Defina SUPABASE_URL + SUPABASE_KEY.",
     },
     {
       id: "instagram", name: "Instagram (Graph API)", required: false,
-      purpose: "Publicacao automatica no Instagram (protegida por gate de aprovacao).",
+      purpose: "Publicação automática no Instagram (protegida por gate de aprovação).",
       configured: envHas("IG_ACCESS_TOKEN", f),
       detail: envHas("IG_ACCESS_TOKEN", f) ? "Token presente." : "Defina IG_ACCESS_TOKEN + IG Business account id.",
     },
     {
       id: "youtube", name: "YouTube (Data API)", required: false,
-      purpose: "Publicacao automatica no YouTube via OAuth (protegida por gate de aprovacao).",
+      purpose: "Publicação automática no YouTube via OAuth (protegida por gate de aprovação).",
       configured: envHas("YOUTUBE_REFRESH_TOKEN", f),
       detail: envHas("YOUTUBE_REFRESH_TOKEN", f) ? "OAuth configurado." : "Defina YOUTUBE_REFRESH_TOKEN (OAuth).",
     },

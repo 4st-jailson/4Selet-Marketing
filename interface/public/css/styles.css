@@ -472,6 +472,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* #6 — chave de API em estado bloqueado/edição (Configurações) */
 .key-locked { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 13px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); }
 .key-lock { flex: 0 0 auto; opacity: .7; }
+.t-ok { color: var(--ok); font-weight: 700; }
+.t-err { color: var(--err); font-weight: 700; }
 .key-mask { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; color: var(--text-2); letter-spacing: .04em; }
 .key-edit { display: flex; flex-direction: column; gap: 9px; }
 
@@ -522,6 +524,21 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .msg { padding: 10px 14px; border-radius: var(--r); font-size: 13.5px; line-height: 1.5; max-width: 88%; white-space: pre-wrap; }
 .msg-bot { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border-soft); align-self: flex-start; border-bottom-left-radius: 5px; }
 .msg-user { background: var(--accent); color: var(--accent-ink); align-self: flex-end; border-bottom-right-radius: 5px; }
+.msg-bot { white-space: normal; }
+.msg-bot > :first-child { margin-top: 0; }
+.msg-bot > :last-child { margin-bottom: 0; }
+.msg-bot p { margin: 0 0 8px; }
+.msg-bot h1, .msg-bot h2, .msg-bot h3, .msg-bot h4, .msg-bot h5, .msg-bot h6 { margin: 12px 0 6px; font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.msg-bot ul, .msg-bot ol { margin: 0 0 8px; padding-left: 20px; }
+.msg-bot li { margin: 2px 0; }
+.msg-bot code { font-family: var(--mono, "JetBrains Mono", monospace); font-size: 12px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 4px; padding: 1px 5px; }
+.msg-bot .md-pre { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--r); padding: 10px 12px; overflow-x: auto; margin: 0 0 8px; }
+.msg-bot .md-pre code { background: none; border: 0; padding: 0; font-size: 12px; line-height: 1.45; }
+.msg-bot .md-table { border-collapse: collapse; width: 100%; margin: 0 0 8px; font-size: 12.5px; }
+.msg-bot .md-table th, .msg-bot .md-table td { border: 1px solid var(--border-soft); padding: 5px 8px; text-align: left; }
+.msg-bot .md-table th { background: var(--surface); font-weight: 700; }
+.msg-bot hr { border: 0; border-top: 1px solid var(--border-soft); margin: 10px 0; }
+.msg-bot a { color: var(--accent); text-decoration: underline; }
 .assistant-form { display: flex; gap: 8px; padding: var(--s4); border-top: 1px solid var(--border-soft); }
 .assistant-form textarea { flex: 1; }
 

@@ -38,7 +38,7 @@ const ALLOWED_PLATFORMS = [
 
 // 5 colunas estrategicas (brand_identity.md §Core Values)
 const BRAND_PILLARS = [
-  "Experiencia", "Lucratividade", "Sabedoria", "Exclusividade", "Seguranca",
+  "Experiência", "Lucratividade", "Sabedoria", "Exclusividade", "Segurança",
 ];
 
 // Lista fechada de concorrentes proibidos em criativos abertos (brand_identity.md)
@@ -86,7 +86,7 @@ const CONTENT_TYPES = [
     media: "image",
     kind: "feed",
     icon: "▣",
-    description: "Post de feed: imagem 1080x1350 + caption (hook + numero + CTA + 3-5 hashtags).",
+    description: "Post de feed: imagem 1080x1350 + caption (hook + número + CTA + 3-5 hashtags).",
   },
   {
     id: "instagram_carousel",
@@ -102,7 +102,7 @@ const CONTENT_TYPES = [
   },
   {
     id: "ad_creative",
-    label: "Imagem / Anuncio",
+    label: "Imagem / Anúncio",
     short: "Imagem",
     platform: "instagram",
     file: "ads/concept.json",
@@ -110,19 +110,19 @@ const CONTENT_TYPES = [
     media: "image",
     kind: "image",
     icon: "◧",
-    description: "Criativo estatico 1080x1080: headline <=4 palavras, subtext, CTA e arte da marca.",
+    description: "Criativo estático 1080x1080: headline <=4 palavras, subtext, CTA e arte da marca.",
   },
   {
     id: "video_idea",
-    label: "Video (short-form)",
-    short: "Video",
+    label: "Vídeo (short-form)",
+    short: "Vídeo",
     platform: "instagram",
     file: "video/concept.json",
     format: "json",
     media: "video",
     kind: "video",
     icon: "►",
-    description: "Reels/short 9:16: hook, arco e roteiro de cenas renderizado em MP4 (Remotion).",
+    description: "Reels/short vertical (9:16): hook, arco e roteiro de cenas, gerado como vídeo final.",
   },
   {
     id: "linkedin_post",
@@ -146,7 +146,7 @@ const CONTENT_TYPES = [
     media: "text",
     kind: "threads",
     icon: "@",
-    description: "Provocacao controlada com dado, <=500 chars, 0-1 hashtag.",
+    description: "Provocação controlada com dado, <=500 chars, 0-1 hashtag.",
   },
 ];
 
@@ -154,8 +154,8 @@ const CONTENT_TYPES = [
 const KIND_LABELS = {
   feed: "Feed",
   carousel: "Carrossel",
-  image: "Imagem / Anuncio",
-  video: "Video",
+  image: "Imagem / Anúncio",
+  video: "Vídeo",
   linkedin: "LinkedIn",
   threads: "Threads / X",
   other: "Outros",

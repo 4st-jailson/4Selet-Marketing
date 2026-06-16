@@ -2,7 +2,7 @@
 // Vanilla JS, hash-router, sem build. Contrato de API inalterado (ver api.js).
 "use strict";
 
-const State = { meta: null, settings: null };
+const State = { meta: null, settings: null, campMap: null };
 
 /* ============================ helpers ============================ */
 const $  = (sel, root = document) => root.querySelector(sel);
@@ -57,6 +57,15 @@ function displayName(t) {
   const explicit = t.title || (t.status && t.status.title);
   if (explicit) return String(explicit);
   return humanize(t.task_name || (t.status && t.status.task_name) || "");
+}
+
+/* ---- nome legível da campanha (resolve id técnico → nome cadastrado) ---- */
+function setCampMap(list) { State.campMap = {}; (list || []).forEach((c) => { State.campMap[c.id] = c.name; }); }
+function campLabel(id) { if (!id) return ""; const m = State.campMap || {}; return m[id] || humanize(id); }
+async function ensureCampMap() {
+  if (State.campMap) return;
+  try { const { campaigns } = await API.campaigns(); setCampMap(campaigns); }
+  catch (e) { State.campMap = State.campMap || {}; }
 }
 
 /* ---- datas legíveis (pt-BR) ---- */
@@ -168,6 +177,7 @@ async function refreshKeyStatus() {
 async function viewDashboard() {
   setTitle("Dashboard");
   const [{ campaigns }, { tasks }] = await Promise.all([API.campaigns(), API.content()]);
+  setCampMap(campaigns);
   const active = campaigns.filter((c) => c.status === "active").length;
   const inReview = tasks.filter((t) => t.status === "in_review").length;
   const approved = tasks.filter((t) => t.status === "approved" || t.zone === "approved").length;
@@ -191,7 +201,7 @@ async function viewDashboard() {
         <div class="list">
           <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true">→</span></a>
           <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">◈</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true">→</span></a>
-          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças versionadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças aprovadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>`);
@@ -276,6 +286,7 @@ function renderCampaignForm(existing) {
 
 async function viewCampaignDetail(id) {
   const { campaign: c, tasks } = await API.campaign(id);
+  State.campMap = Object.assign(State.campMap || {}, { [c.id]: c.name });
   setTitle(c.name);
   setView(`
     <div class="flex-between mb flex-wrap">
@@ -340,13 +351,14 @@ function taskCard(t) {
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}</div>
       ${tagsHtml}
-      <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? tag(t.campaign_id) : ""}</div>
+      <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
     </div></a>`;
 }
 
 async function viewContent(arg, query) {
   setTitle("Conteúdo");
   const [{ tasks }, { campaigns }] = await Promise.all([API.content(), API.campaigns()]);
+  setCampMap(campaigns);
   const active = tasks.filter((t) => t.zone !== "approved");
   const campName = (id) => { const c = campaigns.find((x) => x.id === id); return c ? c.name : id; };
   const kinds = ["all"].concat(Object.keys(State.meta.kind_labels || {}).filter((k) => active.some((t) => t.kind === k)));
@@ -398,6 +410,7 @@ async function viewContent(arg, query) {
 async function viewApproved(arg, query) {
   setTitle("Aprovados");
   const [{ tasks }, { campaigns }] = await Promise.all([API.content(), API.campaigns()]);
+  setCampMap(campaigns);
   const approved = tasks.filter((t) => t.zone === "approved" || t.status === "approved");
   const fc = (query && query.campaign) || "all";
   const shown = fc === "all" ? approved : approved.filter((t) => (t.campaign_id || "") === fc);
@@ -416,7 +429,7 @@ async function viewApproved(arg, query) {
       <div class="content-grid">${byKind[k].map(taskCard).join("")}</div>
     </div>`).join("");
   setView(`
-    <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${approved.length} peça(s) versionada(s)</span></div>
+    <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${approved.length} peça(s) aprovada(s)</span></div>
     ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
     ${shown.length ? groups : '<div class="empty">Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.</div>'}`);
   $$(".filter-bar .chip-filter").forEach((b) => { b.onclick = () => { location.hash = "#/approved?campaign=" + encodeURIComponent(b.dataset.camp); }; });
@@ -444,7 +457,7 @@ function mediaGallery(folder, task) {
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
     .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
-  return `<div class="card"><h3>Mídia renderizada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
+  return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
 // #2 — Strip ordenado de thumbnails dos slides de um carrossel (slide_1..n).
@@ -467,12 +480,12 @@ function renderPanel(folder, task) {
   if (!isMediaKind(task.kind)) return "";
   const hasMedia = task.files.some((f) => f.isImage || f.isVideo);
   if (task.zone !== "active") {
-    return `<div class="card"><h3>Arte final</h3><p class="muted mt">A peça está em <strong>${esc(zoneLabel(task.zone))}</strong>. Para gerar a arte novamente, reabra para edição (rework).</p></div>`;
+    return `<div class="card"><h3>Arte final</h3><p class="muted mt">A peça está em <strong>${esc(zoneLabel(task.zone))}</strong>. Para gerar a arte novamente, reabra a peça para edição.</p></div>`;
   }
-  const label = task.kind === "video" ? "Gerar vídeo final (MP4)" : "Gerar arte final";
+  const label = task.kind === "video" ? "Gerar vídeo final" : "Gerar arte final";
   const reLabel = task.kind === "video" ? "Gerar nova versão do vídeo" : "Gerar nova versão da arte";
   const note = task.kind === "video"
-    ? "Gera o MP4 9:16 via Remotion a partir do roteiro de cenas. Pode levar alguns minutos."
+    ? "Cria o vídeo final (formato vertical 9:16, ideal para Reels e Stories) a partir do roteiro de cenas. Pode levar alguns minutos."
     : "Gera a arte final no padrão da marca automaticamente.";
   return `<div class="card">
     <h3>Arte final</h3>
@@ -486,7 +499,7 @@ function renderPanel(folder, task) {
 const VISUAL_TEMPLATES = [
   { id: "editorial", name: "Editorial", desc: "Gradiente azul, dots, headline à esquerda" },
   { id: "bold", name: "Destaque", desc: "Fundo escuro centralizado, número em evidência" },
-  { id: "split", name: "Split", desc: "Faixa clara (logo) + faixa escura (headline)" },
+  { id: "split", name: "Dividido", desc: "Faixa clara (logo) + faixa escura (título)" },
 ];
 
 // #8 — variação visual automática: quando a peça ainda não tem template salvo,
@@ -509,7 +522,7 @@ function templatePicker(task) {
       <span class="tpl-desc">${esc(t.desc)}</span>
     </label>`).join("");
   return `<div class="tpl-picker mt">
-    <div class="muted" style="font-size:13px;margin-bottom:8px">Template visual</div>
+    <div class="muted" style="font-size:13px;margin-bottom:8px">Estilo visual da arte</div>
     <div class="tpl-grid">${opts}</div>
   </div>`;
 }
@@ -551,7 +564,7 @@ async function refineTask(folder, task) {
   try {
     const current = await API.taskFile(folder, file);
     const r = await API.refine({ content_type: ctId, current, instruction, campaign_id: s.campaign_id || undefined });
-    if (r.simulated) toast("Ajuste simulado (configure a chave p/ IA real)", "warn");
+    if (r.simulated) toast("Ajuste simulado (configure a chave para usar a IA real)", "warn");
     await API.save({
       content_type: ctId,
       brief: "Ajuste via painel: " + instruction,
@@ -560,7 +573,7 @@ async function refineTask(folder, task) {
       parsed: r.parsed, raw: r.raw,
     });
     if (autoRenders(task.kind)) {
-      btn.innerHTML = '<span class="spinner"></span> re-renderizando…';
+      btn.innerHTML = '<span class="spinner"></span> atualizando a arte…';
       const rr = await API.renderMedia(folder, task.kind, selectedTemplate());
       if (!rr.ok) toast("Ajustado, mas falhou a geração da arte: " + (rr.stderr || rr.error || "erro"), "warn");
       else toast("Ajustado e arte atualizada", "success");
@@ -579,11 +592,12 @@ async function refineTask(folder, task) {
 
 async function viewTaskDetail(folder) {
   const { task } = await API.task(folder);
+  await ensureCampMap();
   const s = task.status;
   setTitle(displayName(s));
   const actions = workflowActions(task);
   const canDiscard = task.zone !== "approved";
-  const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">slug: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
+  const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">identificador: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
   setView(`
     <div class="flex-between mb flex-wrap">
       <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(p)).join("")}${techSlug}</div>
@@ -606,9 +620,9 @@ async function viewTaskDetail(folder) {
           <p class="muted mt">Rótulos livres para organizar e filtrar na biblioteca.</p>
         </div>
         <div class="card mt">
-          <h3>Workflow de aprovação</h3>
+          <h3>Aprovação da peça</h3>
           <div class="kv mt">
-            <div class="k">Campanha</div><div>${s.campaign_id ? '<a href="#/campaign/' + esc(s.campaign_id) + '">' + esc(s.campaign_id) + "</a>" : "—"}</div>
+            <div class="k">Campanha</div><div>${s.campaign_id ? '<a href="#/campaign/' + esc(s.campaign_id) + '">' + esc(campLabel(s.campaign_id)) + "</a>" : "—"}</div>
             <div class="k">Ângulo</div><div>${esc(s.campaign_angle || "—")}</div>
             <div class="k">Criada</div><div>${esc(fmtDateTime(s.created_at))}</div>
             <div class="k">Atualizada</div><div>${esc(fmtDateTime(s.last_updated_at))}</div>
@@ -617,7 +631,7 @@ async function viewTaskDetail(folder) {
           <hr class="sep" />
           <div class="flex flex-wrap" id="wf-actions">${actions}</div>
           <p class="muted mt">${workflowHint(s.status)}</p>
-          ${canDiscard ? '<hr class="sep" /><button class="btn btn-sm btn-danger" id="btn-discard">Descartar peça</button><p class="muted mt">Move para <span class="codeblock">outputs/_archived/</span> (reversível, não apaga).</p>' : ""}
+          ${canDiscard ? '<hr class="sep" /><button class="btn btn-sm btn-danger" id="btn-discard">Descartar peça</button><p class="muted mt">Move a peça para os arquivados — pode ser restaurada depois; nada é apagado.</p>' : ""}
         </div>
       </div>
     </div>`);
@@ -632,18 +646,18 @@ async function viewTaskDetail(folder) {
   if ($("#btn-render")) {
     $("#btn-render").onclick = async () => {
       const btn = $("#btn-render"); const out = $("#render-out");
-      btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> renderizando…';
+      btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> gerando arte…';
       out.textContent = task.kind === "video" ? "isto pode levar alguns minutos…" : "";
       try {
         const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate());
-        if (!r.ok) throw new Error(r.stderr || r.error || "falha na renderização");
-        toast("Mídia renderizada", "success"); router();
+        if (!r.ok) throw new Error(r.stderr || r.error || "falha ao gerar a arte");
+        toast("Arte gerada", "success"); router();
       } catch (e) { toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }
     };
   }
   if ($("#btn-discard")) {
     $("#btn-discard").onclick = async () => {
-      const ok = await uiConfirm("A peça vai para outputs/_archived/ (reversível — pode ser restaurada manualmente).", { title: "Descartar “" + displayName(s) + "”?", confirmText: "Descartar peça", confirmKind: "danger" });
+      const ok = await uiConfirm("A peça vai para os arquivados — pode ser restaurada depois; nada é apagado.", { title: "Descartar “" + displayName(s) + "”?", confirmText: "Descartar peça", confirmKind: "danger" });
       if (!ok) return;
       try { await API.discard(folder); toast("Peça descartada (arquivada)", "warn"); location.hash = "#/content"; }
       catch (e) { toast(e.message, "error"); }
@@ -669,17 +683,17 @@ async function editTags(folder, current) {
 
 function workflowActions(task) {
   const s = task.status.status;
-  if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Gerar preview → em revisão</button>`;
-  if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Regerar preview</button>`;
-  if (s === "approved") return `<span class="badge approved">aprovada e versionada</span><button class="btn btn-sm" data-wf="rework">Reabrir p/ edição (rework)</button>`;
-  if (s === "rejected") return `<button class="btn btn-sm" data-wf="rework">Reabrir (rework)</button>`;
+  if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Enviar para revisão</button>`;
+  if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Gerar prévia de novo</button>`;
+  if (s === "approved") return `<span class="badge approved">aprovada e salva</span><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
+  if (s === "rejected") return `<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
   return "";
 }
 function workflowHint(s) {
-  if (s === "draft") return "Gerar preview revisa a peça e move para 'em revisão'.";
-  if (s === "in_review") return "Aprovar versiona a peça (SHA-256) em outputs/approved. Rejeitar arquiva.";
-  if (s === "approved") return "Aprovada: não edite os arquivos diretamente. Use rework para alterar e reaprovar.";
-  if (s === "rejected") return "Rejeitada e arquivada. Reabra para retrabalhar.";
+  if (s === "draft") return "Envia a peça para revisão antes da aprovação.";
+  if (s === "in_review") return "Aprovar salva uma versão final protegida da peça. Rejeitar arquiva a peça.";
+  if (s === "approved") return "Aprovada: não altere os arquivos diretamente. Use “Reabrir para edição” para mudar e aprovar de novo.";
+  if (s === "rejected") return "Rejeitada e arquivada. Reabra para editar de novo.";
   return "";
 }
 function bindWorkflow(task) {
@@ -690,11 +704,11 @@ function bindWorkflow(task) {
       const busy = () => { $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = true)); btn.innerHTML = '<span class="spinner"></span> processando…'; };
       try {
         if (wf === "preview") {
-          busy(); const r = await API.preview(task.folder); if (!r.ok) throw new Error(r.stderr || "falha no preview"); toast("Preview gerado · em revisão", "success");
+          busy(); const r = await API.preview(task.folder); if (!r.ok) throw new Error(r.stderr || "falha ao gerar a prévia"); toast("Peça enviada para revisão", "success");
         } else if (wf === "approve") {
-          const res = await uiModal({ title: "Aprovar peça", message: "Versiona a peça (SHA-256) em outputs/approved.", fields: [{ name: "by", label: "Aprovado por (seu nome)", placeholder: "ex.: Hugo Belo" }], confirmText: "Aprovar e versionar" });
+          const res = await uiModal({ title: "Aprovar peça", message: "Salva uma versão final protegida da peça.", fields: [{ name: "by", label: "Aprovado por (seu nome)", placeholder: "ex.: Hugo Belo" }], confirmText: "Aprovar peça" });
           if (!res || !res.by) return;
-          busy(); const r = await API.promote(task.folder, { to: "approved", by: res.by }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Aprovada e versionada", "success");
+          busy(); const r = await API.promote(task.folder, { to: "approved", by: res.by }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Aprovada e salva", "success");
         } else if (wf === "reject") {
           const res = await uiModal({ title: "Rejeitar peça", message: "A peça será arquivada (reversível).", fields: [{ name: "reason", label: "Motivo da rejeição (opcional)", type: "textarea", placeholder: "ex.: headline fora do tom da marca" }], confirmText: "Rejeitar peça", confirmKind: "danger" });
           if (res === null) return;
@@ -821,6 +835,7 @@ let LAST_GEN = null;
 async function viewCreate(arg, query) {
   setTitle("Criar conteúdo");
   const { campaigns } = await API.campaigns();
+  setCampMap(campaigns);
   const preCamp = (query && query.campaign) || "";
   const preType = (query && query.type) || State.meta.content_types[0].id;
   const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}" ${c.id === preCamp ? "selected" : ""}>${esc(c.name)}</option>`).join("");
@@ -848,16 +863,16 @@ async function viewCreate(arg, query) {
           <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
         </div>
         <div class="field"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
-          <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Split — faixa clara (logo) + faixa escura</option></select>
+          <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option></select>
         </div>
-        <div class="field"><label>Referência visual / mood (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
+        <div class="field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
         <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
         <details class="adv-block">
           <summary>Identificador técnico (avançado)</summary>
-          <div class="field"><label>Slug da pasta <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
+          <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
         </details>
-        <label class="research-toggle mt"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e injeta como apoio factual no prompt — leva alguns segundos a mais)</span></span></label>
+        <label class="research-toggle mt"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e usa como apoio factual na geração — leva alguns segundos a mais)</span></span></label>
         <button class="btn btn-primary mt" id="g-run">Gerar com IA</button>
       </div>
       <div class="card create-result">
@@ -924,13 +939,13 @@ function renderGenResult(r) {
   $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain">' + esc(r.model) + "</span>";
   if (r.research_requested) {
     $("#g-flag").innerHTML += r.research_used
-      ? ' <span class="badge ok" title="Pesquisa de mercado ao vivo injetada no prompt">▸ Tavily: ' + ((r.research_sources || []).length) + " fontes</span>"
+      ? ' <span class="badge ok" title="Pesquisa de mercado ao vivo usada como apoio na geração">▸ Tavily: ' + ((r.research_sources || []).length) + " fontes</span>"
       : ' <span class="badge warn" title="Tavily não retornou dados — geração seguiu sem pesquisa">▸ Tavily indisponível</span>';
   }
   const researchHtml = (r.research_used && (r.research_sources || []).length)
     ? `<details class="research-box mt"><summary>Fontes da pesquisa Tavily (${r.research_sources.length})</summary>
          <ul class="research-list">${r.research_sources.map((s) => `<li><span class="research-focus">${esc(s.focus)}</span> <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("")}</ul>
-         <p class="muted" style="font-size:12px">Usadas como apoio factual; o conteúdo final segue as regras de marca e os knowledge files.</p>
+         <p class="muted" style="font-size:12px">Usadas como apoio factual; o conteúdo final segue as regras e o conhecimento da marca.</p>
        </details>`
     : "";
   const ct = metaType(r.content_type);
@@ -952,7 +967,7 @@ function renderGenResult(r) {
   const mockHtml = mockKind
     ? `<details class="social-mock-box mt" open><summary>Pré-visualização do post (${mockKind === "linkedin" ? "LinkedIn" : "Threads / X"})</summary>
          <div id="g-mock" class="social-mock">${socialMock(mockKind, editorVal)}</div>
-         <p class="muted" style="font-size:12px">Mockup ilustrativo — atualiza conforme você edita o texto acima.</p>
+         <p class="muted" style="font-size:12px">Prévia ilustrativa — atualiza conforme você edita o texto acima.</p>
        </details>`
     : "";
   $("#g-result").innerHTML = `
@@ -965,7 +980,7 @@ function renderGenResult(r) {
       <textarea id="g-refine" rows="2" placeholder="ex.: encurte o headline e troque o CTA por Solicitar convite"></textarea>
       <button class="btn btn-sm mt" id="g-refine-btn">Aplicar ajuste</button>
     </div>
-    <div class="flex mt"><button class="btn btn-primary" id="g-save">Salvar na campanha</button><button class="btn btn-ghost" id="g-regen">Regerar do zero</button></div>`;
+    <div class="flex mt"><button class="btn btn-primary" id="g-save">Salvar na campanha</button><button class="btn btn-ghost" id="g-regen">Gerar de novo</button></div>`;
   $("#g-regen").onclick = runGenerate;
   $("#g-save").onclick = saveGenerated;
   $("#g-refine-btn").onclick = refineGenerated;
@@ -996,7 +1011,7 @@ function socialMock(kind, text) {
   return `<div class="sm-card sm-linkedin">
     <div class="sm-head"><span class="sm-avatar">4S</span><div class="sm-id"><span class="sm-name">4Selet</span><span class="sm-handle">Plataforma de pagamentos · Patrocinado</span></div></div>
     <div class="sm-body">${bodyHtml}</div>${tagsHtml}
-    <div class="sm-actions"><span>👍 Gostei</span><span>💬 Comentar</span><span>↪ Compartilhar</span></div>
+    <div class="sm-actions"><span>♡ Gostei</span><span>↺ Comentar</span><span>↪ Compartilhar</span></div>
   </div>`;
 }
 
@@ -1019,7 +1034,7 @@ async function refineGenerated() {
       simulated: r.simulated, model: r.model, content_type: r.content_type,
     });
     renderGenResult(LAST_GEN.res);
-    toast(r.simulated ? "Ajuste simulado (configure a chave p/ IA real)" : "Ajuste aplicado", r.simulated ? "warn" : "success");
+    toast(r.simulated ? "Ajuste simulado (configure a chave para usar a IA real)" : "Ajuste aplicado", r.simulated ? "warn" : "success");
   } catch (e) {
     toastAiError(e);
     btn.disabled = false; btn.textContent = "Aplicar ajuste";
@@ -1088,7 +1103,7 @@ function sceneItem(s, i, total) {
   return `<div class="se-item" data-i="${i}">
     <div class="se-head"><span class="se-n">Cena ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
     <input class="se-f se-type" data-k="type" list="se-types" placeholder="tipo (hook, product, benefit, cta)" value="${esc(s.type || "")}" />
-    <textarea class="se-f" data-k="text" rows="2" placeholder="Texto on-screen (headline da cena)">${esc(s.text || "")}</textarea>
+    <textarea class="se-f" data-k="text" rows="2" placeholder="Texto que aparece na tela (título da cena)">${esc(s.text || "")}</textarea>
     <input class="se-f" data-k="subtitle" placeholder="Subtexto (segunda linha, opcional)" value="${esc(s.subtitle || "")}" />
     <textarea class="se-f se-dim" data-k="visual" rows="2" placeholder="Direção de arte (não aparece na tela)">${esc(s.visual || "")}</textarea>
   </div>`;
@@ -1188,7 +1203,7 @@ function applyJsonToStructured(type) {
 }
 
 function govHtml(gov) {
-  if (!gov.errors.length && !gov.warnings.length) return '<div class="gov-item ok">✓ Passou no checklist de marca (sem violações).</div>';
+  if (!gov.errors.length && !gov.warnings.length) return '<div class="gov-item ok">✓ Passou na checagem da marca (sem problemas).</div>';
   return gov.errors.map((e) => '<div class="gov-item err">✕ ' + esc(e) + "</div>").join("") +
     gov.warnings.map((w) => '<div class="gov-item warn">⚠ ' + esc(w) + "</div>").join("");
 }
@@ -1231,7 +1246,7 @@ async function saveGenerated() {
   $("#e-task").textContent = "";
   if (title.length < 3) { if ($("#g-title")) $("#g-title").classList.add("invalid"); if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
   if (!task) task = slugify(title).slice(0, 40);
-  if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#e-task").textContent = "Slug inválido (a-z, 0-9, _ ou -)."; return; }
+  if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#e-task").textContent = "Identificador inválido (use só a-z, 0-9, _ ou -)."; return; }
   if (!date) { toast("Informe a data.", "error"); return; }
   const ct = metaType(LAST_GEN.req.content_type);
   const editVal = $("#g-edit").value;
@@ -1243,7 +1258,7 @@ async function saveGenerated() {
   try {
     const r = await API.save(payload);
     $("#g-gov").innerHTML = govHtml(r.governance);
-    toast("Salvo em " + r.folder + "/" + r.file, "success");
+    toast("Conteúdo salvo com sucesso", "success");
     saved = true;
     // #1 — trava o botão após sucesso (evita salvar/duplicar de novo) e mostra "✓ Salvo".
     btn.disabled = true; btn.textContent = "✓ Salvo";
@@ -1273,11 +1288,11 @@ async function viewSettings() {
   setView(`
     <div class="card" style="max-width:660px">
       <h3>Inteligência Artificial (Claude)</h3>
-      <p class="muted mt">Cole sua chave da Anthropic. Ela é salva apenas localmente em <span class="codeblock">interface/.env</span> (fora do git) e nunca é exposta no front.</p>
+      <p class="muted mt">Cole sua chave da Anthropic. Ela fica guardada só neste servidor (no arquivo <span class="codeblock">interface/.env</span>, fora do controle de versão) e nunca é enviada para o navegador.</p>
       <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)</label>
         ${s.has_key ? `
         <div id="s-key-locked" class="key-locked">
-          <span class="key-lock" aria-hidden="true">🔒</span>
+          <svg class="key-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <span class="key-mask">${esc(s.masked_key)}</span>
           <span class="badge ok">Ativa</span>
           <button class="btn btn-sm btn-ghost" id="s-change-key" type="button">Trocar chave</button>
@@ -1304,7 +1319,7 @@ async function viewSettings() {
     </div>
     <div class="card mt" style="max-width:660px">
       <h3>Integrações</h3>
-      <p class="muted mt">Status de conexão de cada serviço externo para acompanhamento. As chaves ficam em <span class="codeblock">interface/.env</span> (fora do git) — esta tela mostra apenas se estão configuradas, nunca os valores.</p>
+      <p class="muted mt">Situação de cada serviço externo conectado ao painel. As chaves ficam guardadas no servidor (no arquivo <span class="codeblock">interface/.env</span>, fora do controle de versão) — esta tela mostra apenas se estão configuradas, nunca os valores.</p>
       <ul class="integ-list mt">
         ${integ.map((it) => {
           const ok = !!it.configured;
@@ -1324,7 +1339,7 @@ async function viewSettings() {
     </div>
     <div class="card mt" style="max-width:660px">
       <h3>Aparência</h3>
-      <p class="muted mt">Cor de destaque da interface (preferência local, só do seu navegador). Não altera as cores das peças renderizadas — a marca permanece travada.</p>
+      <p class="muted mt">Cor de destaque da interface (preferência local, só do seu navegador). Não altera as cores das peças geradas — a marca permanece travada.</p>
       <div class="field mt"><label>Cor de destaque</label>
         <div class="accent-grid" id="accent-grid">${Object.keys(ACCENT_PRESETS).map((id) => {
           const p = ACCENT_PRESETS[id];
@@ -1361,8 +1376,8 @@ async function viewSettings() {
   $("#s-save-model").onclick = async () => { await API.saveModel($("#s-model").value); toast("Modelo salvo", "success"); await refreshKeyStatus(); };
   $("#s-test").onclick = async () => {
     const out = $("#s-test-out"); out.innerHTML = '<span class="spinner"></span> testando…';
-    try { const r = await API.testKey(); out.innerHTML = r.ok ? '✅ Conexão bem-sucedida com ' + esc(r.model) : "❌ " + (esc(r.error) || "Chave inválida ou sem acesso"); }
-    catch (e) { out.textContent = "❌ " + (e.data && e.data.error || "Chave inválida ou sem acesso"); }
+    try { const r = await API.testKey(); out.innerHTML = r.ok ? '<span class="t-ok">✓</span> Conexão bem-sucedida com ' + esc(r.model) : '<span class="t-err">✕</span> ' + (esc(r.error) || "Chave inválida ou sem acesso"); }
+    catch (e) { out.innerHTML = '<span class="t-err">✕</span> ' + esc(e.data && e.data.error || "Chave inválida ou sem acesso"); }
   };
 }
 
@@ -1384,6 +1399,64 @@ function collectChecks(root, group) {
 /* =====================================================================
    Assistente IA
    ===================================================================== */
+// Renderer Markdown mínimo e seguro: escapa TODO o HTML primeiro e só então
+// aplica formatação. Suporta títulos, negrito/itálico, código, listas, tabelas,
+// linha horizontal e links http(s). Links com outros esquemas são ignorados.
+function mdToHtml(src) {
+  const inline = (s) => {
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g, (m, c) => "<code>" + c + "</code>");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return s;
+  };
+  const lines = String(src || "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0, listType = null;
+  const closeList = () => { if (listType) { out.push("</" + listType + ">"); listType = null; } };
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      closeList(); const buf = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) { buf.push(esc(lines[i])); i++; }
+      i++; out.push('<pre class="md-pre"><code>' + buf.join("\n") + "</code></pre>"); continue;
+    }
+    if (/\|/.test(line) && i + 1 < lines.length && /-/.test(lines[i + 1]) && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+      closeList();
+      const parseRow = (r) => r.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+      const headers = parseRow(line); i += 2; const rows = [];
+      while (i < lines.length && /\|/.test(lines[i]) && lines[i].trim() !== "") { rows.push(parseRow(lines[i])); i++; }
+      out.push('<table class="md-table"><thead><tr>' + headers.map((h) => "<th>" + inline(h) + "</th>").join("") +
+        "</tr></thead><tbody>" + rows.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") +
+        "</tbody></table>");
+      continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { closeList(); out.push("<hr/>"); i++; continue; }
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h) { closeList(); const lvl = h[1].length; out.push("<h" + lvl + ">" + inline(h[2]) + "</h" + lvl + ">"); i++; continue; }
+    if (/^\s*[-*+]\s+/.test(line)) {
+      if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; }
+      out.push("<li>" + inline(line.replace(/^\s*[-*+]\s+/, "")) + "</li>"); i++; continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; }
+      out.push("<li>" + inline(line.replace(/^\s*\d+\.\s+/, "")) + "</li>"); i++; continue;
+    }
+    if (line.trim() === "") { closeList(); i++; continue; }
+    closeList();
+    const para = [line]; i++;
+    while (i < lines.length && lines[i].trim() !== "" && !/^(#{1,6})\s/.test(lines[i]) &&
+      !/^\s*[-*+]\s/.test(lines[i]) && !/^\s*\d+\.\s/.test(lines[i]) && !/^```/.test(lines[i]) && !/\|/.test(lines[i])) {
+      para.push(lines[i]); i++;
+    }
+    out.push("<p>" + para.map(inline).join("<br>") + "</p>");
+  }
+  closeList();
+  return out.join("\n");
+}
+
 function setupAssistant() {
   const panel = $("#assistant");
   $("#btn-assistant").onclick = () => panel.classList.add("open");
@@ -1398,7 +1471,7 @@ function setupAssistant() {
     log.appendChild(loading); log.scrollTop = log.scrollHeight;
     try {
       const r = await API.assistant(q, "rota: " + parseHash().route);
-      loading.innerHTML = esc(r.answer) + (r.simulated ? ' <span class="sim-flag">SIMULADO</span>' : "");
+      loading.innerHTML = mdToHtml(r.answer) + (r.simulated ? ' <span class="sim-flag">SIMULADO</span>' : "");
     } catch (err) {
       const m = (err && err.status === 429)
         ? "Limite de requisições da API atingido — aguarde alguns segundos e pergunte de novo."
