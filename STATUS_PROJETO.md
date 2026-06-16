@@ -71,9 +71,8 @@ Implementado em 2026-06-02. Máquina de estados explícita `draft → in_review 
 
 ### 2.4 Dry-runs e fixtures
 
-- `test/campanha-demo/taxa_zero_demo_2026-05-29/` — campanha-demo completa (4 ads + vídeo Remotion real + copy 4 plataformas + Publish MD)
-- `test/outputs/teste_*` — artefatos dos 10 testes felizes + 5 payloads em `test/payloads/`
-- `outputs/archive/test_workflow_aprovacao_2026-06-02/` e `adv2_2026-06-02/` — evidência dos testes do Workflow (rejected)
+- `outputs/e2e_*_2026-06-10/` — tasks de validação end-to-end por tipo (vídeo Remotion real, carrossel, feed, LinkedIn); `outputs/approved/e2e_image_2026-06-10/` (aprovada) e `outputs/archive/e2e_threads_2026-06-10/` (rejected) cobrem os dois estados versionados do Workflow
+- `test/RESULTADOS_TESTES.md` + `test/TESTES_AGENTES.md` — registro dos testes dos agentes; `test/assets/` — fixtures de assets (ex.: `teste_skip_assets/`)
 - `skills/ad-creative-designer/examples/` — fixture canônico do pipeline simulado
 
 ### 2.5 Cenários cobertos (Workflow)

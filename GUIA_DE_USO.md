@@ -383,7 +383,7 @@ O pipeline roda os agentes de ponta a ponta. Por padrão é **sequencial**; com 
 
 ```bash
 npm run pipeline:run                       # payload padrão
-npm run pipeline:run:payload <arquivo.json>  # payload específico
+npm run pipeline:run:payload '<json>'      # payload JSON inline (p/ arquivo: node pipeline/orchestrator.js --file payload.json)
 npm run pipeline:worker                    # worker da fila (terminal separado)
 ```
 
@@ -416,7 +416,7 @@ Todos seguem a paleta e a tipografia oficiais (logo claro sobre fundo escuro, es
 > No **carrossel**, o template escolhido vale para a **capa**; os demais slides usam layouts navy próprios, escolhidos automaticamente pelo conteúdo — grade de números, lista, texto corrido ou slide de CTA no fechamento. Cada slide leva a assinatura *"Para quem sabe que é Selet."* no rodapé.
 
 > [!NOTE]
-> A primeira renderização de vídeo após subir o servidor é mais lenta (o motor monta o bundle a frio). As seguintes são rápidas. Pela linha de comando, `npm run render` renderiza a composition padrão do projeto.
+> A primeira renderização de vídeo após subir o servidor é mais lenta (o motor monta o bundle a frio). As seguintes são rápidas. Pela linha de comando, `npm run render` renderiza apenas a composition `AdVideo` (referência estática); o vídeo de produção (`BrandStory`) é renderizado pelo painel.
 
 ---
 
@@ -442,7 +442,7 @@ Estas integrações são **opcionais**. Sem elas, os módulos correspondentes ro
 | Sintoma | Causa provável | O que fazer |
 | --- | --- | --- |
 | Conteúdo sai rotulado como "simulado" | Chave da IA não configurada | Configure a chave em Configurações (Seção 4.2). |
-| Aviso de limite de requisições (429) | Muitas chamadas em pouco tempo | Aguarde alguns segundos e tente de novo; o painel mostra um aviso e libera o botão. |
+| Geração mais lenta que o normal | Limite de requisições da API atingido (muitas chamadas em sequência) | O painel enfileira as chamadas e re-tenta sozinho com espera crescente — a geração fica **mais lenta**, mas conclui sem erro. Não clique de novo; aguarde. |
 | "Chave inválida" ao gerar | Chave incorreta ou revogada | Revise a chave em Configurações; gere uma nova se necessário. |
 | Ajuste bloqueado por regra de marca | A IA produziu algo fora das regras | Reescreva a orientação do ajuste e tente de novo. |
 | Render de vídeo demorou e falhou | Primeira renderização a frio | Tente novamente; a partir da segunda fica rápido. |
