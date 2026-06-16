@@ -135,6 +135,17 @@ function parseBlocks(lines) {
 
     if (/^(\s*)(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
 
+    // imagem em bloco (figura com legenda):  ![alt](src "legenda")
+    const img = line.match(/^\s*!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*$/);
+    if (img) {
+      const alt = escapeHtml(img[1] || "");
+      const src = String(img[2]).replace(/"/g, "%22");
+      const cap = img[3] ? '<figcaption>' + inline(img[3]) + "</figcaption>" : "";
+      out.push('<figure class="fig"><img src="' + src + '" alt="' + alt + '" loading="lazy">' + cap + "</figure>");
+      i++;
+      continue;
+    }
+
     if (/^>\s?/.test(line)) {
       const buf = [];
       while (i < lines.length && (/^>\s?/.test(lines[i]) || (/^\s+\S/.test(lines[i]) && buf.length && !/^\s*$/.test(lines[i])))) {
@@ -180,7 +191,8 @@ function parseBlocks(lines) {
     while (i < lines.length && !/^\s*$/.test(lines[i]) &&
            !/^(#{1,6})\s+/.test(lines[i]) && !/^```+/.test(lines[i]) &&
            !/^>\s?/.test(lines[i]) && !/^(\s*)([-*+]|\d+\.)\s+/.test(lines[i]) &&
-           !/^(\s*)(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])) {
+           !/^(\s*)(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i]) &&
+           !/^\s*!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*$/.test(lines[i])) {
       para.push(lines[i]); i++;
     }
     if (para.length) out.push("<p>" + inline(para.join(" ").trim()) + "</p>");
@@ -328,6 +340,11 @@ function wrap(bodyHtml, title) {
   .st{display:inline-flex;vertical-align:-.16em;margin-right:.35em}
   .st .ic{width:1em;height:1em}
   .st-ok{color:var(--ok)}.st-pending{color:var(--pending)}.st-warn{color:var(--warn)}.st-na{color:var(--na)}
+  /* figuras / diagramas */
+  .fig{margin:1.6em 0;text-align:center}
+  .fig img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--border);
+    background:var(--surface);box-shadow:0 6px 22px rgba(7,33,43,.10)}
+  .fig figcaption{margin-top:.6em;color:var(--muted);font-size:.86rem;font-style:italic}
   hr{border:none;border-top:1px solid var(--border);margin:2.4em 0}
   ul,ol{margin:.5em 0 1em;padding-left:1.5em}
   li{margin:.3em 0}

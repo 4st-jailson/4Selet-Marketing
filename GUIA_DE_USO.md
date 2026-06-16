@@ -81,6 +81,8 @@ Briefing  ->  Geração (IA)  ->  Revisão e refino  ->  Render da mídia  ->  A
                                                                                             (assistida)
 ```
 
+![Fluxo de geração em seis etapas: briefing, geração com IA, revisão e refino, render da mídia, aprovação e publicação assistida.](docs/diagramas/fluxo-geracao.svg "As seis etapas do briefing à publicação — cada uma acontece dentro do painel.")
+
 **Arquitetura resumida**
 
 ```
@@ -91,6 +93,8 @@ Pesquisa de mercado
         +--> Copywriter            --+
               (coordenados pelo Orchestrator)
 ```
+
+![Arquitetura dos agentes: a pesquisa de mercado alimenta três agentes criativos (Designer de Imagem, Especialista de Vídeo e Copywriter), que alimentam a Distribuição, tudo coordenado pelo Orchestrator.](docs/diagramas/arquitetura-agentes.svg "Cinco agentes especializados mais o Orchestrator, que define a ordem de execução.")
 
 São **cinco agentes** especializados, um **Orchestrator** que coordena a ordem de execução, e uma camada de **governança de aprovação** por cima de tudo. No total, o sistema empacota **sete skills** (os cinco agentes, o orchestrator e o task-promoter). Detalhes na Seção 8.
 
@@ -196,6 +200,11 @@ Crie uma campanha para agrupar peças sob um mesmo tema/ângulo. As peças gerad
 - **Carrossel / Vídeo:** edite slide a slide (título e texto) ou cena a cena (tipo, texto on-screen, subtexto e direção de arte). Os botões `↑` `↓` `✕` reordenam e removem; "+ Adicionar" cria um novo item. Para editar o JSON à mão, abra **JSON (avançado)**, altere e clique em **Aplicar JSON aos campos**.
 - **Texto (Feed / LinkedIn / Threads):** edite diretamente no campo de texto.
 - Em qualquer tipo, use **Aplicar ajuste**: descreva a mudança em linguagem natural (ex.: "encurte o headline e troque o CTA") e a IA reescreve mantendo o resto.
+
+**Prévia da arte (peças visuais).** Para Imagem, Feed e Carrossel, o botão **Ver prévia da arte** renderiza o PNG real da peça ali mesmo na tela de criação — usando o conteúdo atual e o template selecionado —, sem precisar salvar. Assim você vê como a arte fica antes de comprometer a peça à campanha. Ajuste o texto ou troque o template e clique em **Atualizar prévia da arte** para gerar de novo.
+
+> [!TIP]
+> A prévia usa o mesmo motor de renderização da mídia final (Seção 12), então o que você vê é fiel ao PNG que será gravado ao salvar.
 
 ### 6.5 Salvar e gerar a mídia
 
@@ -311,6 +320,8 @@ rascunho -> em revisão -> aprovado -> em revisão (rework)
                   +------ rejeitado -> em revisão
 ```
 
+![Máquina de estados de uma peça: de rascunho para em revisão, depois aprovado; de em revisão pode ir para rejeitado e voltar; aprovado pode reabrir via rework, com reaprovação obrigatória.](docs/diagramas/workflow-estados.svg "Os estados de uma peça e as transições entre eles. Peças aprovadas guardam hashes de integridade; edições silenciosas são revertidas automaticamente.")
+
 Cada task carrega um `status.json` versionado, com estado, histórico (somente acréscimo), aprovador, data e hashes de integridade dos arquivos aprovados.
 
 ### 10.2 Onde cada peça fica
@@ -388,6 +399,8 @@ Imagem, feed e carrossel podem ser renderizados em três layouts on-brand, selec
 | Editorial | Gradiente azul, Selet Dots, logo no topo, headline à esquerda | Padrão; mensagem com subtexto descritivo |
 | Destaque | Fundo escuro centralizado, símbolo "4" como marca-d'água | Headlines curtas com número em evidência (ex.: `0%`, `95%`) |
 | Split | Faixa clara (logo + rótulo) sobre faixa escura (headline + CTA) | Contraste editorial, números realçados na headline |
+
+![Os três templates visuais on-brand lado a lado: Editorial (gradiente azul com headline à esquerda), Destaque (fundo escuro com número em evidência) e Split (faixa clara sobre faixa escura).](docs/diagramas/templates-visuais.svg "Três layouts on-brand para a mesma peça — escolha o template antes de renderizar.")
 
 Todos seguem a paleta e a tipografia oficiais (logo claro sobre fundo escuro, escuro sobre claro). Números e percentuais na headline recebem realce automático na cor Sky.
 

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 296" role="img" aria-label="Os três templates visuais on-brand: Editorial, Destaque e Split" font-family="Inter, -apple-system, Segoe UI, Roboto, Arial, sans-serif">
+  <rect x="0" y="0" width="920" height="296" rx="14" fill="#f5f7f7" stroke="#dde4e6"/>
+  <defs>
+    <linearGradient id="gEdit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#006494"/><stop offset="0.5" stop-color="#003554"/><stop offset="1" stop-color="#07212B"/>
+    </linearGradient>
+    <linearGradient id="gBold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#003554"/><stop offset="1" stop-color="#07212B"/>
+    </linearGradient>
+    <clipPath id="clipSplit"><rect x="626" y="46" width="270" height="196" rx="14"/></clipPath>
+    <style>
+      .cap{fill:#003554;font-size:13.5px;font-weight:700;text-anchor:middle}
+      .lc{fill:#D9DCD6}.sky{fill:#5499B5}.blue{fill:#006494}.mist{fill:#AFBCC9}
+    </style>
+  </defs>
+
+  <text x="24" y="30" fill="#003554" font-size="14" font-weight="700">Três layouts on-brand para a mesma peça</text>
+
+  <!-- ====== Editorial ====== -->
+  <rect x="24" y="46" width="270" height="196" rx="14" fill="url(#gEdit)"/>
+  <g opacity="0.5" fill="#5499B5">
+    <circle cx="210" cy="78" r="2.2"/><circle cx="234" cy="78" r="2.2"/><circle cx="258" cy="78" r="2.2"/>
+    <circle cx="210" cy="100" r="2.2"/><circle cx="234" cy="100" r="2.2"/><circle cx="258" cy="100" r="2.2"/>
+  </g>
+  <rect class="lc" x="44" y="64" width="56" height="12" rx="3"/>
+  <rect class="sky" x="44" y="96" width="78" height="7" rx="3.5"/>
+  <rect class="lc" x="44" y="112" width="150" height="15" rx="3"/>
+  <rect class="lc" x="44" y="133" width="116" height="15" rx="3"/>
+  <rect class="mist" x="44" y="160" width="170" height="6" rx="3"/>
+  <rect class="mist" x="44" y="172" width="138" height="6" rx="3"/>
+  <rect class="blue" x="44" y="202" width="96" height="24" rx="12"/>
+  <text class="cap" x="159" y="270">Editorial</text>
+
+  <!-- ====== Destaque ====== -->
+  <rect x="325" y="46" width="270" height="196" rx="14" fill="url(#gBold)"/>
+  <text x="585" y="240" font-size="150" font-weight="800" fill="#5499B5" opacity="0.07" text-anchor="end">4</text>
+  <rect class="lc" x="434" y="64" width="52" height="11" rx="3"/>
+  <rect class="sky" x="420" y="92" width="80" height="7" rx="3.5"/>
+  <text x="460" y="150" font-size="44" font-weight="800" fill="#FFFFFF" text-anchor="middle">0<tspan fill="#5499B5">%</tspan></text>
+  <rect class="mist" x="385" y="164" width="150" height="6" rx="3"/>
+  <rect class="mist" x="405" y="176" width="110" height="6" rx="3"/>
+  <rect class="blue" x="414" y="202" width="92" height="24" rx="12"/>
+  <text class="cap" x="460" y="270">Destaque</text>
+
+  <!-- ====== Split ====== -->
+  <g clip-path="url(#clipSplit)">
+    <rect x="626" y="46" width="270" height="196" fill="url(#gBold)"/>
+    <rect x="626" y="46" width="270" height="74" fill="#D9DCD6"/>
+    <g opacity="0.5" fill="#006494">
+      <circle cx="836" cy="66" r="2"/><circle cx="858" cy="66" r="2"/><circle cx="880" cy="66" r="2"/>
+      <circle cx="836" cy="88" r="2"/><circle cx="858" cy="88" r="2"/><circle cx="880" cy="88" r="2"/>
+    </g>
+    <rect x="646" y="60" width="54" height="12" rx="3" fill="#003554"/>
+    <rect x="646" y="90" width="80" height="7" rx="3.5" fill="#006494"/>
+    <rect class="lc" x="646" y="140" width="150" height="15" rx="3"/>
+    <rect class="lc" x="646" y="161" width="120" height="15" rx="3"/>
+    <rect class="blue" x="646" y="202" width="96" height="24" rx="12"/>
+  </g>
+  <rect x="626" y="46" width="270" height="196" rx="14" fill="none" stroke="#dde4e6"/>
+  <text class="cap" x="761" y="270">Split</text>
+</svg>

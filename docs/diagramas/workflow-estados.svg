@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 248" role="img" aria-label="Máquina de estados do workflow de aprovação: rascunho, em revisão, aprovado, rejeitado e rework" font-family="Inter, -apple-system, Segoe UI, Roboto, Arial, sans-serif">
+  <rect x="0" y="0" width="920" height="248" rx="14" fill="#f5f7f7" stroke="#dde4e6"/>
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5499B5"/>
+    </marker>
+    <style>
+      .s{fill:#003554}
+      .approved{fill:#1f8a52}
+      .rejected{fill:#9a6212}
+      .st{fill:#D9DCD6;font-size:14px;font-weight:700;text-anchor:middle}
+      .edge{stroke:#5499B5;stroke-width:2;fill:none}
+      .elbl{fill:#5b7180;font-size:11.5px;text-anchor:middle}
+      .ico{fill:none;stroke:#5499B5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+  </defs>
+
+  <text x="24" y="32" fill="#003554" font-size="14" font-weight="700">Estados de uma peça</text>
+
+  <!-- rascunho -> em revisão -->
+  <line class="edge" x1="208" y1="92" x2="300" y2="92" marker-end="url(#a3)"/>
+  <text class="elbl" x="254" y="82">preview</text>
+  <!-- em revisão -> aprovado -->
+  <line class="edge" x1="484" y1="92" x2="576" y2="92" marker-end="url(#a3)"/>
+  <text class="elbl" x="530" y="82">aprovar</text>
+  <!-- aprovado -> em revisão (rework), arco por cima -->
+  <path class="edge" d="M648 64 C 648 24, 392 24, 392 64" marker-end="url(#a3)"/>
+  <text class="elbl" x="520" y="20">rework (reabre · reaprovação obrigatória)</text>
+  <!-- em revisão -> rejeitado -->
+  <line class="edge" x1="392" y1="120" x2="392" y2="168" marker-end="url(#a3)"/>
+  <text class="elbl" x="430" y="148">rejeita</text>
+  <!-- rejeitado -> em revisão (volta), arco lateral -->
+  <path class="edge" d="M468 188 C 560 188, 520 120, 470 104" marker-end="url(#a3)"/>
+  <text class="elbl" x="556" y="160">reabre</text>
+
+  <!-- nós -->
+  <g><rect class="s" x="56" y="64" width="152" height="56" rx="12"/><text class="st" x="132" y="98">rascunho</text></g>
+  <g><rect class="s" x="316" y="64" width="168" height="56" rx="12"/><text class="st" x="400" y="98">em revisão</text></g>
+  <g><rect class="approved" x="576" y="64" width="152" height="56" rx="12"/><text class="st" x="652" y="98">aprovado</text></g>
+  <g><rect class="rejected" x="316" y="168" width="152" height="56" rx="12"/><text class="st" x="392" y="202">rejeitado</text></g>
+
+  <!-- nota integridade -->
+  <g transform="translate(600,176)">
+    <circle class="ico" cx="10" cy="10" r="8"/><path class="ico" d="M10 6v5l3 2"/>
+    <text x="26" y="9" fill="#5b7180" font-size="11.5">Aprovado guarda hashes de</text>
+    <text x="26" y="24" fill="#5b7180" font-size="11.5">integridade; edição silenciosa</text>
+    <text x="26" y="39" fill="#5b7180" font-size="11.5">é revertida automaticamente.</text>
+  </g>
+</svg>

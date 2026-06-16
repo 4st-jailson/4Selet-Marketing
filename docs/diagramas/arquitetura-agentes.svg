@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 320" role="img" aria-label="Arquitetura: pesquisa alimenta três agentes criativos, que alimentam a distribuição, tudo coordenado pelo Orchestrator" font-family="Inter, -apple-system, Segoe UI, Roboto, Arial, sans-serif">
+  <rect x="0" y="0" width="920" height="320" rx="14" fill="#f5f7f7" stroke="#dde4e6"/>
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5499B5"/>
+    </marker>
+    <style>
+      .node{fill:#003554}
+      .src{fill:#006494}
+      .title{fill:#D9DCD6;font-size:14px;font-weight:700;text-anchor:middle}
+      .sub{fill:#AFBCC9;font-size:11px;text-anchor:middle}
+      .link{stroke:#5499B5;stroke-width:2;fill:none}
+      .band{fill:#e9eef0;stroke:#dde4e6}
+      .bandtxt{fill:#003554;font-size:12.5px;font-weight:600}
+      .bandsub{fill:#5b7180;font-size:11.5px}
+    </style>
+  </defs>
+
+  <text x="24" y="30" fill="#003554" font-size="14" font-weight="700">Cinco agentes + coordenação</text>
+
+  <!-- conexões: pesquisa -> 3 criativos -->
+  <path class="link" d="M186 132 C 260 132, 280 74, 348 74" marker-end="url(#a2)"/>
+  <path class="link" d="M186 142 C 270 142, 290 158, 348 158" marker-end="url(#a2)"/>
+  <path class="link" d="M186 152 C 260 152, 280 242, 348 242" marker-end="url(#a2)"/>
+  <!-- 3 criativos -> distribuição -->
+  <path class="link" d="M560 74 C 640 74, 660 150, 726 150" marker-end="url(#a2)"/>
+  <path class="link" d="M560 158 C 640 158, 660 152, 726 152" marker-end="url(#a2)"/>
+  <path class="link" d="M560 242 C 640 242, 660 162, 726 162" marker-end="url(#a2)"/>
+
+  <!-- pesquisa -->
+  <g>
+    <rect class="src" x="24" y="112" width="162" height="64" rx="12"/>
+    <text class="title" x="105" y="140">Pesquisa</text><text class="sub" x="105" y="158">de mercado</text>
+  </g>
+
+  <!-- criativos -->
+  <g>
+    <rect class="node" x="348" y="46" width="212" height="56" rx="11"/>
+    <text class="title" x="454" y="70">Designer de Imagem</text><text class="sub" x="454" y="88">criativos estáticos (PNG)</text>
+  </g>
+  <g>
+    <rect class="node" x="348" y="130" width="212" height="56" rx="11"/>
+    <text class="title" x="454" y="154">Especialista de Vídeo</text><text class="sub" x="454" y="172">roteiro e vídeo (MP4)</text>
+  </g>
+  <g>
+    <rect class="node" x="348" y="214" width="212" height="56" rx="11"/>
+    <text class="title" x="454" y="238">Copywriter</text><text class="sub" x="454" y="256">copy por plataforma</text>
+  </g>
+
+  <!-- distribuição -->
+  <g>
+    <rect class="src" x="726" y="118" width="170" height="64" rx="12"/>
+    <text class="title" x="811" y="146">Distribuição</text><text class="sub" x="811" y="164">metadados + agendamento</text>
+  </g>
+
+  <!-- bandas: orchestrator + governança -->
+  <rect class="band" x="24" y="286" width="872" height="22" rx="7"/>
+  <text class="bandtxt" x="36" y="301">Orchestrator</text>
+  <text class="bandsub" x="120" y="301">coordena a ordem de execução — pesquisa primeiro, criativos em paralelo, distribuição por último</text>
+</svg>
