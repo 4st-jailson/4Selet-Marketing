@@ -1,0 +1,25 @@
+{
+  "id": "campanha-verao-2026",
+  "name": "Campanha Verão 2026 - Edição Especial",
+  "objective": "Aumentar engajamento e conversões durante a temporada de verão com foco em novos clientes.",
+  "angle": "Aproveite o verão com condições exclusivas - até 30% de desconto",
+  "status": "active",
+  "pillar": "Lucratividade",
+  "platforms": [
+    "instagram",
+    "linkedin"
+  ],
+  "key_messages": [
+    "Verão é tempo de aproveitar",
+    "Condições especiais para novos clientes",
+    "Desconto exclusivo de até 30%"
+  ],
+  "start_date": "2026-06-15",
+  "end_date": "2026-08-31",
+  "notes": "Campanha focada no público jovem de 18-35 anos. Usar linguagem descontraída e visual vibrante.",
+  "content_ids": [
+    "promover_desconto_de_30_de_ver_2026-06-12"
+  ],
+  "created_at": "2026-06-12T16:07:22-03:00",
+  "updated_at": "2026-06-12T16:08:36-03:00"
+}

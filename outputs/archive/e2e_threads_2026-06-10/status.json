@@ -1,0 +1,40 @@
+{
+  "task_name": "e2e_threads",
+  "task_date": "2026-06-10",
+  "status": "rejected",
+  "created_at": "2026-06-10T18:16:28-03:00",
+  "last_updated_at": "2026-06-12T16:14:51-03:00",
+  "approved_by": null,
+  "approved_at": null,
+  "campaign_angle": null,
+  "platforms": [
+    "x"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "draft",
+      "at": "2026-06-10T18:16:28-03:00",
+      "by": "orchestrator",
+      "event_type": "first_creation"
+    },
+    {
+      "from": "draft",
+      "to": "in_review",
+      "at": "2026-06-10T18:16:28-03:00",
+      "by": "distribution-agent",
+      "event_type": "transition"
+    },
+    {
+      "from": "in_review",
+      "to": "rejected",
+      "at": "2026-06-12T16:14:51-03:00",
+      "by": "painel",
+      "event_type": "promoted"
+    }
+  ],
+  "rejected_by": "painel",
+  "rejected_at": "2026-06-12T16:14:51-03:00",
+  "rejection_reason": "",
+  "first_viewed_at": "2026-06-15T13:33:17.122Z"
+}
