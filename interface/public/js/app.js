@@ -35,6 +35,7 @@ function setView(html) { $("#view").innerHTML = html; }
 function setTitle(t) { $("#page-title").textContent = t; document.title = t + " · Painel 4Selet"; }
 function metaType(id) { return (State.meta.content_types || []).find((c) => c.id === id); }
 function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels[k]) || k || "Outros"; }
+function pillarLabel(id) { const p = (State.meta.content_pillars || []).find((x) => x.id === id); return p ? (p.short || p.label) : null; }
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
 function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video"; }
 function tag(text) { return '<span class="badge plain">' + esc(text) + "</span>"; }
@@ -235,7 +236,7 @@ function taskRow(t) {
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
     <span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>
     <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${!t.first_viewed_at ? ' <span class="lr-new">Novo</span>' : ""}</div>
-    <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.platforms || []).length ? " · " + esc(t.platforms.map(platformLabel).join(", ")) : ""}</div></div>
+    <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}${(t.platforms || []).length ? " · " + esc(t.platforms.map(platformLabel).join(", ")) : ""}</div></div>
     ${statusBadge(t.status)}</a>`;
 }
 
@@ -373,7 +374,7 @@ function taskCard(t) {
     <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span>${newBadge}${zoomBtn}</div>
     <div class="cc-body">
       <div class="cc-title">${esc(displayName(t))}</div>
-      <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}</div>
+      <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}</div>
       ${tagsHtml}
       <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
     </div></a>`;
@@ -851,7 +852,7 @@ async function refineTask(folder, task) {
   btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> ajustando…';
   try {
     const current = await API.taskFile(folder, file);
-    const r = await API.refine({ content_type: ctId, current, instruction, campaign_id: s.campaign_id || undefined });
+    const r = await API.refine({ content_type: ctId, current, instruction, campaign_id: s.campaign_id || undefined, pillar: task.pillar || undefined });
     if (r.simulated) toast("Ajuste simulado (configure a chave para usar a IA real)", "warn");
     await API.save({
       content_type: ctId,
@@ -886,9 +887,10 @@ async function viewTaskDetail(folder) {
   const actions = workflowActions(task);
   const canDiscard = task.zone !== "approved";
   const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">identificador: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
+  const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   setView(`
     <div class="flex-between mb flex-wrap">
-      <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
+      <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
       <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
     </div>
     ${task.kind === "carousel" ? carouselStrip(folder, task) : ""}
@@ -1134,6 +1136,8 @@ async function viewCreate(arg, query) {
   const preCamp = (query && query.campaign) || "";
   const preType = (query && query.type) || State.meta.content_types[0].id;
   const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}" ${c.id === preCamp ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+  const prePillar = (query && query.pillar) || "";
+  const pillarOpts = '<option value="">— a IA decide pelo tema da peça —</option>' + (State.meta.content_pillars || []).map((p) => `<option value="${esc(p.id)}" ${p.id === prePillar ? "selected" : ""} title="${esc(p.description)}">${esc(p.label)}</option>`).join("");
   const typeCards = State.meta.content_types.map((c) => `
     <button type="button" class="type-card ${c.id === preType ? "on" : ""}" data-type="${esc(c.id)}" title="${esc(c.description)}">
       <span class="tc-icon">${esc(c.icon || "▣")}</span>
@@ -1152,6 +1156,10 @@ async function viewCreate(arg, query) {
         </div>
         <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" /><div class="field-error" id="e-title"></div></div>
         <div class="field"><label>Tema / objetivo da peça</label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos"></textarea><div class="field-error" id="e-brief"></div></div>
+        <div class="field"><label>Pilar de conteúdo <span class="hint">(o eixo temático da peça — o feed não é só Taxa Zero)</span></label>
+          <select id="g-pillar">${pillarOpts}</select>
+          <div class="hint" id="g-pillar-desc"></div>
+        </div>
         <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
         <details class="adv-block">
           <summary>Ajustes opcionais — tom, oferta, estilo visual e referências</summary>
@@ -1202,6 +1210,9 @@ async function viewCreate(arg, query) {
     };
   });
   updDesc();
+  const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
+  const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
+  if ($("#g-pillar")) { $("#g-pillar").addEventListener("change", updPillarDesc); updPillarDesc(); }
   $("#g-title").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; } });
   $("#g-task").addEventListener("input", () => { delete $("#g-task").dataset.auto; });
 
@@ -1223,6 +1234,7 @@ async function runGenerate() {
     extra: $("#g-extra").value.trim() || undefined,
     research: ($("#g-research") && $("#g-research").checked) || undefined,
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
+    pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   try {
@@ -1366,6 +1378,7 @@ async function refineGenerated() {
     current,
     instruction,
     campaign_id: LAST_GEN.req.campaign_id || undefined,
+    pillar: LAST_GEN.req.pillar || undefined,
   };
   const btn = $("#g-refine-btn"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ajustando…';
   try {
@@ -1424,11 +1437,22 @@ function seCtrls(i, total) {
     `<button class="se-mini se-del" data-se="del" title="Remover"${total <= 1 ? " disabled" : ""}>✕</button>`;
 }
 
+const SLIDE_LAYOUTS = [["", "Automático"], ["cover", "Capa"], ["stat_grid", "Grade de números"], ["list", "Lista"], ["text", "Texto"], ["cta", "CTA"]];
 function slideItem(s, i, total) {
-  return `<div class="se-item" data-i="${i}">
+  // Preserva campos não editáveis aqui (items, stats) para não perdê-los no
+  // sync do JSON. O layout é exposto no seletor abaixo.
+  const extra = {};
+  Object.keys(s || {}).forEach((k) => { if (k !== "title" && k !== "body" && k !== "layout") extra[k] = s[k]; });
+  const extraAttr = Object.keys(extra).length ? ` data-extra="${esc(JSON.stringify(extra)).replace(/"/g, "&quot;")}"` : "";
+  const cur = String(s.layout || "");
+  const layoutOpts = SLIDE_LAYOUTS.map(([v, l]) => `<option value="${v}"${v === cur ? " selected" : ""}>${l}</option>`).join("");
+  const richHint = (Array.isArray(s.stats) && s.stats.length) ? '<span class="se-rich">grade: ' + s.stats.length + ' números (edite no JSON)</span>'
+    : ((Array.isArray(s.items) && s.items.length) ? '<span class="se-rich">lista: ' + s.items.length + ' itens (edite no JSON)</span>' : "");
+  return `<div class="se-item" data-i="${i}"${extraAttr}>
     <div class="se-head"><span class="se-n">Slide ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
     <input class="se-f" data-k="title" placeholder="Título do slide" value="${esc(s.title || "")}" />
     <textarea class="se-f" data-k="body" rows="2" placeholder="Texto do slide">${esc(s.body || "")}</textarea>
+    <label class="se-layout">Layout do slide <select class="se-f" data-k="layout">${layoutOpts}</select>${richHint}</label>
   </div>`;
 }
 function carouselEditor(p) {
@@ -1479,7 +1503,14 @@ function structToParsed() {
   const items = [...ed.querySelectorAll(".se-item")];
   const val = (it, k) => { const el = it.querySelector('[data-k="' + k + '"]'); return el ? el.value : ""; };
   if (type === "instagram_carousel") {
-    base.slides = items.map((it) => ({ title: val(it, "title"), body: val(it, "body") }));
+    base.slides = items.map((it) => {
+      let extra = {};
+      if (it.dataset.extra) { try { extra = JSON.parse(it.dataset.extra); } catch (e) { extra = {}; } }
+      const slide = Object.assign({}, extra, { title: val(it, "title"), body: val(it, "body") });
+      const layout = val(it, "layout");
+      if (layout) slide.layout = layout; else delete slide.layout;
+      return slide;
+    });
     base.cta = (ed.querySelector(".se-cta") || {}).value || "";
   } else if (type === "video_idea") {
     base.concept = (ed.querySelector(".se-concept") || {}).value || "";

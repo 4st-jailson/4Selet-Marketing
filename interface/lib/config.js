@@ -42,6 +42,66 @@ const BRAND_PILLARS = [
   "Experiência", "Lucratividade", "Sabedoria", "Exclusividade", "Segurança",
 ];
 
+// Pilares de CONTEUDO (eixo TEMATICO da peca) — distinto das 5 colunas
+// estrategicas da marca acima. Modela a variedade real do feed @4selet: o
+// conteudo NAO e so Taxa Zero. Vale para TODOS os formatos (feed, carrossel,
+// ad, video, texto), nao so carrossel. Cada pilar guia o ANGULO/tema da peca;
+// `angle` e injetado no prompt de geracao (lib/prompts.js).
+const CONTENT_PILLARS = [
+  {
+    id: "taxa_zero",
+    label: "Campanha Taxa Zero",
+    short: "Taxa Zero",
+    description: "A oferta ativa: 0% por 3 meses, R$ 1,99/transação, PIX D+10. Convite e condições.",
+    angle:
+      "Foque na campanha Taxa Zero como oferta central: 0% de taxa da plataforma por 3 meses ou até R$ 300 mil em vendas (o que ocorrer primeiro), R$ 1,99 fixo por transação, PIX em D+10 e cartão em D+30. Ancore em exclusividade por convite. Transparência sobre condições (sem letra miúda).",
+  },
+  {
+    id: "educacional",
+    label: "Educacional",
+    short: "Educacional",
+    description: "Ensina um conceito de negócio digital, recomenda livro/playbook, estrutura uma ideia.",
+    angle:
+      "Ensine algo de valor real ao produtor estabelecido (estratégia, gestão, finanças do negócio digital, recomendação de livro/playbook como 'De Zero a Um'). A marca aparece como autoridade que educa, não como anúncio. Sem empurrar oferta — entregue conhecimento primeiro; CTA suave de relacionamento.",
+  },
+  {
+    id: "curiosidade_mercado",
+    label: "Curiosidade de mercado",
+    short: "Curiosidade",
+    description: "Dado ou curiosidade sobre plataformas de venda, checkout, juros do parcelamento.",
+    angle:
+      "Traga uma curiosidade ou dado pouco óbvio sobre o mercado de plataformas de venda e checkout (ex.: quanto o juro do parcelamento pesa, custo invisível além da taxa percentual, como a aprovação do cartão muda a margem). Provoque reflexão com número específico. Fale do 'mercado' em abstrato, nunca cite concorrente.",
+  },
+  {
+    id: "prova_plataforma",
+    label: "Prova da plataforma",
+    short: "Prova",
+    description: "Resultados e diferenciais que provam a 4Selet: 95% de aprovação, prazos, gestor de conta.",
+    angle:
+      "Prove a plataforma com diferenciais concretos: 95%+ de aprovação no cartão, PIX D+10/cartão D+30, gestor de conta dedicado, checkout amigável, redundância inteligente. Use prova-âncora e números verificáveis dos 9 diferenciais oficiais. Tom de quem mostra resultado, não de quem promete.",
+  },
+  {
+    id: "novidade",
+    label: "Novidade",
+    short: "Novidade",
+    description: "Lançamento, atualização da plataforma ou novidade relevante do mercado.",
+    angle:
+      "Comunique uma novidade: atualização/recurso da plataforma 4Selet ou movimento relevante do mercado que afeta o produtor. Posicione a 4Selet como quem acompanha e antecipa o mercado. Foque no que muda na prática para a operação do produtor.",
+  },
+  {
+    id: "motivacional",
+    label: "Motivacional / estratégico",
+    short: "Motivacional",
+    description: "Mentalidade de produtor sério, decisões melhores, visão estratégica de longo prazo.",
+    angle:
+      "Mensagem de mentalidade e estratégia para o produtor que opera com seriedade: decisões melhores, foco em margem e parceria de longo prazo, desenvolver o negócio. Sóbrio e estruturado — nunca motivacional vazio nem promessa mágica; ancore a inspiração em um raciocínio concreto.",
+  },
+];
+
+function pillarById(id) {
+  return CONTENT_PILLARS.find((p) => p.id === id) || null;
+}
+
 // Lista fechada de concorrentes proibidos em criativos abertos (brand_identity.md)
 const BANNED_COMPETITORS = [
   "greenn", "hubla", "kiwify", "hotmart", "eduzz", "ticto", "cakto", "monetizze", "perfect pay", "perfectpay",
@@ -171,6 +231,7 @@ module.exports = {
   PALETTE,
   ALLOWED_PLATFORMS,
   BRAND_PILLARS,
+  CONTENT_PILLARS,
   BANNED_COMPETITORS,
   BANNED_EMOJIS,
   APPROVED_CTAS,
@@ -179,4 +240,5 @@ module.exports = {
   CONTENT_TYPES,
   KIND_LABELS,
   contentTypeById,
+  pillarById,
 };

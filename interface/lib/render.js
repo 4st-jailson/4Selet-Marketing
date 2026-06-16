@@ -251,6 +251,126 @@ function highlightHeadline(text) {
   return esc(text).replace(/(\d+[%.,]?\d*\s*%?|R\$\s?\d[\d.,]*|D\+\d+)/g, '<span class="accent">$1</span>');
 }
 
+// ---- Arquetipos de SLIDE do carrossel -------------------------------------
+// Diferente dos 3 templates de arte estatica: o carrossel compoe LAYOUTS
+// distintos por slide (capa, grade de numeros, lista, texto, CTA), espelhando o
+// design system real do feed @4selet (ver Referencia-Instagram), em vez de
+// repetir um unico template. A CAPA usa o template de arte escolhido
+// (editorial|bold|split); os demais slides usam estes arquetipos navy.
+function carBase(width, height) {
+  return `* { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:${width}px; height:${height}px; }
+  .card { position:relative; width:${width}px; height:${height}px; overflow:hidden;
+    font-family:'Inter',sans-serif; color:${PALETTE.cloud};
+    background:linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);
+    display:flex; flex-direction:column; padding:90px 86px; }
+  .dots { position:absolute; inset:0; background-image:radial-gradient(${PALETTE.sky}1f 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
+  .top { position:relative; display:flex; align-items:center; justify-content:space-between; }
+  .logo { height:46px; }
+  .pageno { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.8; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; color:${PALETTE.sky}; font-size:30px; letter-spacing:3px; text-transform:uppercase; margin-bottom:26px; }
+  .mid { position:relative; flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .s-title { font-weight:900; font-size:84px; line-height:1.02; color:#FFFFFF; letter-spacing:-1.5px; }
+  .s-title .accent { color:${PALETTE.sky}; }
+  .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }`;
+}
+function carDoc(ctx, extraCss, bodyInner) {
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+<style>${carBase(ctx.width, ctx.height)}${extraCss || ""}</style></head>
+<body><div class="card"><div class="dots"></div>${bodyInner}</div></body></html>`;
+}
+function carTop(ctx) {
+  return `<div class="top"><img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/><span class="pageno">${ctx.n} / ${ctx.total}</span></div>`;
+}
+function carFooter(ctx) { return `<div class="footer">${esc(ctx.footer || DEFAULT_FOOTER)}</div>`; }
+
+// Texto (desenvolvimento): titulo forte + paragrafo de apoio.
+function slideText(slide, ctx) {
+  const css = `.s-body { margin-top:34px; font-size:42px; line-height:1.34; color:${PALETTE.mist}; max-width:94%; }`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    <div class="s-title">${highlightHeadline(slide.title || "")}</div>
+    ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+  </div>
+  ${carFooter(ctx)}`;
+  return carDoc(ctx, css, inner);
+}
+// Grade de numeros (2x2): ate 4 cartoes valor + rotulo.
+function slideStatGrid(slide, ctx) {
+  const stats = (Array.isArray(slide.stats) ? slide.stats : []).slice(0, 4);
+  const cells = stats.map((s) => `<div class="stat"><div class="stat-v">${highlightHeadline(String(s.value == null ? "" : s.value))}</div><div class="stat-l">${esc(s.label || "")}</div></div>`).join("");
+  const css = `.s-title.sm { font-size:60px; margin-bottom:46px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:28px; }
+    .stat { background:${PALETTE.navy}; border:2px solid ${PALETTE.blue}55; border-radius:28px; padding:44px 40px; }
+    .stat-v { font-weight:900; font-size:94px; line-height:1; color:#FFFFFF; letter-spacing:-2px; }
+    .stat-v .accent { color:${PALETTE.sky}; }
+    .stat-l { margin-top:16px; font-size:33px; line-height:1.24; color:${PALETTE.mist}; }`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
+    <div class="grid">${cells}</div>
+  </div>
+  ${carFooter(ctx)}`;
+  return carDoc(ctx, css, inner);
+}
+// Lista com marcadores: titulo + itens com marcador Selet Blue.
+function slideList(slide, ctx) {
+  const items = (Array.isArray(slide.items) ? slide.items : []).slice(0, 6)
+    .map((it) => (typeof it === "string" ? it : (it && it.text) || ""));
+  const lis = items.map((t) => `<div class="li"><span class="mk">&#9656;</span><span class="lt">${esc(t)}</span></div>`).join("");
+  const css = `.s-title.sm { font-size:64px; margin-bottom:42px; }
+    .list { display:flex; flex-direction:column; gap:28px; }
+    .li { display:flex; align-items:flex-start; gap:24px; }
+    .mk { color:${PALETTE.sky}; font-size:44px; line-height:1.1; font-weight:900; flex:0 0 auto; }
+    .lt { font-size:44px; line-height:1.28; color:${PALETTE.cloud}; font-weight:600; }
+    .s-body { margin-top:40px; font-size:36px; line-height:1.3; color:${PALETTE.mist}; }`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
+    <div class="list">${lis}</div>
+    ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+  </div>
+  ${carFooter(ctx)}`;
+  return carDoc(ctx, css, inner);
+}
+// CTA de fechamento: centralizado, logo + headline + pilula de CTA.
+function slideCta(slide, ctx) {
+  const headline = slide.title || ctx.cta || "Para quem sabe que e Selet";
+  const css = `.mid.center { align-items:center; text-align:center; }
+    .logo-c { height:62px; margin-bottom:40px; }
+    .s-title.big { font-size:92px; }
+    .s-body { margin-top:28px; font-size:40px; line-height:1.32; color:${PALETTE.mist}; max-width:86%; }
+    .cta { margin-top:52px; font-weight:800; font-size:40px; background:${PALETTE.blue}; color:#FFFFFF; padding:30px 60px; border-radius:999px; }`;
+  const inner = `<div class="top"><span></span><span class="pageno">${ctx.n} / ${ctx.total}</span></div>
+  <div class="mid center">
+    <img class="logo-c" src="${LOGO_LIGHT}" alt="4Selet"/>
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    <div class="s-title big">${highlightHeadline(headline)}</div>
+    ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+    ${ctx.cta ? `<span class="cta">${esc(ctx.cta)} &#8594;</span>` : ""}
+  </div>
+  ${carFooter(ctx)}`;
+  return carDoc(ctx, css, inner);
+}
+const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta };
+
+// Decide o arquetipo de um slide: override explicito (layout/type) > inferencia
+// por posicao (1o=capa, ultimo=cta) e por conteudo (stats=>grade, items=>lista).
+function slideArchetype(slide, i, total) {
+  const ex = String((slide && (slide.layout || slide.type)) || "").toLowerCase().replace(/[\s-]+/g, "_");
+  if (ex === "stats" || ex === "grid" || ex === "stat_grid" || ex === "number_grid") return "stat_grid";
+  if (ex === "list" || ex === "lista" || ex === "bullets") return "list";
+  if (ex === "cover" || ex === "capa" || ex === "hook") return "cover";
+  if (ex === "cta") return "cta";
+  if (ex === "text" || ex === "texto") return "text";
+  if (i === 0) return "cover";
+  if (i === total - 1 && total > 1) return "cta";
+  if (Array.isArray(slide && slide.stats) && slide.stats.length) return "stat_grid";
+  if (Array.isArray(slide && slide.items) && slide.items.length) return "list";
+  return "text";
+}
+
 // ---- Renders por tipo -----------------------------------------------------
 function renderImage(folder, opts) {
   const loc = requireActive(folder);
@@ -307,26 +427,37 @@ function renderCarousel(folder, opts) {
   fs.mkdirSync(dir, { recursive: true });
   const rels = [];
   let lastErr = null;
+  const total = slides.length;
   slides.forEach((s, i) => {
     const n = i + 1;
-    const isCover = i === 0;
-    const isCta = i === slides.length - 1;
+    const arch = slideArchetype(s, i, total);
     const htmlPath = path.join(dir, "slide_" + n + ".html");
     const outPng = path.join(dir, "slide_" + n + ".png");
-    const html = tpl.build({
-      width: 1080, height: 1350,
-      eyebrow: isCover ? (concept.eyebrow || "Carrossel") : (n + " / " + slides.length),
-      headline: highlightHeadline(s.title || ""),
-      subtext: s.body || "",
-      cta: isCta ? (concept.cta || "Solicitar convite") : "",
-      badge: isCover ? (concept.badge || "") : "",
-    });
+    let html;
+    if (arch === "cover") {
+      // A capa usa o template de arte escolhido (editorial|bold|split).
+      html = tpl.build({
+        width: 1080, height: 1350,
+        eyebrow: concept.eyebrow || "Carrossel",
+        headline: highlightHeadline(s.title || ""),
+        subtext: s.body || "",
+        cta: "",
+        badge: concept.badge || "",
+      });
+    } else {
+      const ctx = {
+        width: 1080, height: 1350, n: n, total: total,
+        cta: arch === "cta" ? (concept.cta || "Solicitar convite") : "",
+        footer: concept.footer,
+      };
+      html = SLIDE_ARCHETYPES[arch](s, ctx);
+    }
     fs.writeFileSync(htmlPath, html, "utf8");
     const r = htmlToPng(htmlPath, outPng, 1080, 1350);
     if (!r.ok) lastErr = r.stderr || r.stdout;
     else rels.push("slides/slide_" + n + ".png");
   });
-  return { ok: rels.length === slides.length, rels, stderr: lastErr || "", count: rels.length, total: slides.length, template: tpl.id };
+  return { ok: rels.length === total, rels, stderr: lastErr || "", count: rels.length, total: total, template: tpl.id };
 }
 
 // ---- Video (Remotion parametrizado) ---------------------------------------

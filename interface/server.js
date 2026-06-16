@@ -6,7 +6,7 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
-const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_TYPES, KIND_LABELS } = require("./lib/config");
+const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_PILLARS, CONTENT_TYPES, KIND_LABELS } = require("./lib/config");
 const ai = require("./lib/anthropic");
 
 const app = express();
@@ -29,6 +29,7 @@ app.get("/api/meta", (req, res) => {
     palette: PALETTE,
     platforms: ALLOWED_PLATFORMS,
     pillars: BRAND_PILLARS,
+    content_pillars: CONTENT_PILLARS,
     content_types: CONTENT_TYPES,
     kind_labels: KIND_LABELS,
   });

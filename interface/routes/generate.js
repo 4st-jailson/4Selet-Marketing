@@ -220,6 +220,10 @@ router.post("/save", async (req, res, next) => {
     // ignora "auto"/vazio para deixar a rotacao automatica por slug atuar).
     if (body.template_variant) content.setTemplate(folder, body.template_variant);
 
+    // 2d) grava o pilar de conteudo (eixo tematico) escolhido no brief.
+    // Validado na taxonomia fechada; pilar invalido/ausente e ignorado.
+    if (body.pillar) content.setPillar(folder, body.pillar);
+
     // 3) grava o arquivo de conteudo
     const text = formatContentFile(ct, parsed, body.raw);
     let rel;

@@ -4,7 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { PATHS, contentTypeById } = require("./config");
+const { PATHS, contentTypeById, CONTENT_PILLARS } = require("./config");
 
 const ZONES = [
   { dir: PATHS.OUTPUTS_DIR, zone: "active" },
@@ -96,6 +96,7 @@ function listTasks() {
         last_updated_at: status.last_updated_at,
         first_viewed_at: status.first_viewed_at || null,
         tags: Array.isArray(status.tags) ? status.tags : [],
+        pillar: (typeof status.pillar === "string") ? status.pillar : null,
         kind: classifyKind(files),
         thumb: pickThumb(files),
       });
@@ -156,6 +157,7 @@ function getTask(folder) {
       const rp = readJsonSafe(path.join(loc.path, "render.json"));
       return (rp && typeof rp.template === "string") ? rp.template : null;
     })(),
+    pillar: (status && typeof status.pillar === "string") ? status.pillar : null,
   };
 }
 
@@ -244,6 +246,21 @@ function setTemplate(folder, template) {
   return true;
 }
 
+// Grava o pilar de conteudo (eixo tematico) no status.json. Validado contra a
+// taxonomia fechada CONTENT_PILLARS; pilar invalido/ausente e ignorado.
+function setPillar(folder, pillar) {
+  const valid = CONTENT_PILLARS.some((p) => p.id === String(pillar));
+  if (!valid) return false;
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return false;
+  status.pillar = String(pillar);
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return true;
+}
+
 // #5 — Normaliza tags: trim, minusculas, sem vazios/duplicatas, limite de 12.
 function normalizeTags(tags) {
   const arr = Array.isArray(tags) ? tags : String(tags || "").split(",");
@@ -322,5 +339,5 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  setCampaignId, setTitle, setTemplate, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
+  setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };
