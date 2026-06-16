@@ -7,6 +7,7 @@ const ai = require("../lib/anthropic");
 const prompts = require("../lib/prompts");
 const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
+const researchLib = require("../lib/research");
 const { contentTypeById } = require("../lib/config");
 const { runBrandGovernance, validateContentRequest } = require("../lib/validation");
 
@@ -65,7 +66,19 @@ router.post("/", async (req, res, next) => {
     if (body.campaign_id) {
       campaign = campaigns.get(body.campaign_id);
     }
-    const req2 = Object.assign({}, body, { campaign });
+
+    // Pesquisa de mercado ao vivo (Tavily) — opt-in via body.research. Degrada
+    // com elegancia: se a chave/SDK faltar ou nada retornar, a geracao segue sem ela.
+    let research = null;
+    if (body.research) {
+      const topic = [body.brief, campaign && campaign.angle].filter(Boolean).join(" — ");
+      try {
+        const r = await researchLib.marketIntel(topic, {});
+        if (r && r.available) research = r;
+      } catch (e) { research = null; }
+    }
+
+    const req2 = Object.assign({}, body, { campaign, research });
     const system = prompts.systemPrompt();
     const userPrompt = prompts.generationPrompt(req2);
 
@@ -86,6 +99,9 @@ router.post("/", async (req, res, next) => {
       raw: result.text,
       governance: gov,
       content_type: body.content_type,
+      research_requested: !!body.research,
+      research_used: !!research,
+      research_sources: research ? research.sources : [],
     });
   } catch (e) { next(e); }
 });

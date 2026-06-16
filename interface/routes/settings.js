@@ -1,8 +1,12 @@
-// routes/settings.js — configurar/testar a chave Anthropic e o modelo.
+// routes/settings.js — configurar/testar a chave Anthropic e o modelo +
+// status das integracoes externas (somente leitura, sem expor segredos).
 "use strict";
+const fs = require("fs");
 const express = require("express");
 const router = express.Router();
 const ai = require("../lib/anthropic");
+const research = require("../lib/research");
+const { PATHS } = require("../lib/config");
 
 router.get("/", (req, res) => {
   res.json({
@@ -11,6 +15,71 @@ router.get("/", (req, res) => {
     model: ai.getModel(),
     default_model: ai.DEFAULT_MODEL,
   });
+});
+
+// Le todas as vars do interface/.env (sem expor valores ao front).
+function envFileVars() {
+  try {
+    const raw = fs.readFileSync(PATHS.ENV_FILE, "utf8");
+    const out = {};
+    for (const line of raw.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    }
+    return out;
+  } catch (e) { return {}; }
+}
+function envHas(name, fileVars) {
+  return !!(process.env[name] && String(process.env[name]).trim()) ||
+         !!(fileVars[name] && String(fileVars[name]).trim());
+}
+
+// GET /api/settings/integrations — status (configurado ou nao) de cada integracao
+// externa. NUNCA retorna o valor das chaves, apenas booleans + descricoes.
+router.get("/integrations", (req, res) => {
+  const f = envFileVars();
+  const supaOk = envHas("SUPABASE_URL", f) && (envHas("SUPABASE_KEY", f) || envHas("SUPABASE_SERVICE_ROLE_KEY", f));
+  const integrations = [
+    {
+      id: "anthropic", name: "Anthropic (Claude)", required: true,
+      purpose: "Geracao e refino de conteudo com IA no painel.",
+      configured: ai.hasKey(),
+      detail: ai.hasKey() ? "Modelo atual: " + ai.getModel() : "Cole a chave Anthropic acima.",
+    },
+    {
+      id: "tavily", name: "Tavily (pesquisa de mercado)", required: false,
+      purpose: "Pesquisa de mercado ao vivo injetada na geracao (opt-in pelo toggle ao gerar).",
+      configured: research.isConfigured(),
+      detail: research.isConfigured()
+        ? "Pronta — marque 'Pesquisar mercado com Tavily' ao gerar."
+        : "Defina TAVILY_API_KEY e instale @tavily/core.",
+    },
+    {
+      id: "redis", name: "Redis / BullMQ (fila)", required: false,
+      purpose: "Processa campanhas em fila assincrona. Sem ele, o pipeline roda sequencial.",
+      configured: envHas("REDIS_URL", f),
+      detail: envHas("REDIS_URL", f) ? "Fila BullMQ habilitada." : "Defina REDIS_URL (Upstash) para ativar a fila.",
+    },
+    {
+      id: "supabase", name: "Supabase (hospedagem de midia)", required: false,
+      purpose: "Hospeda midia e gera URLs publicas — pre-requisito para publicacao real.",
+      configured: supaOk,
+      detail: supaOk ? "Conectado." : "Defina SUPABASE_URL + SUPABASE_KEY.",
+    },
+    {
+      id: "instagram", name: "Instagram (Graph API)", required: false,
+      purpose: "Publicacao automatica no Instagram (protegida por gate de aprovacao).",
+      configured: envHas("IG_ACCESS_TOKEN", f),
+      detail: envHas("IG_ACCESS_TOKEN", f) ? "Token presente." : "Defina IG_ACCESS_TOKEN + IG Business account id.",
+    },
+    {
+      id: "youtube", name: "YouTube (Data API)", required: false,
+      purpose: "Publicacao automatica no YouTube via OAuth (protegida por gate de aprovacao).",
+      configured: envHas("YOUTUBE_REFRESH_TOKEN", f),
+      detail: envHas("YOUTUBE_REFRESH_TOKEN", f) ? "OAuth configurado." : "Defina YOUTUBE_REFRESH_TOKEN (OAuth).",
+    },
+  ];
+  res.json({ integrations });
 });
 
 router.post("/key", (req, res) => {

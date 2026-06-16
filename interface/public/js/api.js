@@ -19,6 +19,7 @@ const API = (() => {
     meta: () => req("GET", "/api/meta"),
     // settings
     settings: () => req("GET", "/api/settings"),
+    integrations: () => req("GET", "/api/settings/integrations"),
     saveKey: (key) => req("POST", "/api/settings/key", { key }),
     saveModel: (model) => req("POST", "/api/settings/model", { model }),
     testKey: () => req("POST", "/api/settings/test"),

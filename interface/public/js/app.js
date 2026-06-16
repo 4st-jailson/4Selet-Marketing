@@ -812,6 +812,7 @@ async function viewCreate(arg, query) {
           <summary>Identificador técnico (avançado)</summary>
           <div class="field"><label>Slug da pasta <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
         </details>
+        <label class="research-toggle mt"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e injeta como apoio factual no prompt — leva alguns segundos a mais)</span></span></label>
         <button class="btn btn-primary mt" id="g-run">Gerar com IA</button>
       </div>
       <div class="card create-result">
@@ -862,6 +863,7 @@ async function runGenerate() {
     key_offer: $("#g-offer").value.trim() || undefined,
     mood: ($("#g-mood") && $("#g-mood").value.trim()) || undefined,
     extra: $("#g-extra").value.trim() || undefined,
+    research: ($("#g-research") && $("#g-research").checked) || undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   try {
@@ -874,6 +876,17 @@ async function runGenerate() {
 
 function renderGenResult(r) {
   $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain">' + esc(r.model) + "</span>";
+  if (r.research_requested) {
+    $("#g-flag").innerHTML += r.research_used
+      ? ' <span class="badge ok" title="Pesquisa de mercado ao vivo injetada no prompt">▸ Tavily: ' + ((r.research_sources || []).length) + " fontes</span>"
+      : ' <span class="badge warn" title="Tavily não retornou dados — geração seguiu sem pesquisa">▸ Tavily indisponível</span>';
+  }
+  const researchHtml = (r.research_used && (r.research_sources || []).length)
+    ? `<details class="research-box mt"><summary>Fontes da pesquisa Tavily (${r.research_sources.length})</summary>
+         <ul class="research-list">${r.research_sources.map((s) => `<li><span class="research-focus">${esc(s.focus)}</span> <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("")}</ul>
+         <p class="muted" style="font-size:12px">Usadas como apoio factual; o conteúdo final segue as regras de marca e os knowledge files.</p>
+       </details>`
+    : "";
   const ct = metaType(r.content_type);
   let editorVal;
   if (ct.format === "json") editorVal = JSON.stringify(r.parsed || {}, null, 2);
@@ -889,6 +902,7 @@ function renderGenResult(r) {
        </details>`
     : `<div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>`;
   $("#g-result").innerHTML = `
+    ${researchHtml}
     ${editorBlock}
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
@@ -1161,6 +1175,8 @@ async function viewSettings() {
   setTitle("Configurações");
   const s = await API.settings();
   State.settings = s;
+  let integ = [];
+  try { const ri = await API.integrations(); integ = (ri && ri.integrations) || []; } catch (e) { integ = []; }
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
@@ -1183,6 +1199,26 @@ async function viewSettings() {
         <div class="k">Status</div><div>${s.has_key ? '<span class="badge approved">conectada</span>' : '<span class="badge paused">não configurada</span>'}</div>
         <div class="k">Modelo atual</div><div>${esc(s.model)}</div>
       </div>
+    </div>
+    <div class="card mt" style="max-width:660px">
+      <h3>Integrações</h3>
+      <p class="muted mt">Status de conexão de cada serviço externo para acompanhamento. As chaves ficam em <span class="codeblock">interface/.env</span> (fora do git) — esta tela mostra apenas se estão configuradas, nunca os valores.</p>
+      <ul class="integ-list mt">
+        ${integ.map((it) => {
+          const ok = !!it.configured;
+          const badge = ok
+            ? '<span class="badge ok">conectado</span>'
+            : (it.required ? '<span class="badge warn">obrigatório</span>' : '<span class="badge paused">não configurado</span>');
+          return `<li class="integ-row">
+            <span class="integ-dot ${ok ? "on" : (it.required ? "req" : "off")}"></span>
+            <div class="integ-main">
+              <div class="integ-name">${esc(it.name)} ${badge}${it.required ? ' <span class="hint">essencial</span>' : ' <span class="hint">opcional</span>'}</div>
+              <div class="integ-purpose">${esc(it.purpose || "")}</div>
+              <div class="integ-detail">${esc(it.detail || "")}</div>
+            </div>
+          </li>`;
+        }).join("")}
+      </ul>
     </div>
     <div class="card mt" style="max-width:660px">
       <h3>Aparência</h3>

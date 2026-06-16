@@ -102,6 +102,11 @@ function generationPrompt(req) {
   if (req.mood) lines.push("- Referencia visual/mood (clima e estilo a evocar, sempre dentro da marca): " + req.mood);
   if (req.extra) lines.push("- Observacoes extras: " + req.extra);
   lines.push("");
+  if (req.research && Array.isArray(req.research.findings) && req.research.findings.length) {
+    lines.push("INTELIGENCIA DE MERCADO (pesquisa AO VIVO via Tavily — use como apoio factual e de atualidade; NAO copie literalmente: sintetize, valide contra os knowledge files e mantenha a voz/regras da marca 4Selet):");
+    req.research.findings.slice(0, 12).forEach((f) => lines.push("- " + f));
+    lines.push("");
+  }
   lines.push("FORMATO DE SAIDA — responda APENAS com um objeto JSON valido, sem texto fora do JSON, neste schema:");
   lines.push(schema);
   return lines.join("\n");
