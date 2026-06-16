@@ -1,5 +1,5 @@
 {
-  "_test": true,
+  "_simulated": true,
   "_label": "TESTE - saida SIMULADA do Marketing Research Agent (dry-run, sem Tavily real)",
   "task_name": "test_job_payload_1",
   "task_date": "2026-03-31",

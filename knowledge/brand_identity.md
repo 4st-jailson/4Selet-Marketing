@@ -349,7 +349,7 @@ CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concre
 
 **Threads / X (post curto):**
 
-> Taxa de 7,9% é problema dos outros. O seu problema é por que o seu cartão tá aprovando 78% em vez de 92%.
+> Taxa de 7,9% é problema dos outros. O seu problema é por que o seu cartão tá aprovando 78% em vez de 95%.
 
 **Social caption (Instagram, Taxa Zero):**
 

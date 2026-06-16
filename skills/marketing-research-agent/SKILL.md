@@ -59,8 +59,10 @@ Inegociavel. Sem excecao para "edicao minima" ou "fix rapido".
 ## CRITICAL: chave Tavily e modo simulado
 
 - **Busca real** requer `TAVILY_API_KEY` no ambiente **e** o SDK instalado (`npm i @tavily/core`).
-- **Sem a chave** (estado atual do projeto): a skill opera em **modo SIMULADO (dry-run)** — o agente sintetiza a inteligencia a partir dos knowledge files, **rotulando o output como simulado** (`_test: true`, `_label`). Nao invente dados de mercado como se fossem reais; deixe claro que sao simulados.
+- **Sem a chave** (estado atual do projeto): a skill opera em **modo SIMULADO (dry-run)** — o agente sintetiza a inteligencia a partir dos knowledge files, **rotulando o output como simulado** (`_simulated: true`, `_label`). Nao invente dados de mercado como se fossem reais; deixe claro que sao simulados.
 - O script empacotado `scripts/research.js` detecta a chave: com chave, roda as 5 buscas e grava `research_raw.json`; sem chave, avisa e sai (o agente segue em simulacao).
+
+> **Dois caminhos de execucao (importante):** este SKILL descreve o **fluxo agente-skill** (Claude roda a skill e produz os 3 deliverables, sendo `research_results.json` o contrato machine-readable). O **pipeline executavel** (`pipeline/agents.js`) e o **painel** (`interface/lib/research.js`) seguem um caminho mais enxuto: gravam um advisory `research/insights.md` e o painel roda **3 buscas** (nao 5) para enriquecer o prompt de geracao. Ambos respeitam os mesmos knowledge files e guardrails; o schema completo de `research_results.json` e o alvo do fluxo agente-skill.
 
 ## CRITICAL: antes de pesquisar/sintetizar
 

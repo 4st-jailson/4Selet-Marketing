@@ -107,7 +107,7 @@ Solicitar convite no link da bio. →
 
 **Exemplos de estilo de post:**
 
-> Taxa de 7,9% é problema dos outros. O seu problema é por que o seu cartão tá aprovando 78% em vez de 92%.
+> Taxa de 7,9% é problema dos outros. O seu problema é por que o seu cartão tá aprovando 78% em vez de 95%.
 
 > Migrar de plataforma é caro. Ficar onde já não serve é mais caro. Faz o cálculo.
 

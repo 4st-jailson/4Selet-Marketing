@@ -32,7 +32,7 @@ Coordena o pipeline de conteudo 4Selet a partir de **um Job Payload**: valida, r
 ## CRITICAL: modos de execucao (realidade do projeto)
 
 - **Sequencial (padrao, atual):** sem Redis/BullMQ instalados, o orchestrator dispara as skills dos agentes **em ordem de dependencia**, uma a uma (foi assim que o dry-run rodou). Os agentes sao **skills executadas pelo Claude** — nao servicos de codigo.
-- **Enfileirado (BullMQ + Upstash Redis):** modo de producao. Requer `REDIS_URL` + `npm i bullmq` + os scripts `pipeline/orchestrator.js` (enqueue na fila `ai-content-pipeline`) e `pipeline/worker.js` (worker). **Esses arquivos ainda nao existem** — sao o alvo de implementacao.
+- **Enfileirado (BullMQ + Upstash Redis):** modo de producao. Requer `REDIS_URL` + `npm i bullmq`. Os scripts `pipeline/orchestrator.js` (enqueue na fila `marketing-pipeline`) e `pipeline/worker.js` (worker) **ja estao entregues e executaveis** (commit e787dc7); sem `REDIS_URL` o pipeline degrada para sequencial automaticamente.
 - O script empacotado `scripts/orchestrate.js` **valida o payload e gera o plano de execucao + logs** em ambos os modos; ele NAO roda os agentes (isso e o Claude seguindo o plano, ou o worker BullMQ no futuro).
 
 ## CRITICAL: reconciliacoes com o contrato real
@@ -47,6 +47,7 @@ Coordena o pipeline de conteudo 4Selet a partir de **um Job Payload**: valida, r
 {
   "task_name": "taxa_zero_maio",
   "task_date": "2026-05-26",
+  "brief": "Anunciar a Taxa Zero para produtores estabelecidos (50k+/mes)",
   "platform_targets": ["instagram", "youtube"],
   "user_flags": { "skip_research": false, "skip_image": false, "skip_video": false },
   "source_folder": null,
@@ -55,6 +56,8 @@ Coordena o pipeline de conteudo 4Selet a partir de **um Job Payload**: valida, r
 ```
 
 (Aceita tambem skip flags no topo do payload. `source_folder`/`assets/<task>/` so e exigido se `skip_research: true`.)
+
+> **Pipeline executavel (`pipeline/orchestrator.js`):** exige `task_name`, `task_date` **e `brief`** (min. 8 chars) — sem `brief` sai com exit 2. Aceita `platforms` (alias de `platform_targets`) e `content_types`. As skip flags do pipeline real sao `--skip-research`, `--skip-distribution`, `--no-render`, `--skip-video` (nao ha `--skip-image` no executavel; `skip_image` so existe no caminho historico `orchestrate.js`).
 
 ## Step 1: Intake + validacao
 
@@ -122,7 +125,7 @@ Bloqueio (skip_research sem assets): retorne *"Task nao pode prosseguir ate a so
 ## Step 3: Executar o plano
 
 - **Sequencial:** dispare as skills nesta ordem — `research` -> (`ad` , `video`, `copy`) -> `distribution`. Os 3 do meio sao independentes (paralelizaveis conceitualmente; em modo Claude, rode em sequencia). Cada agente le/escreve em `outputs/<task>_<date>/` conforme seu contrato. Skips: marque o job `complete (skipped)` sem invocar a skill.
-- **Enfileirado (futuro):** `pipeline/orchestrator.js` faz enqueue na fila `ai-content-pipeline` com dependencias; `pipeline/worker.js` processa. Comandos-alvo: `npm run pipeline:run`, `npm run pipeline:run:payload '<json>'`, `node pipeline/worker.js`.
+- **Enfileirado (entregue):** com `REDIS_URL` + `bullmq`, `pipeline/orchestrator.js` faz enqueue na fila `marketing-pipeline`; `pipeline/worker.js` processa. Comandos: `npm run pipeline:run`, `npm run pipeline:run:payload '<json inline>'`, `npm run pipeline:worker` (= `node pipeline/worker.js`).
 
 Passagem de dados entre estagios = o **contrato de arquivos** em `outputs/<task>_<date>/` (research_results.json -> ad/video/copy; midia + copy -> distribution).
 
@@ -167,7 +170,7 @@ Se um job falha: logue, **notifique qual job falhou**, e ofereca recovery (re-ro
 ## Troubleshooting
 
 ### Sem Redis / "Cannot find module 'bullmq'"
-**Solution:** modo **sequencial** (padrao) — orchestrate.js planeja e o Claude dispara as skills em ordem. Para enfileirado: `npm i bullmq` + `REDIS_URL` + criar `pipeline/`.
+**Solution:** modo **sequencial** (padrao) — `pipeline/orchestrator.js` roda os estagios aqui mesmo (ou orchestrate.js planeja e o Claude dispara as skills em ordem). Para enfileirado: `npm i bullmq` + `REDIS_URL` (a pasta `pipeline/` ja existe).
 
 ### skip_research sem `assets/<task>/`
 **Solution:** pipeline **bloqueado**; peca o upload da source folder. Nao prossiga.
@@ -191,7 +194,7 @@ Se um job falha: logue, **notifique qual job falhou**, e ofereca recovery (re-ro
 Job Payload → orchestrator (esta skill)
   research_agent → research_results.json
      ├─► ad_creative_designer → ads/{layout.json, ad.html, styles.css, instagram_ad.png}
-     ├─► video_ad_specialist  → video/{scenes.json, ad.mp4}
+     ├─► video_ad_specialist  → video/{scenes.json, video.mp4}
      └─► copywriter_agent     → copy/{copy.json + .txt/.json}
               ↓ (todos prontos)
   distribution_agent → media_urls.json + Publish <task> <date>.md  (gate: nao publica sozinho)

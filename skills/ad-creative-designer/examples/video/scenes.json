@@ -1,20 +1,45 @@
 {
   "_test": true,
   "_label": "TESTE - saida do Video Ad Specialist (dry-run). Props adaptados ao payload test_job_payload_1.",
-  "composition": "AdVideoTest",
+  "composition": "BrandStory",
   "props": {
+    "concept": "Taxa Zero: 0% pela plataforma por 3 meses para o produtor que opera com seriedade.",
+    "cta": "Solicitar convite.",
     "style": "problem_solution",
     "duration": 15,
     "platform": "instagram_reels",
-    "source_composition": "AdVideo",
-    "watermark": "TESTE · DRY-RUN",
     "scenes": [
-      { "type": "hook", "text": "Quanto a taxa come da sua venda?" },
-      { "type": "problem", "text": "7,9% de taxa. E o dinheiro demorando a cair." },
-      { "type": "offer", "text": "4Selet. 0% de taxa por 3 meses." },
-      { "type": "benefit", "text": "95% de aprovacao no cartao | R$ 1,99 por transacao | Suporte de gente de verdade" },
-      { "type": "cta", "text": "Solicitar convite." }
+      {
+        "type": "hook",
+        "text": "Quanto a taxa come da sua venda?",
+        "subtitle": "Taxa media do mercado: 7,9%.",
+        "visual": "Fundo Selet Darker (#07212B) com Selet Dots 8%. Inter Black em Selet Cloud."
+      },
+      {
+        "type": "problem",
+        "text": "7,9% de taxa. E o dinheiro demorando a cair.",
+        "subtitle": "Margem que evapora todo mes.",
+        "visual": "Selet Darker; numero 7,9% em Selet Sky."
+      },
+      {
+        "type": "offer",
+        "text": "0% pela plataforma por 3 meses.",
+        "subtitle": "R$ 1,99 por transacao. PIX em D+10, cartao em D+30.",
+        "visual": "Bloco Selet Navy (#003554); 0% gigante em Selet Blue (#006494)."
+      },
+      {
+        "type": "proof",
+        "text": "95% de aprovacao no cartao.",
+        "subtitle": "Mais venda aprovada = mais faturamento.",
+        "visual": "Selet Darker; selo 95% em Selet Blue."
+      },
+      {
+        "type": "cta",
+        "text": "Solicitar convite.",
+        "subtitle": "Para quem sabe que e Selet.",
+        "visual": "Selet Navy; logo-4selet-light.png fade-in."
+      }
     ]
   },
-  "_note": "Reaproveita a composition Remotion existente (src/AdVideo.tsx). O wrapper AdVideoTest renderiza AdVideo + selo TESTE. Render -> ad.mp4."
+  "_note": "Schema canonico do Video Ad Specialist. Renderizado pela composition BrandStory (src/BrandStory.tsx) via painel/CLI Remotion -> video/video.mp4. `visual` e direcao de arte (nao aparece como texto); `subtitle` e o subtexto on-screen."
 }

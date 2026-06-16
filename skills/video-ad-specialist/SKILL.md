@@ -66,7 +66,7 @@ Sempre carregue, nesta ordem, os knowledge files do projeto:
 
 Se existir pesquisa em `outputs/<task_name>_<date>/research_results.json`, extraia `ad_hooks`, `marketing_angles` e `keywords` e ancore a estratégia neles.
 
-Guidance técnico de Remotion (componentes React + SVG, `useCurrentFrame()`, `interpolate()`, `@remotion/google-fonts`): ver o **projeto Remotion em `src/`** — a composition `AdVideo` (`src/AdVideo.tsx` + `src/scenes/*`) é a implementação de referência; renderize com `npm run render`. (Não existe skill `remotion-best-practices`.) Esta skill produz só o JSON — não escreve componentes React.
+Guidance técnico de Remotion (componentes React + SVG, `useCurrentFrame()`, `interpolate()`, `@remotion/google-fonts`): ver o **projeto Remotion em `src/`**. A composition de produção parametrizada por scenes é **`BrandStory`** (`src/BrandStory.tsx`) — é o que o painel e o pipeline renderizam para `video/video.mp4`. `AdVideo` (`src/AdVideo.tsx`) é uma composition estática de referência (sem props). (Não existe skill `remotion-best-practices`.) Esta skill produz só o JSON — não escreve componentes React.
 
 ## Inputs
 
@@ -123,24 +123,38 @@ Estrutura mínima de uma scene (campos obrigatórios):
 { "type": "hook", "text": "Vou perder vendas migrando?" }
 ```
 
-Cada scene **deve** ter `type` e `text`. Campos opcionais — preencha com direção de marca para facilitar o trabalho do renderer Remotion:
+Cada scene **deve** ter `type` e `text` (headline on-screen). Campos opcionais:
 
-- `visual` — direção visual (background da paleta, layout, asset). Ponte com a noção de `text_overlay`/`visual` do pipeline.
-- `transition` — `fade` | `slide` | `wipe` (nunca hard cut).
-- `animation` — ex.: `"word-by-word easeOut"`, `"spring contido"`, `"pulse 1x Selet Blue"`.
+- `subtitle` — **subtexto on-screen** (segunda linha, voltada ao espectador). É o que o BrandStory desenha abaixo da headline.
+- `visual` — **direção de arte** (background da paleta, layout, asset). NÃO aparece como texto na tela — guia o renderer/designer.
+- `transition` — `fade` | `slide` | `wipe` (nunca hard cut). Metadado de estratégia.
+- `animation` — ex.: `"word-by-word easeOut"`, `"spring contido"`, `"pulse 1x Selet Blue"`. Metadado de estratégia.
 
 Mapeie scene → background da paleta (ver Step 5): hook/problem em `Selet Darker`, product/benefit/proof em `Selet Darker` ou `Navy`, offer/cta em `Selet Navy`. Accent e números-âncora em `Selet Blue`.
 
 ## Step 4: Remotion Configuration Output
 
-Gere **apenas JSON válido**, diretamente compatível com a skill de rendering Remotion.
+Gere **apenas JSON válido**. A composition de produção é **`BrandStory`** (`src/BrandStory.tsx`) — é ela que o painel (`interface/lib/render.js`) e o pipeline renderizam para `video/video.mp4`. (`AdVideo` é uma composition **estática de referência**, sem props; não renderiza scenes dinâmicas.)
 
-**Campos obrigatórios:** `composition`, `props.style`, `props.duration`, `props.platform`, `props.scenes`. Cada scene: `type` + `text`.
+**O que o renderer BrandStory realmente consome** (campos efetivamente desenhados na tela):
+
+- `concept` — tese/conceito do vídeo (string curta).
+- `cta` — CTA final aprovado.
+- `scenes[]` — cada scene com:
+  - `type` — `hook` | `problem` | `product` | `benefit` | `proof` | `offer` | `testimonial` | `cta` (vira o eyebrow da cena).
+  - `text` — **headline on-screen** (obrigatório).
+  - `subtitle` — **subtexto on-screen** (opcional, voltado ao espectador).
+
+> **`visual`, `transition`, `animation`, `style`, `duration`, `platform` são metadados de ESTRATÉGIA** — guiam pacing, direção de arte e escolha de plataforma, mas **não são desenhados literalmente** pelo BrandStory. Em especial, `visual` é **direção de arte** (ex.: "Fundo Selet Darker, Inter Black…"), **nunca** aparece como texto na tela. O subtexto que aparece na tela vem de `subtitle`.
+
+**Campos obrigatórios:** `composition` (= `"BrandStory"`), `props.concept`, `props.cta`, `props.scenes`. Cada scene: `type` + `text`.
 
 ```json
 {
-  "composition": "AdVideo",
+  "composition": "BrandStory",
   "props": {
+    "concept": "Taxa Zero: 0% pela plataforma por 3 meses para quem opera com seriedade.",
+    "cta": "Solicitar convite.",
     "style": "limited_offer",
     "duration": 18,
     "platform": "instagram_reels",
@@ -148,20 +162,23 @@ Gere **apenas JSON válido**, diretamente compatível com a skill de rendering R
       {
         "type": "hook",
         "text": "Taxa média do mercado: 7,9%.",
+        "subtitle": "E você ainda divide isso com prazos longos.",
         "visual": "Background Selet Darker (#07212B) com Selet Dots 8% opacity. Inter Black em Selet Cloud.",
         "transition": "fade",
         "animation": "word-by-word easeOut"
       },
       {
         "type": "offer",
-        "text": "0% pela plataforma por 3 meses. R$ 1,99 por transação.",
+        "text": "0% pela plataforma por 3 meses.",
+        "subtitle": "R$ 1,99 por transação. Sem letra miúda.",
         "visual": "Bloco Selet Navy (#003554); número 0% gigante em Selet Blue (#006494).",
         "transition": "slide",
         "animation": "spring contido"
       },
       {
         "type": "benefit",
-        "text": "PIX em D+10. Cartão em D+30. Sem letra miúda.",
+        "text": "PIX em D+10. Cartão em D+30.",
+        "subtitle": "95% de aprovação no cartão.",
         "visual": "Bullets com indicador ▸ em Selet Blue sobre Selet Darker.",
         "transition": "fade",
         "animation": "staggered"
@@ -169,6 +186,7 @@ Gere **apenas JSON válido**, diretamente compatível com a skill de rendering R
       {
         "type": "cta",
         "text": "Solicitar convite.",
+        "subtitle": "Para quem sabe que é Selet.",
         "visual": "Selet Navy; Inter Black em Selet Cloud; logo-4selet-light.png fade-in.",
         "transition": "fade",
         "animation": "logo reveal"
@@ -184,7 +202,7 @@ Gere **apenas JSON válido**, diretamente compatível com a skill de rendering R
 outputs/<task_name>_<date>/video/scenes.json
 ```
 
-A duração total (`props.duration`, em segundos) deve bater com a soma aproximada dos beats das scenes e respeitar a faixa da plataforma (Step 2).
+A duração total (`props.duration`, em segundos) deve bater com a soma aproximada dos beats das scenes e respeitar a faixa da plataforma (Step 2). Cada beat do BrandStory ocupa ~3s (90 frames @ 30fps); calibre o nº de scenes para a faixa de duração da plataforma.
 
 ---
 
@@ -220,7 +238,7 @@ A duração total (`props.duration`, em segundos) deve bater com a soma aproxima
 ## Troubleshooting
 
 ### JSON inválido ou campo obrigatório ausente
-**Cause:** falta `composition`, `props.style/duration/platform/scenes`, ou uma scene sem `type`/`text`.
+**Cause:** falta `composition` (= `"BrandStory"`), `props.concept/cta/scenes`, ou uma scene sem `type`/`text`.
 **Solution:** valide o objeto contra o schema do Step 4 antes de salvar. Output deve ser **apenas** JSON — sem texto fora do bloco.
 
 ### Número da campanha errado
@@ -235,8 +253,9 @@ A duração total (`props.duration`, em segundos) deve bater com a soma aproxima
 
 - [ ] Knowledge files carregados (brand_identity, product_campaign, platform_guidelines)
 - [ ] Estratégia escolhida tem fit 4Selet (não `meme_style`/`lifestyle`)
+- [ ] `composition` = `"BrandStory"`; `props.concept` e `props.cta` preenchidos
 - [ ] `platform` válido e composition size correto para a plataforma
-- [ ] Todas as scenes têm `type` + `text`; opcionais `visual`/`transition`/`animation` preenchidos
+- [ ] Todas as scenes têm `type` + `text`; `subtitle` (subtexto on-screen) e `visual` (direção de arte) preenchidos quando útil
 - [ ] `props.duration` bate com a soma dos beats e a faixa da plataforma
 - [ ] Paleta, fontes, CTA aprovado e números da Taxa Zero corretos
 - [ ] Nenhum concorrente citado; sem urgência fake; sem branco/preto puro
@@ -246,10 +265,10 @@ A duração total (`props.duration`, em segundos) deve bater com a soma aproxima
 
 ```
 Research Agent → Ad Creative Designer → Video Ad Specialist (esta skill)
-   → scenes.json → Remotion (composition AdVideo em src/, npm run render) → ad.mp4 → Copywriter → Distribution
+   → scenes.json → Remotion (composition BrandStory em src/) → video/video.mp4 → Copywriter → Distribution
 ```
 
-Esta skill é a ponte entre **estratégia de marketing** e **produção de vídeo**: gera a estrutura do ad; a renderização é feita pelo **projeto Remotion em `src/`** (composition `AdVideo`, `npm run render`) — não há skill `remotion-best-practices`. O mesmo scene JSON pode alimentar outros formatos (image ads, captions, distribution metadata), garantindo mensagem consistente entre mídias.
+Esta skill é a ponte entre **estratégia de marketing** e **produção de vídeo**: gera a estrutura do ad; a renderização é feita pelo **projeto Remotion em `src/`** (composition `BrandStory`, via painel `interface/lib/render.js` ou CLI Remotion) — não há skill `remotion-best-practices`. O mesmo scene JSON pode alimentar outros formatos (image ads, captions, distribution metadata), garantindo mensagem consistente entre mídias.
 
 ## Performance Notes
 

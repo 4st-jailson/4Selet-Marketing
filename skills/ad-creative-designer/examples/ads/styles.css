@@ -72,10 +72,13 @@ html, body { width: 1080px; height: 1080px; }
   align-self: flex-start;
   background: #006494;
   color: #D9DCD6;
+  font-family: inherit;
   font-weight: 700;
   font-size: 40px;
   padding: 28px 56px;
+  border: none;
   border-radius: 16px;
+  cursor: pointer;
 }
 
 .footer {

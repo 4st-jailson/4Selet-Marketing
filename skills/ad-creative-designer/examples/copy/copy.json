@@ -1,6 +1,6 @@
 {
   "_test": true,
-  "_label": "TESTE - saida estruturada do Copywriter Agent (dry-run)",
+  "_label": "TESTE - saida estruturada do Copywriter Agent (dry-run). 4 plataformas, ancorado no research_results.json (selected_campaign_angle) e nos knowledge files.",
   "task_name": "test_job_payload_1",
   "campaign_angle": "Migracao sem perder margem: 0% por 3 meses ou ate R$ 300 mil em vendas",
   "instagram": {
@@ -8,10 +8,20 @@
     "hashtags": ["#4Selet", "#TaxaZero", "#PlataformaDePagamentos", "#ProdutorDigital", "#DigitalSerio"],
     "cta": "Solicitar convite"
   },
+  "threads": {
+    "post": "Taxa de 7,9% e problema dos outros. O seu problema e o cartao aprovando 78% em vez de 95% — receita perdida que ninguem audita.\n\nNa 4Selet sao 0% por 3 meses pra voce medir a diferenca.",
+    "hashtag": "#4Selet"
+  },
   "youtube": {
     "title": "0% de Taxa por 3 Meses: A Mecanica Completa da Taxa Zero 4Selet",
-    "description_first_fold": "A mecanica completa da Taxa Zero: 0% por 3 meses ou ate R$ 300 mil, R$ 1,99 por transacao, PIX D+10, cartao D+30. Acesso por convite.",
-    "tags": ["4selet", "taxa zero", "plataforma de pagamentos", "infoproduto", "multi-adquirencia", "produtor digital"],
+    "description": "A mecanica completa da Taxa Zero: 0% por 3 meses ou ate R$ 300 mil, R$ 1,99 por transacao, PIX D+10, cartao D+30 e 95% de aprovacao no cartao. Acesso por convite, para o produtor que opera com seriedade.\n\nSolicitar convite: link na descricao.",
+    "tags": ["4selet", "taxa zero", "plataforma de pagamentos", "infoproduto", "multi-adquirencia", "produtor digital", "aprovacao de cartao", "migracao de plataforma"],
     "cta": "Solicitar convite"
-  }
+  },
+  "linkedin": {
+    "post": "O produtor que olha apenas a taxa percentual esta olhando para o lugar errado.\n\nA rentabilidade de uma operacao digital e a soma de quatro variaveis:\n\n→ Taxa por transacao (todo mundo olha)\n→ Prazo de recebimento (poucos calculam o custo de oportunidade)\n→ Taxa de aprovacao do cartao (a maior fonte de receita perdida silenciosa: 78% em vez de 95% e dinheiro que evapora)\n→ Custo do suporte em horas-equipe resolvendo problema de plataforma\n\nReduzir uma variavel e perder nas outras tres e prejuizo disfarcado de economia.\n\nPor isso a Taxa Zero da 4Selet nao e so sobre 0%. E sobre dar ao produtor estabelecido 3 meses (ou ate R$ 300 mil em vendas) para medir as quatro variaveis num ambiente desenhado para quem opera com seriedade.\n\nO acesso e por convite. Para quem sabe que e Selet.",
+    "hashtags": ["#4Selet", "#TaxaZero", "#PagamentosDigitais", "#Infoproduto", "#NegocioDigital"],
+    "cta": "Falar com o time"
+  },
+  "_note": "Schema canonico do Copywriter Agent (copy.json). Mesmo angulo de campanha nas 4 plataformas, roupagem nativa por plataforma. Hashtags LinkedIn seguem o mix de platform_guidelines.md (#PagamentosDigitais/#Infoproduto/#NegocioDigital). Numero-ancora 95% de aprovacao (vs. 78% do mercado)."
 }

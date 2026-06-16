@@ -48,7 +48,7 @@ Skill File: `skills/orchestrator/SKILL.md`
 Responsabilidades:
 - Aceitar um Job Payload (JSON) com `task_name`, `task_date`, `platform_targets` e skip flags opcionais
 - Validar o payload e enforçar a ordering de dependências
-- Enqueue todos os agent jobs na fila BullMQ `ai-content-pipeline` via `pipeline/orchestrator.js`
+- Enqueue todos os agent jobs na fila BullMQ `marketing-pipeline` via `pipeline/orchestrator.js`
 - Iniciar o BullMQ worker (`pipeline/worker.js`) para processar jobs enfileirados
 - Rastrear status dos jobs via log files em `outputs/<task_name>_<date>/logs/`
 - Reportar conclusão do pipeline e surfacear o Publish MD file gerado
@@ -129,7 +129,7 @@ Responsabilidades:
 - Renderização real via o projeto Remotion em `src/` (React + SVG, `useCurrentFrame()`/`interpolate()`, fontes via `@remotion/google-fonts`). O **painel** (`interface/lib/render.js`) renderiza a composition **`BrandStory`** e grava `video/video.mp4`; o CLI `npm run render` pode renderizar qualquer composition registrada em `src/Root.tsx` (`AdVideo`, `CampanhaDemo`, `BrandStory`). *(Não existe skill `remotion-best-practices`; o mecanismo de render é o projeto Remotion em `src/`.)*
 
 Output Típico (salvo em `outputs/<task_name>_<date>/video/`):
-- `scenes.json` — scene JSON no schema canônico `composition` / `props`: no topo `composition` (ex.: `"AdVideo"`); dentro de `props`, os campos `style`, `duration` (segundos), `platform` e `scenes[]`. Cada scene tem `type` + `text` obrigatórios e `visual` / `transition` / `animation` opcionais.
+- `scenes.json` — scene JSON no schema `composition` / `props`. A composition de produção é **`BrandStory`** (`src/BrandStory.tsx`; `AdVideo` é estática de referência). O renderer **consome** `props.concept`, `props.cta` e `props.scenes[]` com `type` + `text` (headline) + `subtitle` (subtexto on-screen). Os campos `props.style` / `duration` / `platform` e `scenes[].visual` (direção de arte) / `transition` / `animation` são **metadados de estratégia** — guiam pacing/arte mas não são desenhados literalmente.
 - Schema detalhado e regras de marca: `skills/video-ad-specialist/SKILL.md` (fonte de verdade).
 
 ---
@@ -391,7 +391,7 @@ outputs/<task_name>_<date>/
 │   └── instagram_ad.png          ← Ad Creative Designer (Playwright render)
 ├── video/
 │   ├── scenes.json               ← Video Ad Specialist (JSON composition/props)
-│   └── video.mp4                 ← Remotion (composition BrandStory em src/ · render via painel ou npm run render)
+│   └── video.mp4                 ← Remotion (composition BrandStory em src/ · render via painel interface/lib/render.js)
 ├── copy/
 │   ├── instagram_caption.txt     ← Copywriter Agent
 │   ├── threads_post.txt          ← Copywriter Agent
