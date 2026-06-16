@@ -51,6 +51,7 @@ const API = (() => {
     promote: (folder, payload) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/promote", payload),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
+    renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
     refine: (payload) => req("POST", "/api/generate/refine", payload),
     save: (payload) => req("POST", "/api/generate/save", payload),
     assistant: (question, context) => req("POST", "/api/generate/assistant", { question, context }),

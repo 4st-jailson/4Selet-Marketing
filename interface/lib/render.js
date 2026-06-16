@@ -6,9 +6,10 @@
 // Tudo local, sem chaves externas. Respeita a regra: so renderiza em zona active.
 "use strict";
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { PATHS, PALETTE } = require("./config");
+const { PATHS, PALETTE, contentTypeById } = require("./config");
 const { findTask } = require("./content");
 
 const ASSETS = PATHS.ASSETS_DIR;
@@ -377,6 +378,78 @@ function renderVideo(folder) {
   };
 }
 
+// ---- Previa de arte (render efemero, sem salvar) --------------------------
+// Renderiza a partir do conceito EM MEMORIA (parsed da geracao), sem exigir task
+// nem zona active, e devolve um data URL PNG. Usado na tela de criacao para o
+// usuario ver a arte antes de salvar. Espelha o mapeamento de campos dos renders
+// por tipo (renderImage/renderFeed/renderCarousel).
+function previewFields(ct, parsed) {
+  parsed = parsed || {};
+  if (ct.kind === "image") {
+    return {
+      width: 1080, height: 1080,
+      eyebrow: parsed.layout_type || parsed.eyebrow || "Destaque",
+      headline: highlightHeadline(parsed.headline || "Para quem sabe que e Selet."),
+      subtext: parsed.subtext || "",
+      cta: parsed.cta || "Ver as condicoes",
+      badge: parsed.badge || "",
+    };
+  }
+  if (ct.kind === "feed") {
+    const caption = String(parsed.body || parsed.caption || "");
+    const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que e Selet.";
+    const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
+    return {
+      width: 1080, height: 1350,
+      eyebrow: "Feed",
+      headline: highlightHeadline(headline),
+      subtext: "",
+      cta: "Solicitar convite",
+      badge: "",
+    };
+  }
+  if (ct.kind === "carousel") {
+    const slides = Array.isArray(parsed.slides) && parsed.slides.length
+      ? parsed.slides : [{ title: "Para quem sabe que e Selet", body: "" }];
+    const s = slides[0] || {};
+    return {
+      width: 1080, height: 1350,
+      eyebrow: parsed.eyebrow || "Carrossel",
+      headline: highlightHeadline(s.title || ""),
+      subtext: s.body || "",
+      cta: "",
+      badge: parsed.badge || "",
+    };
+  }
+  return null;
+}
+
+function renderPreview({ content_type, parsed, template } = {}) {
+  const ct = contentTypeById(content_type);
+  if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
+  const fields = previewFields(ct, parsed);
+  if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
+  const tplId = (template && TEMPLATES[template]) ? template : "editorial";
+  const html = resolveTemplate(tplId)(fields);
+  const base = path.join(os.tmpdir(), "4selet-preview-" + process.pid + "-" + Date.now());
+  const htmlPath = base + ".html";
+  const outPng = base + ".png";
+  try {
+    fs.writeFileSync(htmlPath, html, "utf8");
+    const r = htmlToPng(htmlPath, outPng, fields.width, fields.height);
+    if (!r.ok || !fs.existsSync(outPng)) {
+      return { ok: false, error: (r.stderr || r.stdout || "falha ao renderizar a previa").slice(0, 400), template: tplId };
+    }
+    const b64 = fs.readFileSync(outPng).toString("base64");
+    return { ok: true, dataUrl: "data:image/png;base64," + b64, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  } finally {
+    try { fs.unlinkSync(htmlPath); } catch (e) {}
+    try { fs.unlinkSync(outPng); } catch (e) {}
+  }
+}
+
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
 function render(folder, kind, opts) {
   switch (kind) {
@@ -389,6 +462,6 @@ function render(folder, kind, opts) {
 }
 
 module.exports = {
-  render, renderImage, renderFeed, renderCarousel, renderVideo,
+  render, renderImage, renderFeed, renderCarousel, renderVideo, renderPreview,
   TEMPLATE_IDS,
 };

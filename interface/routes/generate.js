@@ -8,6 +8,7 @@ const prompts = require("../lib/prompts");
 const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
 const researchLib = require("../lib/research");
+const render = require("../lib/render");
 const { contentTypeById } = require("../lib/config");
 const { runBrandGovernance, validateContentRequest } = require("../lib/validation");
 
@@ -142,6 +143,23 @@ router.post("/refine", async (req, res, next) => {
       governance: gov,
       content_type: body.content_type,
     });
+  } catch (e) { next(e); }
+});
+
+// POST /api/generate/preview — previa RENDERIZADA da arte a partir do conceito em
+// memoria (parsed), sem salvar nem exigir task. So vale para tipos visuais (image).
+router.post("/preview", (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const ct = contentTypeById(body.content_type);
+    if (!ct) return res.status(400).json({ error: "content_type invalido" });
+    const out = render.renderPreview({
+      content_type: body.content_type,
+      parsed: body.parsed || extractJson(body.raw),
+      template: body.template,
+    });
+    if (!out.ok) return res.status(422).json(out);
+    res.json(out);
   } catch (e) { next(e); }
 });
 

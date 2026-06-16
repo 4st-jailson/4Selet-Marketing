@@ -482,6 +482,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* #2 — mockup de pré-visualização social (LinkedIn / Threads) */
 .social-mock-box { margin-top: var(--s5); }
 .social-mock-box > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+.art-preview-box { margin-top: var(--s5); }
+.art-preview-box > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-2); }
+.art-preview { display: flex; flex-direction: column; align-items: center; }
+.art-img { width: 100%; max-width: 360px; height: auto; border-radius: var(--r-sm); border: 1px solid var(--border-soft); box-shadow: 0 6px 22px rgba(0,0,0,.22); }
 .social-mock { display: flex; justify-content: center; }
 .sm-card { width: 100%; max-width: 420px; background: #fff; color: #0d1f29; border: 1px solid #e2e6ea; border-radius: 12px; padding: 16px; box-shadow: 0 4px 18px rgba(0,0,0,.12); }
 .sm-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }

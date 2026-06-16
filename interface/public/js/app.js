@@ -1268,10 +1268,20 @@ function renderGenResult(r) {
          <p class="muted" style="font-size:12px">Prévia ilustrativa — atualiza conforme você edita o texto acima.</p>
        </details>`
     : "";
+  // #1 — prévia RENDERIZADA da arte (imagem final) para tipos visuais.
+  const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel";
+  const artHtml = visualKind
+    ? `<details class="art-preview-box mt" open><summary>Prévia da arte</summary>
+         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "(slide de capa) " : ""}com o estilo visual escolhido no brief. Não salva nada — é só para conferir.</p>
+         <button class="btn btn-ghost btn-sm" id="g-art-btn" type="button">Ver prévia da arte</button>
+         <div id="g-art" class="art-preview mt"></div>
+       </details>`
+    : "";
   $("#g-result").innerHTML = `
     ${researchHtml}
     ${editorBlock}
     ${mockHtml}
+    ${artHtml}
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
       <label>Ajustar com IA <span class="hint">(descreva o que mudar; o resto é mantido)</span></label>
@@ -1289,6 +1299,39 @@ function renderGenResult(r) {
   // #2 — liga o mockup ao vivo ao textarea de conteúdo.
   if (mockKind && $("#g-edit")) {
     $("#g-edit").addEventListener("input", () => { const m = $("#g-mock"); if (m) m.innerHTML = socialMock(mockKind, $("#g-edit").value); });
+  }
+  // #1 — botão de prévia renderizada da arte.
+  if (visualKind && $("#g-art-btn")) $("#g-art-btn").onclick = () => renderArtPreview(r.content_type, ct.kind);
+}
+
+// #1 — renderiza a arte final (sem salvar) a partir do conteúdo atual em tela.
+async function renderArtPreview(contentType, kind) {
+  const btn = $("#g-art-btn"); const box = $("#g-art");
+  if (!btn || !box) return;
+  const ct = metaType(contentType);
+  let parsed = LAST_GEN && LAST_GEN.res ? LAST_GEN.res.parsed : null;
+  const ed = $("#g-edit");
+  if (ed) {
+    if (ct && ct.format === "json") { try { parsed = JSON.parse(ed.value); } catch (e) { /* mantém o último parsed válido */ } }
+    else parsed = { body: ed.value };
+  }
+  // Template: estilo escolhido no brief; se "Automático", a mesma variação por slug usada no salvamento.
+  let template = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
+  if (!template) {
+    const task = ($("#g-task") && $("#g-task").value) || slugify(($("#g-title") && $("#g-title").value) || "");
+    const date = ($("#g-date") && $("#g-date").value) || todayISO();
+    template = autoVariant(task + "_" + date);
+  }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> renderizando…';
+  box.innerHTML = "";
+  try {
+    const out = await API.renderPreview({ content_type: contentType, parsed, template });
+    box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" />
+      <div class="muted" style="font-size:12px;margin-top:8px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height}${kind === "carousel" ? " · slide de capa" : ""}</div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="field-error" style="display:block">${esc((e && e.message) || "falha ao renderizar a prévia")}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Atualizar prévia da arte";
   }
 }
 
