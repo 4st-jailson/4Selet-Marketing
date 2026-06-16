@@ -130,7 +130,7 @@ Inspiração visual:
 * **Espaço mínimo livre** = altura do símbolo "4" em todos os lados
 * **Nunca** sobre fundo fotográfico ocupado ou com baixo contraste
 * **Nunca** com borda, sombra ou outline
-* **Nunca** alterar as cores oficiais (azul `#003C81` no símbolo)
+* **Nunca** alterar as cores oficiais (Selet Navy `#003554` no símbolo)
 * **Nunca** recriar a tipografia "SELET" — usar sempre o arquivo oficial
 
 ---

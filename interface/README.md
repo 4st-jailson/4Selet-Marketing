@@ -29,13 +29,17 @@ Abra **http://localhost:4500** no navegador.
 
 1. **Campanhas** → *Nova campanha*: defina nome, objetivo, ângulo, pilar e mensagens-chave.
 2. **Criar Conteúdo**: escolha a campanha + o tipo (caption, carrossel, post LinkedIn/Threads,
-   conceito de ad, ideia de vídeo), preencha o brief e clique em **Gerar com IA**.
+   conceito de ad, ideia de vídeo) + o **pilar de conteúdo** (eixo temático — Taxa Zero, educacional,
+   curiosidade de mercado, prova da plataforma, novidade ou motivacional; ou deixe a IA decidir pelo
+   tema), preencha o brief e clique em **Gerar com IA**.
    - O painel monta o **prompt padrão** com os knowledge files + o contexto da campanha.
    - O resultado vem estruturado e editável, com um **checklist de marca** (governança).
 3. **Salvar na campanha**: cria a peça em `outputs/<nome>_<data>/` (via `orchestrator.js`) e a
    vincula à campanha.
 4. **Conteúdo** → abra a peça → **workflow de aprovação**: gerar preview (→ em revisão),
    **Aprovar** (versiona em `outputs/approved/` com hash SHA-256) ou **Rejeitar**.
+   - Em **Aprovados › Coleções**, agrupe peças aprovadas em conjuntos curados com ordem própria
+     (opcionais; não substituem tags nem campanhas).
 
 ## Validação de estrutura padrão (front + back)
 

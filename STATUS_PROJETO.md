@@ -65,7 +65,8 @@ Implementado em 2026-06-02. Máquina de estados explícita `draft → in_review 
 
 ### 2.3 Pipeline de vídeo (Remotion) — `src/`
 
-- Composition **`AdVideo`** (1080×1920, 15s) — 5 scenes, SVGs inline, Inter+JetBrains Mono, paleta oficial.
+- Composition **`BrandStory`** — **composition de produção** parametrizada (consome `props.concept`/`cta`/`scenes[]`); é a que o **painel** renderiza ao gerar vídeo (`interface/lib/render.js`).
+- Composition **`AdVideo`** (1080×1920, 15s) — estática de **referência**: 5 scenes, SVGs inline, Inter+JetBrains Mono, paleta oficial.
 - Composition **`CampanhaDemo`** — adaptação do AdVideo para o ângulo "Migração Sem Trauma" (campanha-demo).
 
 ### 2.4 Dry-runs e fixtures
@@ -123,7 +124,7 @@ Claude Equipe de Marketing - 6 Agentes/
 ├── public/logo-4selet-light.png
 ├── knowledge/ (brand_identity, product_campaign, platform_guidelines)
 ├── assets/ (logos, brand-identity kit, reference-videos)
-├── src/ (Remotion: Root, AdVideo, CampanhaDemo, scenes/*, theme, components)
+├── src/ (Remotion: Root, BrandStory, AdVideo, CampanhaDemo, scenes/*, theme, components)
 ├── scripts/
 │   ├── lib/ (content_hash, status_bootstrap)
 │   ├── orchestrator.js · generate_preview.js · promote_task.js · refresh_index.js

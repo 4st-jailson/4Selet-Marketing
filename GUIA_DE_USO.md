@@ -189,8 +189,9 @@ Crie uma campanha para agrupar peças sob um mesmo tema/ângulo. As peças gerad
 
 1. Escolha o **tipo de conteúdo** (Seção 7).
 2. Escreva o **briefing** (mínimo de alguns caracteres; quanto mais específico, melhor).
-3. Opcional: **Referência visual / mood** — descreve o clima e o estilo a evocar (sempre dentro da marca). Direciona o conceito visual da peça.
-4. **Gerar com IA**. O resultado aparece em um editor.
+3. Escolha o **pilar de conteúdo** — o eixo temático da peça (o feed não é só Taxa Zero): *Campanha Taxa Zero*, *Educacional*, *Curiosidade de mercado*, *Prova da plataforma*, *Novidade* ou *Motivacional / estratégico*. Deixe em *"a IA decide pelo tema da peça"* para a IA escolher sozinha pelo tema.
+4. Opcional: **Referência visual / mood** — descreve o clima e o estilo a evocar (sempre dentro da marca). Direciona o conceito visual da peça.
+5. **Gerar com IA**. O resultado aparece em um editor.
 
 > [!NOTE]
 > O conteúdo textual (Feed, LinkedIn, Threads) é editável diretamente como texto. Carrossel e Vídeo têm um **editor estruturado**: cada slide ou cena é um cartão com campos próprios, e você pode adicionar, remover e reordenar os itens.
@@ -228,7 +229,14 @@ Onde todas as peças vivem. Recursos:
 | **Lightbox** | Visualização ampliada (imagens e preview) centralizada, com download. |
 | **Download** | Baixa o arquivo final da peça. |
 
-### 6.8 Configurações
+### 6.8 Coleções
+
+Em **Aprovados**, a aba **Coleções** agrupa peças aprovadas em conjuntos curados, com ordem própria — úteis para montar um carrossel de campanha, um kit de lançamento ou uma sequência de publicação. São opcionais e **não substituem tags nem campanhas**.
+
+- **＋ Nova coleção** cria o agrupamento; **Renomear** e **Excluir coleção** o gerenciam (excluir remove só o agrupamento, nunca as peças).
+- Na peça aprovada, use **Adicionar a uma coleção**. Dentro da coleção, **capa** define a imagem de destaque, e cada peça pode ser reordenada ou removida (a peça em si não é afetada — só sai do agrupamento).
+
+### 6.9 Configurações
 
 Chave da IA, modelo e **Aparência** (tema e cor de destaque do painel).
 
@@ -403,6 +411,9 @@ Imagem, feed e carrossel podem ser renderizados em três layouts on-brand, selec
 ![Os três templates visuais on-brand lado a lado: Editorial (gradiente azul com headline à esquerda), Destaque (fundo escuro com número em evidência) e Split (faixa clara sobre faixa escura).](docs/diagramas/templates-visuais.svg "Três layouts on-brand para a mesma peça — escolha o template antes de renderizar.")
 
 Todos seguem a paleta e a tipografia oficiais (logo claro sobre fundo escuro, escuro sobre claro). Números e percentuais na headline recebem realce automático na cor Sky.
+
+> [!NOTE]
+> No **carrossel**, o template escolhido vale para a **capa**; os demais slides usam layouts navy próprios, escolhidos automaticamente pelo conteúdo — grade de números, lista, texto corrido ou slide de CTA no fechamento. Cada slide leva a assinatura *"Para quem sabe que é Selet."* no rodapé.
 
 > [!NOTE]
 > A primeira renderização de vídeo após subir o servidor é mais lenta (o motor monta o bundle a frio). As seguintes são rápidas. Pela linha de comando, `npm run render` renderiza a composition padrão do projeto.
