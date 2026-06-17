@@ -135,7 +135,10 @@ function uiModal(opts) {
       const ctrl = f.type === "textarea"
         ? `<textarea data-mf="${i}" rows="3" placeholder="${esc(f.placeholder || "")}">${esc(f.value || "")}</textarea>`
         : `<input data-mf="${i}" type="${esc(f.inputType || "text")}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" />`;
-      return `<div class="field"><label>${esc(f.label || "")}</label>${ctrl}</div>`;
+      const sugg = (f.suggestions && f.suggestions.length)
+        ? `<div class="sugg-row" data-msug="${i}">${f.suggestLabel ? '<span class="hint">' + esc(f.suggestLabel) + "</span>" : ""}${f.suggestions.map((s) => '<button type="button" class="sugg-chip" data-sugg="' + esc(s) + '">' + esc(s) + "</button>").join("")}</div>`
+        : "";
+      return `<div class="field"><label>${esc(f.label || "")}</label>${ctrl}${sugg}</div>`;
     }).join("");
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
       <h3>${esc(opts.title || "")}</h3>
@@ -151,6 +154,32 @@ function uiModal(opts) {
     const opener = document.activeElement;
     const focusEl = ov.querySelector("[data-mf]") || ov.querySelector("[data-mx='ok']");
     if (focusEl) focusEl.focus();
+    // chips de sugestão: clicar adiciona/remove no campo; digitar filtra as sugestões (typeahead)
+    ov.querySelectorAll("[data-msug]").forEach((box) => {
+      const inp = ov.querySelector('[data-mf="' + box.dataset.msug + '"]');
+      const chips = Array.prototype.slice.call(box.querySelectorAll(".sugg-chip"));
+      const refresh = (useFrag) => {
+        const parts = inp.value.split(",");
+        const frag = useFrag ? (parts[parts.length - 1] || "").trim().toLowerCase() : "";
+        const sel = inp.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+        chips.forEach((chip) => {
+          const t = chip.dataset.sugg.toLowerCase();
+          chip.classList.toggle("on", sel.indexOf(t) !== -1);
+          chip.style.display = (!frag || t.indexOf(frag) !== -1) ? "" : "none";
+        });
+      };
+      chips.forEach((chip) => {
+        chip.onclick = () => {
+          const parts = inp.value.split(",").map((s) => s.trim()).filter(Boolean);
+          const idx = parts.findIndex((p) => p.toLowerCase() === chip.dataset.sugg.toLowerCase());
+          if (idx === -1) parts.push(chip.dataset.sugg); else parts.splice(idx, 1);
+          inp.value = parts.join(", ");
+          refresh(false); inp.focus();
+        };
+      });
+      inp.addEventListener("input", () => refresh(true));
+      refresh(false);
+    });
     const collect = () => { const o = {}; fields.forEach((f, i) => { o[f.name || i] = ov.querySelector('[data-mf="' + i + '"]').value.trim(); }); return o; };
     const done = (val) => {
       ov.classList.remove("open"); document.body.classList.remove("no-scroll");
@@ -207,7 +236,16 @@ function skeletonFor(route) {
   return `<div class="grid grid-2">${card(4)}${card(4)}</div>`;
 }
 
+let NAV_COUNT = 0;
+// "Voltar": volta para a página anterior de fato (de onde o usuário veio). Se a peça
+// foi aberta por link direto (sem histórico no painel), usa o fallback por zona.
+function goBack(fallback) {
+  if (NAV_COUNT > 1) history.back();
+  else location.hash = fallback || "#/content";
+}
+window.goBack = goBack;
 async function router() {
+  NAV_COUNT++;
   const { route, arg, query } = parseHash();
   $$("#nav a").forEach((a) => {
     const on = a.dataset.route === route;
@@ -432,58 +470,108 @@ async function viewContent(arg, query) {
   const tagSet = Array.from(new Set([].concat.apply([], active.map((t) => t.tags || [])))).sort((a, b) => a.localeCompare(b));
 
   const kindChips = kinds.map((k) => `<button class="chip-filter" data-fkind="${esc(k)}">${k === "all" ? "Todos os tipos" : esc(kindLabel(k))}</button>`).join("");
-  const statusOpts = '<option value="all">Todos os status</option>' + statuses.map((s) => `<option value="${esc(s)}">${esc(statusLabel(s))}</option>`).join("");
-  const campOpts = '<option value="all">Todas as campanhas</option>' + campIds.map((id) => `<option value="${esc(id)}">${esc(campName(id))}</option>`).join("");
-  const tagOpts = '<option value="all">Todas as tags</option>' + tagSet.map((tg) => `<option value="${esc(tg)}">${esc(tg)}</option>`).join("");
-  const collOpts = '<option value="all">Todas as coleções</option>' + collsActive.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+  const qualChips = [
+    '<button type="button" class="qual-chip" data-q="status:">status:</button>',
+    campIds.length ? '<button type="button" class="qual-chip" data-q="campanha:">campanha:</button>' : "",
+    tagSet.length ? '<button type="button" class="qual-chip" data-q="tag:">tag:</button>' : "",
+    collsActive.length ? '<button type="button" class="qual-chip" data-q="coleção:">coleção:</button>' : "",
+  ].filter(Boolean).join("");
+  const q0 = [];
+  if (query && query.status && statuses.includes(query.status)) q0.push("status:" + query.status);
+  if (query && query.tag && tagSet.indexOf(query.tag) !== -1) q0.push("tag:" + query.tag);
+  if (query && query.collection && collsActive.some((c) => c.id === query.collection)) q0.push("coleção:" + query.collection);
 
   setView(`
     <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
     <div class="lib-toolbar">
-      <input id="lib-search" class="lib-search" type="search" placeholder="Buscar por título ou tag…" />
-      <select id="lib-status">${statusOpts}</select>
-      ${campIds.length ? '<select id="lib-camp">' + campOpts + "</select>" : ""}
-      ${tagSet.length ? '<select id="lib-tag">' + tagOpts + "</select>" : ""}
-      ${collsActive.length ? '<select id="lib-coll">' + collOpts + "</select>" : ""}
+      <input id="lib-search" class="lib-search" type="search" placeholder="Buscar — ex.: taxa zero  status:rascunho  tag:q3" value="${esc(q0.join(" "))}" />
     </div>
+    ${qualChips ? '<div class="lib-quals"><span class="hint">Filtrar na busca:</span>' + qualChips + "</div>" : ""}
     <div class="filter-bar" id="lib-kinds">${kindChips}</div>
     <div class="lib-meta"><span id="lib-count" class="muted"></span><button class="muted-link" id="lib-clear" type="button" hidden>Limpar filtros</button></div>
     <div id="lib-grid"></div>`);
 
-  const wantStatus = query && query.status && statuses.includes(query.status) ? query.status : "all";
-  const wantTag = query && query.tag && tagSet.indexOf(query.tag) !== -1 ? query.tag : "all";
-  const st = { kind: (query && query.kind) || "all", status: wantStatus, camp: "all", coll: (query && query.collection) || "all", tag: wantTag, q: "" };
+  const st = { kind: (query && query.kind) || "all" };
+  // resolve um valor digitado (parcial, sem acento exato) para o item real do filtro
+  function resolveQual(key, val) {
+    val = val.toLowerCase();
+    if (key === "status") { const h = statuses.find((s) => statusLabel(s).toLowerCase().includes(val) || s.toLowerCase().includes(val)); return h || "__none__"; }
+    if (key === "camp") { const h = campIds.find((id) => (campName(id) || "").toLowerCase().includes(val) || id.toLowerCase().includes(val)); return h || "__none__"; }
+    if (key === "tag") { const h = tagSet.find((t) => t.toLowerCase().includes(val)); return h || "__none__"; }
+    const h = collsActive.find((c) => c.name.toLowerCase().includes(val) || c.id.toLowerCase().includes(val)); return h ? h.id : "__none__";
+  }
+  // separa "status:rascunho tag:q3 texto livre" em qualifiers + busca textual
+  function parseSearch(raw) {
+    const quals = { status: null, camp: null, tag: null, coll: null }; const terms = [];
+    raw.split(/\s+/).filter(Boolean).forEach((tok) => {
+      const m = tok.match(/^(status|campanha|campaign|tag|cole(?:c|ç)[aã]o|collection):(.*)$/i);
+      if (m) {
+        if (!m[2]) return;
+        const k = m[1].toLowerCase();
+        if (k === "status") quals.status = resolveQual("status", m[2]);
+        else if (k === "campanha" || k === "campaign") quals.camp = resolveQual("camp", m[2]);
+        else if (k === "tag") quals.tag = resolveQual("tag", m[2]);
+        else quals.coll = resolveQual("coll", m[2]);
+      } else terms.push(tok);
+    });
+    return { quals, text: terms.join(" ").toLowerCase() };
+  }
   function apply() {
+    const raw = ($("#lib-search").value || "").trim();
+    const { quals, text } = parseSearch(raw);
     let shown = active.slice();
     if (st.kind !== "all") shown = shown.filter((t) => t.kind === st.kind);
-    if (st.status !== "all") shown = shown.filter((t) => t.status === st.status);
+    if (quals.status) shown = shown.filter((t) => t.status === quals.status);
     else shown = shown.filter((t) => t.status !== "rejected");
-    if (st.camp !== "all") shown = shown.filter((t) => (t.campaign_id || "") === st.camp);
-    if (st.coll !== "all") shown = shown.filter((t) => (folderColls[t.folder] || []).indexOf(st.coll) !== -1);
-    if (st.tag !== "all") shown = shown.filter((t) => (t.tags || []).indexOf(st.tag) !== -1);
-    if (st.q) { const q = st.q.toLowerCase(); shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "") + " " + (t.tags || []).join(" ")).toLowerCase().includes(q)); }
+    if (quals.camp) shown = shown.filter((t) => (t.campaign_id || "") === quals.camp);
+    if (quals.coll) shown = shown.filter((t) => (folderColls[t.folder] || []).indexOf(quals.coll) !== -1);
+    if (quals.tag) shown = shown.filter((t) => (t.tags || []).indexOf(quals.tag) !== -1);
+    if (text) shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "") + " " + (t.tags || []).join(" ")).toLowerCase().includes(text));
     $$("#lib-kinds .chip-filter").forEach((b) => b.classList.toggle("on", b.dataset.fkind === st.kind));
     $("#lib-grid").innerHTML = shown.length
       ? '<div class="content-grid">' + shown.map(taskCard).join("") + "</div>"
       : '<div class="empty">Nenhuma peça com esses filtros. <a href="#/create">Criar conteúdo</a></div>';
-    const countEl = $("#lib-count"); if (countEl) countEl.textContent = plural(shown.length, "peça", "peças");
-    const anyFilter = st.kind !== "all" || st.status !== "all" || st.camp !== "all" || st.coll !== "all" || st.tag !== "all" || !!st.q;
-    const clearEl = $("#lib-clear"); if (clearEl) clearEl.hidden = !anyFilter;
+    $("#lib-count").textContent = plural(shown.length, "peça", "peças");
+    $("#lib-clear").hidden = !(st.kind !== "all" || raw);
   }
-  if (st.status !== "all" && $("#lib-status")) $("#lib-status").value = st.status;
-  if (st.tag !== "all" && $("#lib-tag")) $("#lib-tag").value = st.tag;
   $$("#lib-kinds .chip-filter").forEach((b) => { b.onclick = () => { st.kind = b.dataset.fkind; apply(); }; });
-  $("#lib-status").onchange = () => { st.status = $("#lib-status").value; apply(); };
-  if ($("#lib-camp")) $("#lib-camp").onchange = () => { st.camp = $("#lib-camp").value; apply(); };
-  if ($("#lib-coll")) { if (st.coll !== "all") $("#lib-coll").value = st.coll; $("#lib-coll").onchange = () => { st.coll = $("#lib-coll").value; apply(); }; }
-  if ($("#lib-tag")) $("#lib-tag").onchange = () => { st.tag = $("#lib-tag").value; apply(); };
-  $("#lib-search").oninput = () => { st.q = $("#lib-search").value.trim(); apply(); };
-  $("#lib-clear").onclick = () => {
-    st.kind = "all"; st.status = "all"; st.camp = "all"; st.coll = "all"; st.tag = "all"; st.q = "";
-    $("#lib-search").value = "";
-    ["#lib-status", "#lib-camp", "#lib-coll", "#lib-tag"].forEach((sel) => { if ($(sel)) $(sel).value = "all"; });
+  $("#lib-search").oninput = apply;
+  // dropdown de valores ao clicar num qualifier (status:/campanha:/tag:/coleção:) — seleciona e aplica
+  let qualMenu = null;
+  const onMenuKey = (e) => { if (e.key === "Escape") closeQualMenu(); };
+  const onDocClick = (e) => { if (qualMenu && !e.target.closest(".qual-menu") && !e.target.closest(".qual-chip")) closeQualMenu(); };
+  function closeQualMenu() { if (qualMenu) { qualMenu.remove(); qualMenu = null; document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onMenuKey); } }
+  function setQual(key, value) {
+    const inp = $("#lib-search");
+    const toks = inp.value.split(/\s+/).filter(Boolean).filter((t) => t.toLowerCase().indexOf(key.toLowerCase() + ":") !== 0);
+    toks.push(key + ":" + value);
+    inp.value = toks.join(" ");
     apply();
-  };
+  }
+  function qualItems(key) {
+    if (key === "status") return statuses.map((s) => ({ value: statusLabel(s).split(/\s+/).pop().toLowerCase(), label: statusLabel(s) }));
+    if (key === "campanha") return campIds.map((id) => ({ value: id, label: campName(id) }));
+    if (key === "tag") return tagSet.map((t) => ({ value: t, label: t }));
+    if (key === "coleção") return collsActive.map((c) => ({ value: c.id, label: c.name }));
+    return [];
+  }
+  function openQualMenu(chip, key) {
+    closeQualMenu();
+    const items = qualItems(key);
+    const r = chip.getBoundingClientRect();
+    qualMenu = document.createElement("div");
+    qualMenu.className = "qual-menu";
+    qualMenu.innerHTML = items.length
+      ? items.map((it) => `<button type="button" class="qual-opt" data-v="${esc(it.value)}">${esc(it.label)}</button>`).join("")
+      : '<div class="qual-opt is-empty">nada disponível</div>';
+    qualMenu.style.left = Math.round(Math.min(r.left, window.innerWidth - 290)) + "px";
+    qualMenu.style.top = Math.round(r.bottom + 4) + "px";
+    document.body.appendChild(qualMenu);
+    qualMenu.querySelectorAll(".qual-opt[data-v]").forEach((opt) => { opt.onclick = () => { setQual(key, opt.dataset.v); closeQualMenu(); $("#lib-search").focus(); }; });
+    setTimeout(() => { document.addEventListener("click", onDocClick); document.addEventListener("keydown", onMenuKey); }, 0);
+  }
+  $$(".lib-quals .qual-chip").forEach((b) => { b.onclick = (e) => { e.stopPropagation(); openQualMenu(b, b.dataset.q.replace(/:$/, "")); }; });
+  $("#lib-clear").onclick = () => { st.kind = "all"; $("#lib-search").value = ""; closeQualMenu(); apply(); };
   apply();
 }
 
@@ -950,7 +1038,7 @@ async function viewTaskDetail(folder) {
   setView(`
     <div class="flex-between mb flex-wrap">
       <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
-      <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="goBack('${task.zone === "approved" ? "#/approved" : "#/content"}')">← voltar</button>
     </div>
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
@@ -1022,10 +1110,15 @@ async function viewTaskDetail(folder) {
 
 // #5 — Edita as tags da peça (rótulos livres, separados por vírgula).
 async function editTags(folder, current) {
+  let suggestions = [];
+  try {
+    const { tasks } = await API.content();
+    suggestions = Array.from(new Set([].concat.apply([], tasks.map((t) => t.tags || [])))).sort((a, b) => a.localeCompare(b));
+  } catch (e) {}
   const res = await uiModal({
     title: "Editar tags",
     message: "Separe por vírgula. Até 12 tags, 32 caracteres cada.",
-    fields: [{ name: "tags", label: "Tags", value: (current || []).join(", "), placeholder: "ex.: taxa-zero, instagram, q3" }],
+    fields: [{ name: "tags", label: "Tags", value: (current || []).join(", "), placeholder: "ex.: taxa-zero, instagram, q3", suggestions, suggestLabel: suggestions.length ? "Já usadas (clique para usar):" : "" }],
     confirmText: "Salvar tags",
   });
   if (!res) return;
@@ -1034,6 +1127,23 @@ async function editTags(folder, current) {
     toast("Tags atualizadas", "success");
     router();
   } catch (e) { toast(e.message, "error"); }
+}
+
+// Exclui uma tag de TODAS as peças (remoção global). Sem endpoint dedicado: itera
+// as peças que a usam e regrava as tags sem ela. Confirmação obrigatória.
+async function deleteTagGlobally(tag) {
+  const ok = await uiConfirm('Excluir a tag "' + tag + '" de todas as peças? Não dá para desfazer com um clique.', { title: "Excluir tag", confirmText: "Excluir tag", confirmKind: "danger" });
+  if (!ok) return;
+  let tasks = [];
+  try { tasks = ((await API.content()).tasks || []).filter((t) => (t.tags || []).some((x) => x.toLowerCase() === tag.toLowerCase())); }
+  catch (e) { toast("Não foi possível carregar as peças", "error"); return; }
+  let done = 0, fail = 0;
+  for (const t of tasks) {
+    const next = (t.tags || []).filter((x) => x.toLowerCase() !== tag.toLowerCase());
+    try { await API.setTags(t.folder, next); done++; } catch (e) { fail++; }
+  }
+  toast(fail ? ('Tag removida de ' + done + ' peça(s); ' + fail + " falhou(aram)") : ('Tag "' + tag + '" removida de ' + done + " peça(s)"), fail ? "warn" : "success");
+  if (location.hash.indexOf("/settings") !== -1) viewSettings();
 }
 
 function workflowActions(task) {
@@ -1785,6 +1895,12 @@ async function viewSettings() {
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
     { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido/econômico)" },
   ];
+  const tagCounts = {};
+  try { (((await API.content().catch(() => ({}))).tasks) || []).forEach((t) => (t.tags || []).forEach((tg) => { tagCounts[tg] = (tagCounts[tg] || 0) + 1; })); } catch (e) {}
+  const tagNames = Object.keys(tagCounts).sort((a, b) => a.localeCompare(b));
+  const tagRows = tagNames.length
+    ? tagNames.map((tg) => `<div class="tagman-row"><span class="cc-tag">${esc(tg)}</span><span class="hint">${plural(tagCounts[tg], "peça", "peças")}</span><button class="btn btn-sm btn-danger" data-deltag="${esc(tg)}">Excluir</button></div>`).join("")
+    : '<p class="muted">Nenhuma tag criada ainda.</p>';
   setView(`
     <div class="card" style="max-width:660px">
       <h3>Inteligência Artificial (Claude)</h3>
@@ -1847,7 +1963,13 @@ async function viewSettings() {
           return '<button type="button" class="accent-opt" data-accent-id="' + id + '">' + sw + '<span>' + esc(p.label) + "</span></button>";
         }).join("")}</div>
       </div>
+    </div>
+    <div class="card mt" style="max-width:660px">
+      <h3>Gerenciar tags</h3>
+      <p class="muted mt">Tags são rótulos livres das peças. Excluir uma tag aqui remove ela de <strong>todas</strong> as peças que a usam — útil para limpar rótulos antigos ou digitados errado.</p>
+      <div class="tagman mt" id="tagman">${tagRows}</div>
     </div>`);
+  $$("#tagman [data-deltag]").forEach((b) => { b.onclick = () => deleteTagGlobally(b.dataset.deltag); });
   const markAccent = () => { const cur = currentAccent(); $$("#accent-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.accentId === cur)); };
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
