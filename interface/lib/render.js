@@ -63,12 +63,19 @@ function htmlToPng(htmlPath, outPng, width, height) {
 // 3 layouts on-brand (paleta 4Selet, Inter/JetBrains Mono, logo, Selet Dots).
 // Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
 // `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
-const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
+const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
 const DEFAULT_FOOTER = "Para quem sabe que é Selet.";
+
+// Comprimento VISÍVEL do headline (ignora as tags <span> do realce). Usado para
+// dimensionar a fonte: sem isso, o markup do destaque (ex.: "0%" vira
+// '<span class="accent">0%</span>') inflava a contagem e derrubava a fonte do
+// número — quebrando o efeito grande dos headlines curtos do template Destaque.
+function headlineLen(html) { return String(html || "").replace(/<[^>]+>/g, "").length; }
 
 // 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
 function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
-  const headlineSize = headline && headline.length > 22 ? 120 : 168;
+  const n = headlineLen(headline);
+  const headlineSize = n > 36 ? 100 : n > 22 ? 120 : 168;
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -90,9 +97,9 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
   .mid { position:relative; }
   .eyebrow { font-family:'JetBrains Mono',monospace; color:${PALETTE.sky};
     font-size:32px; letter-spacing:3px; text-transform:uppercase; margin-bottom:30px; }
-  .headline { font-weight:900; font-size:${headlineSize}px; line-height:0.98;
+  .headline { font-weight:700; font-size:${headlineSize}px; line-height:0.98;
     color:#FFFFFF; letter-spacing:-2px; }
-  .headline .accent { color:${PALETTE.sky}; }
+  .headline .accent { color:${PALETTE.sky}; font-weight:900; }
   .subtext { margin-top:36px; font-size:40px; line-height:1.34; color:${PALETTE.mist};
     max-width:90%; font-weight:400; }
   .bottom { position:relative; display:flex; align-items:center; justify-content:space-between; }
@@ -120,7 +127,8 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
 // 2) Bold — fundo Darker solido, simbolo "4" como marca d'agua, tudo centralizado.
 // Pensado p/ headlines curtas number-forward (ex.: "0%", "95%", "Os 4 numeros").
 function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
-  const headlineSize = headline && headline.length > 18 ? 132 : 196;
+  const n = headlineLen(headline);
+  const headlineSize = n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196;
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -140,9 +148,9 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
     font-size:32px; letter-spacing:4px; text-transform:uppercase; margin-bottom:36px; }
   .badge { font-family:'JetBrains Mono',monospace; font-size:28px; letter-spacing:1px;
     color:${PALETTE.darker}; background:${PALETTE.sky}; padding:9px 22px; border-radius:999px; font-weight:500; margin-bottom:40px; }
-  .headline { font-weight:900; font-size:${headlineSize}px; line-height:0.96;
+  .headline { font-weight:700; font-size:${headlineSize}px; line-height:0.96;
     color:#FFFFFF; letter-spacing:-3px; }
-  .headline .accent { color:${PALETTE.sky}; }
+  .headline .accent { color:${PALETTE.sky}; font-weight:900; }
   .subtext { margin-top:40px; font-size:42px; line-height:1.32; color:${PALETTE.mist};
     max-width:84%; font-weight:400; }
   .bottom { position:relative; display:flex; flex-direction:column; align-items:center; gap:28px; }
@@ -172,11 +180,12 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
   // Em formato quadrado (1080x1080) a banda inferior e mais curta — reduz a
   // tipografia e o padding para o subtexto e o CTA nao serem cortados.
   const square = height < 1200;
-  const headlineSize = square ? (headline && headline.length > 22 ? 100 : 124)
-                              : (headline && headline.length > 22 ? 112 : 150);
+  const n = headlineLen(headline);
+  const headlineSize = square ? (n > 52 ? 72 : n > 36 ? 84 : n > 22 ? 100 : 124)
+                              : (n > 52 ? 84 : n > 36 ? 96 : n > 22 ? 112 : 150);
   const subSize = square ? 34 : 40;
-  const topFlex = square ? 30 : 36;
-  const botPad = square ? 64 : 88;
+  const topFlex = square ? 22 : 26;
+  const botPad = square ? 76 : 104;
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -184,7 +193,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
   .card { position:relative; width:${width}px; height:${height}px; overflow:hidden;
     font-family:'Inter',sans-serif; display:flex; flex-direction:column; }
   .band-top { position:relative; flex:0 0 ${topFlex}%; background:${PALETTE.cloud}; color:${PALETTE.navy};
-    display:flex; flex-direction:column; justify-content:center; gap:22px; padding:0 92px; }
+    display:flex; flex-direction:column; justify-content:center; gap:22px; padding:0 104px; }
   .band-top .dots { position:absolute; inset:0;
     background-image: radial-gradient(${PALETTE.blue}1f 2px, transparent 2px);
     background-size: 44px 44px; opacity:.6; }
@@ -194,10 +203,10 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
   .badge { position:relative; align-self:flex-start; font-family:'JetBrains Mono',monospace; font-size:28px;
     color:#FFFFFF; background:${PALETTE.blue}; padding:9px 22px; border-radius:999px; font-weight:500; }
   .band-bot { position:relative; flex:1; min-height:0; background:linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);
-    color:${PALETTE.cloud}; display:flex; flex-direction:column; justify-content:space-between; padding:${botPad}px 92px; }
-  .headline { font-weight:900; font-size:${headlineSize}px; line-height:0.99;
+    color:${PALETTE.cloud}; display:flex; flex-direction:column; justify-content:space-between; padding:${botPad}px 104px; }
+  .headline { font-weight:700; font-size:${headlineSize}px; line-height:0.99;
     color:#FFFFFF; letter-spacing:-2px; }
-  .headline .accent { color:${PALETTE.sky}; }
+  .headline .accent { color:${PALETTE.sky}; font-weight:900; }
   .subtext { margin-top:28px; font-size:${subSize}px; line-height:1.3; color:${PALETTE.mist};
     max-width:92%; font-weight:400; }
   .bottom { display:flex; align-items:center; justify-content:space-between; }
@@ -270,8 +279,8 @@ function carBase(width, height) {
   .pageno { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.8; }
   .eyebrow { font-family:'JetBrains Mono',monospace; color:${PALETTE.sky}; font-size:30px; letter-spacing:3px; text-transform:uppercase; margin-bottom:26px; }
   .mid { position:relative; flex:1; display:flex; flex-direction:column; justify-content:center; }
-  .s-title { font-weight:900; font-size:84px; line-height:1.02; color:#FFFFFF; letter-spacing:-1.5px; }
-  .s-title .accent { color:${PALETTE.sky}; }
+  .s-title { font-weight:700; font-size:84px; line-height:1.02; color:#FFFFFF; letter-spacing:-1.5px; }
+  .s-title .accent { color:${PALETTE.sky}; font-weight:900; }
   .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }`;
 }
 function carDoc(ctx, extraCss, bodyInner) {
@@ -282,7 +291,8 @@ function carDoc(ctx, extraCss, bodyInner) {
 function carTop(ctx) {
   return `<div class="top"><img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/><span class="pageno">${ctx.n} / ${ctx.total}</span></div>`;
 }
-function carFooter(ctx) { return `<div class="footer">${esc(ctx.footer || DEFAULT_FOOTER)}</div>`; }
+// Slogan só no slide de fechamento (ctx.tagline) — evita repetir a frase em todo slide.
+function carFooter(ctx) { return ctx.tagline ? `<div class="footer">${esc(ctx.footer || DEFAULT_FOOTER)}</div>` : ""; }
 
 // Texto (desenvolvimento): titulo forte + paragrafo de apoio.
 function slideText(slide, ctx) {
@@ -381,7 +391,7 @@ function renderImage(folder, opts) {
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
   const html = tpl.build({
     width: 1080, height: 1080,
-    eyebrow: concept.layout_type || concept.eyebrow || "Destaque",
+    eyebrow: concept.eyebrow || "",
     headline: highlightHeadline(concept.headline || "Para quem sabe que é Selet."),
     subtext: concept.subtext || "",
     cta: concept.cta || "Ver as condicoes",
@@ -405,7 +415,7 @@ function renderFeed(folder, opts) {
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
   const html = tpl.build({
     width: 1080, height: 1350,
-    eyebrow: "Feed",
+    eyebrow: "",
     headline: highlightHeadline(headline),
     subtext: "",
     cta: "Solicitar convite",
@@ -438,7 +448,7 @@ function renderCarousel(folder, opts) {
       // A capa usa o template de arte escolhido (editorial|bold|split).
       html = tpl.build({
         width: 1080, height: 1350,
-        eyebrow: concept.eyebrow || "Carrossel",
+        eyebrow: concept.eyebrow || "",
         headline: highlightHeadline(s.title || ""),
         subtext: s.body || "",
         cta: "",
@@ -449,6 +459,7 @@ function renderCarousel(folder, opts) {
         width: 1080, height: 1350, n: n, total: total,
         cta: arch === "cta" ? (concept.cta || "Solicitar convite") : "",
         footer: concept.footer,
+        tagline: arch === "cta",
       };
       html = SLIDE_ARCHETYPES[arch](s, ctx);
     }
@@ -519,7 +530,7 @@ function previewFields(ct, parsed) {
   if (ct.kind === "image") {
     return {
       width: 1080, height: 1080,
-      eyebrow: parsed.layout_type || parsed.eyebrow || "Destaque",
+      eyebrow: parsed.eyebrow || "",
       headline: highlightHeadline(parsed.headline || "Para quem sabe que é Selet."),
       subtext: parsed.subtext || "",
       cta: parsed.cta || "Ver as condicoes",
@@ -532,7 +543,7 @@ function previewFields(ct, parsed) {
     const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
     return {
       width: 1080, height: 1350,
-      eyebrow: "Feed",
+      eyebrow: "",
       headline: highlightHeadline(headline),
       subtext: "",
       cta: "Solicitar convite",
@@ -545,7 +556,7 @@ function previewFields(ct, parsed) {
     const s = slides[0] || {};
     return {
       width: 1080, height: 1350,
-      eyebrow: parsed.eyebrow || "Carrossel",
+      eyebrow: parsed.eyebrow || "",
       headline: highlightHeadline(s.title || ""),
       subtext: s.body || "",
       cta: "",

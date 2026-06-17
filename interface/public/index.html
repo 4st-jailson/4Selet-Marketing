@@ -70,14 +70,14 @@
     <main class="main">
       <header class="topbar">
         <div class="topbar-left">
-          <button class="btn btn-ghost btn-icon menu-btn" id="btn-menu" aria-label="Abrir menu">
+          <button class="btn btn-ghost btn-icon menu-btn" id="btn-menu" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">
             <svg class="ico-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </button>
           <h1 id="page-title">Painel 4Selet</h1>
         </div>
         <div class="topbar-actions">
           <button class="btn btn-ghost btn-sm" id="btn-theme" title="Alternar tema" aria-label="Alternar tema">Tema</button>
-          <button class="btn btn-ghost btn-sm" id="btn-assistant">
+          <button class="btn btn-ghost btn-sm" id="btn-assistant" aria-controls="assistant" aria-expanded="false">
             <svg class="ico-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span>Assistente</span>
           </button>
@@ -102,7 +102,7 @@
     </div>
   </div>
 
-  <div id="toasts" class="toasts"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Lightbox -->
   <div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Visualizador de mídia">

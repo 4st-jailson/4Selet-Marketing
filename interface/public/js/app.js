@@ -109,6 +109,21 @@ function fmtDateTime(v) {
   return d.getDate() + " " + MESES[d.getMonth()] + " " + d.getFullYear() + " às " + p(d.getHours()) + "h" + p(d.getMinutes());
 }
 
+/* ---- foco acessível em diálogos: prende o Tab dentro do diálogo e devolve o foco ao fechar ---- */
+const FOCUSABLE_SEL = 'a[href],button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+function focusablesIn(el) {
+  return $$(FOCUSABLE_SEL, el).filter((n) => n.offsetParent !== null || n === document.activeElement);
+}
+function trapTabKey(container, e) {
+  if (e.key !== "Tab" || !container) return;
+  const els = focusablesIn(container);
+  if (!els.length) return;
+  const first = els[0], last = els[els.length - 1], active = document.activeElement;
+  if (e.shiftKey && (active === first || !container.contains(active))) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (active === last || !container.contains(active))) { e.preventDefault(); first.focus(); }
+}
+function restoreFocus(el) { if (el && typeof el.focus === "function") { try { el.focus(); } catch (_) { /* elemento pode ter saído do DOM */ } } }
+
 /* ---- Modal in-app (substitui prompt/confirm nativos) ---- */
 function uiModal(opts) {
   opts = opts || {};
@@ -133,16 +148,18 @@ function uiModal(opts) {
     document.body.appendChild(ov);
     document.body.classList.add("no-scroll");
     requestAnimationFrame(() => ov.classList.add("open"));
+    const opener = document.activeElement;
     const focusEl = ov.querySelector("[data-mf]") || ov.querySelector("[data-mx='ok']");
     if (focusEl) focusEl.focus();
     const collect = () => { const o = {}; fields.forEach((f, i) => { o[f.name || i] = ov.querySelector('[data-mf="' + i + '"]').value.trim(); }); return o; };
     const done = (val) => {
       ov.classList.remove("open"); document.body.classList.remove("no-scroll");
-      document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val);
+      document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); restoreFocus(opener); resolve(val);
     };
     const onKey = (e) => {
       if (e.key === "Escape") { e.preventDefault(); done(null); }
       else if (e.key === "Enter" && !fields.some((f) => f.type === "textarea")) { e.preventDefault(); done(fields.length ? collect() : true); }
+      else if (e.key === "Tab") trapTabKey(ov, e);
     };
     ov.querySelector("[data-mx='ok']").onclick = () => done(fields.length ? collect() : true);
     ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
@@ -176,12 +193,30 @@ const Routes = {
   settings: viewSettings,
 };
 
+// Skeleton de carregamento com o formato do destino — load parece intencional,
+// não um "piscar". Substituído pela view real assim que os dados chegam.
+function skeletonFor(route) {
+  const card = (rows) => `<div class="card"><div class="skel skel-h"></div>${Array.from({ length: rows || 3 }).map((_, i) => `<div class="skel skel-line" style="width:${85 - i * 11}%"></div>`).join("")}</div>`;
+  const stat = () => `<div class="card sk-stat"><div class="skel skel-dot"></div><div class="sk-stat-body"><div class="skel skel-num"></div><div class="skel skel-line" style="width:72%"></div></div></div>`;
+  const row = () => `<div class="sk-row"><div class="skel skel-dot"></div><div class="sk-row-body"><div class="skel skel-line" style="width:55%"></div><div class="skel skel-line" style="width:34%"></div></div></div>`;
+  const head = (w) => `<div class="section-head"><div class="skel skel-h" style="width:${w || 170}px;margin-bottom:0"></div></div>`;
+  if (route === "dashboard") return `<div class="stat-grid mb">${stat() + stat() + stat() + stat()}</div><div class="grid grid-2">${card(5)}${card(3)}</div>`;
+  if (route === "campaigns" || route === "approved") return `${head()}<div class="grid grid-3">${card(3) + card(3) + card(3)}</div>`;
+  if (route === "content") return `${head(150)}<div class="card">${Array.from({ length: 6 }).map(row).join("")}</div>`;
+  if (route === "create") return `<div class="grid grid-2">${card(6)}${card(2)}</div>`;
+  return `<div class="grid grid-2">${card(4)}${card(4)}</div>`;
+}
+
 async function router() {
   const { route, arg, query } = parseHash();
-  $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === route));
+  $$("#nav a").forEach((a) => {
+    const on = a.dataset.route === route;
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
   closeSidebar();
   const fn = Routes[route] || viewDashboard;
-  setView('<div class="empty"><span class="spinner"></span> carregando…</div>');
+  setView(skeletonFor(route));
   try { await fn(arg, query); window.scrollTo({ top: 0 }); }
   catch (e) { setView('<div class="empty">Erro ao carregar: ' + esc(e.message) + "</div>"); toast(e.message, "error"); }
 }
@@ -254,12 +289,12 @@ async function viewCampaigns() {
 }
 
 function campCard(c) {
-  return `<div class="card card-link" onclick="location.hash='#/campaign/${encodeURIComponent(c.id)}'">
+  return `<a class="card card-link" href="#/campaign/${encodeURIComponent(c.id)}">
     <div class="flex-between"><h3>${esc(c.name)}</h3>${statusBadge(c.status)}</div>
     <p class="muted mt">${esc(c.objective || c.angle || "—")}</p>
     <div class="chips mt">${(c.platforms || []).map((p) => tag(platformLabel(p))).join("")}${c.pillar ? tag(c.pillar) : ""}</div>
     <div class="muted mt">${plural((c.content_ids || []).length, "peça vinculada", "peças vinculadas")}</div>
-  </div>`;
+  </a>`;
 }
 
 function renderCampaignForm(existing) {
@@ -269,7 +304,7 @@ function renderCampaignForm(existing) {
   const wrap = $("#camp-form-wrap") || $("#view");
   wrap.innerHTML = `<div class="card mb">
     <h3>${existing ? "Editar campanha" : "Nova campanha"}</h3>
-    <div class="field mt"><label>Nome <span class="hint">(mín. 3 caracteres)</span></label><input id="c-name" value="${esc(c.name || "")}" placeholder="ex.: Taxa Zero — 2º semestre" /><div class="field-error" id="e-name"></div></div>
+    <div class="field mt"><label>Nome <span class="hint">(mín. 3 caracteres)</span></label><input id="c-name" value="${esc(c.name || "")}" placeholder="ex.: Taxa Zero — 2º semestre" aria-describedby="e-name" /><div class="field-error" id="e-name" role="alert"></div></div>
     <div class="field"><label>Objetivo</label><textarea id="c-obj" rows="2" placeholder="O que esta campanha precisa alcançar?">${esc(c.objective || "")}</textarea></div>
     <div class="row">
       <div class="field"><label>Ângulo</label><input id="c-angle" value="${esc(c.angle || "")}" placeholder="ex.: 0% por 3 meses" /></div>
@@ -290,8 +325,8 @@ function renderCampaignForm(existing) {
   $("#c-cancel").onclick = () => router();
   $("#c-save").onclick = async () => {
     const name = $("#c-name").value.trim();
-    $("#e-name").textContent = "";
-    if (name.length < 3) { $("#c-name").classList.add("invalid"); $("#e-name").textContent = "Nome obrigatório (mín. 3 caracteres)."; return; }
+    $("#e-name").textContent = ""; $("#c-name").removeAttribute("aria-invalid");
+    if (name.length < 3) { $("#c-name").classList.add("invalid"); $("#c-name").setAttribute("aria-invalid", "true"); $("#e-name").textContent = "Nome obrigatório (mín. 3 caracteres)."; return; }
     const payload = {
       name, objective: $("#c-obj").value.trim(), angle: $("#c-angle").value.trim(),
       pillar: $("#c-pillar").value, status: $("#c-status").value,
@@ -364,7 +399,7 @@ function taskCard(t) {
   const hasThumb = t.thumb && t.thumb.rel;
   const previewable = hasThumb && (t.thumb.type === "video" || t.thumb.type === "image" || /\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i.test(t.thumb.rel));
   const zoomBtn = previewable
-    ? `<button class="cc-zoom" title="Pré-visualizar" onclick="event.preventDefault();event.stopPropagation();openLightbox('${API.rawUrl(t.folder, t.thumb.rel)}','${t.thumb.type === "video" ? "video" : "image"}','${API.downloadUrl(t.folder, t.thumb.rel)}')">⤢</button>`
+    ? `<button class="cc-zoom" title="Pré-visualizar" aria-label="Pré-visualizar" onclick="event.preventDefault();event.stopPropagation();openLightbox('${API.rawUrl(t.folder, t.thumb.rel)}','${t.thumb.type === "video" ? "video" : "image"}','${API.downloadUrl(t.folder, t.thumb.rel)}')">⤢</button>`
     : "";
   const newBadge = !t.first_viewed_at ? '<span class="cc-new">Novo</span>' : "";
   const tagsHtml = (t.tags && t.tags.length)
@@ -382,9 +417,14 @@ function taskCard(t) {
 
 async function viewContent(arg, query) {
   setTitle("Conteúdo");
-  const [{ tasks }, { campaigns }] = await Promise.all([API.content(), API.campaigns()]);
+  const [{ tasks }, { campaigns }, collData] = await Promise.all([API.content(), API.campaigns(), API.collections().catch(() => ({ collections: [] }))]);
   setCampMap(campaigns);
   const active = tasks.filter((t) => t.zone !== "approved");
+  // membership de coleções (já vem em item_ids) — para o filtro por coleção da biblioteca
+  const colls = (collData && collData.collections) || [];
+  const folderColls = {};
+  colls.forEach((c) => (c.item_ids || []).forEach((f) => { (folderColls[f] = folderColls[f] || []).push(c.id); }));
+  const collsActive = colls.filter((c) => (c.item_ids || []).some((f) => active.some((t) => t.folder === f)));
   const campName = (id) => { const c = campaigns.find((x) => x.id === id); return c ? c.name : id; };
   const kinds = ["all"].concat(Object.keys(State.meta.kind_labels || {}).filter((k) => active.some((t) => t.kind === k)));
   const statuses = Array.from(new Set(active.map((t) => t.status)));
@@ -395,41 +435,55 @@ async function viewContent(arg, query) {
   const statusOpts = '<option value="all">Todos os status</option>' + statuses.map((s) => `<option value="${esc(s)}">${esc(statusLabel(s))}</option>`).join("");
   const campOpts = '<option value="all">Todas as campanhas</option>' + campIds.map((id) => `<option value="${esc(id)}">${esc(campName(id))}</option>`).join("");
   const tagOpts = '<option value="all">Todas as tags</option>' + tagSet.map((tg) => `<option value="${esc(tg)}">${esc(tg)}</option>`).join("");
+  const collOpts = '<option value="all">Todas as coleções</option>' + collsActive.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
 
   setView(`
-    <div class="section-head"><h2>Biblioteca de conteúdo</h2><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div>
+    <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
     <div class="lib-toolbar">
-      <input id="lib-search" class="lib-search" type="search" placeholder="Buscar por título…" />
+      <input id="lib-search" class="lib-search" type="search" placeholder="Buscar por título ou tag…" />
       <select id="lib-status">${statusOpts}</select>
       ${campIds.length ? '<select id="lib-camp">' + campOpts + "</select>" : ""}
       ${tagSet.length ? '<select id="lib-tag">' + tagOpts + "</select>" : ""}
+      ${collsActive.length ? '<select id="lib-coll">' + collOpts + "</select>" : ""}
     </div>
     <div class="filter-bar" id="lib-kinds">${kindChips}</div>
+    <div class="lib-meta"><span id="lib-count" class="muted"></span><button class="muted-link" id="lib-clear" type="button" hidden>Limpar filtros</button></div>
     <div id="lib-grid"></div>`);
 
   const wantStatus = query && query.status && statuses.includes(query.status) ? query.status : "all";
   const wantTag = query && query.tag && tagSet.indexOf(query.tag) !== -1 ? query.tag : "all";
-  const st = { kind: (query && query.kind) || "all", status: wantStatus, camp: "all", tag: wantTag, q: "" };
+  const st = { kind: (query && query.kind) || "all", status: wantStatus, camp: "all", coll: (query && query.collection) || "all", tag: wantTag, q: "" };
   function apply() {
     let shown = active.slice();
     if (st.kind !== "all") shown = shown.filter((t) => t.kind === st.kind);
     if (st.status !== "all") shown = shown.filter((t) => t.status === st.status);
     else shown = shown.filter((t) => t.status !== "rejected");
     if (st.camp !== "all") shown = shown.filter((t) => (t.campaign_id || "") === st.camp);
+    if (st.coll !== "all") shown = shown.filter((t) => (folderColls[t.folder] || []).indexOf(st.coll) !== -1);
     if (st.tag !== "all") shown = shown.filter((t) => (t.tags || []).indexOf(st.tag) !== -1);
     if (st.q) { const q = st.q.toLowerCase(); shown = shown.filter((t) => (displayName(t) + " " + (t.task_name || "") + " " + (t.tags || []).join(" ")).toLowerCase().includes(q)); }
     $$("#lib-kinds .chip-filter").forEach((b) => b.classList.toggle("on", b.dataset.fkind === st.kind));
     $("#lib-grid").innerHTML = shown.length
       ? '<div class="content-grid">' + shown.map(taskCard).join("") + "</div>"
       : '<div class="empty">Nenhuma peça com esses filtros. <a href="#/create">Criar conteúdo</a></div>';
+    const countEl = $("#lib-count"); if (countEl) countEl.textContent = plural(shown.length, "peça", "peças");
+    const anyFilter = st.kind !== "all" || st.status !== "all" || st.camp !== "all" || st.coll !== "all" || st.tag !== "all" || !!st.q;
+    const clearEl = $("#lib-clear"); if (clearEl) clearEl.hidden = !anyFilter;
   }
   if (st.status !== "all" && $("#lib-status")) $("#lib-status").value = st.status;
   if (st.tag !== "all" && $("#lib-tag")) $("#lib-tag").value = st.tag;
   $$("#lib-kinds .chip-filter").forEach((b) => { b.onclick = () => { st.kind = b.dataset.fkind; apply(); }; });
   $("#lib-status").onchange = () => { st.status = $("#lib-status").value; apply(); };
   if ($("#lib-camp")) $("#lib-camp").onchange = () => { st.camp = $("#lib-camp").value; apply(); };
+  if ($("#lib-coll")) { if (st.coll !== "all") $("#lib-coll").value = st.coll; $("#lib-coll").onchange = () => { st.coll = $("#lib-coll").value; apply(); }; }
   if ($("#lib-tag")) $("#lib-tag").onchange = () => { st.tag = $("#lib-tag").value; apply(); };
   $("#lib-search").oninput = () => { st.q = $("#lib-search").value.trim(); apply(); };
+  $("#lib-clear").onclick = () => {
+    st.kind = "all"; st.status = "all"; st.camp = "all"; st.coll = "all"; st.tag = "all"; st.q = "";
+    $("#lib-search").value = "";
+    ["#lib-status", "#lib-camp", "#lib-coll", "#lib-tag"].forEach((sel) => { if ($(sel)) $(sel).value = "all"; });
+    apply();
+  };
   apply();
 }
 
@@ -523,8 +577,8 @@ async function openCollection(id) {
       </div>
       <div class="flex flex-wrap">
         <div class="seg-group sm">
-          <button class="seg ${lm === "grid" ? "on" : ""}" data-lay="grid" title="Ver em grade">▦</button>
-          <button class="seg ${lm === "list" ? "on" : ""}" data-lay="list" title="Ver em lista">≡</button>
+          <button class="seg ${lm === "grid" ? "on" : ""}" data-lay="grid" title="Ver em grade" aria-label="Ver em grade">▦</button>
+          <button class="seg ${lm === "list" ? "on" : ""}" data-lay="list" title="Ver em lista" aria-label="Ver em lista">≡</button>
         </div>
         <button class="btn btn-sm btn-primary" id="coll-add">＋ Adicionar peças</button>
         <button class="btn btn-sm" id="coll-edit">Renomear</button>
@@ -542,10 +596,10 @@ async function openCollection(id) {
 
 function collItemCtrls(t, idx, total) {
   return `<div class="coll-ctrls">
-    <button class="cc-mini" data-cmove="up" data-folder="${esc(t.folder)}" title="Mover para cima" ${idx === 0 ? "disabled" : ""}>↑</button>
-    <button class="cc-mini" data-cmove="down" data-folder="${esc(t.folder)}" title="Mover para baixo" ${idx === total - 1 ? "disabled" : ""}>↓</button>
+    <button class="cc-mini" data-cmove="up" data-folder="${esc(t.folder)}" title="Mover para cima" aria-label="Mover para cima" ${idx === 0 ? "disabled" : ""}>↑</button>
+    <button class="cc-mini" data-cmove="down" data-folder="${esc(t.folder)}" title="Mover para baixo" aria-label="Mover para baixo" ${idx === total - 1 ? "disabled" : ""}>↓</button>
     <button class="cc-mini" data-ccover data-folder="${esc(t.folder)}" title="Usar como capa">capa</button>
-    <button class="cc-mini danger" data-cremove data-folder="${esc(t.folder)}" title="Tirar da coleção">✕</button>
+    <button class="cc-mini danger" data-cremove data-folder="${esc(t.folder)}" title="Tirar da coleção" aria-label="Tirar da coleção">✕</button>
   </div>`;
 }
 function collItemCard(t, idx, total) {
@@ -657,9 +711,10 @@ function pickPiecesModal(opts) {
       </div></div>`;
     document.body.appendChild(ov);
     document.body.classList.add("no-scroll");
-    requestAnimationFrame(() => ov.classList.add("open"));
-    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val); };
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    const opener = document.activeElement;
+    requestAnimationFrame(() => { ov.classList.add("open"); const f0 = focusablesIn(ov)[0]; if (f0) f0.focus(); });
+    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); restoreFocus(opener); resolve(val); };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null); } else if (e.key === "Tab") trapTabKey(ov, e); };
     ov.querySelector("[data-mx='ok']").onclick = () => { const sel = $$('input[type="checkbox"]', ov).filter((x) => x.checked).map((x) => x.value); done(sel); };
     ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
     ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
@@ -713,9 +768,10 @@ function chooseCollectionModal(collections, folder) {
       </div></div>`;
     document.body.appendChild(ov);
     document.body.classList.add("no-scroll");
-    requestAnimationFrame(() => ov.classList.add("open"));
-    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val); };
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    const opener = document.activeElement;
+    requestAnimationFrame(() => { ov.classList.add("open"); const f0 = focusablesIn(ov)[0]; if (f0) f0.focus(); });
+    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); restoreFocus(opener); resolve(val); };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null); } else if (e.key === "Tab") trapTabKey(ov, e); };
     $$("[data-cid]", ov).forEach((b) => { b.onclick = () => done({ id: b.dataset.cid }); });
     ov.querySelector("[data-mx='create']").onclick = () => { const v = ov.querySelector("[data-newcoll]").value.trim(); if (v.length < 3) { toast("Dê um nome com ao menos 3 caracteres.", "error"); return; } done({ create: v }); };
     ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
@@ -744,12 +800,13 @@ function mediaGallery(folder, task) {
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const items = []
-    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
+    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
   return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
-// #2 — Strip ordenado de thumbnails dos slides de um carrossel (slide_1..n).
+// #2 — Galeria única e ordenada dos slides de um carrossel (slide_1..n): cada slide
+// numerado, com ampliar e baixar. Substitui a "Arte gerada" p/ carrossel (evita duplicar).
 function carouselStrip(folder, task) {
   const slides = task.files
     .filter((f) => /slide_0*\d+\.png$/i.test(f.rel))
@@ -757,12 +814,14 @@ function carouselStrip(folder, task) {
     .sort((a, b) => a.n - b.n);
   if (slides.length < 2) return "";
   const items = slides.map((s) =>
-    `<button class="slide-thumb" title="Slide ${s.n} — ampliar" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')">
-      <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" /><span class="slide-num">${s.n}</span>
-    </button>`).join("");
+    `<div class="media-item"><div class="media-frame">
+      <span class="slide-num">${s.n}</span>
+      <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')" />
+      <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')">⤢</button>
+    </div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, s.f.rel)}" download>baixar slide ${s.n}</a></div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
-    <p class="muted mt">Ordem de publicação — clique para ampliar.</p>
-    <div class="slide-strip mt">${items}</div></div>`;
+    <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
+    <div class="media-gallery mt">${items}</div></div>`;
 }
 
 function renderPanel(folder, task) {
@@ -893,8 +952,7 @@ async function viewTaskDetail(folder) {
       <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
       <a class="btn btn-sm btn-ghost" href="#/content">← voltar</a>
     </div>
-    ${task.kind === "carousel" ? carouselStrip(folder, task) : ""}
-    ${mediaGallery(folder, task)}
+    ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
         <h3>Arquivos</h3>
@@ -1039,11 +1097,21 @@ window.openFile = openFile;
 
 /* ---- Lightbox ---- */
 let _lbBlobUrl = null;
+let _lbOpener = null;
 // Mostra/oculta o botão "abrir em nova aba" do lightbox (só faz sentido p/ HTML).
 function setLightboxNewTab(url) {
   const nt = $("#lightbox-newtab");
   if (!nt) return;
   if (url) { nt.href = url; nt.style.display = ""; } else { nt.style.display = "none"; nt.removeAttribute("href"); }
+}
+// Abre o chrome do lightbox: guarda quem abriu, exibe e move o foco para o botão fechar.
+function lbShow() {
+  const lb = $("#lightbox"); if (!lb) return;
+  _lbOpener = document.activeElement;
+  lb.classList.add("open");
+  lb.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+  const cb = $("#lightbox-close"); if (cb) cb.focus();
 }
 function openLightbox(url, type, dlUrl) {
   const lb = $("#lightbox");
@@ -1055,9 +1123,7 @@ function openLightbox(url, type, dlUrl) {
   setLightboxNewTab(null);
   const dl = $("#lightbox-dl");
   if (dl) { dl.href = dlUrl || url; dl.style.display = dlUrl ? "" : "none"; }
-  lb.classList.add("open");
-  lb.setAttribute("aria-hidden", "false");
-  document.body.classList.add("no-scroll");
+  lbShow();
 }
 // #7 — Pré-visualiza .json/.txt num modal amplo com <pre> mono, scroll interno.
 async function openTextLightbox(folder, rel, dlUrl) {
@@ -1066,9 +1132,7 @@ async function openTextLightbox(folder, rel, dlUrl) {
   if (!lb || !stage) { window.open(API.rawUrl(folder, rel), "_blank"); return; }
   stage.innerHTML = '<div class="lightbox-loading"><span class="spinner"></span> carregando…</div>';
   setLightboxNewTab(null);
-  lb.classList.add("open");
-  lb.setAttribute("aria-hidden", "false");
-  document.body.classList.add("no-scroll");
+  lbShow();
   const dl = $("#lightbox-dl");
   if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
   try {
@@ -1086,9 +1150,7 @@ async function openHtmlLightbox(folder, rel, dlUrl) {
   if (!lb || !stage) { window.open(API.rawUrl(folder, rel), "_blank"); return; }
   stage.innerHTML = '<div class="lightbox-loading"><span class="spinner"></span> carregando…</div>';
   setLightboxNewTab(null);
-  lb.classList.add("open");
-  lb.setAttribute("aria-hidden", "false");
-  document.body.classList.add("no-scroll");
+  lbShow();
   try {
     const text = await API.taskFile(folder, rel);
     if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
@@ -1111,6 +1173,7 @@ function closeLightbox() {
   setLightboxNewTab(null);
   if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
   document.body.classList.remove("no-scroll");
+  restoreFocus(_lbOpener); _lbOpener = null;
 }
 function setupLightbox() {
   const lb = $("#lightbox");
@@ -1118,7 +1181,11 @@ function setupLightbox() {
   const closeBtn = $("#lightbox-close");
   if (closeBtn) closeBtn.onclick = closeLightbox;
   lb.addEventListener("click", (e) => { if (e.target === lb || e.target.id === "lightbox-stage") closeLightbox(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lb.classList.contains("open")) closeLightbox(); });
+  document.addEventListener("keydown", (e) => {
+    if (!lb.classList.contains("open")) return;
+    if (e.key === "Escape") closeLightbox();
+    else if (e.key === "Tab") trapTabKey(lb, e);
+  });
 }
 window.openLightbox = openLightbox;
 window.openHtmlLightbox = openHtmlLightbox;
@@ -1148,14 +1215,15 @@ async function viewCreate(arg, query) {
     <div class="grid grid-2">
       <div class="card">
         <h3>Brief da peça</h3>
+        <p class="muted create-lead">Descreva a peça uma vez. A IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing.</p>
         <div class="field mt"><label>Campanha</label><select id="g-camp">${campOpts}</select></div>
         <div class="field"><label>Tipo de conteúdo</label>
           <div class="type-grid" id="g-type-grid">${typeCards}</div>
           <input type="hidden" id="g-type" value="${esc(preType)}" />
           <div class="hint" id="g-type-desc"></div>
         </div>
-        <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" /><div class="field-error" id="e-title"></div></div>
-        <div class="field"><label>Tema / objetivo da peça</label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos"></textarea><div class="field-error" id="e-brief"></div></div>
+        <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
+        <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="field-error" id="e-brief" role="alert"></div></div>
         <div class="field"><label>Pilar de conteúdo <span class="hint">(o eixo temático da peça — o feed não é só Taxa Zero)</span></label>
           <select id="g-pillar">${pillarOpts}</select>
           <div class="hint" id="g-pillar-desc"></div>
@@ -1176,29 +1244,41 @@ async function viewCreate(arg, query) {
         <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
         <details class="adv-block">
           <summary>Identificador técnico (avançado)</summary>
-          <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" /><div class="field-error" id="e-task"></div></div>
+          <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" aria-describedby="e-task" /><div class="field-error" id="e-task" role="alert"></div></div>
         </details>
         <label class="research-toggle mt"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e usa como apoio factual na geração — leva alguns segundos a mais)</span></span></label>
         <button class="btn btn-primary mt" id="g-run">Gerar com IA</button>
       </div>
       <div class="card create-result">
         <div class="flex-between"><h3>Resultado</h3><span id="g-flag"></span></div>
-        <div id="g-result"><div class="empty">Preencha o brief e clique em <strong>Gerar com IA</strong>.</div></div>
+        <div id="g-result"><div class="empty">Preencha o brief e clique em <strong>Gerar com IA</strong>. Sua equipe de IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca.</div></div>
       </div>
     </div>`);
 
   const campMap = {}; campaigns.forEach((c) => { campMap[c.id] = c; });
+  let platsTouched = false;
+  const typePlatform = (id) => { const ct = metaType(id); return ct && ct.platform ? ct.platform : null; };
   function renderPlats(selected, inherited) {
     const set = (selected && selected.length) ? selected : ["instagram"];
     $("#g-plats").innerHTML = State.meta.platforms.map((p) => checkPill("gplat", p, set.includes(p), platformLabel(p))).join("");
     bindCheckPills($("#g-plats"));
     $("#g-plats-hint").textContent = inherited ? "(herdadas da campanha — ajuste se quiser)" : "";
   }
+  // garante que a plataforma natural do tipo (config.js define .platform) esteja marcada
+  function ensureTypePlatform() {
+    const p = typePlatform($("#g-type").value);
+    if (!p) return;
+    const input = $("#g-plats").querySelector('input[value="' + p + '"]');
+    if (input && !input.checked) { input.checked = true; const lab = input.closest(".check"); if (lab) lab.classList.add("on"); }
+  }
+  $("#g-plats").addEventListener("change", () => { platsTouched = true; });
   const preCampObj = preCamp && campMap[preCamp];
-  renderPlats(preCampObj ? preCampObj.platforms : ["instagram"], !!preCampObj);
+  renderPlats(preCampObj ? preCampObj.platforms : (typePlatform(preType) ? [typePlatform(preType)] : ["instagram"]), !!preCampObj);
+  ensureTypePlatform();
   $("#g-camp").addEventListener("change", () => {
     const c = campMap[$("#g-camp").value];
     renderPlats(c && c.platforms && c.platforms.length ? c.platforms : ["instagram"], !!c);
+    ensureTypePlatform();
   });
   const updDesc = () => { const ct = metaType($("#g-type").value); $("#g-type-desc").textContent = ct ? ct.description : ""; };
   $$("#g-type-grid .type-card").forEach((card) => {
@@ -1206,6 +1286,10 @@ async function viewCreate(arg, query) {
       $$("#g-type-grid .type-card").forEach((c) => c.classList.remove("on"));
       card.classList.add("on");
       $("#g-type").value = card.dataset.type;
+      const p = typePlatform(card.dataset.type);
+      // sem campanha e sem edição manual: plataforma vira exatamente a do tipo; senão, só garante a do tipo
+      if (p && !platsTouched && !$("#g-camp").value) renderPlats([p], false);
+      else ensureTypePlatform();
       updDesc();
     };
   });
@@ -1215,14 +1299,46 @@ async function viewCreate(arg, query) {
   if ($("#g-pillar")) { $("#g-pillar").addEventListener("change", updPillarDesc); updPillarDesc(); }
   $("#g-title").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; } });
   $("#g-task").addEventListener("input", () => { delete $("#g-task").dataset.auto; });
+  const briefCount = () => {
+    const el = $("#g-brief-count"); if (!el) return;
+    const n = $("#g-brief").value.trim().length;
+    el.textContent = n === 0 ? "" : (n < 8 ? n + " caracteres — descreva um pouco mais" : n + " caracteres");
+  };
+  $("#g-brief").addEventListener("input", briefCount); briefCount();
 
   $("#g-run").onclick = runGenerate;
 }
 
+// Mostra as etapas da "equipe" enquanto a IA trabalha. Avança no tempo (o
+// backend faz tudo numa chamada) só para dar a sensação de bastidores em ação.
+function startGenProgress(host, research) {
+  if (!host) return null;
+  const steps = [
+    research ? "Pesquisando o tema no mercado" : "Estudando o tema e o público",
+    "Escrevendo no tom da 4Selet",
+    "Aplicando a identidade da marca",
+    "Conferência final da marca",
+  ];
+  host.innerHTML = `
+    <div class="gen-progress" role="status" aria-live="polite">
+      <div class="gp-head"><span class="spinner"></span> <strong>Sua equipe de marketing está montando a peça…</strong></div>
+      <ol class="gp-steps">${steps.map((s, i) => `<li class="gp-step${i === 0 ? " on" : ""}"><span class="gp-dot"></span><span class="gp-txt">${esc(s)}</span></li>`).join("")}</ol>
+      <p class="muted gp-note">Pesquisa, redação e checagem de marca acontecem nos bastidores.</p>
+    </div>`;
+  const lis = $$(".gp-step", host);
+  let i = 0;
+  const timer = setInterval(() => {
+    if (i >= lis.length - 1) return;
+    lis[i].classList.replace("on", "done");
+    i++; lis[i].classList.add("on");
+  }, 1100);
+  return timer;
+}
+
 async function runGenerate() {
   const brief = $("#g-brief").value.trim();
-  $("#e-brief").textContent = ""; $("#g-brief").classList.remove("invalid");
-  if (brief.length < 8) { $("#g-brief").classList.add("invalid"); $("#e-brief").textContent = "Descreva o tema (mín. 8 caracteres)."; return; }
+  $("#e-brief").textContent = ""; $("#g-brief").classList.remove("invalid"); $("#g-brief").removeAttribute("aria-invalid");
+  if (brief.length < 8) { $("#g-brief").classList.add("invalid"); $("#g-brief").setAttribute("aria-invalid", "true"); $("#e-brief").textContent = "Descreva o tema (mín. 8 caracteres)."; return; }
   const payload = {
     content_type: $("#g-type").value,
     brief,
@@ -1237,11 +1353,17 @@ async function runGenerate() {
     pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
+  const prog = startGenProgress($("#g-result"), !!payload.research);
   try {
     const r = await API.generate(payload);
+    clearInterval(prog);
     LAST_GEN = { req: payload, res: r };
     renderGenResult(r);
-  } catch (e) { toastAiError(e); }
+  } catch (e) {
+    clearInterval(prog);
+    $("#g-result").innerHTML = '<div class="empty">Não foi possível gerar agora. Ajuste o brief e clique em <strong>Gerar com IA</strong> de novo.</div>';
+    toastAiError(e);
+  }
   finally { btn.disabled = false; btn.textContent = "Gerar com IA"; }
 }
 
@@ -1284,7 +1406,7 @@ function renderGenResult(r) {
   const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel";
   const artHtml = visualKind
     ? `<details class="art-preview-box mt" open><summary>Prévia da arte</summary>
-         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "(slide de capa) " : ""}com o estilo visual escolhido no brief. Não salva nada — é só para conferir.</p>
+         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "(slide de capa) " : ""}com o estilo visual escolhido no brief. Não salva nada — confira e baixe a imagem se quiser (rascunho rápido).</p>
          <button class="btn btn-ghost btn-sm" id="g-art-btn" type="button">Ver prévia da arte</button>
          <div id="g-art" class="art-preview mt"></div>
        </details>`
@@ -1294,6 +1416,7 @@ function renderGenResult(r) {
     ${editorBlock}
     ${mockHtml}
     ${artHtml}
+    <div class="gov-head">Conferência da marca <span class="hint">(checagem automática das regras da 4Selet)</span></div>
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
       <label>Ajustar com IA <span class="hint">(descreva o que mudar; o resto é mantido)</span></label>
@@ -1338,8 +1461,12 @@ async function renderArtPreview(contentType, kind) {
   box.innerHTML = "";
   try {
     const out = await API.renderPreview({ content_type: contentType, parsed, template });
+    const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" />
-      <div class="muted" style="font-size:12px;margin-top:8px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height}${kind === "carousel" ? " · slide de capa" : ""}</div>`;
+      <div class="flex flex-between mt" style="align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height}${kind === "carousel" ? " · slide de capa" : ""}</span>
+        <a class="btn btn-sm btn-ghost" href="${out.dataUrl}" download="${esc(fname)}">Baixar imagem</a>
+      </div>`;
   } catch (e) {
     box.innerHTML = `<div class="field-error" style="display:block">${esc((e && e.message) || "falha ao renderizar a prévia")}</div>`;
   } finally {
@@ -1432,9 +1559,9 @@ function structuredEditor(type, p) {
 }
 
 function seCtrls(i, total) {
-  return `<button class="se-mini" data-se="up" title="Mover para cima"${i === 0 ? " disabled" : ""}>↑</button>` +
-    `<button class="se-mini" data-se="down" title="Mover para baixo"${i === total - 1 ? " disabled" : ""}>↓</button>` +
-    `<button class="se-mini se-del" data-se="del" title="Remover"${total <= 1 ? " disabled" : ""}>✕</button>`;
+  return `<button class="se-mini" data-se="up" title="Mover para cima" aria-label="Mover para cima"${i === 0 ? " disabled" : ""}>↑</button>` +
+    `<button class="se-mini" data-se="down" title="Mover para baixo" aria-label="Mover para baixo"${i === total - 1 ? " disabled" : ""}>↓</button>` +
+    `<button class="se-mini se-del" data-se="del" title="Remover" aria-label="Remover"${total <= 1 ? " disabled" : ""}>✕</button>`;
 }
 
 const SLIDE_LAYOUTS = [["", "Automático"], ["cover", "Capa"], ["stat_grid", "Grade de números"], ["list", "Lista"], ["text", "Texto"], ["cta", "CTA"]];
@@ -1615,10 +1742,11 @@ async function saveGenerated() {
   let task = $("#g-task").value.trim();
   const date = $("#g-date").value;
   if ($("#e-title")) $("#e-title").textContent = "";
-  $("#e-task").textContent = "";
-  if (title.length < 3) { if ($("#g-title")) $("#g-title").classList.add("invalid"); if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
+  if ($("#g-title")) $("#g-title").removeAttribute("aria-invalid");
+  $("#e-task").textContent = ""; $("#g-task").removeAttribute("aria-invalid");
+  if (title.length < 3) { if ($("#g-title")) { $("#g-title").classList.add("invalid"); $("#g-title").setAttribute("aria-invalid", "true"); } if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
   if (!task) task = slugify(title).slice(0, 40);
-  if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#e-task").textContent = "Identificador inválido (use só a-z, 0-9, _ ou -)."; return; }
+  if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#g-task").setAttribute("aria-invalid", "true"); $("#e-task").textContent = "Identificador inválido (use só a-z, 0-9, _ ou -)."; return; }
   if (!date) { toast("Informe a data.", "error"); return; }
   const ct = metaType(LAST_GEN.req.content_type);
   const editVal = $("#g-edit").value;
@@ -1831,8 +1959,24 @@ function mdToHtml(src) {
 
 function setupAssistant() {
   const panel = $("#assistant");
-  $("#btn-assistant").onclick = () => panel.classList.add("open");
-  $("#assistant-close").onclick = () => panel.classList.remove("open");
+  const btn = $("#btn-assistant");
+  let asstOpener = null;
+  const openAsst = () => {
+    asstOpener = document.activeElement;
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    if (btn) btn.setAttribute("aria-expanded", "true");
+    const inp = $("#assistant-input"); if (inp) inp.focus();
+  };
+  const closeAsst = () => {
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    restoreFocus(asstOpener); asstOpener = null;
+  };
+  if (btn) btn.onclick = openAsst;
+  $("#assistant-close").onclick = closeAsst;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && panel.classList.contains("open")) closeAsst(); });
   $("#assistant-form").onsubmit = async (e) => {
     e.preventDefault();
     const inp = $("#assistant-input"); const q = inp.value.trim(); if (!q) return;
@@ -1857,11 +2001,29 @@ function setupAssistant() {
 /* =====================================================================
    Menu mobile
    ===================================================================== */
-function openSidebar() { $("#sidebar").classList.add("open"); $("#scrim").classList.add("open"); }
-function closeSidebar() { const sb = $("#sidebar"); if (sb) sb.classList.remove("open"); const sc = $("#scrim"); if (sc) sc.classList.remove("open"); }
+let _sbOpener = null;
+function openSidebar() {
+  const sb = $("#sidebar"); if (!sb) return;
+  _sbOpener = document.activeElement;
+  sb.classList.add("open"); $("#scrim").classList.add("open");
+  const b = $("#btn-menu"); if (b) b.setAttribute("aria-expanded", "true");
+  const f0 = focusablesIn(sb)[0]; if (f0) f0.focus();
+}
+function closeSidebar() {
+  const sb = $("#sidebar"); if (sb) sb.classList.remove("open");
+  const sc = $("#scrim"); if (sc) sc.classList.remove("open");
+  const b = $("#btn-menu"); if (b) b.setAttribute("aria-expanded", "false");
+  if (_sbOpener) { restoreFocus(_sbOpener); _sbOpener = null; }
+}
 function setupMenu() {
   const btn = $("#btn-menu"); if (btn) btn.onclick = openSidebar;
   const scrim = $("#scrim"); if (scrim) scrim.onclick = closeSidebar;
+  const sb = $("#sidebar");
+  document.addEventListener("keydown", (e) => {
+    if (!sb || !sb.classList.contains("open")) return;
+    if (e.key === "Escape") { closeSidebar(); const b = $("#btn-menu"); if (b) b.focus(); }
+    else if (e.key === "Tab") trapTabKey(sb, e);
+  });
 }
 
 /* =====================================================================
