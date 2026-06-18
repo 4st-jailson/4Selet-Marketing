@@ -490,7 +490,7 @@ async function viewContent(arg, query) {
   setView(`
     <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
     <div class="lib-toolbar">
-      <input id="lib-search" class="lib-search" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Buscar — ex.: taxa zero  status:rascunho  tag:q3" value="${esc(q0.join(" "))}" />
+      <input id="lib-search" class="lib-search" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Buscar por título, tema ou tag…  (ou filtre com os atalhos abaixo)" value="${esc(q0.join(" "))}" />
     </div>
     ${qualChips ? '<div class="lib-quals"><span class="hint">Filtrar na busca:</span>' + qualChips + "</div>" : ""}
     <div class="filter-bar" id="lib-kinds">${kindChips}</div>
@@ -1328,8 +1328,8 @@ async function viewCreate(arg, query) {
   setView(`
     <div class="grid grid-2">
       <div class="card">
-        <h3>Brief da peça</h3>
-        <p class="muted create-lead">Descreva a peça uma vez. A IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing.</p>
+        <h3>Descreva a peça</h3>
+        <p class="muted create-lead">Você descreve uma vez. A IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing faria.</p>
 
         <div class="form-section">
           <div class="form-section-head"><span class="fs-num">1</span><h4>O que criar</h4></div>
@@ -1339,14 +1339,14 @@ async function viewCreate(arg, query) {
             <div class="hint" id="g-type-desc"></div>
           </div>
           <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
-          <div class="field"><label>Campanha <span class="hint">(opcional — vincula a peça e sugere o pilar)</span></label><select id="g-camp">${campOpts}</select></div>
+          <div class="field"><label>Campanha <span class="hint">(opcional — liga a peça à campanha e já sugere o tema)</span></label><select id="g-camp">${campOpts}</select></div>
         </div>
 
         <div class="form-section">
           <div class="form-section-head"><span class="fs-num">2</span><h4>Sobre a peça</h4></div>
           <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
           <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="field-error" id="e-brief" role="alert"></div></div>
-          <div class="field"><label>Pilar de conteúdo <span class="hint">(o eixo temático da peça — o feed não é só Taxa Zero)</span></label>
+          <div class="field"><label>Pilar de conteúdo <span class="hint">(o tema central da peça — seu feed não é só Taxa Zero)</span></label>
             <select id="g-pillar">${pillarOpts}</select>
             <div class="hint" id="g-pillar-desc"></div>
           </div>
@@ -1354,22 +1354,22 @@ async function viewCreate(arg, query) {
         </div>
 
         <div class="form-section">
-          <div class="form-section-head"><span class="fs-num">3</span><h4>Refino <span class="fs-opt">— opcional</span></h4></div>
+          <div class="form-section-head"><span class="fs-num">3</span><h4>Ajustes <span class="fs-opt">— opcional</span></h4></div>
         <details class="adv-block">
           <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
           <p class="muted adv-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
           <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; escreva uma ação só se quiser orientar)</span></label>
-            <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer CTA" />
+            <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer chamada" />
             <div class="sugg-row" id="g-cta-sugg">${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<button type="button" class="sugg-chip" data-cta="${esc(c)}">${esc(c)}</button>`).join("")}</div>
           </div>
           <div class="row">
             <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
             <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
           </div>
-          <div class="field"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
+          <div class="field art-only"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
             <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option></select>
           </div>
-          <div class="field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
+          <div class="field art-only"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
           <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         </details>
           <details class="adv-block">
@@ -1379,13 +1379,13 @@ async function viewCreate(arg, query) {
         </div>
 
         <div class="form-foot">
-          <label class="research-toggle"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e usa como apoio factual na geração — leva alguns segundos a mais)</span></span></label>
+          <label class="research-toggle"><input type="checkbox" id="g-research" /> <span>Pesquisar o mercado na internet antes de gerar <span class="hint">(busca tendências e concorrência ao vivo para embasar a peça com fatos atuais — leva alguns segundos a mais)</span></span></label>
           <button class="btn btn-primary btn-block" id="g-run">Gerar com IA</button>
         </div>
       </div>
       <div class="card create-result">
         <div class="flex-between"><h3>Resultado</h3><span id="g-flag"></span></div>
-        <div id="g-result"><div class="empty">Preencha o brief e clique em <strong>Gerar com IA</strong>. Sua equipe de IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca.</div></div>
+        <div id="g-result"><div class="empty">Descreva a peça e clique em <strong>Gerar com IA</strong>. Sua equipe de IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca.</div></div>
       </div>
     </div>`);
 
@@ -1417,6 +1417,8 @@ async function viewCreate(arg, query) {
     applyCampPillar(c);
   });
   const updDesc = () => { const ct = metaType($("#g-type").value); $("#g-type-desc").textContent = ct ? ct.description : ""; };
+  // Esconde os ajustes de ARTE (estilo visual, referência visual) para tipos só-texto (LinkedIn/Threads).
+  const updArtFields = () => { const ct = metaType($("#g-type").value); const isImg = !!(ct && ct.media === "image"); $$(".art-only").forEach((el) => { el.style.display = isImg ? "" : "none"; }); };
   $$("#g-type-grid .type-card").forEach((card) => {
     card.onclick = () => {
       $$("#g-type-grid .type-card").forEach((c) => c.classList.remove("on"));
@@ -1427,9 +1429,11 @@ async function viewCreate(arg, query) {
       if (p && !platsTouched && !$("#g-camp").value) renderPlats([p], false);
       else ensureTypePlatform();
       updDesc();
+      updArtFields();
     };
   });
   updDesc();
+  updArtFields();
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
   const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
   // Sugere o pilar de conteúdo a partir da campanha (ex.: campanha "Taxa Zero" -> pilar "Campanha Taxa Zero").
@@ -1533,7 +1537,7 @@ async function runGenerate() {
     renderGenResult(r);
   } catch (e) {
     clearInterval(prog);
-    $("#g-result").innerHTML = '<div class="empty">Não foi possível gerar agora. Ajuste o brief e clique em <strong>Gerar com IA</strong> de novo.</div>';
+    $("#g-result").innerHTML = '<div class="empty">Não foi possível gerar agora. Ajuste a descrição e clique em <strong>Gerar com IA</strong> de novo.</div>';
     toastAiError(e);
   }
   finally { btn.disabled = false; btn.textContent = "Gerar com IA"; }
@@ -1578,7 +1582,7 @@ function renderGenResult(r) {
   const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel";
   const artHtml = visualKind
     ? `<details class="art-preview-box mt" open><summary>Prévia da arte</summary>
-         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "(slide de capa) " : ""}com o estilo visual escolhido no brief. Não salva nada — confira e baixe a imagem se quiser (rascunho rápido).</p>
+         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "(slide de capa) " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe a imagem se quiser (rascunho rápido).</p>
          <button class="btn btn-ghost btn-sm" id="g-art-btn" type="button">Ver prévia da arte</button>
          <div id="g-art" class="art-preview mt"></div>
        </details>`
@@ -2026,10 +2030,11 @@ async function viewSettings() {
         }).join("")}</div>
       </div>
       <div class="field mt"><label>Esquema de cores <span class="hint">(tons de fundo e superfície — vale para o modo claro e o escuro)</span></label>
-        <div class="accent-grid" id="scheme-grid">${Object.keys(SCHEME_PRESETS).map((id) => {
-          const p = SCHEME_PRESETS[id];
-          return '<button type="button" class="accent-opt" data-scheme-id="' + id + '" title="' + esc(p.desc) + '"><span class="accent-sw" style="background:' + p.swatch + '"></span><span>' + esc(p.label) + "</span></button>";
-        }).join("")}</div>
+        <div class="scheme-current">
+          <span class="accent-sw" id="scheme-current-sw" style="background:${SCHEME_PRESETS[currentScheme()].swatch}"></span>
+          <span class="scheme-current-name" id="scheme-current-name">${esc(SCHEME_PRESETS[currentScheme()].label)}</span>
+          <button type="button" class="btn btn-sm btn-ghost" id="scheme-open">Alterar cores</button>
+        </div>
       </div>
     </div>
     <div class="card mt" style="max-width:660px">
@@ -2041,9 +2046,7 @@ async function viewSettings() {
   const markAccent = () => { const cur = currentAccent(); $$("#accent-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.accentId === cur)); };
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
-  const markScheme = () => { const cur = currentScheme(); $$("#scheme-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.schemeId === cur)); };
-  $$("#scheme-grid .accent-opt").forEach((b) => { b.onclick = () => { setScheme(b.dataset.schemeId); markScheme(); toast("Esquema de cores atualizado", "success"); }; });
-  markScheme();
+  if ($("#scheme-open")) $("#scheme-open").onclick = openSchemeCarousel;
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");
   const saveKeyBtn = $("#s-save-key");
@@ -2272,22 +2275,130 @@ function setupAccent() { applyAccent(currentAccent()); }
 /* ---- Esquema de cores (Aparência): tons de fundo/superfície p/ claro e escuro ---- */
 const SCHEME_KEY = "painel4selet_scheme";
 const SCHEME_PRESETS = {
-  padrao:    { label: "Padrão",    swatch: "#0c2530", desc: "Teal-navy da marca" },
-  contraste: { label: "Contraste", swatch: "#1b4254", desc: "Mais profundidade" },
-  profundo:  { label: "Profundo",  swatch: "#07181f", desc: "Quase preto, sóbrio" },
-  grafite:   { label: "Grafite",   swatch: "#20262c", desc: "Cinza neutro" },
+  grafite:   { label: "Grafite",   swatch: "#20262c", desc: "Cinza neutro (padrão)" },
+  oceano:    { label: "Oceano",    swatch: "#0c2530", desc: "Teal-navy da marca" },
+  esmeralda: { label: "Esmeralda", swatch: "#12241b", desc: "Verde profundo, joia" },
+  ametista:  { label: "Ametista",  swatch: "#1f1a2d", desc: "Violeta elegante, joia" },
+  ambar:     { label: "Âmbar",     swatch: "#281f15", desc: "Quente, terracota" },
+  vibrante:  { label: "Vibrante",  swatch: "#1a2142", desc: "Índigo elétrico" },
+  carbono:   { label: "Carbono",   swatch: "#0e0f10", desc: "Mono alto-contraste" },
 };
-function currentScheme() { try { return localStorage.getItem(SCHEME_KEY) || "padrao"; } catch (e) { return "padrao"; } }
+// "oceano" usa os tokens-base (sem data-scheme); os demais sobrepoem.
+function currentScheme() { try { const s = localStorage.getItem(SCHEME_KEY); return (s && SCHEME_PRESETS[s]) ? s : "grafite"; } catch (e) { return "grafite"; } }
 function applyScheme(id) {
-  if (!SCHEME_PRESETS[id] || id === "padrao") document.documentElement.removeAttribute("data-scheme");
+  if (!SCHEME_PRESETS[id] || id === "oceano") document.documentElement.removeAttribute("data-scheme");
   else document.documentElement.setAttribute("data-scheme", id);
 }
 function setScheme(id) {
-  if (!SCHEME_PRESETS[id]) id = "padrao";
+  if (!SCHEME_PRESETS[id]) id = "grafite";
   try { localStorage.setItem(SCHEME_KEY, id); } catch (e) {}
   applyScheme(id);
 }
-function setupScheme() { applyScheme(currentScheme()); }
+function setupScheme() { setScheme(currentScheme()); }
+
+// Cores por esquema (p/ pintar a mini-prévia de cada card; espelham os tokens do CSS).
+const SCHEME_COLORS = {
+  grafite:   { dark: { bg: "#12161a", surface: "#191e23", border: "#333b43", text: "#eaf2f5", accent: "#5499B5" }, light: { bg: "#ecedee", surface: "#ffffff", border: "#d2d5d8", text: "#0c2530", accent: "#006494" } },
+  oceano:    { dark: { bg: "#061a22", surface: "#0c2530", border: "#1c3d4c", text: "#eaf2f5", accent: "#5499B5" }, light: { bg: "#eef1f0", surface: "#ffffff", border: "#d8e0e0", text: "#0c2530", accent: "#006494" } },
+  esmeralda: { dark: { bg: "#08140f", surface: "#0e1d16", border: "#244736", text: "#e8f3ec", accent: "#2fb37a" }, light: { bg: "#eaf2ed", surface: "#ffffff", border: "#cfe0d6", text: "#0c2530", accent: "#1f9d6a" } },
+  ametista:  { dark: { bg: "#120f1c", surface: "#1a1526", border: "#3b3257", text: "#efeaf7", accent: "#a585f0" }, light: { bg: "#f0edf6", surface: "#ffffff", border: "#ddd5ec", text: "#0c2530", accent: "#7c5cd6" } },
+  ambar:     { dark: { bg: "#18120c", surface: "#221a12", border: "#4d3a25", text: "#f5ede2", accent: "#e0922f" }, light: { bg: "#f5efe7", surface: "#ffffff", border: "#e2d4c2", text: "#0c2530", accent: "#c2750a" } },
+  vibrante:  { dark: { bg: "#0c1024", surface: "#141a35", border: "#34407a", text: "#eaf0ff", accent: "#7c6bff" }, light: { bg: "#eef0fa", surface: "#ffffff", border: "#d5dbf2", text: "#0c2530", accent: "#4f46e5" } },
+  carbono:   { dark: { bg: "#050506", surface: "#0e0f10", border: "#2c2f33", text: "#f2f3f5", accent: "#d4d7dc" }, light: { bg: "#f4f4f5", surface: "#ffffff", border: "#d6d7d9", text: "#0a0a0b", accent: "#18181b" } },
+};
+function schemeColors(id, theme) { return (SCHEME_COLORS[id] && SCHEME_COLORS[id][theme]) || SCHEME_COLORS.oceano[theme]; }
+
+// Carrossel curvo (carretel infinito) p/ escolher o esquema de cores, com prévia do painel por card.
+function openSchemeCarousel() {
+  const ids = Object.keys(SCHEME_PRESETS);
+  const N = ids.length;
+  let active = Math.max(0, ids.indexOf(currentScheme()));
+  const theme = currentTheme();
+  const opener = document.activeElement;
+  const ov = document.createElement("div");
+  ov.className = "scheme-cz"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-label", "Escolher esquema de cores");
+  ov.innerHTML = `
+    <button class="scheme-cz-close" aria-label="Fechar">✕</button>
+    <div class="scheme-cz-title">Esquema de cores</div>
+    <div class="scheme-cz-sub">Cada cartão é uma prévia do painel — tema ${theme === "light" ? "claro" : "escuro"}. Gire e escolha.</div>
+    <div class="scheme-cz-stage">
+      <button class="scheme-cz-nav prev" aria-label="Anterior">‹</button>
+      <div class="scheme-cz-reel"></div>
+      <button class="scheme-cz-nav next" aria-label="Próximo">›</button>
+    </div>
+    <div class="scheme-cz-foot">
+      <div class="scheme-cz-name"></div><div class="scheme-cz-desc"></div>
+      <button class="btn btn-primary scheme-cz-apply">Usar este esquema</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const reel = $(".scheme-cz-reel", ov);
+  ids.forEach((id, i) => {
+    const c = schemeColors(id, theme);
+    const card = document.createElement("button");
+    card.className = "scheme-cz-card"; card.dataset.i = i; card.type = "button"; card.setAttribute("aria-label", SCHEME_PRESETS[id].label);
+    card.style.cssText += `--mbg:${c.bg};--msurface:${c.surface};--mborder:${c.border};--mtext:${c.text};--maccent:${c.accent}`;
+    card.innerHTML = `<div class="scheme-mini">
+        <div class="scheme-mini-side"><div class="scheme-mini-dot acc"></div><div class="scheme-mini-dot"></div><div class="scheme-mini-dot"></div><div class="scheme-mini-dot"></div></div>
+        <div class="scheme-mini-main"><div class="scheme-mini-bar"></div>
+          <div class="scheme-mini-cardm"><div class="scheme-mini-line t"></div><div class="scheme-mini-line"></div><div class="scheme-mini-line a"></div></div>
+          <div class="scheme-mini-cardm"><div class="scheme-mini-line t"></div><div class="scheme-mini-line"></div></div>
+        </div></div>`;
+    card.onclick = () => { if (i === active) apply(); else { active = i; layout(); } };
+    reel.appendChild(card);
+  });
+  const cards = Array.prototype.slice.call(reel.children);
+  function layout() {
+    // Dimensões proporcionais ao viewport: o carrossel cresce em telas grandes
+    // (em vez de ficar pequeno no centro) e encolhe no mobile.
+    const vw = window.innerWidth || 1200;
+    const cw = Math.round(Math.max(220, Math.min(440, vw * 0.21)));
+    const ch = Math.round(cw * 0.78);
+    const STEP = Math.round(cw * 0.66), DROP = Math.round(cw * 0.17), ROT = 7;
+    cards.forEach((card, i) => {
+      let d = i - active; if (d > N / 2) d -= N; if (d < -N / 2) d += N;
+      const ad = Math.abs(d), show = ad <= 2;
+      card.style.width = cw + "px"; card.style.height = ch + "px"; card.style.margin = (-ch / 2) + "px 0 0 " + (-cw / 2) + "px";
+      card.style.transform = `translateX(${d * STEP}px) translateY(${ad * DROP}px) scale(${(1 - ad * 0.16).toFixed(3)}) rotate(${d * ROT}deg)`;
+      card.style.opacity = show ? (1 - ad * 0.28) : 0;
+      card.style.zIndex = String(20 - ad);
+      card.style.pointerEvents = show ? "auto" : "none";
+      card.classList.toggle("is-active", d === 0);
+    });
+    const id = ids[active];
+    $(".scheme-cz-name", ov).textContent = SCHEME_PRESETS[id].label;
+    $(".scheme-cz-desc", ov).textContent = SCHEME_PRESETS[id].desc || "";
+  }
+  function go(dir) { active = (active + dir + N) % N; layout(); }
+  function apply() {
+    const id = ids[active];
+    setScheme(id);
+    const nm = $("#scheme-current-name"); if (nm) nm.textContent = SCHEME_PRESETS[id].label;
+    const sw = $("#scheme-current-sw"); if (sw) sw.style.background = SCHEME_PRESETS[id].swatch;
+    toast("Esquema aplicado: " + SCHEME_PRESETS[id].label, "success");
+    close();
+  }
+  function close() { ov.classList.remove("open"); setTimeout(() => ov.remove(), 220); document.removeEventListener("keydown", onKey); window.removeEventListener("resize", layout); if (opener && opener.focus) opener.focus(); }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") go(-1);
+    else if (e.key === "ArrowRight") go(1);
+    else if (e.key === "Enter") apply();
+  }
+  $(".scheme-cz-close", ov).onclick = close;
+  $(".scheme-cz-nav.prev", ov).onclick = () => go(-1);
+  $(".scheme-cz-nav.next", ov).onclick = () => go(1);
+  $(".scheme-cz-apply", ov).onclick = apply;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  // arrastar p/ girar
+  let dragX = null;
+  reel.addEventListener("pointerdown", (e) => { dragX = e.clientX; });
+  window.addEventListener("pointerup", (e) => { if (dragX == null) return; const dx = e.clientX - dragX; dragX = null; if (Math.abs(dx) > 44) go(dx < 0 ? 1 : -1); });
+  document.addEventListener("keydown", onKey);
+  window.addEventListener("resize", layout);
+  layout();
+  requestAnimationFrame(() => { ov.classList.add("open"); $(".scheme-cz-apply", ov).focus(); });
+}
+window.openSchemeCarousel = openSchemeCarousel;
 
 function setupTheme() {
   applyTheme(currentTheme());
