@@ -234,7 +234,7 @@ function setTitle(folder, title) {
 
 // #8 — Grava a variante de template visual escolhida (render.json) como default
 // da arte, SEM renderizar. So vale para pecas estaticas (image/feed/carousel).
-const VALID_TEMPLATES = ["editorial", "bold", "split"];
+const VALID_TEMPLATES = ["editorial", "bold", "split", "photo"];
 function setTemplate(folder, template) {
   if (!VALID_TEMPLATES.includes(String(template))) return false;
   const loc = findTask(folder);

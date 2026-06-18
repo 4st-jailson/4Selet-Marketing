@@ -14,6 +14,9 @@ outputs/*
 # videos de referencia (binarios grandes > limite do GitHub) — manter so localmente
 assets/reference-videos/
 
+# acervo de imagens enviadas pelo usuario (runtime, nao versionar)
+interface/public/uploads/
+
 # logs e temp
 logs/
 *.log

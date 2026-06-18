@@ -36,6 +36,15 @@ function esc(s) {
 }
 // Escape p/ valor de ATRIBUTO (ex.: src="..."). Alem de &<>, neutraliza aspas.
 function escAttr(s) { return esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+// Resolve a imagem do template Foto: caminhos locais (/uploads/...) viram file://
+// (carregam sempre, sem depender de host externo); http(s)/data/file passam direto.
+function resolveImage(u) {
+  u = String(u || "");
+  if (!u) return "";
+  if (/^(https?:|data:|file:)/i.test(u)) return u;
+  if (u.charAt(0) === "/") return fileUrl(path.join(__dirname, "..", "public", u.replace(/^\/+/, "")));
+  return u;
+}
 
 function requireActive(folder) {
   const loc = findTask(folder);
@@ -243,7 +252,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
 function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image }) {
   const n = headlineLen(headline);
   const headlineSize = n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156;
-  const photo = image ? `<img class="photo" src="${escAttr(image)}" alt=""/>` : "";
+  const photo = image ? `<img class="photo" src="${escAttr(resolveImage(image))}" alt=""/>` : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }

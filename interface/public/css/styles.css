@@ -579,6 +579,13 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .adv-block > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-sm); }
 .adv-block .field { margin: var(--s4); }
 .adv-block .adv-lead { margin: var(--s4) var(--s4) 0; font-size: 12.5px; line-height: 1.5; }
+/* acervo de imagens (estilo visual "Foto") */
+.photo-pick { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s2); flex-wrap: wrap; }
+.photo-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--s3); }
+.photo-thumb { width: 66px; height: 66px; padding: 0; border-radius: var(--r-xs); overflow: hidden; border: 2px solid var(--border); background: var(--surface-2); cursor: pointer; transition: border-color var(--tr), box-shadow var(--tr); }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb:hover { border-color: var(--accent); }
+.photo-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* ---- seções do formulário Criar (agrupamento com hierarquia) ---- */
 .form-section { margin-top: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--border-soft); }

@@ -1367,7 +1367,13 @@ async function viewCreate(arg, query) {
             <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
           </div>
           <div class="field art-only"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
-            <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option></select>
+            <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option><option value="photo">Foto — imagem enviada + texto por cima</option></select>
+          </div>
+          <div class="field" id="g-photo-row" style="display:none">
+            <label>Imagem da peça <span class="hint">(enviada por você; entra como fundo da arte “Foto”)</span></label>
+            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-photo-file" accept="image/*" hidden /> Enviar imagem</label><span class="hint" id="g-photo-hint"></span></div>
+            <div class="photo-gallery" id="g-photo-gallery"></div>
+            <input type="hidden" id="g-image" value="" />
           </div>
           <div class="field art-only"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
           <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
@@ -1430,10 +1436,39 @@ async function viewCreate(arg, query) {
       else ensureTypePlatform();
       updDesc();
       updArtFields();
+      updPhotoRow();
     };
   });
   updDesc();
   updArtFields();
+  // ---- acervo de imagens (estilo visual "Foto") ----
+  const updPhotoRow = () => {
+    const ct = metaType($("#g-type").value);
+    const show = (($("#g-style") && $("#g-style").value) === "photo") && !!(ct && ct.media === "image");
+    const row = $("#g-photo-row"); if (row) row.style.display = show ? "" : "none";
+  };
+  async function loadPhotoGallery(sel) {
+    const g = $("#g-photo-gallery"); if (!g) return;
+    let images = [];
+    try { images = ((await fetch("/api/uploads").then((x) => x.json())) || {}).images || []; } catch (e) {}
+    if (!images.length) { g.innerHTML = '<span class="hint">Nenhuma imagem no acervo ainda — envie a primeira.</span>'; return; }
+    g.innerHTML = images.map((im) => `<button type="button" class="photo-thumb${im.url === sel ? " on" : ""}" data-url="${esc(im.url)}" title="${esc(im.name)}"><img src="${esc(im.url)}" alt="" loading="lazy"/></button>`).join("");
+    $$("#g-photo-gallery .photo-thumb").forEach((b) => { b.onclick = () => { $("#g-image").value = b.dataset.url; $$("#g-photo-gallery .photo-thumb").forEach((x) => x.classList.toggle("on", x === b)); }; });
+  }
+  if ($("#g-style")) $("#g-style").addEventListener("change", updPhotoRow);
+  if ($("#g-photo-file")) $("#g-photo-file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const hint = $("#g-photo-hint"); if (hint) hint.textContent = "enviando…";
+    try {
+      const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(f); });
+      const r = await fetch("/api/uploads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, dataUrl }) }).then((x) => x.json());
+      if (r && r.url) { $("#g-image").value = r.url; await loadPhotoGallery(r.url); if (hint) hint.textContent = "imagem enviada"; toast("Imagem adicionada ao acervo", "success"); }
+      else { if (hint) hint.textContent = "falha no envio"; toast((r && r.error) || "falha no envio", "error"); }
+    } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
+    e.target.value = "";
+  });
+  loadPhotoGallery("");
+  updPhotoRow();
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
   const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
   // Sugere o pilar de conteúdo a partir da campanha (ex.: campanha "Taxa Zero" -> pilar "Campanha Taxa Zero").
@@ -1527,6 +1562,7 @@ async function runGenerate() {
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
     pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
     cta: ctaDirective(),
+    image: ((($("#g-style") && $("#g-style").value) === "photo") && $("#g-image") && $("#g-image").value) ? $("#g-image").value : undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   const prog = startGenProgress($("#g-result"), !!payload.research);

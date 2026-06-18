@@ -95,6 +95,8 @@ router.post("/", async (req, res, next) => {
     // Sem orientacao -> campo cta vazio (sem chamada forcada). Com orientacao -> forca o texto escolhido.
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       parsed.cta = body.cta ? String(body.cta) : "";
+      // Imagem do acervo (estilo "Foto"): injeta no conceito p/ o template Foto compor.
+      if (body.image) parsed.image = String(body.image);
     }
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
 

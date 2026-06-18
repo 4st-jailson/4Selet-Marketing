@@ -40,6 +40,7 @@ app.use("/api/campaigns", require("./routes/campaigns"));
 app.use("/api/collections", require("./routes/collections"));
 app.use("/api/content", require("./routes/content"));
 app.use("/api/generate", require("./routes/generate"));
+app.use("/api/uploads", require("./routes/uploads"));
 
 // Servir assets de marca (logos) read-only
 app.use("/brand-assets", express.static(PATHS.ASSETS_DIR));
