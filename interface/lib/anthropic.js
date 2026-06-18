@@ -83,7 +83,12 @@ function mapAnthropicError(e) {
   } else if (status === 401 || status === 403) {
     msg = "Chave da API inválida ou sem permissão — verifique a chave em Configurações.";
   } else if (status === 400 || status === 422) {
-    msg = "A API recusou a requisição (conteúdo ou parâmetros inválidos). Ajuste o brief e tente de novo.";
+    const det = String((e && e.error && e.error.message) || (e && e.message) || "");
+    if (/credit balance|purchase credits|plans\s*&?\s*billing|too low to access/i.test(det)) {
+      msg = "Sem créditos na API Anthropic — a geração está bloqueada. Adicione créditos em Plans & Billing (console.anthropic.com) e tente de novo.";
+    } else {
+      msg = "A API recusou a requisição (conteúdo ou parâmetros inválidos). Ajuste o brief e tente de novo.";
+    }
   } else if (status && status >= 500) {
     msg = "A API da Anthropic está instável no momento. Tente novamente em instantes.";
   } else if (e && (e.name === "APIConnectionTimeoutError" || /timeout/i.test(e.message || ""))) {
