@@ -490,7 +490,7 @@ async function viewContent(arg, query) {
   setView(`
     <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
     <div class="lib-toolbar">
-      <input id="lib-search" class="lib-search" type="search" placeholder="Buscar — ex.: taxa zero  status:rascunho  tag:q3" value="${esc(q0.join(" "))}" />
+      <input id="lib-search" class="lib-search" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Buscar — ex.: taxa zero  status:rascunho  tag:q3" value="${esc(q0.join(" "))}" />
     </div>
     ${qualChips ? '<div class="lib-quals"><span class="hint">Filtrar na busca:</span>' + qualChips + "</div>" : ""}
     <div class="filter-bar" id="lib-kinds">${kindChips}</div>
@@ -1330,29 +1330,37 @@ async function viewCreate(arg, query) {
       <div class="card">
         <h3>Brief da peça</h3>
         <p class="muted create-lead">Descreva a peça uma vez. A IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing.</p>
-        <div class="field mt"><label>Campanha</label><select id="g-camp">${campOpts}</select></div>
-        <div class="field"><label>Tipo de conteúdo</label>
-          <div class="type-grid" id="g-type-grid">${typeCards}</div>
-          <input type="hidden" id="g-type" value="${esc(preType)}" />
-          <div class="hint" id="g-type-desc"></div>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">1</span><h4>O que criar</h4></div>
+          <div class="field"><label>Tipo de conteúdo</label>
+            <div class="type-grid" id="g-type-grid">${typeCards}</div>
+            <input type="hidden" id="g-type" value="${esc(preType)}" />
+            <div class="hint" id="g-type-desc"></div>
+          </div>
+          <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
+          <div class="field"><label>Campanha <span class="hint">(opcional — vincula a peça e sugere o pilar)</span></label><select id="g-camp">${campOpts}</select></div>
         </div>
-        <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
-        <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="field-error" id="e-brief" role="alert"></div></div>
-        <div class="field"><label>Pilar de conteúdo <span class="hint">(o eixo temático da peça — o feed não é só Taxa Zero)</span></label>
-          <select id="g-pillar">${pillarOpts}</select>
-          <div class="hint" id="g-pillar-desc"></div>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">2</span><h4>Sobre a peça</h4></div>
+          <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
+          <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="field-error" id="e-brief" role="alert"></div></div>
+          <div class="field"><label>Pilar de conteúdo <span class="hint">(o eixo temático da peça — o feed não é só Taxa Zero)</span></label>
+            <select id="g-pillar">${pillarOpts}</select>
+            <div class="hint" id="g-pillar-desc"></div>
+          </div>
+          <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
         </div>
-        <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">3</span><h4>Refino <span class="fs-opt">— opcional</span></h4></div>
         <details class="adv-block">
           <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
           <p class="muted adv-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
-          <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; só inclua se quiser orientar uma ação)</span></label>
-            <select id="g-cta">
-              <option value="">— sem chamada (padrão) —</option>
-              ${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}
-              <option value="__custom__">Outra… (escrever)</option>
-            </select>
-            <input id="g-cta-custom" class="mt" placeholder="escreva a chamada / orientação da ação" hidden />
+          <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; escreva uma ação só se quiser orientar)</span></label>
+            <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer CTA" />
+            <div class="sugg-row" id="g-cta-sugg">${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<button type="button" class="sugg-chip" data-cta="${esc(c)}">${esc(c)}</button>`).join("")}</div>
           </div>
           <div class="row">
             <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
@@ -1364,13 +1372,16 @@ async function viewCreate(arg, query) {
           <div class="field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
           <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         </details>
-        <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
-        <details class="adv-block">
-          <summary>Identificador técnico (avançado)</summary>
-          <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" aria-describedby="e-task" /><div class="field-error" id="e-task" role="alert"></div></div>
-        </details>
-        <label class="research-toggle mt"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e usa como apoio factual na geração — leva alguns segundos a mais)</span></span></label>
-        <button class="btn btn-primary mt" id="g-run">Gerar com IA</button>
+          <details class="adv-block">
+            <summary>Identificador técnico (avançado)</summary>
+            <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" aria-describedby="e-task" /><div class="field-error" id="e-task" role="alert"></div></div>
+          </details>
+        </div>
+
+        <div class="form-foot">
+          <label class="research-toggle"><input type="checkbox" id="g-research" /> <span>Pesquisar mercado com Tavily antes de gerar <span class="hint">(busca tendências/concorrência ao vivo e usa como apoio factual na geração — leva alguns segundos a mais)</span></span></label>
+          <button class="btn btn-primary btn-block" id="g-run">Gerar com IA</button>
+        </div>
       </div>
       <div class="card create-result">
         <div class="flex-between"><h3>Resultado</h3><span id="g-flag"></span></div>
@@ -1451,11 +1462,14 @@ async function viewCreate(arg, query) {
     el.textContent = n === 0 ? "" : (n < 8 ? n + " caracteres — descreva um pouco mais" : n + " caracteres");
   };
   $("#g-brief").addEventListener("input", briefCount); briefCount();
-  if ($("#g-cta")) $("#g-cta").addEventListener("change", () => {
-    const cust = $("#g-cta-custom"); if (!cust) return;
-    const on = $("#g-cta").value === "__custom__";
-    cust.hidden = !on; if (on) cust.focus();
+  const ctaChipSync = () => {
+    const v = ($("#g-cta") && $("#g-cta").value.trim()) || "";
+    $$("#g-cta-sugg .sugg-chip").forEach((b) => b.classList.toggle("on", b.dataset.cta === v));
+  };
+  $$("#g-cta-sugg .sugg-chip").forEach((b) => {
+    b.onclick = () => { const inp = $("#g-cta"); inp.value = (inp.value.trim() === b.dataset.cta) ? "" : b.dataset.cta; ctaChipSync(); inp.focus(); };
   });
+  if ($("#g-cta")) $("#g-cta").addEventListener("input", ctaChipSync);
 
   $("#g-run").onclick = runGenerate;
 }
@@ -1489,10 +1503,8 @@ function startGenProgress(host, research) {
 // Lê a orientação de CTA do brief avançado: "" / select aprovado / "Outra…" (texto livre).
 // undefined = sem CTA forçado (padrão).
 function ctaDirective() {
-  const sel = $("#g-cta"); if (!sel) return undefined;
-  const v = sel.value || "";
-  const out = v === "__custom__" ? (($("#g-cta-custom") && $("#g-cta-custom").value.trim()) || "") : v;
-  return out || undefined;
+  const inp = $("#g-cta"); if (!inp) return undefined;
+  return inp.value.trim() || undefined;
 }
 async function runGenerate() {
   const brief = $("#g-brief").value.trim();
@@ -2013,6 +2025,12 @@ async function viewSettings() {
           return '<button type="button" class="accent-opt" data-accent-id="' + id + '">' + sw + '<span>' + esc(p.label) + "</span></button>";
         }).join("")}</div>
       </div>
+      <div class="field mt"><label>Esquema de cores <span class="hint">(tons de fundo e superfície — vale para o modo claro e o escuro)</span></label>
+        <div class="accent-grid" id="scheme-grid">${Object.keys(SCHEME_PRESETS).map((id) => {
+          const p = SCHEME_PRESETS[id];
+          return '<button type="button" class="accent-opt" data-scheme-id="' + id + '" title="' + esc(p.desc) + '"><span class="accent-sw" style="background:' + p.swatch + '"></span><span>' + esc(p.label) + "</span></button>";
+        }).join("")}</div>
+      </div>
     </div>
     <div class="card mt" style="max-width:660px">
       <h3>Gerenciar tags</h3>
@@ -2023,6 +2041,9 @@ async function viewSettings() {
   const markAccent = () => { const cur = currentAccent(); $$("#accent-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.accentId === cur)); };
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
+  const markScheme = () => { const cur = currentScheme(); $$("#scheme-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.schemeId === cur)); };
+  $$("#scheme-grid .accent-opt").forEach((b) => { b.onclick = () => { setScheme(b.dataset.schemeId); markScheme(); toast("Esquema de cores atualizado", "success"); }; });
+  markScheme();
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");
   const saveKeyBtn = $("#s-save-key");
@@ -2248,6 +2269,26 @@ function setAccent(id) {
 }
 function setupAccent() { applyAccent(currentAccent()); }
 
+/* ---- Esquema de cores (Aparência): tons de fundo/superfície p/ claro e escuro ---- */
+const SCHEME_KEY = "painel4selet_scheme";
+const SCHEME_PRESETS = {
+  padrao:    { label: "Padrão",    swatch: "#0c2530", desc: "Teal-navy da marca" },
+  contraste: { label: "Contraste", swatch: "#1b4254", desc: "Mais profundidade" },
+  profundo:  { label: "Profundo",  swatch: "#07181f", desc: "Quase preto, sóbrio" },
+  grafite:   { label: "Grafite",   swatch: "#20262c", desc: "Cinza neutro" },
+};
+function currentScheme() { try { return localStorage.getItem(SCHEME_KEY) || "padrao"; } catch (e) { return "padrao"; } }
+function applyScheme(id) {
+  if (!SCHEME_PRESETS[id] || id === "padrao") document.documentElement.removeAttribute("data-scheme");
+  else document.documentElement.setAttribute("data-scheme", id);
+}
+function setScheme(id) {
+  if (!SCHEME_PRESETS[id]) id = "padrao";
+  try { localStorage.setItem(SCHEME_KEY, id); } catch (e) {}
+  applyScheme(id);
+}
+function setupScheme() { applyScheme(currentScheme()); }
+
 function setupTheme() {
   applyTheme(currentTheme());
   const btn = $("#btn-theme");
@@ -2262,6 +2303,7 @@ function setupTheme() {
 async function boot() {
   setupTheme();
   setupAccent();
+  setupScheme();
   setupMenu();
   setupBack();
   try { State.meta = await API.meta(); } catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
