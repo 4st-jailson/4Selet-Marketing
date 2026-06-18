@@ -54,7 +54,7 @@ Abra **http://localhost:4500** no navegador.
 interface/
 ├── server.js            # Express (API + estáticos)
 ├── lib/                 # config, knowledge, anthropic, prompts, campaigns, content, validation
-├── routes/              # settings, campaigns, content, generate
+├── routes/              # settings, campaigns, collections, content, generate, uploads
 ├── public/              # index.html + css + js (SPA vanilla, tema 4Selet)
 └── .env                 # chave Anthropic (local, ignorada no git)
 ```

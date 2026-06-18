@@ -571,8 +571,15 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .adv-block { margin-top: var(--s2); border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); }
 .adv-block > summary { padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-dim); list-style: none; }
 .adv-block > summary::-webkit-details-marker { display: none; }
-.adv-block > summary::before { content: "▸ "; color: var(--text-mut); }
-.adv-block[open] > summary::before { content: "▾ "; }
+/* Marcador chevron desenhado em CSS (cantos top+right girados 45deg). Mais limpo e
+   moderno que o triangulo glyph "▸"/"▾"; gira suave ao abrir/fechar. */
+.adv-block > summary::before {
+  content: ""; display: inline-block; width: 6px; height: 6px;
+  margin-right: 11px; vertical-align: middle; position: relative; top: -2px;
+  border-top: 2px solid var(--text-mut); border-right: 2px solid var(--text-mut);
+  transform: rotate(45deg); transition: transform .18s ease;
+}
+.adv-block[open] > summary::before { transform: rotate(135deg); top: -1px; }
 .adv-block[open] > summary { border-bottom: 1px solid var(--border-soft); }
 /* foco do cabeçalho: anel interno discreto on-brand, no lugar da moldura padrão do navegador */
 .adv-block > summary:focus { outline: none; }

@@ -435,9 +435,35 @@ function thumbHtml(t) {
   }
   return "";
 }
+// Ícone de um tipo de conteúdo: usa o SVG inline (iconSvg) quando houver — já é
+// markup confiável vindo do nosso config, então NÃO escapamos —, senão o glyph.
+function typeIconHtml(ct) {
+  if (ct && ct.iconSvg) return ct.iconSvg;
+  return esc((ct && ct.icon) || "▣");
+}
 function kindIcon(kind) {
   const ct = (State.meta.content_types || []).find((c) => c.kind === kind);
-  return ct ? (ct.icon || "▣") : "▤";
+  return ct ? typeIconHtml(ct) : "▤";
+}
+// Sugere um Título legível a partir do Tema/objetivo digitado: remove o verbo
+// imperativo inicial ("Anunciar a", "Divulgar o"...), pega a 1ª frase e limita o
+// tamanho sem cortar palavra. É só um ponto de partida — o usuário pode editar.
+function suggestTitleFromBrief(brief) {
+  let s = String(brief || "").trim();
+  if (!s) return "";
+  s = s.split(/[.!?\n]/)[0].trim();
+  // Remove o verbo imperativo inicial + artigo/preposição. O artigo exige espaço
+  // depois (e vem do mais longo p/ o mais curto) para NÃO comer o "o" de "os" etc.
+  s = s.replace(/^(anunciar|divulgar|comunicar|promover|apresentar|mostrar|explicar|ensinar|criar|fazer|gerar|postar|publicar|destacar|refor[cç]ar|lembrar|avisar(?:\s+sobre)?|falar\s+(?:sobre|de))\s+(?:(?:as|os|uma|um|sobre|da|do|de|a|o)\s+)?/i, "");
+  if (!s) return "";
+  // Corta numa fronteira natural (—, :, vírgula, "que", "para") p/ um título limpo,
+  // desde que sobre texto suficiente — evita terminar no meio de uma oração.
+  const cut = (re) => { const i = s.search(re); return (i >= 18) ? s.slice(0, i).trim() : null; };
+  s = cut(/\s+[—–]\s+/) || cut(/\s*:\s+/) || cut(/,\s+/) || cut(/\s+que\s+/i) || cut(/\s+(?:para|pra)\s+/i) || s;
+  if (s.length > 52) s = s.slice(0, 52).replace(/\s+\S*$/, "").trim();
+  // Remove conectora pendurada no fim (ex.: "...percentual no" -> "...percentual").
+  s = s.replace(/\s+(?:no|na|nos|nas|do|da|dos|das|de|e|o|a|os|as|em|ao|aos|para|pra|com|que)$/i, "").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 function taskCard(t) {
   const hasThumb = t.thumb && t.thumb.rel;
@@ -1321,7 +1347,7 @@ async function viewCreate(arg, query) {
   const pillarOpts = '<option value="">— a IA decide pelo tema da peça —</option>' + (State.meta.content_pillars || []).map((p) => `<option value="${esc(p.id)}" ${p.id === prePillar ? "selected" : ""} title="${esc(p.description)}">${esc(p.label)}</option>`).join("");
   const typeCards = State.meta.content_types.map((c) => `
     <button type="button" class="type-card ${c.id === preType ? "on" : ""}" data-type="${esc(c.id)}" title="${esc(c.description)}">
-      <span class="tc-icon">${esc(c.icon || "▣")}</span>
+      <span class="tc-icon">${typeIconHtml(c)}</span>
       <span class="tc-label">${esc(c.short || c.label)}</span>
       <span class="tc-media badge plain">${esc(mediaLabel(c.media))}</span>
     </button>`).join("");
@@ -1493,14 +1519,23 @@ async function viewCreate(arg, query) {
     updPillarDesc();
   }
   if (preCampObj && !prePillar) applyCampPillar(preCampObj);
-  $("#g-title").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; } });
+  $("#g-title").addEventListener("input", (e) => {
+    if (e && e.isTrusted) $("#g-title").dataset.touched = "1"; // editou à mão → para de auto-sugerir
+    if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; }
+  });
   $("#g-task").addEventListener("input", () => { delete $("#g-task").dataset.auto; });
   const briefCount = () => {
     const el = $("#g-brief-count"); if (!el) return;
     const n = $("#g-brief").value.trim().length;
     el.textContent = n === 0 ? "" : (n < 8 ? n + " caracteres — descreva um pouco mais" : n + " caracteres");
   };
-  $("#g-brief").addEventListener("input", briefCount); briefCount();
+  // Enquanto o título não foi tocado, sugere um a partir do tema (e re-deriva o slug).
+  const suggestTitle = () => {
+    const t = $("#g-title"); if (!t || t.dataset.touched) return;
+    t.value = suggestTitleFromBrief($("#g-brief").value);
+    if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify(t.value).slice(0, 40); $("#g-task").dataset.auto = "1"; }
+  };
+  $("#g-brief").addEventListener("input", () => { briefCount(); suggestTitle(); }); briefCount();
   const ctaChipSync = () => {
     const v = ($("#g-cta") && $("#g-cta").value.trim()) || "";
     $$("#g-cta-sugg .sugg-chip").forEach((b) => b.classList.toggle("on", b.dataset.cta === v));

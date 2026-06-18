@@ -8,9 +8,61 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn } = require("child_process");
 const { PATHS, PALETTE, contentTypeById } = require("./config");
 const { findTask } = require("./content");
+
+// --- Fila de render (assincrona + serializada) ------------------------------
+// Antes usavamos spawnSync, que BLOQUEIA o event loop: enquanto o Playwright/
+// Remotion rodava, o painel inteiro ficava travado (health, biblioteca, geracao
+// de IA — tudo esperava). Agora cada processo roda via spawn (assincrono) e o
+// painel segue respondendo. A fila garante UM render por vez: Chromium/Remotion
+// sao pesados; sem isso, uma rajada (ou carrossel) abriria varios processos
+// simultaneos e estouraria a memoria da VPS. Resultado: nao-bloqueante E seguro.
+let _renderChain = Promise.resolve();
+function enqueueRender(task) {
+  const run = _renderChain.then(task, task); // roda mesmo se o anterior rejeitou
+  _renderChain = run.then(() => undefined, () => undefined); // cadeia nunca quebra
+  return run;
+}
+
+// Roda um processo Node (render_ad.js / remotion-cli) de forma assincrona, dentro
+// da fila. opts.timeout (ms) mata o processo se estourar (usado no video).
+// Resolve sempre (nunca rejeita) com { code, stdout, stderr, error, timedOut, ok }.
+function spawnAsync(args, opts) {
+  opts = opts || {};
+  return enqueueRender(() => new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT });
+    } catch (e) {
+      return resolve({ code: -1, stdout: "", stderr: "", error: (e && e.message) || String(e), timedOut: false, ok: false });
+    }
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    let stdout = "", stderr = "", error = "", timedOut = false;
+    const MAX = 1024 * 1024 * 16; // teto de captura (evita memoria sem limite)
+    child.stdout.on("data", (d) => { if (stdout.length < MAX) stdout += d; });
+    child.stderr.on("data", (d) => { if (stderr.length < MAX) stderr += d; });
+    let timer = null;
+    if (opts.timeout) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        try { child.kill("SIGTERM"); } catch (e) {}
+        setTimeout(() => { try { child.kill("SIGKILL"); } catch (e) {} }, 5000).unref();
+      }, opts.timeout);
+    }
+    child.on("error", (err) => { error = (err && err.message) || String(err); });
+    child.on("close", (code) => {
+      if (timer) clearTimeout(timer);
+      resolve({
+        code: code === null ? -1 : code,
+        stdout: stdout.trim(), stderr: stderr.trim(),
+        error, timedOut, ok: code === 0,
+      });
+    });
+  }));
+}
 
 const ASSETS = PATHS.ASSETS_DIR;
 function fileUrl(p) { return "file:///" + path.resolve(p).replace(/\\/g, "/"); }
@@ -56,19 +108,20 @@ function requireActive(folder) {
   return loc;
 }
 
-// Executa o render_ad.js oficial (Playwright) — HTML -> PNG.
-function htmlToPng(htmlPath, outPng, width, height) {
+// Executa o render_ad.js oficial (Playwright) — HTML -> PNG. Assincrono (spawn).
+// `scale` = deviceScaleFactor: 1 = base; 2 = ALTA RESOLUCAO (ex.: 2160px) p/ download.
+async function htmlToPng(htmlPath, outPng, width, height, scale) {
   const script = path.join(PATHS.SCRIPTS_DIR, "render_ad.js");
-  const r = spawnSync(process.execPath, [script, htmlPath, outPng, String(width), String(height)], {
-    cwd: PATHS.PROJECT_ROOT, encoding: "utf8",
-  });
-  return {
-    code: r.status === null ? -1 : r.status,
-    stdout: (r.stdout || "").trim(),
-    stderr: (r.stderr || "").trim(),
-    ok: r.status === 0,
-  };
+  const args = [script, htmlPath, outPng, String(width), String(height)];
+  if (scale && scale !== 1) args.push(String(scale));
+  const r = await spawnAsync(args);
+  return { code: r.code, stdout: r.stdout, stderr: r.stderr || r.error, ok: r.ok };
 }
+
+// Fator de resolucao dos renders FINAIS (salvos/baixados): 2x = alta resolucao.
+// A previa (renderPreview) fica em 1x de proposito — e so visualizacao na tela.
+// Tunavel por env: RENDER_SCALE.
+const RENDER_SCALE = Number(process.env.RENDER_SCALE || 2) || 2;
 
 // ---- Templates visuais da marca -------------------------------------------
 // 3 layouts on-brand (paleta 4Selet, Inter/JetBrains Mono, logo, Selet Dots).
@@ -463,7 +516,7 @@ function slideArchetype(slide, i, total) {
 }
 
 // ---- Renders por tipo -----------------------------------------------------
-function renderImage(folder, opts) {
+async function renderImage(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
   const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
@@ -480,11 +533,11 @@ function renderImage(folder, opts) {
     image: concept.image || (opts && opts.image) || "",
   });
   fs.writeFileSync(htmlPath, html, "utf8");
-  const r = htmlToPng(htmlPath, outPng, 1080, 1080);
+  const r = await htmlToPng(htmlPath, outPng, 1080, 1080, RENDER_SCALE);
   return Object.assign(r, { rel: "ads/ad.png", template: tpl.id });
 }
 
-function renderFeed(folder, opts) {
+async function renderFeed(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
@@ -505,11 +558,11 @@ function renderFeed(folder, opts) {
     image: (opts && opts.image) || "",
   });
   fs.writeFileSync(htmlPath, html, "utf8");
-  const r = htmlToPng(htmlPath, outPng, 1080, 1350);
+  const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
   return Object.assign(r, { rel: "ads/feed.png", template: tpl.id });
 }
 
-function renderCarousel(folder, opts) {
+async function renderCarousel(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
@@ -521,7 +574,10 @@ function renderCarousel(folder, opts) {
   const rels = [];
   let lastErr = null;
   const total = slides.length;
-  slides.forEach((s, i) => {
+  // Sequencial (await em fila): renderiza um slide por vez, sem abrir N Chromium
+  // ao mesmo tempo. Nao bloqueia o event loop (cada htmlToPng e assincrono).
+  for (let i = 0; i < slides.length; i++) {
+    const s = slides[i];
     const n = i + 1;
     const arch = slideArchetype(s, i, total);
     const htmlPath = path.join(dir, "slide_" + n + ".html");
@@ -548,15 +604,15 @@ function renderCarousel(folder, opts) {
       html = SLIDE_ARCHETYPES[arch](s, ctx);
     }
     fs.writeFileSync(htmlPath, html, "utf8");
-    const r = htmlToPng(htmlPath, outPng, 1080, 1350);
+    const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
     if (!r.ok) lastErr = r.stderr || r.stdout;
     else rels.push("slides/slide_" + n + ".png");
-  });
+  }
   return { ok: rels.length === total, rels, stderr: lastErr || "", count: rels.length, total: total, template: tpl.id };
 }
 
 // ---- Video (Remotion parametrizado) ---------------------------------------
-function renderVideo(folder) {
+async function renderVideo(folder) {
   const loc = requireActive(folder);
   const concept = readJson(path.join(loc.path, "video", "concept.json")) || {};
   const scenes = Array.isArray(concept.scenes) && concept.scenes.length ? concept.scenes : [
@@ -585,21 +641,20 @@ function renderVideo(folder) {
   // JS do CLI (@remotion/cli/remotion-cli.js) e rodando com process.execPath e
   // robusto e cross-platform.
   const cliJs = remotionCliPath();
-  const r = spawnSync(
-    process.execPath,
+  // 12min: o 1o render apos subir o servidor faz o bundle webpack a frio (cold-start);
+  // 8min encostava no limite. Render quente leva ~2min. spawnAsync mata no timeout.
+  const r = await spawnAsync(
     [cliJs, "render", "src/index.ts", "BrandStory", outMp4, "--props=" + propsPath, "--log=error"],
-    // 12min: o 1o render apos subir o servidor faz o bundle webpack a frio (cold-start);
-    // 8min encostava no limite e retornava status null. Render quente leva ~2min.
-    { cwd: PATHS.PROJECT_ROOT, encoding: "utf8", timeout: 1000 * 60 * 12, maxBuffer: 1024 * 1024 * 32 }
+    { timeout: 1000 * 60 * 12 }
   );
-  const spawnErr = r.error ? (r.error.message || String(r.error)) : "";
-  const timedOut = !spawnErr && r.status === null;
+  const spawnErr = r.error || "";
+  const timedOut = r.timedOut;
   return {
-    code: r.status === null ? -1 : r.status,
-    stdout: (r.stdout || "").trim(),
-    stderr: (r.stderr || "").trim() || spawnErr ||
+    code: r.code,
+    stdout: r.stdout,
+    stderr: r.stderr || spawnErr ||
       (timedOut ? "render de video excedeu o tempo limite (cold-start). Tente novamente — o cache fica quente." : ""),
-    ok: r.status === 0 && fs.existsSync(outMp4),
+    ok: r.code === 0 && fs.existsSync(outMp4),
     rel: "video/video.mp4",
   };
 }
@@ -653,19 +708,24 @@ function previewFields(ct, parsed) {
   return null;
 }
 
-function renderPreview({ content_type, parsed, template } = {}) {
+async function renderPreview({ content_type, parsed, template } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   const fields = previewFields(ct, parsed);
   if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
   const tplId = (template && TEMPLATES[template]) ? template : "editorial";
   const html = resolveTemplate(tplId)(fields);
-  const base = path.join(os.tmpdir(), "4selet-preview-" + process.pid + "-" + Date.now());
+  // Sufixo aleatorio: agora que o render e assincrono, duas previas podem rodar
+  // "ao mesmo tempo" — nomes unicos evitam colisao no arquivo temporario.
+  const uniq = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  const base = path.join(os.tmpdir(), "4selet-preview-" + process.pid + "-" + uniq);
   const htmlPath = base + ".html";
   const outPng = base + ".png";
   try {
     fs.writeFileSync(htmlPath, html, "utf8");
-    const r = htmlToPng(htmlPath, outPng, fields.width, fields.height);
+    // Previa fica em resolucao base (1x) de proposito: e so visualizacao na tela —
+    // alta resolucao so vale p/ o render final salvo (download).
+    const r = await htmlToPng(htmlPath, outPng, fields.width, fields.height);
     if (!r.ok || !fs.existsSync(outPng)) {
       return { ok: false, error: (r.stderr || r.stdout || "falha ao renderizar a previa").slice(0, 400), template: tplId };
     }
@@ -680,7 +740,8 @@ function renderPreview({ content_type, parsed, template } = {}) {
 }
 
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
-function render(folder, kind, opts) {
+// Assincrono: o chamador (rota) deve usar `await render.render(...)`.
+async function render(folder, kind, opts) {
   switch (kind) {
     case "image": return renderImage(folder, opts);
     case "feed": return renderFeed(folder, opts);

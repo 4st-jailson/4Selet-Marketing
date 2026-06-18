@@ -55,14 +55,14 @@ router.post("/:folder/tags", (req, res) => {
 });
 
 // Renderiza a midia final (PNG/MP4) a partir do conceito. ?kind=image|feed|carousel|video
-router.post("/:folder/render", (req, res) => {
+router.post("/:folder/render", async (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
   const kind = String((req.query.kind || req.body && req.body.kind || t.kind || "").trim());
   const reqTpl = String((req.query.template || (req.body && req.body.template) || "").trim());
   const template = render.TEMPLATE_IDS.includes(reqTpl) ? reqTpl : undefined;
   try {
-    const r = render.render(req.params.folder, kind, { template });
+    const r = await render.render(req.params.folder, kind, { template });
     const task = content.getTask(req.params.folder);
     return res.status(r.ok ? 200 : 400).json(Object.assign({ kind, task }, r));
   } catch (e) {

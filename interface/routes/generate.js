@@ -155,12 +155,12 @@ router.post("/refine", async (req, res, next) => {
 
 // POST /api/generate/preview — previa RENDERIZADA da arte a partir do conceito em
 // memoria (parsed), sem salvar nem exigir task. So vale para tipos visuais (image).
-router.post("/preview", (req, res, next) => {
+router.post("/preview", async (req, res, next) => {
   try {
     const body = req.body || {};
     const ct = contentTypeById(body.content_type);
     if (!ct) return res.status(400).json({ error: "content_type invalido" });
-    const out = render.renderPreview({
+    const out = await render.renderPreview({
       content_type: body.content_type,
       parsed: body.parsed || extractJson(body.raw),
       template: body.template,

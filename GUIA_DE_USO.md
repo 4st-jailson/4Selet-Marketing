@@ -250,7 +250,7 @@ O painel gera seis tipos, cada um com formato e mídia final próprios:
 | --- | --- | --- | --- |
 | Feed Instagram | Instagram | Texto (legenda + hashtags) | Texto |
 | Carrossel Instagram | Instagram | Estruturado (slides) | PNG por slide |
-| Imagem / Anúncio | Instagram | Estruturado (layout) | PNG 1080x1080 |
+| Imagem / Anúncio | Instagram | Estruturado (layout) | PNG 2160×2160 (alta resolução) |
 | Vídeo (short-form) | Instagram | Estruturado (cenas) | MP4 |
 | Post LinkedIn | LinkedIn | Texto editorial | Texto |
 | Post Threads / X | Threads / X | Texto curto | Texto |
@@ -272,7 +272,7 @@ Conduz pesquisa estruturada de inteligência de mercado (tendências, concorrên
 
 ### 8.2 Designer de Imagem (Ad Creative Designer)
 
-Gera criativos estáticos como especificação de layout e os renderiza em PNG (1080x1080) via Playwright. Escolhe o tipo de layout conforme plataforma e objetivo, e produz a copy do anúncio (headline, subtexto, CTA).
+Gera criativos estáticos como especificação de layout e os renderiza em PNG de alta resolução (2160×2160, base 1080 em 2×) via Playwright. Escolhe o tipo de layout conforme plataforma e objetivo, e produz a copy do anúncio (headline, subtexto, CTA).
 
 ### 8.3 Especialista de Vídeo
 
@@ -393,22 +393,26 @@ npm run pipeline:worker                    # worker da fila (terminal separado)
 
 | Tipo de peça | Motor | Saída |
 | --- | --- | --- |
-| Imagem, Feed, Carrossel | Playwright (HTML para PNG) | PNG (ex.: 1080x1080; um PNG por slide no carrossel) |
+| Imagem, Feed, Carrossel | Playwright (HTML para PNG) | PNG de alta resolução (ex.: 2160×2160; um PNG por slide no carrossel) |
 | Vídeo | Remotion (React) | `video/video.mp4` |
 
 No painel, a renderização acontece ao salvar/aprovar a peça visual. O vídeo é renderizado pela composition `BrandStory` do projeto Remotion em `src/`.
 
+> [!NOTE]
+> As peças visuais são exportadas em **alta resolução** (2× — ex.: 2160×2160), prontas para baixar com nitidez. A renderização roda **em segundo plano** (uma peça por vez), sem travar o painel: você pode navegar pela biblioteca e gerar outros conteúdos enquanto uma arte é gerada.
+
 ### Templates visuais (peças estáticas)
 
-Imagem, feed e carrossel podem ser renderizados em três layouts on-brand, selecionáveis no painel antes de **Renderizar** / **Re-renderizar**. A escolha fica salva por peça, então re-renderizações e o reabrir da peça mantêm o template.
+Imagem, feed e carrossel podem ser renderizados em quatro layouts on-brand, selecionáveis no painel antes de **Renderizar** / **Re-renderizar**. A escolha fica salva por peça, então re-renderizações e o reabrir da peça mantêm o template.
 
 | Template | Visual | Quando usar |
 | --- | --- | --- |
 | Editorial | Gradiente azul, Selet Dots, logo no topo, headline à esquerda | Padrão; mensagem com subtexto descritivo |
 | Destaque | Fundo escuro centralizado, símbolo "4" como marca-d'água | Headlines curtas com número em evidência (ex.: `0%`, `95%`) |
 | Split | Faixa clara (logo + rótulo) sobre faixa escura (headline + CTA) | Contraste editorial, números realçados na headline |
+| Foto | Imagem como herói + wash navy + scrim; logo no topo, copy na base | Peças humanizadas com foto (pessoa/objeto/cena) e copy por cima |
 
-![Os três templates visuais on-brand lado a lado: Editorial (gradiente azul com headline à esquerda), Destaque (fundo escuro com número em evidência) e Split (faixa clara sobre faixa escura).](docs/diagramas/templates-visuais.svg "Três layouts on-brand para a mesma peça — escolha o template antes de renderizar.")
+![Três dos quatro templates visuais on-brand lado a lado: Editorial (gradiente azul com headline à esquerda), Destaque (fundo escuro com número em evidência) e Split (faixa clara sobre faixa escura).](docs/diagramas/templates-visuais.svg "Layouts de cor sólida (Editorial, Destaque, Split). O quarto, Foto, usa uma imagem como fundo, com wash navy + scrim para coesão de marca.")
 
 Todos seguem a paleta e a tipografia oficiais (logo claro sobre fundo escuro, escuro sobre claro). Números e percentuais na headline recebem realce automático na cor Sky.
 

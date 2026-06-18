@@ -1,6 +1,7 @@
 // Render de static ad via Playwright (HTML -> PNG). Usado pela skill ad-creative-designer.
-// Uso: node scripts/render_ad.js <html_path> <out_png> [width] [height]
-// Defaults: paths do dry-run test_job_payload_1, 1080x1080. Local, sem chaves externas.
+// Uso: node scripts/render_ad.js <html_path> <out_png> [width] [height] [scale]
+// Defaults: paths do dry-run test_job_payload_1, 1080x1080, scale 1. Local, sem chaves externas.
+// [scale] = deviceScaleFactor: 1 = resolucao base (1080); 2 = alta resolucao (2160px) p/ download.
 const { chromium } = require("playwright");
 const path = require("path");
 
@@ -13,12 +14,15 @@ const path = require("path");
   );
   const width = parseInt(process.argv[4] || "1080", 10);
   const height = parseInt(process.argv[5] || "1080", 10);
+  // deviceScaleFactor: rasteriza a NxN do tamanho CSS. O layout (px CSS) nao muda;
+  // so a nitidez/resolucao do PNG final. 2 => 2x os pixels (ex.: 2160x2160).
+  const scale = parseFloat(process.argv[6] || "1") || 1;
   const fileUrl = "file:///" + htmlPath.replace(/\\/g, "/");
 
   const browser = await chromium.launch();
   const page = await browser.newPage({
     viewport: { width, height },
-    deviceScaleFactor: 1,
+    deviceScaleFactor: scale,
   });
   await page.goto(fileUrl, { waitUntil: "networkidle" });
   try {
@@ -41,7 +45,7 @@ const path = require("path");
   await page.waitForTimeout(200);
   await page.screenshot({ path: outPath, clip: { x: 0, y: 0, width, height } });
   await browser.close();
-  console.log("OK -> " + outPath + " (" + width + "x" + height + ")");
+  console.log("OK -> " + outPath + " (" + width + "x" + height + " @" + scale + "x)");
 })().catch((err) => {
   console.error("FALHA:", err.message);
   process.exit(1);

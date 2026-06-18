@@ -168,7 +168,7 @@ async function creativeAgent(ctx) {
   if (doRender && renderable) {
     log(`  renderizando mídia (${ct.kind})…`);
     try {
-      const r = render.render(folder, ct.kind);
+      const r = await render.render(folder, ct.kind);
       renderInfo = { ok: r.ok, code: r.code, rel: r.rel || null };
       if (r.ok) log("  mídia: " + (r.rel || "ok"));
       else log("  mídia FALHOU (code " + r.code + "): " + (r.stderr || "").slice(0, 200));

@@ -183,6 +183,9 @@ const CONTENT_TYPES = [
     media: "video",
     kind: "video",
     icon: "►",
+    // SVG inline (player com play): le claramente como "video" — o glyph "►" sozinho
+    // parecia um aviao de papel/enviar. `icon` fica de fallback textual.
+    iconSvg: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" aria-hidden="true" style="vertical-align:-0.14em"><rect x="2.6" y="5.2" width="18.8" height="13.6" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M10 9.3v5.4l4.7-2.7z" fill="currentColor"/></svg>',
     description: "Reels/short vertical (9:16): hook, arco e roteiro de cenas, gerado como vídeo final.",
   },
   {
