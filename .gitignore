@@ -28,3 +28,6 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code (dados de sessao locais) — nunca versionar
+.claude/
