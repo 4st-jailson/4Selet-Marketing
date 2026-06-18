@@ -110,6 +110,8 @@ function generationPrompt(req) {
   if (req.key_offer) lines.push("- Oferta/numero a destacar: " + req.key_offer);
   if (req.mood) lines.push("- Referencia visual/mood (clima e estilo a evocar, sempre dentro da marca): " + req.mood);
   if (req.extra) lines.push("- Observacoes extras: " + req.extra);
+  if (req.cta) lines.push("- Chamada para acao (CTA): use EXATAMENTE \"" + req.cta + "\" como CTA — coloque no campo cta do JSON e, quando fizer sentido, como fechamento natural do texto.");
+  else lines.push("- SEM CTA forcado: NAO use chamadas de conversao (ex.: 'Solicitar convite', 'Ver as condicoes'). Deixe o campo cta do JSON vazio (\"\") e encerre o texto de forma natural, no maximo um fechamento suave de relacionamento.");
   lines.push("");
   if (req.research && Array.isArray(req.research.findings) && req.research.findings.length) {
     lines.push("INTELIGENCIA DE MERCADO (pesquisa AO VIVO via Tavily — use como apoio factual e de atualidade; NAO copie literalmente: sintetize, valide contra os knowledge files e mantenha a voz/regras da marca 4Selet):");

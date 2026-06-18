@@ -338,6 +338,16 @@ a.stat:hover::after { opacity: 1; transform: translateX(2px); }
 /* ---- filtros ---- */
 .lib-toolbar { display: flex; flex-wrap: wrap; gap: var(--s3); margin-bottom: var(--s4); }
 .lib-search { flex: 1; min-width: 220px; }
+/* "x" de limpar da busca: segue a Aparência (tema) via máscara recolorível, no lugar do x nativo do navegador */
+.lib-search::-webkit-search-cancel-button {
+  -webkit-appearance: none; appearance: none;
+  width: 15px; height: 15px; margin-left: 6px; cursor: pointer;
+  background-color: var(--text-2);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M6%206%2018%2018M18%206%206%2018'%20stroke='%23000'%20stroke-width='2.6'%20stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M6%206%2018%2018M18%206%206%2018'%20stroke='%23000'%20stroke-width='2.6'%20stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  opacity: .55; transition: opacity var(--tr);
+}
+.lib-search::-webkit-search-cancel-button:hover { opacity: 1; }
 .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: var(--s4); }
 .lib-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: 0 2px var(--s4); min-height: 18px; }
 .lib-quals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 2px var(--s4); }
@@ -653,6 +663,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 
 /* ---- menu mobile ---- */
 .menu-btn { display: none; }
+/* botão voltar na topbar: visível só em telas de detalhe (toggle via atributo hidden) */
+.back-btn[hidden] { display: none; }
 .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(4,16,22,.5); opacity: 0; pointer-events: none; transition: opacity var(--tr); }
 .scrim.open { opacity: 1; pointer-events: auto; }
 

@@ -247,6 +247,12 @@ window.goBack = goBack;
 async function router() {
   NAV_COUNT++;
   const { route, arg, query } = parseHash();
+  // Botão "voltar" na topbar: aparece em telas de detalhe (peça/campanha).
+  const backBtn = $("#btn-back");
+  if (backBtn) {
+    backBtn.hidden = !(arg && (route === "task" || route === "campaign"));
+    backBtn.dataset.fallback = route === "campaign" ? "#/campaigns" : "#/content";
+  }
   $$("#nav a").forEach((a) => {
     const on = a.dataset.route === route;
     a.classList.toggle("active", on);
@@ -1031,15 +1037,13 @@ async function viewTaskDetail(folder) {
   await ensureCampMap();
   const s = task.status;
   setTitle(displayName(s));
+  { const _bk = $("#btn-back"); if (_bk) _bk.dataset.fallback = task.zone === "approved" ? "#/approved" : "#/content"; }
   const actions = workflowActions(task);
   const canDiscard = task.zone !== "approved";
   const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">identificador: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   setView(`
-    <div class="flex-between mb flex-wrap">
-      <div class="flex flex-wrap">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
-      <button type="button" class="btn btn-sm btn-ghost" onclick="goBack('${task.zone === "approved" ? "#/approved" : "#/content"}')">← voltar</button>
-    </div>
+    <div class="flex flex-wrap mb">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
@@ -1340,7 +1344,16 @@ async function viewCreate(arg, query) {
         </div>
         <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
         <details class="adv-block">
-          <summary>Ajustes opcionais — tom, oferta, estilo visual e referências</summary>
+          <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
+          <p class="muted adv-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
+          <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; só inclua se quiser orientar uma ação)</span></label>
+            <select id="g-cta">
+              <option value="">— sem chamada (padrão) —</option>
+              ${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}
+              <option value="__custom__">Outra… (escrever)</option>
+            </select>
+            <input id="g-cta-custom" class="mt" placeholder="escreva a chamada / orientação da ação" hidden />
+          </div>
           <div class="row">
             <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
             <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
@@ -1367,6 +1380,7 @@ async function viewCreate(arg, query) {
 
   const campMap = {}; campaigns.forEach((c) => { campMap[c.id] = c; });
   let platsTouched = false;
+  let pillarTouched = false;
   const typePlatform = (id) => { const ct = metaType(id); return ct && ct.platform ? ct.platform : null; };
   function renderPlats(selected, inherited) {
     const set = (selected && selected.length) ? selected : ["instagram"];
@@ -1389,6 +1403,7 @@ async function viewCreate(arg, query) {
     const c = campMap[$("#g-camp").value];
     renderPlats(c && c.platforms && c.platforms.length ? c.platforms : ["instagram"], !!c);
     ensureTypePlatform();
+    applyCampPillar(c);
   });
   const updDesc = () => { const ct = metaType($("#g-type").value); $("#g-type-desc").textContent = ct ? ct.description : ""; };
   $$("#g-type-grid .type-card").forEach((card) => {
@@ -1406,7 +1421,28 @@ async function viewCreate(arg, query) {
   updDesc();
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
   const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
-  if ($("#g-pillar")) { $("#g-pillar").addEventListener("change", updPillarDesc); updPillarDesc(); }
+  // Sugere o pilar de conteúdo a partir da campanha (ex.: campanha "Taxa Zero" -> pilar "Campanha Taxa Zero").
+  // Casa por palavra-chave do nome/ângulo/objetivo; o usuário pode sobrescrever a qualquer momento.
+  const suggestPillarFromCamp = (c) => {
+    if (!c) return "";
+    const hay = ((c.name || "") + " " + (c.angle || "") + " " + (c.objective || "")).toLowerCase();
+    for (const p of (State.meta.content_pillars || [])) {
+      const kw = String(p.short || p.label || "").toLowerCase().trim();
+      if (kw && hay.indexOf(kw) !== -1) return p.id;
+    }
+    return /taxa\s*zero/.test(hay) ? "taxa_zero" : "";
+  };
+  const applyCampPillar = (c) => {
+    if (!c || pillarTouched) return;
+    const pid = suggestPillarFromCamp(c);
+    const sel = $("#g-pillar");
+    if (pid && sel && sel.value !== pid) { sel.value = pid; updPillarDesc(); }
+  };
+  if ($("#g-pillar")) {
+    $("#g-pillar").addEventListener("change", () => { pillarTouched = true; updPillarDesc(); });
+    updPillarDesc();
+  }
+  if (preCampObj && !prePillar) applyCampPillar(preCampObj);
   $("#g-title").addEventListener("input", () => { if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify($("#g-title").value).slice(0, 40); $("#g-task").dataset.auto = "1"; } });
   $("#g-task").addEventListener("input", () => { delete $("#g-task").dataset.auto; });
   const briefCount = () => {
@@ -1415,6 +1451,11 @@ async function viewCreate(arg, query) {
     el.textContent = n === 0 ? "" : (n < 8 ? n + " caracteres — descreva um pouco mais" : n + " caracteres");
   };
   $("#g-brief").addEventListener("input", briefCount); briefCount();
+  if ($("#g-cta")) $("#g-cta").addEventListener("change", () => {
+    const cust = $("#g-cta-custom"); if (!cust) return;
+    const on = $("#g-cta").value === "__custom__";
+    cust.hidden = !on; if (on) cust.focus();
+  });
 
   $("#g-run").onclick = runGenerate;
 }
@@ -1445,6 +1486,14 @@ function startGenProgress(host, research) {
   return timer;
 }
 
+// Lê a orientação de CTA do brief avançado: "" / select aprovado / "Outra…" (texto livre).
+// undefined = sem CTA forçado (padrão).
+function ctaDirective() {
+  const sel = $("#g-cta"); if (!sel) return undefined;
+  const v = sel.value || "";
+  const out = v === "__custom__" ? (($("#g-cta-custom") && $("#g-cta-custom").value.trim()) || "") : v;
+  return out || undefined;
+}
 async function runGenerate() {
   const brief = $("#g-brief").value.trim();
   $("#e-brief").textContent = ""; $("#g-brief").classList.remove("invalid"); $("#g-brief").removeAttribute("aria-invalid");
@@ -1461,6 +1510,7 @@ async function runGenerate() {
     research: ($("#g-research") && $("#g-research").checked) || undefined,
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
     pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
+    cta: ctaDirective(),
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   const prog = startGenProgress($("#g-result"), !!payload.research);
@@ -2137,6 +2187,10 @@ function closeSidebar() {
   const b = $("#btn-menu"); if (b) b.setAttribute("aria-expanded", "false");
   if (_sbOpener) { restoreFocus(_sbOpener); _sbOpener = null; }
 }
+function setupBack() {
+  const b = $("#btn-back");
+  if (b) b.onclick = () => goBack(b.dataset.fallback || "#/content");
+}
 function setupMenu() {
   const btn = $("#btn-menu"); if (btn) btn.onclick = openSidebar;
   const scrim = $("#scrim"); if (scrim) scrim.onclick = closeSidebar;
@@ -2209,6 +2263,7 @@ async function boot() {
   setupTheme();
   setupAccent();
   setupMenu();
+  setupBack();
   try { State.meta = await API.meta(); } catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   setupAssistant();
   setupLightbox();

@@ -34,6 +34,8 @@ function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+// Escape p/ valor de ATRIBUTO (ex.: src="..."). Alem de &<>, neutraliza aspas.
+function escAttr(s) { return esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
 function requireActive(folder) {
   const loc = findTask(folder);
@@ -233,7 +235,71 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
 </div></body></html>`;
 }
 
-const TEMPLATES = { editorial: tplEditorial, bold: tplBold, split: tplSplit };
+// 4) Foto — imagem como HEROI (object-fit cover) + wash navy p/ coesao de marca
+// + scrim inferior p/ legibilidade. Logo no topo, headline/subtexto/CTA na base.
+// Espelha as capas humanizadas do feed @4selet (ver Referencia-Instagram): a arte
+// deixa de ser so cor solida + texto e passa a combinar foto (pessoa/objeto/cena)
+// com a copy por cima. Sem `image`, cai num fundo navy (nada quebra).
+function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image }) {
+  const n = headlineLen(headline);
+  const headlineSize = n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156;
+  const photo = image ? `<img class="photo" src="${escAttr(image)}" alt=""/>` : "";
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:${width}px; height:${height}px; }
+  .card {
+    position:relative; width:${width}px; height:${height}px; overflow:hidden;
+    background: linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);
+    color:${PALETTE.cloud}; font-family:'Inter',sans-serif;
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .photo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  /* wash de marca: da unidade navy a qualquer foto */
+  .wash { position:absolute; inset:0;
+    background: linear-gradient(160deg, ${PALETTE.navy}59 0%, ${PALETTE.darker}26 45%, ${PALETTE.darker}80 100%); }
+  /* scrim inferior: garante leitura da copy sobre a foto */
+  .scrim { position:absolute; inset:0;
+    background: linear-gradient(0deg, ${PALETTE.darker}f2 0%, ${PALETTE.darker}d9 14%, ${PALETTE.darker}00 54%); }
+  .top { position:relative; display:flex; align-items:center; justify-content:space-between; padding:80px 88px 0; }
+  .logo { height:50px; filter:drop-shadow(0 2px 10px rgba(0,0,0,.45)); }
+  .badge { font-family:'JetBrains Mono',monospace; font-size:28px; letter-spacing:1px;
+    color:${PALETTE.darker}; background:${PALETTE.sky}; padding:9px 22px; border-radius:999px; font-weight:500; }
+  .content { position:relative; padding:0 88px 84px; display:flex; flex-direction:column; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; color:${PALETTE.sky};
+    font-size:30px; letter-spacing:3px; text-transform:uppercase; margin-bottom:24px;
+    text-shadow:0 2px 12px rgba(0,0,0,.5); }
+  .headline { font-weight:700; font-size:${headlineSize}px; line-height:1.0;
+    color:#FFFFFF; letter-spacing:-2px; text-shadow:0 3px 22px rgba(0,0,0,.55); }
+  .headline .accent { color:${PALETTE.sky}; font-weight:900; }
+  .subtext { margin-top:26px; font-size:38px; line-height:1.3; color:${PALETTE.cloud};
+    max-width:90%; font-weight:400; text-shadow:0 2px 14px rgba(0,0,0,.5); }
+  .bottom { margin-top:40px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .cta { font-weight:800; font-size:34px;
+    background:${PALETTE.blue}; color:#FFFFFF; padding:24px 46px; border-radius:999px; box-shadow:0 8px 30px rgba(0,0,0,.4); }
+  .footer { font-family:'JetBrains Mono',monospace; font-size:24px; color:${PALETTE.mist}; text-shadow:0 2px 10px rgba(0,0,0,.5); }
+</style></head>
+<body><div class="card">
+  ${photo}
+  <div class="wash"></div>
+  <div class="scrim"></div>
+  <div class="top">
+    <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
+    ${badge ? `<span class="badge">${esc(badge)}</span>` : "<span></span>"}
+  </div>
+  <div class="content">
+    ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
+    <div class="headline">${headline || ""}</div>
+    ${subtext ? `<div class="subtext">${esc(subtext)}</div>` : ""}
+    <div class="bottom">
+      ${cta ? `<span class="cta">${esc(cta)} →</span>` : "<span></span>"}
+      <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+    </div>
+  </div>
+</div></body></html>`;
+}
+
+const TEMPLATES = { editorial: tplEditorial, bold: tplBold, split: tplSplit, photo: tplPhoto };
 const TEMPLATE_IDS = Object.keys(TEMPLATES);
 function resolveTemplate(id) { return TEMPLATES[id] || tplEditorial; }
 
@@ -284,9 +350,15 @@ function carBase(width, height) {
   .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }`;
 }
 function carDoc(ctx, extraCss, bodyInner) {
+  // Continuidade visual entre slides: desloca os Selet Dots como se os slides
+  // formassem uma FAIXA UNICA — ao deslizar o carrossel, o padrao "encadeia" de
+  // um slide para o outro (espelha as primeiras postagens reais do feed @4selet).
+  // A logo no topo-esquerda em todos os slides reforça o encadeamento.
+  const TILE = 46;
+  const offX = -((((ctx.n || 1) - 1) * (ctx.width || 1080)) % TILE);
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>${carBase(ctx.width, ctx.height)}${extraCss || ""}</style></head>
-<body><div class="card"><div class="dots"></div>${bodyInner}</div></body></html>`;
+<body><div class="card"><div class="dots" style="background-position:${offX}px 0;"></div>${bodyInner}</div></body></html>`;
 }
 function carTop(ctx) {
   return `<div class="top"><img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/><span class="pageno">${ctx.n} / ${ctx.total}</span></div>`;
@@ -394,8 +466,9 @@ function renderImage(folder, opts) {
     eyebrow: concept.eyebrow || "",
     headline: highlightHeadline(concept.headline || "Para quem sabe que é Selet."),
     subtext: concept.subtext || "",
-    cta: concept.cta || "Ver as condicoes",
+    cta: concept.cta || "",
     badge: concept.badge || "",
+    image: concept.image || (opts && opts.image) || "",
   });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = htmlToPng(htmlPath, outPng, 1080, 1080);
@@ -418,8 +491,9 @@ function renderFeed(folder, opts) {
     eyebrow: "",
     headline: highlightHeadline(headline),
     subtext: "",
-    cta: "Solicitar convite",
+    cta: "",
     badge: "",
+    image: (opts && opts.image) || "",
   });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = htmlToPng(htmlPath, outPng, 1080, 1350);
@@ -453,11 +527,12 @@ function renderCarousel(folder, opts) {
         subtext: s.body || "",
         cta: "",
         badge: concept.badge || "",
+        image: (s && s.image) || concept.image || "",
       });
     } else {
       const ctx = {
         width: 1080, height: 1350, n: n, total: total,
-        cta: arch === "cta" ? (concept.cta || "Solicitar convite") : "",
+        cta: arch === "cta" ? (concept.cta || "") : "",
         footer: concept.footer,
         tagline: arch === "cta",
       };
@@ -533,8 +608,9 @@ function previewFields(ct, parsed) {
       eyebrow: parsed.eyebrow || "",
       headline: highlightHeadline(parsed.headline || "Para quem sabe que é Selet."),
       subtext: parsed.subtext || "",
-      cta: parsed.cta || "Ver as condicoes",
+      cta: parsed.cta || "",
       badge: parsed.badge || "",
+      image: parsed.image || "",
     };
   }
   if (ct.kind === "feed") {
@@ -546,8 +622,9 @@ function previewFields(ct, parsed) {
       eyebrow: "",
       headline: highlightHeadline(headline),
       subtext: "",
-      cta: "Solicitar convite",
+      cta: "",
       badge: "",
+      image: parsed.image || "",
     };
   }
   if (ct.kind === "carousel") {
@@ -561,6 +638,7 @@ function previewFields(ct, parsed) {
       subtext: s.body || "",
       cta: "",
       badge: parsed.badge || "",
+      image: parsed.image || "",
     };
   }
   return null;

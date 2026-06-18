@@ -91,6 +91,11 @@ router.post("/", async (req, res, next) => {
     });
 
     const parsed = extractJson(result.text);
+    // Orientacao de CTA do brief avancado: respeita a escolha do usuario (vale p/ real e simulado).
+    // Sem orientacao -> campo cta vazio (sem chamada forcada). Com orientacao -> forca o texto escolhido.
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      parsed.cta = body.cta ? String(body.cta) : "";
+    }
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
 
     res.json({
