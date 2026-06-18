@@ -600,8 +600,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .scheme-cz.open { opacity: 1; pointer-events: auto; }
 .scheme-cz-close { position: absolute; top: 20px; right: 24px; width: 40px; height: 40px; border-radius: var(--r-pill);
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 17px; cursor: pointer; }
-.scheme-cz-title { color: var(--text); font-weight: 700; font-size: 19px; }
-.scheme-cz-sub { color: var(--text-dim); font-size: 13px; margin: 5px 0 30px; }
+/* O modal tem fundo escuro nos dois temas → texto sempre claro (não usar tokens do tema) */
+.scheme-cz-title { color: #eef3f5; font-weight: 700; font-size: 19px; }
+.scheme-cz-sub { color: rgba(221,231,236,.62); font-size: 13px; margin: 5px 0 30px; }
 .scheme-cz-stage { position: relative; width: min(1500px, 96vw); height: clamp(300px, 32vw, 520px); }
 .scheme-cz-reel { position: absolute; inset: 0; }
 .scheme-cz-card { position: absolute; top: 50%; left: 50%; width: 240px; height: 184px; margin: -92px 0 0 -120px;
@@ -613,8 +614,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .scheme-cz-nav.prev { left: -10px; } .scheme-cz-nav.next { right: -10px; }
 .scheme-cz-nav:hover { color: var(--text); border-color: var(--accent); }
 .scheme-cz-foot { margin-top: 24px; text-align: center; }
-.scheme-cz-name { color: var(--text); font-weight: 700; font-size: 16px; }
-.scheme-cz-desc { color: var(--text-dim); font-size: 13px; margin: 3px 0 16px; min-height: 18px; }
+.scheme-cz-name { color: #eef3f5; font-weight: 700; font-size: 16px; }
+.scheme-cz-desc { color: rgba(221,231,236,.62); font-size: 13px; margin: 3px 0 16px; min-height: 18px; }
 /* mini-prévia do painel dentro de cada card (pintada com as cores do esquema) */
 .scheme-mini { width: 100%; height: 100%; display: flex; background: var(--mbg); }
 .scheme-mini-side { width: 27%; background: var(--msurface); border-right: 1px solid var(--mborder); padding: 12px 9px; }
