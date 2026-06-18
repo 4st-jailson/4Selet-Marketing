@@ -46,8 +46,14 @@ app.use("/api/uploads", require("./routes/uploads"));
 
 // Servir assets de marca (logos) read-only
 app.use("/brand-assets", express.static(PATHS.ASSETS_DIR));
-// Front
-app.use("/", express.static(path.join(__dirname, "public")));
+// Front. HTML/JS/CSS com "no-cache" (revalida sempre): o navegador guarda, mas
+// confere antes de usar — 304 quando nada mudou (rapido), 200 com o novo quando
+// mudou. Evita o painel exibir JS/CSS antigos depois de uma atualizacao.
+app.use("/", express.static(path.join(__dirname, "public"), {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/i.test(filePath)) res.setHeader("Cache-Control", "no-cache");
+  },
+}));
 
 // 404 JSON para rotas /api desconhecidas
 app.use("/api", (req, res) => res.status(404).json({ error: "rota nao encontrada" }));

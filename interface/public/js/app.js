@@ -427,6 +427,22 @@ async function viewCampaignDetail(id) {
 /* =====================================================================
    CONTEÚDO (biblioteca de tasks)
    ===================================================================== */
+// Menu de download com escolha de resolução (PNG). baseUrl = API.downloadUrl(folder, rel)
+// sem scale; cada opção acrescenta &scale=N e o backend re-renderiza a peça naquela
+// resolução (re-render a partir do HTML salvo; 2x sai do arquivo já salvo, instantâneo).
+function dlMenu(baseUrl, label) {
+  label = label || "baixar";
+  const opt = (s, txt) => `<a role="menuitem" class="dl-res-opt" href="${baseUrl}&scale=${s}" download onclick="this.closest('details').open=false">${txt}</a>`;
+  return `<details class="dl-res"><summary class="btn btn-sm btn-ghost" title="Baixar — escolha a resolução do PNG">${esc(label)}<span class="dl-caret" aria-hidden="true"></span></summary>`
+    + `<div class="dl-res-menu" role="menu"><span class="dl-res-h">Resolução (PNG)</span>`
+    + opt(1, "Padrão — 1080px") + opt(2, "Alta — 2160px") + opt(4, "Máxima — 4320px")
+    + `</div></details>`;
+}
+// Fecha qualquer menu de resolução aberto ao clicar fora dele.
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.dl-res[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
+});
+
 function thumbHtml(t) {
   if (t.thumb && t.thumb.rel) {
     const url = API.rawUrl(t.folder, t.thumb.rel);
@@ -921,7 +937,7 @@ function mediaGallery(folder, task) {
   if (!imgs.length && !vids.length) return "";
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div>`));
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
   return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
@@ -938,7 +954,7 @@ function carouselStrip(folder, task) {
       <span class="slide-num">${s.n}</span>
       <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')">⤢</button>
-    </div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, s.f.rel)}" download>baixar slide ${s.n}</a></div>`).join("");
+    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
     <div class="media-gallery mt">${items}</div></div>`;
@@ -1262,7 +1278,15 @@ function openLightbox(url, type, dlUrl) {
     : `<img src="${url}" alt="" />`;
   setLightboxNewTab(null);
   const dl = $("#lightbox-dl");
-  if (dl) { dl.href = dlUrl || url; dl.style.display = dlUrl ? "" : "none"; }
+  const res = $("#lightbox-res");
+  if (type === "image" && dlUrl) {
+    // imagem: oferece escolha de resolução (PNG) no lugar do botão simples
+    if (res) { res.innerHTML = dlMenu(dlUrl, "Baixar"); res.style.display = ""; }
+    if (dl) dl.style.display = "none";
+  } else {
+    if (res) { res.innerHTML = ""; res.style.display = "none"; }
+    if (dl) { dl.href = dlUrl || url; dl.style.display = dlUrl ? "" : "none"; }
+  }
   lbShow();
 }
 // #7 — Pré-visualiza .json/.txt num modal amplo com <pre> mono, scroll interno.
@@ -1274,6 +1298,8 @@ async function openTextLightbox(folder, rel, dlUrl) {
   setLightboxNewTab(null);
   lbShow();
   const dl = $("#lightbox-dl");
+  const lbRes = $("#lightbox-res");
+  if (lbRes) { lbRes.innerHTML = ""; lbRes.style.display = "none"; }
   if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
   try {
     let text = await API.taskFile(folder, rel);

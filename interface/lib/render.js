@@ -739,6 +739,50 @@ async function renderPreview({ content_type, parsed, template } = {}) {
   }
 }
 
+// ---- Download em resolucao escolhida --------------------------------------
+// Re-renderiza a peca a partir do HTML salvo (ads/ad.html, ads/feed.html,
+// slides/slide_N.html) na escala pedida (1x..4x), para o usuario baixar o PNG na
+// resolucao que quiser. Read-only: NAO exige zona active e NAO sobrescreve o PNG
+// salvo (gera um arquivo temporario). Se a escala pedida resultar na MESMA
+// resolucao do PNG ja salvo, devolve o proprio (sem re-render).
+function _pngBaseDims(html) {
+  const m = /html\s*,\s*body\s*\{[^}]*?width:\s*(\d+)px[^}]*?height:\s*(\d+)px/i.exec(String(html || ""));
+  return m ? { w: parseInt(m[1], 10), h: parseInt(m[2], 10) } : null;
+}
+function _pngDims(file) {
+  try {
+    const fd = fs.openSync(file, "r"); const b = Buffer.alloc(24);
+    fs.readSync(fd, b, 0, 24, 0); fs.closeSync(fd);
+    if (b[0] === 0x89 && b[1] === 0x50) return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  } catch (e) {}
+  return null;
+}
+async function renderForDownload(folder, rel, scale) {
+  const loc = findTask(folder);
+  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  rel = String(rel || "").replace(/^[\\/]+/, "");
+  const root = path.resolve(loc.path);
+  const absPng = path.resolve(root, rel);
+  // Confina ao folder da task e exige PNG.
+  if (!(absPng === root || absPng.startsWith(root + path.sep)) || !/\.png$/i.test(absPng)) {
+    const e = new Error("arquivo invalido para download em resolucao"); e.code = "E_BAD_REL"; throw e;
+  }
+  const htmlPath = absPng.replace(/\.png$/i, ".html");
+  if (!fs.existsSync(htmlPath)) { const e = new Error("origem (HTML) da peca nao encontrada para re-render"); e.code = "E_NO_SOURCE_HTML"; throw e; }
+  const base = _pngBaseDims(fs.readFileSync(htmlPath, "utf8"));
+  if (!base) { const e = new Error("nao foi possivel ler as dimensoes da peca"); e.code = "E_NO_SOURCE_HTML"; throw e; }
+  const s = Math.max(1, Math.min(4, Math.round(Number(scale) || 1)));
+  const reqW = base.w * s, reqH = base.h * s;
+  // Ja salvo nessa exata resolucao? serve o proprio (rapido, sem re-render).
+  const stored = _pngDims(absPng);
+  if (stored && stored.w === reqW && stored.h === reqH) return { path: absPng, width: reqW, height: reqH, temp: false };
+  const uniq = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  const outPng = path.join(os.tmpdir(), "4selet-dl-" + process.pid + "-" + uniq + ".png");
+  const r = await htmlToPng(htmlPath, outPng, base.w, base.h, s);
+  if (!r.ok || !fs.existsSync(outPng)) { const e = new Error((r.stderr || "falha ao renderizar em resolucao").slice(0, 300)); e.code = "E_RENDER_FAIL"; throw e; }
+  return { path: outPng, width: reqW, height: reqH, temp: true };
+}
+
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
 // Assincrono: o chamador (rota) deve usar `await render.render(...)`.
 async function render(folder, kind, opts) {
@@ -753,5 +797,6 @@ async function render(folder, kind, opts) {
 
 module.exports = {
   render, renderImage, renderFeed, renderCarousel, renderVideo, renderPreview,
+  renderForDownload,
   TEMPLATE_IDS,
 };

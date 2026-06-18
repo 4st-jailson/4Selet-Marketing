@@ -2,6 +2,8 @@
 // promover (workflow de aprovacao). Integra os scripts oficiais via lib/content.
 "use strict";
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const router = express.Router();
 const content = require("../lib/content");
 const render = require("../lib/render");
@@ -36,9 +38,25 @@ router.get("/:folder/raw", (req, res) => {
 });
 
 // Download com Content-Disposition (forca salvar o arquivo).
-router.get("/:folder/download", (req, res) => {
+// ?scale=1|2|4 (so PNG): baixa a arte na resolucao escolhida — re-renderiza a peca
+// a partir do HTML salvo. Sem `scale`, serve o arquivo salvo como esta. Se o
+// re-render falhar (ex.: sem HTML de origem), cai para o arquivo salvo (degrada bem).
+router.get("/:folder/download", async (req, res) => {
   const rel = req.query.rel;
   if (!rel) return res.status(400).json({ error: "parametro rel obrigatorio" });
+  const wantsScale = req.query.scale != null && String(req.query.scale) !== "";
+  if (wantsScale && /\.png$/i.test(String(rel))) {
+    const scale = Math.max(1, Math.min(4, parseInt(req.query.scale, 10) || 1));
+    try {
+      const out = await render.renderForDownload(req.params.folder, String(rel), scale);
+      const stem = path.basename(String(rel)).replace(/\.png$/i, "");
+      const name = stem + "_" + out.width + "x" + out.height + ".png";
+      return res.download(out.path, name, () => { if (out.temp) { try { fs.unlinkSync(out.path); } catch (e) {} } });
+    } catch (e) {
+      console.warn("[download] re-render em escala falhou (" + (e.code || "") + "): " + e.message + " — servindo arquivo salvo");
+      // cai para servir o arquivo salvo abaixo
+    }
+  }
   const f = content.resolveFile(req.params.folder, String(rel));
   if (!f) return res.status(404).json({ error: "arquivo nao encontrado" });
   res.download(f.abs, f.name);

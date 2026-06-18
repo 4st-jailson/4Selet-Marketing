@@ -43,7 +43,7 @@ const API = (() => {
     task: (folder) => req("GET", "/api/content/" + encodeURIComponent(folder)),
     taskFile: (folder, rel) => fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent(rel)).then(r => r.text()),
     rawUrl: (folder, rel) => "/api/content/" + encodeURIComponent(folder) + "/raw?rel=" + encodeURIComponent(rel),
-    downloadUrl: (folder, rel) => "/api/content/" + encodeURIComponent(folder) + "/download?rel=" + encodeURIComponent(rel),
+    downloadUrl: (folder, rel, scale) => "/api/content/" + encodeURIComponent(folder) + "/download?rel=" + encodeURIComponent(rel) + (scale ? "&scale=" + encodeURIComponent(scale) : ""),
     preview: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preview"),
     renderMedia: (folder, kind, template) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/render?kind=" + encodeURIComponent(kind) + (template ? "&template=" + encodeURIComponent(template) : "")),
     discard: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/discard"),
