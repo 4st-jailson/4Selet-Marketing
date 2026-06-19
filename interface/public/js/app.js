@@ -278,6 +278,9 @@ async function refreshKeyStatus() {
 /* =====================================================================
    DASHBOARD
    ===================================================================== */
+// Ícone de "campanha" — o MESMO megafone do menu lateral "Campanhas", para o
+// dashboard não ter três ícones diferentes para a mesma ideia.
+const CAMP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>';
 async function viewDashboard() {
   setTitle("Dashboard");
   const [{ campaigns }, { tasks }] = await Promise.all([API.campaigns(), API.content()]);
@@ -285,15 +288,35 @@ async function viewDashboard() {
   const active = campaigns.filter((c) => c.status === "active").length;
   const inReview = tasks.filter((t) => t.status === "in_review").length;
   const approved = tasks.filter((t) => t.status === "approved" || t.zone === "approved").length;
+  const draft = tasks.filter((t) => t.status === "draft").length;
+  // Mix por tipo (formato) — visão do que está sendo produzido.
+  const byKind = {};
+  tasks.forEach((t) => { byKind[t.kind] = (byKind[t.kind] || 0) + 1; });
+  const kindOrder = ["feed", "carousel", "image", "video", "linkedin", "threads"];
+  const mixKinds = kindOrder.filter((k) => byKind[k]).concat(Object.keys(byKind).filter((k) => !kindOrder.includes(k)));
+  const maxKind = Math.max(1, ...mixKinds.map((k) => byKind[k]));
+  const activeCamps = campaigns.filter((c) => c.status === "active");
+  const mixHtml = mixKinds.length
+    ? '<div class="mix">' + mixKinds.map((k) => {
+        const n = byKind[k], pct = Math.round((n / maxKind) * 100);
+        return `<div class="mix-row"><span class="mix-lbl">${esc(kindLabel(k))}</span><span class="mix-bar"><span class="mix-fill" style="width:${pct}%"></span></span><span class="mix-n">${n}</span></div>`;
+      }).join("") + "</div>"
+    : '<div class="empty">Sem peças ainda.</div>';
+  const campsHtml = activeCamps.length
+    ? '<div class="list">' + activeCamps.slice(0, 5).map((c) =>
+        `<a class="list-row" href="#/campaign/${encodeURIComponent(c.id)}"><span class="lr-ico" aria-hidden="true">${CAMP_SVG}</span><div class="lr-main"><div class="lr-title">${esc(c.name)}</div><div class="lr-meta">${c.angle ? esc(c.angle) + " · " : ""}${plural((c.content_ids || []).length, "peça vinculada", "peças vinculadas")}</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>`
+      ).join("") + "</div>"
+    : '<div class="empty">Nenhuma campanha ativa. <a href="#/campaigns">Criar campanha</a></div>';
   const keyWarn = State.settings && !State.settings.has_key
     ? `<div class="card callout mb"><div class="flex-between"><div><h3>Configure a Inteligência Artificial</h3><p class="muted mt">Cole sua chave Anthropic para geração real. Sem chave, o painel funciona em modo simulado.</p></div><a class="btn btn-primary" href="#/settings">Configurar</a></div></div>` : "";
   setView(`
+    <div class="dash-stack">
     ${keyWarn}
-    <div class="stat-grid mb">
-      <a class="card stat" data-accent="sky" href="#/campaigns" title="Ver campanhas"><span class="stat-ico">◈</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></a>
-      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico">▦</span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></a>
-      <a class="card stat" data-accent="warn" href="#/content?status=in_review" title="Ver peças em revisão"><span class="stat-ico">◷</span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></a>
-      <a class="card stat" data-accent="ok" href="#/approved" title="Ver peças aprovadas"><span class="stat-ico">✓</span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div></a>
+    <div class="stat-grid">
+      <a class="card stat" data-accent="sky" href="#/campaigns" title="Ver campanhas"><span class="stat-ico">${CAMP_SVG}</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></a>
+      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></a>
+      <a class="card stat" data-accent="warn" href="#/content?status=in_review" title="Ver peças em revisão"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg></span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></a>
+      <a class="card stat" data-accent="ok" href="#/approved" title="Ver peças aprovadas"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg></span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Aprovadas</span></div></a>
     </div>
     <div class="grid grid-2">
       <div class="card">
@@ -303,17 +326,35 @@ async function viewDashboard() {
       <div class="card">
         <div class="section-head"><h2>Ações rápidas</h2></div>
         <div class="list">
-          <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true">→</span></a>
-          <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">◈</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true">→</span></a>
-          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças aprovadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true">→</span></a>
+          <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
+          <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">${CAMP_SVG}</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
+          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças aprovadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
         </div>
       </div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="section-head"><h2>Mix de conteúdo</h2></div>
+        ${mixHtml}
+        <div class="mix-pipe muted">Pipeline: <strong>${draft}</strong> rascunho · <strong>${inReview}</strong> em revisão · <strong>${approved}</strong> aprovadas</div>
+      </div>
+      <div class="card">
+        <div class="section-head"><h2>Campanhas ativas</h2><a class="muted-link" href="#/campaigns">ver todas →</a></div>
+        ${campsHtml}
+      </div>
+    </div>
     </div>`);
 }
 
 function taskRow(t) {
+  const hasThumb = t.thumb && t.thumb.rel;
+  const ico = hasThumb
+    ? `<span class="lr-thumb">${t.thumb.type === "video"
+        ? `<video src="${API.rawUrl(t.folder, t.thumb.rel)}" muted preload="metadata"></video>`
+        : `<img src="${API.rawUrl(t.folder, t.thumb.rel)}" alt="" loading="lazy" onerror="this.closest('.lr-thumb').classList.add('lr-thumb-fb')" />`}<span class="lr-thumb-ico" aria-hidden="true">${kindIcon(t.kind)}</span></span>`
+    : `<span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>`;
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
-    <span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>
+    ${ico}
     <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${!t.first_viewed_at ? ' <span class="lr-new">Novo</span>' : ""}</div>
     <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}${(t.platforms || []).length ? " · " + esc(t.platforms.map(platformLabel).join(", ")) : ""}</div></div>
     ${statusBadge(t.status)}</a>`;
@@ -936,8 +977,8 @@ function mediaGallery(folder, task) {
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const items = []
-    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','video','${API.downloadUrl(folder, f.rel)}')">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightbox('${API.rawUrl(folder, f.rel)}','image','${API.downloadUrl(folder, f.rel)}')">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
+    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
   return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
@@ -952,8 +993,8 @@ function carouselStrip(folder, task) {
   const items = slides.map((s) =>
     `<div class="media-item"><div class="media-frame">
       <span class="slide-num">${s.n}</span>
-      <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')" />
-      <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightbox('${API.rawUrl(folder, s.f.rel)}','image','${API.downloadUrl(folder, s.f.rel)}')">⤢</button>
+      <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" onclick="openLightboxFromEl(this)" />
+      <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
     </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
@@ -1269,24 +1310,73 @@ function lbShow() {
   document.body.classList.add("no-scroll");
   const cb = $("#lightbox-close"); if (cb) cb.focus();
 }
-function openLightbox(url, type, dlUrl) {
-  const lb = $("#lightbox");
-  const stage = $("#lightbox-stage");
-  if (!lb || !stage) { window.open(url, "_blank"); return; }
-  stage.innerHTML = type === "video"
-    ? `<video src="${url}" controls autoplay playsinline></video>`
-    : `<img src="${url}" alt="" />`;
+// Lightbox com navegação em GRUPO: ao abrir uma imagem de uma galeria (os slides de um
+// carrossel, ou as mídias geradas juntas de uma peça), dá para ir às irmãs com as setas
+// ou o teclado — escopado ÀQUELA galeria, sem pular para artes de outras peças.
+let _lbItems = [];
+let _lbIdx = 0;
+function lbItemFromMedia(m) {
+  const isVid = m.tagName === "VIDEO";
+  const src = m.getAttribute("src") || "";
+  return { url: src, type: isVid ? "video" : "image", dlUrl: src.replace("/raw?", "/download?") };
+}
+// Esconde a navegação (preview de texto/HTML e ao fechar) e zera o grupo.
+function hideLbNav() {
+  _lbItems = []; _lbIdx = 0;
+  ["#lightbox-prev", "#lightbox-next", "#lightbox-count"].forEach((s) => { const e = $(s); if (e) e.style.display = "none"; });
+}
+// Renderiza o item atual no palco + ações (download) + navegação (setas/contador).
+function renderLbItem() {
+  const it = _lbItems[_lbIdx]; const stage = $("#lightbox-stage");
+  if (!it || !stage) return;
+  stage.innerHTML = it.type === "video"
+    ? `<video src="${it.url}" controls autoplay playsinline></video>`
+    : `<img src="${it.url}" alt="" />`;
   setLightboxNewTab(null);
-  const dl = $("#lightbox-dl");
-  const res = $("#lightbox-res");
-  if (type === "image" && dlUrl) {
-    // imagem: oferece escolha de resolução (PNG) no lugar do botão simples
-    if (res) { res.innerHTML = dlMenu(dlUrl, "Baixar"); res.style.display = ""; }
+  const dl = $("#lightbox-dl"), res = $("#lightbox-res");
+  if (it.type === "image" && it.dlUrl) {
+    if (res) { res.innerHTML = dlMenu(it.dlUrl, "Baixar"); res.style.display = ""; }
     if (dl) dl.style.display = "none";
   } else {
     if (res) { res.innerHTML = ""; res.style.display = "none"; }
-    if (dl) { dl.href = dlUrl || url; dl.style.display = dlUrl ? "" : "none"; }
+    if (dl) { dl.href = it.dlUrl || it.url; dl.style.display = (it.dlUrl || it.url) ? "" : "none"; }
   }
+  const multi = _lbItems.length > 1;
+  const prev = $("#lightbox-prev"), next = $("#lightbox-next"), count = $("#lightbox-count");
+  if (prev) prev.style.display = multi ? "" : "none";
+  if (next) next.style.display = multi ? "" : "none";
+  if (count) { count.style.display = multi ? "" : "none"; count.textContent = (_lbIdx + 1) + " / " + _lbItems.length; }
+}
+// Navega no grupo (circular).
+function lbNav(delta) {
+  if (_lbItems.length < 2) return;
+  _lbIdx = (_lbIdx + delta + _lbItems.length) % _lbItems.length;
+  renderLbItem();
+}
+// Abre um item único (compatível com as chamadas existentes — card, lista de arquivos).
+function openLightbox(url, type, dlUrl) {
+  const lb = $("#lightbox"), stage = $("#lightbox-stage");
+  if (!lb || !stage) { window.open(url, "_blank"); return; }
+  _lbItems = [{ url, type: type === "video" ? "video" : "image", dlUrl: dlUrl || "" }];
+  _lbIdx = 0;
+  renderLbItem();
+  lbShow();
+}
+// Abre a partir de um elemento da galeria, agrupando as mídias IRMÃS da mesma
+// .media-gallery (slides do carrossel / mídias da peça) para navegar entre elas.
+function openLightboxFromEl(el) {
+  if (!el) return;
+  const item = el.closest(".media-item");
+  const mediaEl = (item && item.querySelector("img, video"))
+    || ((el.tagName === "IMG" || el.tagName === "VIDEO") ? el : null);
+  if (!mediaEl) return;
+  const lb = $("#lightbox"), stage = $("#lightbox-stage");
+  const gallery = el.closest(".media-gallery");
+  const medias = gallery ? Array.from(gallery.querySelectorAll(".media-item img, .media-item video")) : [mediaEl];
+  _lbItems = medias.map(lbItemFromMedia);
+  _lbIdx = Math.max(0, medias.indexOf(mediaEl));
+  if (!lb || !stage) { window.open(_lbItems[_lbIdx].url, "_blank"); return; }
+  renderLbItem();
   lbShow();
 }
 // #7 — Pré-visualiza .json/.txt num modal amplo com <pre> mono, scroll interno.
@@ -1300,6 +1390,7 @@ async function openTextLightbox(folder, rel, dlUrl) {
   const dl = $("#lightbox-dl");
   const lbRes = $("#lightbox-res");
   if (lbRes) { lbRes.innerHTML = ""; lbRes.style.display = "none"; }
+  hideLbNav();
   if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
   try {
     let text = await API.taskFile(folder, rel);
@@ -1324,6 +1415,9 @@ async function openHtmlLightbox(folder, rel, dlUrl) {
     stage.innerHTML = `<iframe class="lightbox-frame" src="${_lbBlobUrl}" title="${esc(rel)}"></iframe>`;
     setLightboxNewTab(_lbBlobUrl);
     const dl = $("#lightbox-dl");
+    const lbRes = $("#lightbox-res");
+    if (lbRes) { lbRes.innerHTML = ""; lbRes.style.display = "none"; }
+    hideLbNav();
     if (dl) { dl.href = dlUrl || API.downloadUrl(folder, rel); dl.style.display = ""; }
   } catch (e) {
     stage.innerHTML = '<div class="lightbox-loading">Não foi possível abrir: ' + esc(e.message) + "</div>";
@@ -1337,6 +1431,7 @@ function closeLightbox() {
   const stage = $("#lightbox-stage");
   if (stage) stage.innerHTML = "";
   setLightboxNewTab(null);
+  hideLbNav();
   if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
   document.body.classList.remove("no-scroll");
   restoreFocus(_lbOpener); _lbOpener = null;
@@ -1346,14 +1441,19 @@ function setupLightbox() {
   if (!lb) return;
   const closeBtn = $("#lightbox-close");
   if (closeBtn) closeBtn.onclick = closeLightbox;
+  const prevBtn = $("#lightbox-prev"); if (prevBtn) prevBtn.onclick = (e) => { e.stopPropagation(); lbNav(-1); };
+  const nextBtn = $("#lightbox-next"); if (nextBtn) nextBtn.onclick = (e) => { e.stopPropagation(); lbNav(1); };
   lb.addEventListener("click", (e) => { if (e.target === lb || e.target.id === "lightbox-stage") closeLightbox(); });
   document.addEventListener("keydown", (e) => {
     if (!lb.classList.contains("open")) return;
     if (e.key === "Escape") closeLightbox();
+    else if (e.key === "ArrowLeft") lbNav(-1);
+    else if (e.key === "ArrowRight") lbNav(1);
     else if (e.key === "Tab") trapTabKey(lb, e);
   });
 }
 window.openLightbox = openLightbox;
+window.openLightboxFromEl = openLightboxFromEl;
 window.openHtmlLightbox = openHtmlLightbox;
 window.openTextLightbox = openTextLightbox;
 window.closeLightbox = closeLightbox;
