@@ -63,6 +63,8 @@ function escapeHtml(s) {
 }
 
 const slugCounts = Object.create(null);
+// Titulos de nivel 2 coletados durante o parse -> viram a navegacao lateral (sumario).
+const tocEntries = [];
 function slugify(text) {
   let s = text
     .toLowerCase()
@@ -127,6 +129,7 @@ function parseBlocks(lines) {
       const level = h[1].length;
       const raw = h[2].replace(/\s+#+\s*$/, "");
       const id = slugify(raw);
+      if (level === 2) tocEntries.push({ id: id, text: raw });
       const anchor = level > 1 ? '<a class="anchor" href="#' + id + '" aria-label="link">' + svg("link") + "</a>" : "";
       out.push("<h" + level + ' id="' + id + '">' + inline(raw) + anchor + "</h" + level + ">");
       i++;
@@ -258,7 +261,7 @@ function renderList(lines) {
 }
 
 // ---------- template ----------
-function wrap(bodyHtml, title) {
+function wrap(bodyHtml, title, tocHtml) {
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -271,7 +274,7 @@ function wrap(bodyHtml, title) {
     --mist:#AFBCC9; --cloud:#D9DCD6; --ink:#102a36; --muted:#5b7180;
     --paper:#f5f7f7; --surface:#ffffff; --code-bg:#07212B; --border:#dde4e6;
     --ok:#1f8a52; --pending:#7a6a1f; --warn:#9a6212; --na:#697a84;
-    --max:880px;
+    --max:1180px; --content:760px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -282,15 +285,34 @@ function wrap(bodyHtml, title) {
   }
   .ic{width:1.05em;height:1.05em;flex:0 0 auto;vertical-align:-.16em}
   .topbar{
-    position:sticky; top:0; z-index:20; background:var(--darker); color:var(--cloud);
-    padding:13px 28px; box-shadow:0 1px 0 rgba(255,255,255,.04),0 4px 16px rgba(0,0,0,.22);
-    display:flex; align-items:center; gap:12px;
+    position:sticky; top:0; z-index:30; background:var(--darker); color:var(--cloud);
+    padding:12px 28px; box-shadow:0 6px 20px rgba(7,33,43,.30);
+    display:flex; align-items:center; gap:11px;
   }
-  .topbar .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--sky));
-    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:-1px}
+  .topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--sky),transparent);opacity:.55}
+  .topbar .mark{width:27px;height:27px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--sky));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:-1px;
+    box-shadow:0 2px 8px rgba(0,100,148,.40)}
   .topbar b{font-weight:700;letter-spacing:.2px;font-size:15px}
   .topbar small{color:var(--mist);margin-left:auto;font-size:12.5px;font-weight:500}
-  .layout{max-width:var(--max);margin:0 auto;padding:48px 28px 120px}
+  /* layout em duas colunas: sumario fixo a esquerda + conteudo legivel a direita */
+  .shell{max-width:var(--max);margin:0 auto;padding:42px 28px 110px;
+    display:grid;grid-template-columns:248px minmax(0,1fr);gap:52px;align-items:start}
+  .sidebar{position:sticky;top:60px;align-self:start}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:15px 14px 17px;max-height:calc(100vh - 84px);overflow:auto;
+    box-shadow:0 1px 2px rgba(7,33,43,.04)}
+  .toc-title{margin:0 0 9px;padding:0 9px;font-size:.7rem;font-weight:700;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--blue)}
+  .toc ol{margin:0;padding:0;list-style:none}
+  .toc li{margin:1px 0}
+  .toc a{display:block;padding:5px 9px;border-radius:7px;color:var(--ink);
+    font-size:.85rem;line-height:1.35;border-left:2px solid transparent}
+  .toc a:hover{background:var(--paper);color:var(--blue);text-decoration:none;border-left-color:var(--sky)}
+  .content{min-width:0;max-width:var(--content)}
+  .content>h1:first-child{margin-top:0}
+  .content>h1:first-child+p{font-size:1.07rem;line-height:1.6;color:var(--muted);margin-top:.15em}
   h1,h2,h3,h4,h5,h6{color:var(--navy);line-height:1.3;font-weight:700;position:relative}
   h1,h2,h3,h4{scroll-margin-top:74px}
   h1{font-size:2.05rem;margin:.1em 0 .2em;letter-spacing:-.5px}
@@ -351,15 +373,31 @@ function wrap(bodyHtml, title) {
   li>ul,li>ol{margin:.3em 0}
   ::selection{background:var(--sky);color:#fff}
   .foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
-  @media(max-width:640px){.layout{padding:32px 18px 90px}h1{font-size:1.7rem}.anchor{display:none}}
+  @media(max-width:920px){
+    .shell{grid-template-columns:1fr;gap:0;padding:32px 22px 90px}
+    .sidebar{position:static;margin-bottom:26px}
+    .toc{max-height:none}
+    .content{max-width:none}
+  }
+  @media(max-width:640px){.shell{padding:26px 16px 76px}h1{font-size:1.7rem}.anchor{display:none}}
 </style>
 </head>
 <body>
   <header class="topbar"><span class="mark">4S</span><b>4Selet · Guia de Uso</b><small>Equipe de Marketing com IA</small></header>
-  <main class="layout">
+  <div class="shell">
+    <aside class="sidebar">
+      <nav class="toc" aria-label="Sumário">
+        <p class="toc-title">Conteúdo</p>
+        <ol>
+${tocHtml}
+        </ol>
+      </nav>
+    </aside>
+    <main class="content">
 ${bodyHtml}
-    <p class="foot">Documento gerado a partir de <code>GUIA_DE_USO.md</code> · paleta oficial 4Selet · regenere com <code>node scripts/build_guide_html.js</code>.</p>
-  </main>
+      <p class="foot">Documento gerado a partir de <code>GUIA_DE_USO.md</code> · paleta oficial 4Selet · regenere com <code>node scripts/build_guide_html.js</code>.</p>
+    </main>
+  </div>
 </body>
 </html>
 `;
@@ -371,12 +409,19 @@ function main() {
     console.error("ERRO: nao encontrei " + SRC);
     process.exit(1);
   }
-  const md = fs.readFileSync(SRC, "utf8").replace(/\r\n/g, "\n");
+  const mdRaw = fs.readFileSync(SRC, "utf8").replace(/\r\n/g, "\n");
+  // O "## Sumario" do .md (util no GitHub) vira a navegacao lateral no HTML.
+  // Removemos a lista inline aqui para nao duplicar; o sumario lateral e gerado
+  // a partir dos titulos de nivel 2 coletados durante o parse.
+  const md = mdRaw.replace(/^##\s+Sum[áa]rio\b[\s\S]*?(?=^##\s)/m, "");
   const lines = md.split("\n");
   const body = parseBlocks(lines).map((b) => "    " + b).join("\n");
+  const tocHtml = tocEntries
+    .map((e) => '          <li><a href="#' + e.id + '">' + inline(e.text) + "</a></li>")
+    .join("\n");
   const titleMatch = md.match(/^#\s+(.+)$/m);
   const title = titleMatch ? titleMatch[1].trim() : "Guia de Uso — 4Selet";
-  fs.writeFileSync(OUT, wrap(body, title), "utf8");
+  fs.writeFileSync(OUT, wrap(body, title, tocHtml), "utf8");
   console.log("OK: gerado " + path.relative(ROOT, OUT) + " (" + fs.statSync(OUT).size + " bytes)");
 }
 

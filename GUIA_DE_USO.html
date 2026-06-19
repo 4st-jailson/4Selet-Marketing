@@ -10,7 +10,7 @@
     --mist:#AFBCC9; --cloud:#D9DCD6; --ink:#102a36; --muted:#5b7180;
     --paper:#f5f7f7; --surface:#ffffff; --code-bg:#07212B; --border:#dde4e6;
     --ok:#1f8a52; --pending:#7a6a1f; --warn:#9a6212; --na:#697a84;
-    --max:880px;
+    --max:1180px; --content:760px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -21,15 +21,34 @@
   }
   .ic{width:1.05em;height:1.05em;flex:0 0 auto;vertical-align:-.16em}
   .topbar{
-    position:sticky; top:0; z-index:20; background:var(--darker); color:var(--cloud);
-    padding:13px 28px; box-shadow:0 1px 0 rgba(255,255,255,.04),0 4px 16px rgba(0,0,0,.22);
-    display:flex; align-items:center; gap:12px;
+    position:sticky; top:0; z-index:30; background:var(--darker); color:var(--cloud);
+    padding:12px 28px; box-shadow:0 6px 20px rgba(7,33,43,.30);
+    display:flex; align-items:center; gap:11px;
   }
-  .topbar .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--sky));
-    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:-1px}
+  .topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--sky),transparent);opacity:.55}
+  .topbar .mark{width:27px;height:27px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--sky));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:-1px;
+    box-shadow:0 2px 8px rgba(0,100,148,.40)}
   .topbar b{font-weight:700;letter-spacing:.2px;font-size:15px}
   .topbar small{color:var(--mist);margin-left:auto;font-size:12.5px;font-weight:500}
-  .layout{max-width:var(--max);margin:0 auto;padding:48px 28px 120px}
+  /* layout em duas colunas: sumario fixo a esquerda + conteudo legivel a direita */
+  .shell{max-width:var(--max);margin:0 auto;padding:42px 28px 110px;
+    display:grid;grid-template-columns:248px minmax(0,1fr);gap:52px;align-items:start}
+  .sidebar{position:sticky;top:60px;align-self:start}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:15px 14px 17px;max-height:calc(100vh - 84px);overflow:auto;
+    box-shadow:0 1px 2px rgba(7,33,43,.04)}
+  .toc-title{margin:0 0 9px;padding:0 9px;font-size:.7rem;font-weight:700;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--blue)}
+  .toc ol{margin:0;padding:0;list-style:none}
+  .toc li{margin:1px 0}
+  .toc a{display:block;padding:5px 9px;border-radius:7px;color:var(--ink);
+    font-size:.85rem;line-height:1.35;border-left:2px solid transparent}
+  .toc a:hover{background:var(--paper);color:var(--blue);text-decoration:none;border-left-color:var(--sky)}
+  .content{min-width:0;max-width:var(--content)}
+  .content>h1:first-child{margin-top:0}
+  .content>h1:first-child+p{font-size:1.07rem;line-height:1.6;color:var(--muted);margin-top:.15em}
   h1,h2,h3,h4,h5,h6{color:var(--navy);line-height:1.3;font-weight:700;position:relative}
   h1,h2,h3,h4{scroll-margin-top:74px}
   h1{font-size:2.05rem;margin:.1em 0 .2em;letter-spacing:-.5px}
@@ -90,18 +109,45 @@
   li>ul,li>ol{margin:.3em 0}
   ::selection{background:var(--sky);color:#fff}
   .foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
-  @media(max-width:640px){.layout{padding:32px 18px 90px}h1{font-size:1.7rem}.anchor{display:none}}
+  @media(max-width:920px){
+    .shell{grid-template-columns:1fr;gap:0;padding:32px 22px 90px}
+    .sidebar{position:static;margin-bottom:26px}
+    .toc{max-height:none}
+    .content{max-width:none}
+  }
+  @media(max-width:640px){.shell{padding:26px 16px 76px}h1{font-size:1.7rem}.anchor{display:none}}
 </style>
 </head>
 <body>
   <header class="topbar"><span class="mark">4S</span><b>4Selet · Guia de Uso</b><small>Equipe de Marketing com IA</small></header>
-  <main class="layout">
+  <div class="shell">
+    <aside class="sidebar">
+      <nav class="toc" aria-label="Sumário">
+        <p class="toc-title">Conteúdo</p>
+        <ol>
+          <li><a href="#1-sobre-este-guia">1. Sobre este guia</a></li>
+          <li><a href="#2-visão-geral-do-sistema">2. Visão geral do sistema</a></li>
+          <li><a href="#3-conceitos-fundamentais">3. Conceitos fundamentais</a></li>
+          <li><a href="#4-instalação-e-configuração">4. Instalação e configuração</a></li>
+          <li><a href="#5-início-rápido-no-painel">5. Início rápido no painel</a></li>
+          <li><a href="#6-operação-no-painel">6. Operação no painel</a></li>
+          <li><a href="#7-tipos-de-conteúdo">7. Tipos de conteúdo</a></li>
+          <li><a href="#8-os-agentes">8. Os agentes</a></li>
+          <li><a href="#9-identidade-de-marca-e-governança">9. Identidade de marca e governança</a></li>
+          <li><a href="#10-workflow-de-aprovação">10. Workflow de aprovação</a></li>
+          <li><a href="#11-caminho-avançado">11. Caminho avançado</a></li>
+          <li><a href="#12-renderização-de-mídia">12. Renderização de mídia</a></li>
+          <li><a href="#13-integrações-externas">13. Integrações externas</a></li>
+          <li><a href="#14-resolução-de-problemas">14. Resolução de problemas</a></li>
+          <li><a href="#15-referência-rápida">15. Referência rápida</a></li>
+          <li><a href="#16-manutenção-deste-guia">16. Manutenção deste guia</a></li>
+        </ol>
+      </nav>
+    </aside>
+    <main class="content">
     <h1 id="guia-de-uso--equipe-de-marketing-4selet">Guia de Uso — Equipe de Marketing 4Selet</h1>
     <p><em>Manual operacional do sistema de marketing com IA da 4Selet. Documento vivo: descreve como o sistema funciona e como operá-lo em qualquer campanha ativa.</em></p>
     <div class="callout callout-important"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3zM7 12v6a2 2 0 0 0 2 2h1"/></svg><span>Existem dois caminhos para usar o sistema</span></div><div class="callout-body"><p>O <strong>Painel web</strong> é o caminho principal — uma interface visual onde você cria, revisa e aprova conteúdo com cliques, sem digitar prompts. A <strong>extensão Claude Code no VSCode</strong> é o caminho secundário, para automações avançadas, pipeline e scripts. Comece pelo painel (Seções 4 e 5).</p></div></div>
-    <hr>
-    <h2 id="sumário">Sumário<a class="anchor" href="#sumário" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
-    <ol><li><a href="#1-sobre-este-guia">Sobre este guia</a></li><li><a href="#2-visão-geral-do-sistema">Visão geral do sistema</a></li><li><a href="#3-conceitos-fundamentais">Conceitos fundamentais</a></li><li><a href="#4-instalação-e-configuração">Instalação e configuração</a></li><li><a href="#5-início-rápido-no-painel">Início rápido no painel</a></li><li><a href="#6-operação-no-painel">Operação no painel</a></li><li><a href="#7-tipos-de-conteúdo">Tipos de conteúdo</a></li><li><a href="#8-os-agentes">Os agentes</a></li><li><a href="#9-identidade-de-marca-e-governança">Identidade de marca e governança</a></li><li><a href="#10-workflow-de-aprovação">Workflow de aprovação</a></li><li><a href="#11-caminho-avançado">Caminho avançado</a></li><li><a href="#12-renderização-de-mídia">Renderização de mídia</a></li><li><a href="#13-integrações-externas">Integrações externas</a></li><li><a href="#14-resolução-de-problemas">Resolução de problemas</a></li><li><a href="#15-referência-rápida">Referência rápida</a></li><li><a href="#16-manutenção-deste-guia">Manutenção deste guia</a></li></ol>
     <hr>
     <h2 id="1-sobre-este-guia">1. Sobre este guia<a class="anchor" href="#1-sobre-este-guia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
     <p>Este guia explica, em ordem de uso, como operar o sistema de geração de conteúdo de marketing da 4Selet. Ele é <strong>independente de campanha</strong>: descreve o funcionamento permanente do sistema. Quando uma campanha específica aparece, é apenas como <strong>exemplo</strong> — substitua pelos dados da campanha que estiver ativa no momento.</p>
@@ -162,7 +208,16 @@
 </tbody></table></div>
     <hr>
     <h2 id="4-instalação-e-configuração">4. Instalação e configuração<a class="anchor" href="#4-instalação-e-configuração" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
-    <h3 id="41-painel-web-recomendado">4.1 Painel web (recomendado)<a class="anchor" href="#41-painel-web-recomendado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <h3 id="41-acessar-a-vps-conexão-de-área-de-trabalho-remota">4.1 Acessar a VPS (Conexão de Área de Trabalho Remota)<a class="anchor" href="#41-acessar-a-vps-conexão-de-área-de-trabalho-remota" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>O painel roda numa <strong>VPS Windows</strong>. Para operá-lo, primeiro você entra na VPS pela <strong>Conexão de Área de Trabalho Remota</strong> (RDP) — o app de "Área de Trabalho Remota" do próprio Windows.</p>
+    <ol><li>No seu computador, abra <strong>Conexão de Área de Trabalho Remota</strong> (procure por "Área de Trabalho Remota" no menu Iniciar, ou rode <code>mstsc</code>).</li><li>Em <strong>Computador</strong>, informe o <strong>endereço (IP ou nome)</strong> da VPS e clique em <strong>Conectar</strong>.</li><li>Faça login com o <strong>usuário</strong> (ex.: <code>Administrator</code>) e a <strong>senha</strong> da VPS.</li><li>Aceite o aviso de certificado, se aparecer. Pronto — você está na área de trabalho da VPS.</li><li>Lá dentro, abra o navegador e acesse o painel em <strong><code>http://localhost:4500</code></strong> (ou use o atalho <strong>Painel 4Selet</strong> na Área de Trabalho, se existir).</li></ol>
+    <div class="callout callout-important"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3zM7 12v6a2 2 0 0 0 2 2h1"/></svg><span>Importante</span></div><div class="callout-body"><p>O <strong>endereço, o usuário e a senha</strong> da VPS são fornecidos por quem a provisionou. Guarde com segurança — <strong>nunca</strong> os coloque em commits, prints ou mensagens. Se suspeitar de vazamento, troque a senha no painel do provedor.</p></div></div>
+    <div class="callout callout-tip"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><span>Dica</span></div><div class="callout-body"><p>O painel também responde pela rede no IP da VPS (<code>http://&lt;IP-da-VPS&gt;:4500</code>) — útil para abrir do seu próprio navegador sem entrar via RDP. Isso exige a porta <code>4500</code> liberada no firewall; como o painel não tem login próprio, o caminho mais seguro continua sendo <strong>RDP + <code>localhost</code></strong>.</p></div></div>
+    <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>Se o painel não abrir, ele pode ter caído após um reboot da VPS. Confira e suba de novo com <code>pm2 list</code> e <code>pm2 resurrect</code> (ver Seção 14 — Resolução de problemas).</p></div></div>
+    <p><strong>De qual computador você se conecta.</strong> No Windows, o cliente de RDP já vem instalado ("Conexão de Área de Trabalho Remota" / <code>mstsc</code>). No Mac, instale o <strong>Microsoft Remote Desktop</strong> (App Store). No Linux, use o <strong>Remmina</strong> ou similar. O que muda é só o app de conexão — o endereço, o usuário e a senha são os mesmos.</p>
+    <p><strong>Boas práticas de uso remoto:</strong></p>
+    <ul><li><strong>Uma sessão por vez.</strong> Não abra duas conexões RDP ao mesmo tempo com o mesmo usuário — uma derruba a outra e trabalho não salvo pode se perder.</li><li><strong>Encerre pelo menu Iniciar → Desconectar.</strong> Fechar só no <code>X</code> da janela pode deixar processos rodando na VPS. O painel continua no ar mesmo com você desconectado (ele é gerenciado pelo PM2) — isso é esperado.</li><li><strong>Sessão ociosa expira.</strong> O Windows Server desconecta sessões paradas após um tempo; salve seu trabalho de tempos em tempos.</li><li><strong>A senha mora no gerenciador, não em arquivo.</strong> Guarde o endereço, o usuário e a senha num gerenciador de senhas (1Password, Bitwarden etc.) — nunca num arquivo dentro do projeto.</li></ul>
+    <h3 id="42-painel-web-recomendado">4.2 Painel web (recomendado)<a class="anchor" href="#42-painel-web-recomendado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
     <p>Pré-requisito: Node.js instalado.</p>
     <pre class="code" data-lang="bash"><code>cd interface
 npm install        # apenas na primeira vez
@@ -171,12 +226,12 @@ npm start          # sobe o painel em http://localhost:4500</code></pre>
     <div class="callout callout-tip"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg><span>Dica</span></div><div class="callout-body"><p>Em servidor (VPS), rode o painel como serviço gerenciado pelo PM2, que reinicia sozinho após queda ou reboot:</p>
 <pre class="code" data-lang="bash"><code>pm2 restart painel-4selet --update-env
 pm2 logs painel-4selet        # acompanhar logs</code></pre></div></div>
-    <h3 id="42-configurar-a-chave-da-ia">4.2 Configurar a chave da IA<a class="anchor" href="#42-configurar-a-chave-da-ia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <h3 id="43-configurar-a-chave-da-ia">4.3 Configurar a chave da IA<a class="anchor" href="#43-configurar-a-chave-da-ia" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
     <p>Sem chave, a geração funciona em <strong>modo simulado</strong> (conteúdo rotulado, sem custo). Para gerar com IA real:</p>
     <ol><li>No painel, abra <strong>Configurações</strong>.</li><li>Cole a chave da Anthropic (<code>sk-ant-...</code>) e salve.</li><li>Use <strong>Testar chave</strong> para confirmar a conexão.</li></ol>
     <p>A chave fica gravada em <code>interface/.env</code> (arquivo local, fora do controle de versão). O modelo padrão é <code>claude-sonnet-4-6</code> e pode ser trocado em Configurações.</p>
     <div class="callout callout-caution"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7.9 2 16.1 2 22 7.9 22 16.1 16.1 22 7.9 22 2 16.1 2 7.9"/><path d="M12 8v4M12 16h.01"/></svg><span>Cuidado</span></div><div class="callout-body"><p>A chave dá acesso de cobrança à API. Nunca a compartilhe nem a inclua em commits. Se suspeitar de exposição, revogue-a no console da Anthropic e gere uma nova.</p></div></div>
-    <h3 id="43-extensão-claude-code-avançado">4.3 Extensão Claude Code (avançado)<a class="anchor" href="#43-extensão-claude-code-avançado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <h3 id="44-extensão-claude-code-avançado">4.4 Extensão Claude Code (avançado)<a class="anchor" href="#44-extensão-claude-code-avançado" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
     <p>Para o caminho secundário, abra o projeto no VSCode com a extensão Claude Code. Você conversa direto com os agentes e roda os scripts e o pipeline descritos na Seção 11.</p>
     <hr>
     <h2 id="5-início-rápido-no-painel">5. Início rápido no painel<a class="anchor" href="#5-início-rápido-no-painel" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
@@ -262,6 +317,25 @@ pm2 logs painel-4selet        # acompanhar logs</code></pre></div></div>
     <p><strong>Governança automática</strong></p>
     <p>O sistema roda uma verificação de marca sobre o conteúdo antes de salvar. Violações duras bloqueiam o salvamento até serem corrigidas.</p>
     <div class="callout callout-warning"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Atenção</span></div><div class="callout-body"><p>A campanha citada nos knowledge files muda com o tempo. Não fixe peças em uma campanha encerrada: gere sempre referenciando a campanha <strong>ativa no momento</strong>. Exemplos neste guia (como a campanha "Taxa Zero") servem apenas de ilustração.</p></div></div>
+    <h3 id="91-gabarito-de-marca--faz--não-faz">9.1 Gabarito de marca — faz / não faz<a class="anchor" href="#91-gabarito-de-marca--faz--não-faz" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h3>
+    <p>Uma folha de consulta rápida. O painel <strong>já aplica estas regras automaticamente</strong> ao gerar e bloqueia violações duras antes de salvar — use este gabarito para reconhecer, num relance, o que tem "cara de 4Selet" e o que não tem (útil ao escrever um briefing ou ao usar o caminho avançado).</p>
+    <div class="table-wrap"><table>
+<thead><tr><th>Dimensão</th><th>Faz</th><th>Evita</th></tr></thead>
+<tbody>
+<tr><td><strong>Cor</strong></td><td>Paleta oficial; Selet Blue (<code>#006494</code>) em toda peça; fundo Cloud no claro, Darker no escuro</td><td>Branco ou preto puros, neon, gradiente quente</td></tr>
+<tr><td><strong>Tipografia</strong></td><td>Inter em tudo; JetBrains Mono só em trecho técnico</td><td>Arial, Helvetica, Times, Roboto, fontes do sistema</td></tr>
+<tr><td><strong>Voz</strong></td><td>Sóbria e estruturada, de sócio experiente; cada afirmação com número, prazo ou processo</td><td>Motivacional vazio, promessa mágica, tom de guru, sensacionalismo</td></tr>
+<tr><td><strong>Emoji</strong></td><td>Nenhum em headline ou corpo; no máximo uma marca funcional (a seta <code>→</code>) em legenda de Instagram/Threads</td><td>Emojis de hype (fogo, foguete, dinheiro, explosão)</td></tr>
+<tr><td><strong>CTA</strong></td><td>"Solicitar convite", "Ver as condições", "Falar com o time", "Migrar minha operação", "Calcular minha economia"</td><td>"Compre já", "Última chance", "Garanta sua vaga", "Inscreva-se grátis"</td></tr>
+<tr><td><strong>Hashtags (Instagram)</strong></td><td>3 a 5, sempre com <code>#4Selet</code>; campanha + produto + nicho</td><td>Mais de 5; <code>#Sucesso</code>, <code>#DinheiroFacil</code>, <code>#MentorDoSucesso</code></td></tr>
+<tr><td><strong>Mercado</strong></td><td>Falar do mercado em abstrato ("taxas em torno de 7,9%")</td><td>Citar concorrentes pelo nome — há uma lista fechada nos knowledge files</td></tr>
+<tr><td><strong>Logo</strong></td><td>Versão clara em fundo escuro, escura em fundo claro, com respiro</td><td>Esticar, girar, aplicar sombra/borda ou pôr sobre foto poluída</td></tr>
+</tbody></table></div>
+    <p><strong>Frases-tag oficiais</strong> (use quando houver espaço, sobretudo em peças institucionais):</p>
+    <ul><li><em>Para quem sabe que é Selet.</em> — assinatura-mãe da marca</li><li><em>A escolha de quem já performa.</em></li><li><em>Produtor não é número. É parceiro. E parceiro vende junto.</em></li></ul>
+    <p><strong>Números da campanha vigente — Taxa Zero</strong> (ilustrativo; confirme sempre no knowledge file da campanha ativa):</p>
+    <ul><li>0% de taxa da plataforma por 3 meses <strong>ou</strong> até R$ 300 mil em vendas — o que vier primeiro</li><li>R$ 1,99 por transação · PIX em D+10 · cartão em D+30 · 95% de aprovação no cartão</li><li>Acesso <strong>por convite</strong> — a 4Selet não tem "cadastro grátis"</li></ul>
+    <div class="callout callout-important"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3zM7 12v6a2 2 0 0 0 2 2h1"/></svg><span>Importante</span></div><div class="callout-body"><p>A fonte de verdade é a pasta <code>knowledge/</code> (<code>brand_identity.md</code> e <code>product_campaign.md</code>). Este gabarito é um resumo de conveniência: havendo divergência, o knowledge file vence.</p></div></div>
     <hr>
     <h2 id="10-workflow-de-aprovação">10. Workflow de aprovação<a class="anchor" href="#10-workflow-de-aprovação" aria-label="link"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></a></h2>
     <p>Camada de governança que dá às peças uma trilha de revisão rastreável, integridade pós-aprovação e um gate duplo de publicação.</p>
@@ -395,7 +469,8 @@ node scripts/validate_status.js      # auditar estados das tasks</code></pre>
     <pre class="code" data-lang="bash"><code>node scripts/build_guide_html.js</code></pre>
     <p>O gerador converte o Markdown em HTML com a paleta 4Selet, ícones no lugar de emojis e os blocos de destaque (<code>[!NOTE]</code>, <code>[!TIP]</code>, <code>[!WARNING]</code>, <code>[!CAUTION]</code>). Abra o <code>GUIA_DE_USO.html</code> com duplo-clique no navegador.</p>
     <div class="callout callout-note"><div class="callout-head"><svg class="ic " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg><span>Nota</span></div><div class="callout-body"><p>Mantenha a fonte <code>.md</code> como original e regenere o HTML — não edite o HTML à mão, pois ele é sobrescrito a cada geração.</p></div></div>
-    <p class="foot">Documento gerado a partir de <code>GUIA_DE_USO.md</code> · paleta oficial 4Selet · regenere com <code>node scripts/build_guide_html.js</code>.</p>
-  </main>
+      <p class="foot">Documento gerado a partir de <code>GUIA_DE_USO.md</code> · paleta oficial 4Selet · regenere com <code>node scripts/build_guide_html.js</code>.</p>
+    </main>
+  </div>
 </body>
 </html>

@@ -119,7 +119,35 @@ Leia esta seção uma vez; ela destrava o resto do guia.
 
 ## 4. Instalação e configuração
 
-### 4.1 Painel web (recomendado)
+### 4.1 Acessar a VPS (Conexão de Área de Trabalho Remota)
+
+O painel roda numa **VPS Windows**. Para operá-lo, primeiro você entra na VPS pela **Conexão de Área de Trabalho Remota** (RDP) — o app de "Área de Trabalho Remota" do próprio Windows.
+
+1. No seu computador, abra **Conexão de Área de Trabalho Remota** (procure por "Área de Trabalho Remota" no menu Iniciar, ou rode `mstsc`).
+2. Em **Computador**, informe o **endereço (IP ou nome)** da VPS e clique em **Conectar**.
+3. Faça login com o **usuário** (ex.: `Administrator`) e a **senha** da VPS.
+4. Aceite o aviso de certificado, se aparecer. Pronto — você está na área de trabalho da VPS.
+5. Lá dentro, abra o navegador e acesse o painel em **`http://localhost:4500`** (ou use o atalho **Painel 4Selet** na Área de Trabalho, se existir).
+
+> [!IMPORTANT]
+> O **endereço, o usuário e a senha** da VPS são fornecidos por quem a provisionou. Guarde com segurança — **nunca** os coloque em commits, prints ou mensagens. Se suspeitar de vazamento, troque a senha no painel do provedor.
+
+> [!TIP]
+> O painel também responde pela rede no IP da VPS (`http://<IP-da-VPS>:4500`) — útil para abrir do seu próprio navegador sem entrar via RDP. Isso exige a porta `4500` liberada no firewall; como o painel não tem login próprio, o caminho mais seguro continua sendo **RDP + `localhost`**.
+
+> [!NOTE]
+> Se o painel não abrir, ele pode ter caído após um reboot da VPS. Confira e suba de novo com `pm2 list` e `pm2 resurrect` (ver Seção 14 — Resolução de problemas).
+
+**De qual computador você se conecta.** No Windows, o cliente de RDP já vem instalado ("Conexão de Área de Trabalho Remota" / `mstsc`). No Mac, instale o **Microsoft Remote Desktop** (App Store). No Linux, use o **Remmina** ou similar. O que muda é só o app de conexão — o endereço, o usuário e a senha são os mesmos.
+
+**Boas práticas de uso remoto:**
+
+- **Uma sessão por vez.** Não abra duas conexões RDP ao mesmo tempo com o mesmo usuário — uma derruba a outra e trabalho não salvo pode se perder.
+- **Encerre pelo menu Iniciar → Desconectar.** Fechar só no `X` da janela pode deixar processos rodando na VPS. O painel continua no ar mesmo com você desconectado (ele é gerenciado pelo PM2) — isso é esperado.
+- **Sessão ociosa expira.** O Windows Server desconecta sessões paradas após um tempo; salve seu trabalho de tempos em tempos.
+- **A senha mora no gerenciador, não em arquivo.** Guarde o endereço, o usuário e a senha num gerenciador de senhas (1Password, Bitwarden etc.) — nunca num arquivo dentro do projeto.
+
+### 4.2 Painel web (recomendado)
 
 Pré-requisito: Node.js instalado.
 
@@ -138,7 +166,7 @@ Abra `http://localhost:4500` no navegador.
 > pm2 logs painel-4selet        # acompanhar logs
 > ```
 
-### 4.2 Configurar a chave da IA
+### 4.3 Configurar a chave da IA
 
 Sem chave, a geração funciona em **modo simulado** (conteúdo rotulado, sem custo). Para gerar com IA real:
 
@@ -151,7 +179,7 @@ A chave fica gravada em `interface/.env` (arquivo local, fora do controle de ver
 > [!CAUTION]
 > A chave dá acesso de cobrança à API. Nunca a compartilhe nem a inclua em commits. Se suspeitar de exposição, revogue-a no console da Anthropic e gere uma nova.
 
-### 4.3 Extensão Claude Code (avançado)
+### 4.4 Extensão Claude Code (avançado)
 
 Para o caminho secundário, abra o projeto no VSCode com a extensão Claude Code. Você conversa direto com os agentes e roda os scripts e o pipeline descritos na Seção 11.
 
@@ -314,6 +342,36 @@ O sistema roda uma verificação de marca sobre o conteúdo antes de salvar. Vio
 
 > [!WARNING]
 > A campanha citada nos knowledge files muda com o tempo. Não fixe peças em uma campanha encerrada: gere sempre referenciando a campanha **ativa no momento**. Exemplos neste guia (como a campanha "Taxa Zero") servem apenas de ilustração.
+
+### 9.1 Gabarito de marca — faz / não faz
+
+Uma folha de consulta rápida. O painel **já aplica estas regras automaticamente** ao gerar e bloqueia violações duras antes de salvar — use este gabarito para reconhecer, num relance, o que tem "cara de 4Selet" e o que não tem (útil ao escrever um briefing ou ao usar o caminho avançado).
+
+| Dimensão | Faz | Evita |
+| --- | --- | --- |
+| **Cor** | Paleta oficial; Selet Blue (`#006494`) em toda peça; fundo Cloud no claro, Darker no escuro | Branco ou preto puros, neon, gradiente quente |
+| **Tipografia** | Inter em tudo; JetBrains Mono só em trecho técnico | Arial, Helvetica, Times, Roboto, fontes do sistema |
+| **Voz** | Sóbria e estruturada, de sócio experiente; cada afirmação com número, prazo ou processo | Motivacional vazio, promessa mágica, tom de guru, sensacionalismo |
+| **Emoji** | Nenhum em headline ou corpo; no máximo uma marca funcional (a seta `→`) em legenda de Instagram/Threads | Emojis de hype (fogo, foguete, dinheiro, explosão) |
+| **CTA** | "Solicitar convite", "Ver as condições", "Falar com o time", "Migrar minha operação", "Calcular minha economia" | "Compre já", "Última chance", "Garanta sua vaga", "Inscreva-se grátis" |
+| **Hashtags (Instagram)** | 3 a 5, sempre com `#4Selet`; campanha + produto + nicho | Mais de 5; `#Sucesso`, `#DinheiroFacil`, `#MentorDoSucesso` |
+| **Mercado** | Falar do mercado em abstrato ("taxas em torno de 7,9%") | Citar concorrentes pelo nome — há uma lista fechada nos knowledge files |
+| **Logo** | Versão clara em fundo escuro, escura em fundo claro, com respiro | Esticar, girar, aplicar sombra/borda ou pôr sobre foto poluída |
+
+**Frases-tag oficiais** (use quando houver espaço, sobretudo em peças institucionais):
+
+- *Para quem sabe que é Selet.* — assinatura-mãe da marca
+- *A escolha de quem já performa.*
+- *Produtor não é número. É parceiro. E parceiro vende junto.*
+
+**Números da campanha vigente — Taxa Zero** (ilustrativo; confirme sempre no knowledge file da campanha ativa):
+
+- 0% de taxa da plataforma por 3 meses **ou** até R$ 300 mil em vendas — o que vier primeiro
+- R$ 1,99 por transação · PIX em D+10 · cartão em D+30 · 95% de aprovação no cartão
+- Acesso **por convite** — a 4Selet não tem "cadastro grátis"
+
+> [!IMPORTANT]
+> A fonte de verdade é a pasta `knowledge/` (`brand_identity.md` e `product_campaign.md`). Este gabarito é um resumo de conveniência: havendo divergência, o knowledge file vence.
 
 ---
 
