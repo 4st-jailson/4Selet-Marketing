@@ -302,9 +302,9 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
 // Espelha as capas humanizadas do feed @4selet (ver Referencia-Instagram): a arte
 // deixa de ser so cor solida + texto e passa a combinar foto (pessoa/objeto/cena)
 // com a copy por cima. Sem `image`, cai num fundo navy (nada quebra).
-function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image, dots, titleOffsetY }) {
+function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image, dots, titleOffsetY, titleOffsetX, titleScale }) {
   const n = headlineLen(headline);
-  const headlineSize = n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156;
+  const headlineSize = Math.round((n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156) * (Number(titleScale) || 1));
   const photo = image ? `<img class="photo" src="${escAttr(resolveImage(image))}" alt=""/>` : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
@@ -349,7 +349,7 @@ function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, foote
     <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
     ${badge ? `<span class="badge">${esc(badge)}</span>` : "<span></span>"}
   </div>
-  <div class="content"${titleOffsetY ? ` style="transform:translateY(${Number(titleOffsetY) || 0}px)"` : ""}>
+  <div class="content"${(titleOffsetX || titleOffsetY) ? ` style="transform:translate(${Number(titleOffsetX) || 0}px, ${Number(titleOffsetY) || 0}px)"` : ""}>
     ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
     <div class="headline">${headline || ""}</div>
     ${subtext ? `<div class="subtext">${esc(subtext)}</div>` : ""}
@@ -430,12 +430,25 @@ function resolveTheme(v) { return String(v || "").toLowerCase() === "light" ? TH
 
 // Marca d'agua tipografica: palavra display gigante transbordando a direita, ATRAS
 // do conteudo. Profundidade editorial que tira o "achatado/duro" das artes.
-function watermark(text, theme) {
+// Estilos: "word" (palavra display, padrao), "outline" (palavra vazada/contorno),
+// "symbol" (o simbolo "4" da 4Selet), "none". Aceita string (=palavra) OU { text, style }.
+function watermark(spec, theme) {
   const t = theme || THEME_DARK;
-  return '<div style="position:absolute;top:50%;right:-4%;transform:translateY(-50%);z-index:0;'
-    + "font-family:'Inter',sans-serif;font-weight:800;font-size:440px;line-height:0.78;letter-spacing:-14px;"
-    + "white-space:nowrap;pointer-events:none;color:" + t.wm + ";opacity:" + t.wmOp + ';">'
-    + esc(text) + "</div>";
+  const s = (spec && typeof spec === "object") ? spec : { text: spec, style: "word" };
+  const style = String(s.style || "word").toLowerCase();
+  if (style === "none" || style === "off") return "";
+  const op = Number(t.wmOp) || 0.05;
+  if (style === "symbol") {
+    return '<img src="' + SIMBOLO + '" alt="" style="position:absolute;top:50%;right:-8%;transform:translateY(-50%);'
+      + "width:60%;height:auto;z-index:0;pointer-events:none;opacity:" + Math.min(op + 0.06, 0.7) + ';" />';
+  }
+  const text = esc(s.text != null && String(s.text) !== "" ? String(s.text) : "SELET");
+  const base = "position:absolute;top:50%;right:-4%;transform:translateY(-50%);z-index:0;"
+    + "font-family:'Inter',sans-serif;font-weight:800;font-size:440px;line-height:0.78;letter-spacing:-14px;white-space:nowrap;pointer-events:none;";
+  if (style === "outline") {
+    return '<div style="' + base + "opacity:" + Math.min(op + 0.14, 0.85) + ";color:transparent;-webkit-text-stroke:2px " + t.wm + ';">' + text + "</div>";
+  }
+  return '<div style="' + base + "color:" + t.wm + ";opacity:" + op + ';">' + text + "</div>";
 }
 
 // ---- Arquetipos de SLIDE do carrossel -------------------------------------
@@ -782,6 +795,8 @@ async function renderCarousel(folder, opts) {
         image: (s && s.image) || concept.image || "",
         dots: dotsBar(n, total),
         titleOffsetY: s && s.titleOffsetY, // ajuste fino de posicao do titulo (camadas)
+        titleOffsetX: s && s.titleOffsetX,
+        titleScale: s && s.titleScale,
       });
     } else {
       const ctx = {

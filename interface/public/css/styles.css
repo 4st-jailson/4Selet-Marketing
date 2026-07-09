@@ -801,6 +801,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .layer-lab { display: block; font-size: 12px; color: var(--text-dim); margin: 9px 0 3px; }
 .layer-block input, .layer-block textarea, .layer-block select { width: 100%; }
 .layer-block textarea { resize: vertical; }
+.ly-pos { display: flex; gap: 8px; }
+.ly-pos input { width: 33%; text-align: center; }
 
 /* ---- Usuários: nome de exibição + ações pequenas ---- */
 .btn-xs { padding: 1px 7px; font-size: 11px; line-height: 1.5; }

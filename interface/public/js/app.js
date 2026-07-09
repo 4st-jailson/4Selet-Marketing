@@ -1178,7 +1178,7 @@ function layersCard(task) {
   if (task.zone !== "active" || ["carousel", "image", "feed"].indexOf(task.kind) === -1) return "";
   return `<div class="card mt">
     <div class="flex-between"><h3>Camadas</h3><span class="hint">editar direto, sem IA</span></div>
-    <p class="muted mt">Edite o texto da peça (no carrossel, por slide, com tema). <span class="codeblock">==palavra==</span> destaca em azul. Ao salvar, a arte re-renderiza e vira um ponto de retorno (Desfazer).</p>
+    <p class="muted mt">Edite a peça direto, sem a IA: textos, tema (claro/escuro), marca d'água e — na capa — a posição e o tamanho do título. Para destacar uma palavra em azul, coloque-a entre <span class="codeblock">==assim==</span>. Ao salvar, a arte é gerada de novo na hora e a versão anterior fica guardada (dá para desfazer).</p>
     <div id="layers-area" class="mt"><p class="hint"><span class="spinner"></span> carregando camadas…</p></div>
   </div>`;
 }
@@ -1224,6 +1224,30 @@ async function wireLayersFeed(folder, task) {
   };
 }
 // Camadas de CARROSSEL: por slide (título, texto, tema, callout).
+// Marca d'água: preset <-> objeto {text, style} do renderizador.
+function wmPresetOf(wm) {
+  if (wm == null) return "";
+  if (typeof wm === "object") {
+    const st = String(wm.style || "").toLowerCase();
+    if (st === "none") return "none";
+    if (st === "symbol") return "symbol";
+    if (st === "outline") return "outline";
+    return String(wm.text || "") === "4SELET" ? "4selet" : "selet";
+  }
+  return "selet";
+}
+function wmFromPreset(p) {
+  if (p === "none") return { style: "none" };
+  if (p === "symbol") return { style: "symbol" };
+  if (p === "outline") return { text: "SELET", style: "outline" };
+  if (p === "4selet") return { text: "4SELET", style: "word" };
+  if (p === "selet") return { text: "SELET", style: "word" };
+  return undefined; // "" = padrão (não grava campo)
+}
+function wmOptions(sel) {
+  const O = (v, lab) => '<option value="' + v + '"' + (sel === v ? " selected" : "") + ">" + lab + "</option>";
+  return O("", "Padrão (SELET)") + O("4selet", "4SELET") + O("outline", "SELET vazada") + O("symbol", 'Símbolo “4”') + O("none", "Nenhuma");
+}
 async function wireLayersCarousel(folder, task) {
   const box = $("#layers-area"); if (!box) return;
   let concept;
@@ -1234,7 +1258,7 @@ async function wireLayersCarousel(folder, task) {
   const archOf = (s, i) => String(s.layout || (i === 0 ? "cover" : i === slides.length - 1 ? "cta" : "text")).toLowerCase();
   const rows = slides.map((s, i) => {
     const a = archOf(s, i);
-    const showEyebrow = a !== "cover", showBody = (a === "cover" || a === "text" || a === "cta"), showNote = a === "flow", showTheme = (a === "text" || a === "cta");
+    const showEyebrow = a !== "cover", showBody = (a === "cover" || a === "text" || a === "cta"), showNote = a === "flow", showTheme = (a === "text" || a === "cta"), showWm = (a === "text" || a === "cta"), showPos = (a === "cover");
     return `<div class="layer-block" data-i="${i}">
       <div class="layer-head"><span class="layer-n">Slide ${i + 1}</span><span class="badge plain">${esc(LBL[a] || a)}</span></div>
       ${showEyebrow ? `<label class="layer-lab">Rótulo</label><input class="ly-eyebrow" value="${esc(s.eyebrow || "")}" placeholder="ex.: O RISCO" />` : ""}
@@ -1242,6 +1266,8 @@ async function wireLayersCarousel(folder, task) {
       ${showBody ? `<label class="layer-lab">Texto de apoio</label><textarea class="ly-body" rows="2">${esc(s.body || "")}</textarea>` : ""}
       ${showNote ? `<label class="layer-lab">Caixa de destaque</label><input class="ly-note" value="${esc(s.note || "")}" />` : ""}
       ${showTheme ? `<label class="layer-lab">Tema</label><select class="ly-theme"><option value="dark"${s.theme === "light" ? "" : " selected"}>Escuro</option><option value="light"${s.theme === "light" ? " selected" : ""}>Claro (editorial)</option></select>` : ""}
+      ${showWm ? `<label class="layer-lab">Marca d'água</label><select class="ly-wm">${wmOptions(wmPresetOf(s.watermark))}</select>` : ""}
+      ${showPos ? `<label class="layer-lab">Posição e tamanho do título <span class="hint">(X / Y em px · tamanho %)</span></label><div class="ly-pos"><input class="ly-ox" type="number" step="10" value="${Number(s.titleOffsetX) || 0}" title="Horizontal (px)" /><input class="ly-oy" type="number" step="10" value="${Number(s.titleOffsetY) || 0}" title="Vertical (px)" /><input class="ly-sc" type="number" step="5" min="40" max="220" value="${Math.round((Number(s.titleScale) || 1) * 100)}" title="Tamanho (%)" /></div>` : ""}
     </div>`;
   }).join("");
   box.innerHTML = `<div class="field" style="max-width:340px"><label class="layer-lab">CTA do fecho <span class="hint">(botão do último slide)</span></label><input id="ly-cta" value="${esc(concept.cta || "")}" /></div>
@@ -1256,6 +1282,10 @@ async function wireLayersCarousel(folder, task) {
       const bo = bl.querySelector(".ly-body"); if (bo) { if (bo.value.trim()) s.body = bo.value; else delete s.body; }
       const no = bl.querySelector(".ly-note"); if (no) { const v = no.value.trim(); if (v) s.note = v; else delete s.note; }
       const th = bl.querySelector(".ly-theme"); if (th) { if (th.value === "light") s.theme = "light"; else delete s.theme; }
+      const wm = bl.querySelector(".ly-wm"); if (wm) { const p = wmFromPreset(wm.value); if (p) s.watermark = p; else delete s.watermark; }
+      const ox = bl.querySelector(".ly-ox"); if (ox) { const v = parseInt(ox.value, 10) || 0; if (v) s.titleOffsetX = v; else delete s.titleOffsetX; }
+      const oy = bl.querySelector(".ly-oy"); if (oy) { const v = parseInt(oy.value, 10) || 0; if (v) s.titleOffsetY = v; else delete s.titleOffsetY; }
+      const sc = bl.querySelector(".ly-sc"); if (sc) { const v = (parseInt(sc.value, 10) || 100) / 100; if (Math.abs(v - 1) > 0.001) s.titleScale = v; else delete s.titleScale; }
     });
     const ctaEl = $("#ly-cta"); if (ctaEl) concept.cta = ctaEl.value.trim();
     try {
