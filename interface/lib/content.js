@@ -252,6 +252,52 @@ function writeContentFile(folder, rel, content, note) {
   return path.relative(loc.path, target).split(path.sep).join("/");
 }
 
+// Editor visual (canvas): grava o PNG (dataURL) no arquivo da arte + o doc editavel
+// (fabric JSON) ao lado (<arte>.canvas.json) para reabrir. Zona active.
+function saveCanvasArt(folder, rel, pngDataUrl, doc) {
+  const loc = findTask(folder);
+  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  if (loc.zone !== "active") { const e = new Error("edicao so na zona active (rode rework primeiro)"); e.code = "E_NOT_EDITABLE"; throw e; }
+  const target = path.normalize(path.join(loc.path, rel));
+  if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
+  const b64 = String(pngDataUrl).replace(/^data:image\/png;base64,/, "");
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, Buffer.from(b64, "base64"));
+  if (doc != null) {
+    const docPath = target.replace(/\.[a-z0-9]+$/i, "") + ".canvas.json";
+    try { fs.writeFileSync(docPath, typeof doc === "string" ? doc : JSON.stringify(doc), "utf8"); } catch (e) { /* nao-critico */ }
+  }
+  return path.relative(loc.path, target).split(path.sep).join("/");
+}
+
+// Junta as ARTES (png/jpg/webp/mp4) de uma peca para baixar em .zip. Ignora HTML/JSON/logs.
+// Ordena os slides do carrossel numericamente (slide_1, slide_2, ...), depois o resto por nome.
+function collectMediaForZip(folder) {
+  const loc = findTask(folder);
+  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  const out = [];
+  const walk = (rel) => {
+    const abs = path.join(loc.path, rel || ".");
+    let st; try { st = fs.statSync(abs); } catch (e) { return; }
+    if (st.isDirectory()) {
+      if (/(^|\/)(logs|\.history)$/i.test(rel)) return; // nao zipa logs/historico
+      for (const c of fs.readdirSync(abs)) walk(rel ? rel + "/" + c : c);
+      return;
+    }
+    if (/\.(png|jpe?g|webp|mp4)$/i.test(rel)) out.push({ name: rel, buffer: fs.readFileSync(abs), mtime: st.mtime });
+  };
+  walk("");
+  out.sort((a, b) => {
+    const na = (a.name.match(/slide_0*(\d+)\./i) || [])[1];
+    const nb = (b.name.match(/slide_0*(\d+)\./i) || [])[1];
+    if (na && nb) return parseInt(na, 10) - parseInt(nb, 10);
+    if (na) return -1;
+    if (nb) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return out;
+}
+
 // Grava campaign_id no status.json (link bidirecional com a campanha).
 function setCampaignId(folder, campaignId) {
   const loc = findTask(folder);
@@ -383,6 +429,6 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  listContentVersions, restoreContentVersion,
+  listContentVersions, restoreContentVersion, saveCanvasArt, collectMediaForZip,
   setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

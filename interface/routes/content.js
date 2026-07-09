@@ -151,4 +151,34 @@ router.post("/:folder/content", (req, res) => {
   }
 });
 
+// Editor visual (fabric): salva o PNG do canvas na arte + o doc editavel.
+router.post("/:folder/canvas", (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.rel || !/^data:image\/png;base64,/.test(String(body.png || ""))) {
+      return res.status(400).json({ error: "rel e png (dataURL PNG) são obrigatórios" });
+    }
+    const file = content.saveCanvasArt(req.params.folder, String(body.rel), String(body.png), body.doc);
+    res.json({ ok: true, file, task: content.getTask(req.params.folder) });
+  } catch (e) { res.status(e.code === "E_NOT_EDITABLE" ? 409 : 400).json({ error: e.message, code: e.code }); }
+});
+
+// Baixa TODAS as artes da peca (png/jpg/webp/mp4) num unico .zip. Sem dependencia (lib/zip).
+router.get("/:folder/zip", (req, res) => {
+  try {
+    const t = content.getTask(req.params.folder);
+    if (!t) return res.status(404).json({ error: "task nao encontrada" });
+    const files = content.collectMediaForZip(req.params.folder);
+    if (!files.length) return res.status(404).json({ error: "esta peça não tem artes para baixar" });
+    const zip = require("../lib/zip").zipStore(files);
+    const base = String(req.params.folder).replace(/[^a-z0-9._-]+/gi, "_") || "pecas";
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", 'attachment; filename="' + base + '.zip"');
+    res.setHeader("Content-Length", zip.length);
+    res.send(zip);
+  } catch (e) {
+    res.status(e.code === "E_TASK_NOT_FOUND" ? 404 : 400).json({ error: e.message, code: e.code });
+  }
+});
+
 module.exports = router;

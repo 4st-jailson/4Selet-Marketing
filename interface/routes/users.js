@@ -50,4 +50,16 @@ router.post("/:username/role", (req, res) => {
   } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
 
+// Renomeia o LOGIN de um usuario. Se for o proprio admin logado, reemite a sessao com o
+// novo login para nao derrubar a sessao (o cookie carrega o username).
+router.post("/:username/username", (req, res) => {
+  try {
+    const oldU = String(req.params.username).toLowerCase();
+    const isSelf = oldU === req.me.username;
+    const user = auth.setUsername(oldU, (req.body || {}).username);
+    if (isSelf) auth.setSessionCookie(req, res, auth.signSession(user));
+    res.json({ user, self: isSelf });
+  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+
 module.exports = router;

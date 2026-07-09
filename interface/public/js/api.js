@@ -54,6 +54,7 @@ const API = (() => {
     taskFile: (folder, rel) => fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent(rel)).then(r => r.text()),
     rawUrl: (folder, rel) => "/api/content/" + encodeURIComponent(folder) + "/raw?rel=" + encodeURIComponent(rel),
     downloadUrl: (folder, rel, scale) => "/api/content/" + encodeURIComponent(folder) + "/download?rel=" + encodeURIComponent(rel) + (scale ? "&scale=" + encodeURIComponent(scale) : ""),
+    zipUrl: (folder) => "/api/content/" + encodeURIComponent(folder) + "/zip",
     preview: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preview"),
     renderMedia: (folder, kind, template) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/render?kind=" + encodeURIComponent(kind) + (template ? "&template=" + encodeURIComponent(template) : "")),
     discard: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/discard"),
@@ -63,6 +64,7 @@ const API = (() => {
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
     saveContent: (folder, rel, content) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/content", { rel, content }),
+    saveCanvas: (folder, rel, png, doc) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/canvas", { rel, png, doc }),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
@@ -81,5 +83,6 @@ const API = (() => {
     resetUserPassword: (username, password) => req("POST", "/api/users/" + encodeURIComponent(username) + "/password", { password }),
     setUserRole: (username, role) => req("POST", "/api/users/" + encodeURIComponent(username) + "/role", { role }),
     setUserName: (username, name) => req("POST", "/api/users/" + encodeURIComponent(username) + "/name", { name }),
+    setUsername: (username, newUsername) => req("POST", "/api/users/" + encodeURIComponent(username) + "/username", { username: newUsername }),
   };
 })();

@@ -162,7 +162,9 @@ function uiModal(opts) {
     const fieldHtml = fields.map((f, i) => {
       const ctrl = f.type === "textarea"
         ? `<textarea data-mf="${i}" rows="3" placeholder="${esc(f.placeholder || "")}">${esc(f.value || "")}</textarea>`
-        : `<input data-mf="${i}" type="${esc(f.inputType || "text")}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" />`;
+        : f.type === "select"
+          ? `<select data-mf="${i}">${(f.options || []).map((o) => { const val = (o && typeof o === "object") ? o.value : o; const lab = (o && typeof o === "object") ? o.label : o; return `<option value="${esc(val)}"${String(f.value) === String(val) ? " selected" : ""}>${esc(lab)}</option>`; }).join("")}</select>`
+          : `<input data-mf="${i}" type="${esc(f.inputType || "text")}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" />`;
       const sugg = (f.suggestions && f.suggestions.length)
         ? `<div class="sugg-row" data-msug="${i}">${f.suggestLabel ? '<span class="hint">' + esc(f.suggestLabel) + "</span>" : ""}${f.suggestions.map((s) => '<button type="button" class="sugg-chip" data-sugg="' + esc(s) + '">' + esc(s) + "</button>").join("")}</div>`
         : "";
@@ -998,6 +1000,7 @@ function visibleFiles(task) {
   return files.filter((f) => {
     if (f.isImage || f.isVideo) return false;
     if (/(slides\/slide_\d+|ads\/(ad|feed))\.html?$/i.test(f.rel)) return false;
+    if (/\.canvas\.json$/i.test(f.rel)) return false; // sidecar do editor visual (não é entregável)
     return true;
   });
 }
@@ -1039,7 +1042,8 @@ function carouselStrip(folder, task) {
     </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
-    <div class="media-gallery mt">${items}</div></div>`;
+    <div class="media-gallery mt">${items}</div>
+    <div class="strip-foot"><a class="btn btn-sm btn-primary" href="${API.zipUrl(folder)}" download title="Baixa os ${slides.length} slides num único arquivo .zip">Baixar todos (ZIP)</a></div></div>`;
 }
 
 function renderPanel(folder, task) {
@@ -1171,6 +1175,116 @@ function refineCard(task) {
     </div>
     <div id="undo-area"></div>
   </div>`;
+}
+
+// ---- Editor visual (fabric.js) — v0.1: canvas livre p/ peca de Imagem ----
+let FABRIC_LOADING = null;
+function loadFabric() {
+  if (window.fabric) return Promise.resolve();
+  if (FABRIC_LOADING) return FABRIC_LOADING;
+  FABRIC_LOADING = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => { FABRIC_LOADING = null; reject(new Error("Não consegui carregar o editor (fabric.js).")); };
+    document.head.appendChild(s);
+  });
+  return FABRIC_LOADING;
+}
+// Quais artes desta peca abrem no editor: carrossel -> 1 por slide; imagem/feed -> a arte principal.
+function editorTargets(task) {
+  const files = (task && task.files) || [];
+  if (task.kind === "carousel") {
+    return files
+      .filter((f) => /slide_0*\d+\.png$/i.test(f.rel))
+      .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+      .sort((a, b) => a.n - b.n)
+      .map((s) => ({ rel: s.f.rel, label: "Slide " + s.n }));
+  }
+  const png = files.find((f) => f.isImage && /ads\/(ad|feed)\.png$/i.test(f.rel))
+    || files.find((f) => f.isImage && /\.png$/i.test(f.rel));
+  return png ? [{ rel: png.rel, label: "Abrir no editor" }] : [];
+}
+function editorCard(task) {
+  if (task.zone !== "active") return "";
+  const targets = editorTargets(task);
+  if (!targets.length) return "";
+  const many = targets.length > 1;
+  const btns = targets.map((t) =>
+    `<button class="btn ${many ? "btn-sm" : "btn-primary"} editor-open" data-rel="${esc(t.rel)}">${esc(t.label)}</button>`
+  ).join(" ");
+  return `<div class="card mt"><div class="flex-between"><h3>Editor visual</h3><span class="hint">livre, arraste e edite (beta)</span></div>
+    <p class="muted mt">Abra a arte num editor livre (estilo Canva): adicione e mova textos e imagens, mude tamanho, peso e cor, e salve.${many ? " Escolha o slide:" : ""}</p>
+    <div class="editor-open-row mt">${btns}</div>
+    <p class="hint mt">O editor sobrescreve a arte final direto. Para descartar as edições e voltar ao padrão da marca, é só gerar a arte de novo (recria do zero, sem as edições manuais).</p></div>`;
+}
+async function openEditor(folder, task, rel) {
+  const artRel = rel || (editorTargets(task)[0] || {}).rel;
+  if (!artRel) { toast("Não há arte para editar aqui.", "error"); return; }
+  toast("Abrindo editor…", "info");
+  try { await loadFabric(); } catch (e) { toast(e.message, "error"); return; }
+  const pieceLabel = (editorTargets(task).find((t) => t.rel === artRel) || {}).label || "";
+  const ov = document.createElement("div");
+  ov.className = "editor-ov";
+  ov.innerHTML = '<div class="editor-bar">'
+    + '<span class="ed-piece">' + esc(pieceLabel) + '</span>'
+    + '<button class="btn btn-sm" id="ed-text">+ Texto</button>'
+    + '<label class="btn btn-sm" style="cursor:pointer">+ Imagem<input type="file" id="ed-imgf" accept="image/*" hidden></label>'
+    + '<span class="ed-sep"></span>'
+    + '<input type="number" id="ed-size" value="48" min="8" max="600" title="Tamanho do texto" style="width:66px">'
+    + '<button class="btn btn-sm" id="ed-bold" title="Negrito"><b>N</b></button>'
+    + '<input type="color" id="ed-color" value="#ffffff" title="Cor do texto">'
+    + '<button class="btn btn-sm btn-danger" id="ed-del" title="Remover selecionado">Remover</button>'
+    + '<span style="flex:1"></span>'
+    + '<button class="btn btn-sm btn-ghost" id="ed-close">Fechar</button>'
+    + '<button class="btn btn-sm btn-primary" id="ed-save">Salvar</button>'
+    + '</div><div class="editor-stage"><canvas id="ed-canvas" width="560" height="560"></canvas></div>';
+  document.body.appendChild(ov);
+  document.body.classList.add("no-scroll");
+  const canvas = new fabric.Canvas("ed-canvas", { backgroundColor: "#07212B", preserveObjectStacking: true });
+  let exportMul = 1; // multiplicador p/ exportar na resolucao real da arte
+  fabric.Image.fromURL(API.rawUrl(folder, artRel) + "&v=" + Date.now(), (img) => {
+    if (!img) { toast("Não consegui carregar a arte.", "error"); return; }
+    const natW = img.width || 1080, natH = img.height || 1080;
+    const scale = Math.min(560 / natW, 640 / natH, 1); // cabe no palco preservando proporcao
+    const dispW = Math.max(1, Math.round(natW * scale)), dispH = Math.max(1, Math.round(natH * scale));
+    canvas.setWidth(dispW); canvas.setHeight(dispH);
+    img.set({ selectable: false, evented: false, left: 0, top: 0, originX: "left", originY: "top", scaleX: dispW / natW, scaleY: dispH / natH });
+    canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+    exportMul = natW / dispW;
+  });
+  const sel = () => canvas.getActiveObject();
+  const cx = () => canvas.getWidth() / 2, cy = () => canvas.getHeight() / 2;
+  $("#ed-text").onclick = () => {
+    const t = new fabric.IText("Texto", { left: cx(), top: cy(), originX: "center", originY: "center", fill: $("#ed-color").value, fontFamily: "Inter", fontSize: parseInt($("#ed-size").value, 10) || 48, fontWeight: 700, textAlign: "center" });
+    canvas.add(t); canvas.setActiveObject(t); canvas.renderAll();
+  };
+  $("#ed-imgf").onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => fabric.Image.fromURL(r.result, (im) => { im.scaleToWidth(canvas.getWidth() * 0.4); im.set({ left: cx(), top: cy(), originX: "center", originY: "center" }); canvas.add(im); canvas.setActiveObject(im); canvas.renderAll(); });
+    r.readAsDataURL(f); e.target.value = "";
+  };
+  $("#ed-size").oninput = () => { const o = sel(); if (o && o.set && "fontSize" in o) { o.set("fontSize", parseInt($("#ed-size").value, 10) || 48); canvas.renderAll(); } };
+  $("#ed-bold").onclick = () => { const o = sel(); if (o && o.set && "fontWeight" in o) { o.set("fontWeight", o.fontWeight === 700 ? 400 : 700); canvas.renderAll(); } };
+  $("#ed-color").oninput = () => { const o = sel(); if (o && o.set) { o.set("fill", $("#ed-color").value); canvas.renderAll(); } };
+  $("#ed-del").onclick = () => { const o = sel(); if (o) { canvas.remove(o); canvas.discardActiveObject(); canvas.renderAll(); } };
+  const onKey = (ev) => { if (ev.key === "Escape") { const o = sel(); if (!(o && o.isEditing)) close(); } };
+  const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); };
+  document.addEventListener("keydown", onKey);
+  $("#ed-close").onclick = close;
+  const syncBar = () => { const o = sel(); if (o && o.fontSize) $("#ed-size").value = o.fontSize; if (o && typeof o.fill === "string" && /^#[0-9a-f]{6}$/i.test(o.fill)) $("#ed-color").value = o.fill; };
+  canvas.on("selection:created", syncBar);
+  canvas.on("selection:updated", syncBar);
+  $("#ed-save").onclick = async () => {
+    const btn = $("#ed-save"); btn.disabled = true; btn.textContent = "Salvando…";
+    try {
+      canvas.discardActiveObject(); canvas.renderAll();
+      const png = canvas.toDataURL({ format: "png", multiplier: exportMul });
+      await API.saveCanvas(folder, artRel, png, JSON.stringify(canvas.toJSON()));
+      toast("Arte salva do editor.", "success"); close(); router();
+    } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar"; }
+  };
 }
 
 // Painel "Camadas" (A1): editar direto texto/tema de cada slide do carrossel, sem IA.
@@ -1386,6 +1500,7 @@ async function viewTaskDetail(folder) {
       </div>
       <div>
         ${renderPanel(folder, task)}
+        ${editorCard(task)}
         ${layersCard(task)}
         ${refineCard(task)}
         <div class="card mt">
@@ -1419,6 +1534,7 @@ async function viewTaskDetail(folder) {
   loadTaskCollections(folder);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
+  $$(".editor-open").forEach((b) => (b.onclick = () => openEditor(folder, task, b.dataset.rel)));
   wireLayers(folder, task);
   wireUndo(folder, task);
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
@@ -3011,7 +3127,7 @@ function userRow(u) {
   const display = u.name || u.username;
   return '<tr data-u="' + esc(u.username) + '" data-name="' + esc(u.name || "") + '">'
     + '<td><div class="u-name-line"><strong>' + esc(display) + "</strong>" + (isMe ? ' <span class="badge plain">você</span>' : "")
-      + ' <button class="btn btn-ghost btn-xs u-editname" title="Editar nome de exibição">editar</button></div>'
+      + ' <button class="btn btn-ghost btn-xs u-editname" title="Editar nome e login">editar</button></div>'
       + '<div class="muted u-username">@' + esc(u.username) + "</div></td>"
     + "<td>" + (isMe
         ? '<span class="badge ' + (u.role === "admin" ? "approved" : "plain") + '">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span>"
@@ -3028,14 +3144,38 @@ function wireUserRows() {
     const username = tr.dataset.u;
     const nameBtn = tr.querySelector(".u-editname");
     if (nameBtn) nameBtn.onclick = async () => {
-      const v = await uiModal({ title: "Nome de exibição", message: "Nome mostrado no painel para “" + username + "”.", fields: [{ name: "name", label: "Nome", value: tr.dataset.name || "" }], confirmText: "Salvar" });
+      const v = await uiModal({
+        title: "Editar usuário",
+        message: "Nome de exibição e login de “" + username + "”. Trocar o login muda como a pessoa entra no painel.",
+        fields: [
+          { name: "name", label: "Nome de exibição", value: tr.dataset.name || "", placeholder: "ex.: Jailson Junior" },
+          { name: "username", label: "Usuário (login)", value: username, placeholder: "minúsculas, números, . _ -" },
+        ],
+        confirmText: "Salvar",
+      });
       if (!v) return;
+      const newName = v.name;
+      const newLogin = String(v.username || "").trim().toLowerCase();
+      const loginChanged = newLogin && newLogin !== username;
+      const nameChanged = newName !== (tr.dataset.name || "");
+      if (!loginChanged && !nameChanged) return; // nada mudou
       try {
-        await API.setUserName(username, v.name);
-        toast("Nome atualizado.", "ok");
-        if (State.user && username === State.user.username) { State.user.name = v.name; applyUserToChrome(); }
+        let curUser = username;
+        // 1) troca o login (renomeia a conta) — o backend reemite a sessão se for você mesmo
+        if (loginChanged) {
+          const r = await API.setUsername(username, newLogin);
+          curUser = (r.user && r.user.username) || newLogin;
+          if (State.user && username === State.user.username) State.user.username = curUser;
+        }
+        // 2) troca o nome de exibição (já usando o login atualizado)
+        if (nameChanged) {
+          await API.setUserName(curUser, newName);
+          if (State.user && curUser === State.user.username) State.user.name = newName;
+        }
+        toast("Usuário atualizado.", "ok");
+        applyUserToChrome();
         viewUsers();
-      } catch (e) { toast((e && e.message) || "Erro.", "error"); }
+      } catch (e) { toast((e && e.message) || "Erro.", "error"); viewUsers(); }
     };
     const roleSel = $(".u-role", tr);
     if (roleSel && !roleSel.disabled) roleSel.onchange = async () => {
@@ -3060,16 +3200,20 @@ function wireUserRows() {
 async function onAddUser() {
   const v = await uiModal({
     title: "Adicionar usuário",
-    message: "A pessoa entra com esse login. O perfil começa como Membro — dá para promover a Administrador depois.",
+    message: "A pessoa entra com esse login e senha. Escolha o nível de acesso.",
     fields: [
       { name: "name", label: "Nome de exibição (opcional)", placeholder: "ex.: Jailson Junior" },
       { name: "username", label: "Usuário (login)", placeholder: "ex.: joao (minúsculas, números, . _ -)" },
       { name: "password", label: "Senha (mín. 8 caracteres)", inputType: "password" },
+      { name: "role", label: "Nível de acesso", type: "select", value: "membro", options: [
+        { value: "membro", label: "Membro — usa o painel" },
+        { value: "admin", label: "Administrador — usa o painel e gerencia usuários" },
+      ] },
     ],
     confirmText: "Criar",
   });
   if (!v) return;
-  try { await API.createUser({ username: v.username, password: v.password, name: v.name, role: "membro" }); toast("Usuário criado.", "ok"); viewUsers(); }
+  try { await API.createUser({ username: v.username, password: v.password, name: v.name, role: v.role || "membro" }); toast("Usuário criado.", "ok"); viewUsers(); }
   catch (e) { toast((e && e.message) || "Erro ao criar usuário.", "error"); }
 }
 async function viewUsers() {

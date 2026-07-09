@@ -142,6 +142,22 @@ function setName(username, name) {
   saveUsers(users);
   return publicUser(target);
 }
+// Renomeia o LOGIN (chave) de um usuario. Seguro contra o bootstrap (so cria admin se
+// nao ha usuarios) — nao recria o antigo. Se for o proprio usuario logado, a rota reemite
+// o cookie de sessao (senao a sessao, ligada ao login antigo, invalidaria).
+function setUsername(oldUsername, newUsername) {
+  const oldU = normUsername(oldUsername);
+  const newU = normUsername(newUsername);
+  if (!validUsername(newU)) { const e = new Error("Login inválido (3 a 32 caracteres: minúsculas, números, . _ -)."); e.status = 400; throw e; }
+  const users = loadUsers();
+  const target = users.find((x) => x.username === oldU);
+  if (!target) { const e = new Error("Usuário não encontrado."); e.status = 404; throw e; }
+  if (newU === oldU) return publicUser(target);
+  if (users.some((x) => x.username === newU)) { const e = new Error("Já existe um usuário com esse login."); e.status = 409; throw e; }
+  target.username = newU;
+  saveUsers(users);
+  return publicUser(target);
+}
 function listUsers() {
   return loadUsers().map(publicUser).sort((a, b) => a.username.localeCompare(b.username));
 }
@@ -228,6 +244,6 @@ function userFromRequest(req) {
 
 module.exports = {
   ROLES, COOKIE, SESSION_TTL_S,
-  bootstrap, authenticate, listUsers, createUser, deleteUser, setPassword, setRole, setName, findUser,
+  bootstrap, authenticate, listUsers, createUser, deleteUser, setPassword, setRole, setName, setUsername, findUser,
   signSession, verifySession, setSessionCookie, clearSessionCookie, userFromRequest,
 };
