@@ -17,6 +17,9 @@ assets/reference-videos/
 # acervo de imagens enviadas pelo usuario (runtime, nao versionar)
 interface/public/uploads/
 
+# dados de acesso do painel: users.json (hashes de senha) + .session_secret — NUNCA versionar
+interface/data/
+
 # logs e temp
 logs/
 *.log

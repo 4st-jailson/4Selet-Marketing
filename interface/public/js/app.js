@@ -220,6 +220,7 @@ const Routes = {
   task: viewTaskDetail,
   create: viewCreate,
   settings: viewSettings,
+  usuarios: viewUsers,
 };
 
 // Skeleton de carregamento com o formato do destino — load parece intencional,
@@ -977,8 +978,8 @@ function mediaGallery(folder, task) {
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const items = []
-    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
+    .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
   return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
@@ -993,7 +994,7 @@ function carouselStrip(folder, task) {
   const items = slides.map((s) =>
     `<div class="media-item"><div class="media-frame">
       <span class="slide-num">${s.n}</span>
-      <img src="${API.rawUrl(folder, s.f.rel)}" alt="Slide ${s.n}" loading="lazy" onclick="openLightboxFromEl(this)" />
+      <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" loading="lazy" onclick="openLightboxFromEl(this)" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
     </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
@@ -1059,6 +1060,56 @@ function selectedTemplate() {
 
 function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel"; }
 
+// Imagens de referencia anexadas ao "Ajustar com IA" (a IA as "ve" via visao).
+let REFINE_IMAGES = [];
+// Le um arquivo de imagem e devolve um dataURL JPEG redimensionado (leve p/ trafegar).
+function fileToDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = reject;
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, (maxDim || 1280) / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function renderRefineImgs() {
+  const box = $("#refine-imgs"); if (!box) return;
+  box.innerHTML = REFINE_IMAGES.map((src, i) =>
+    '<div class="refimg"><img src="' + src + '" alt=""/><button type="button" class="refimg-x" data-i="' + i + '" title="Remover">&times;</button></div>').join("");
+  $$("#refine-imgs .refimg-x").forEach((b) => { b.onclick = () => { REFINE_IMAGES.splice(Number(b.dataset.i), 1); renderRefineImgs(); }; });
+}
+async function addRefineFiles(files) {
+  for (const f of Array.from(files || [])) {
+    if (!/^image\//.test(f.type)) continue;
+    if (REFINE_IMAGES.length >= 4) { toast("Máximo de 4 imagens de referência.", "warn"); break; }
+    try { REFINE_IMAGES.push(await fileToDataUrl(f, 1280)); } catch (e) { toast("Não consegui ler a imagem.", "error"); }
+  }
+  renderRefineImgs();
+}
+// Liga o anexo de imagem do card de refino (arquivo + colar Ctrl+V). Zera a cada render.
+function wireRefineAttach() {
+  REFINE_IMAGES = [];
+  const inp = $("#refine-file");
+  if (inp) inp.onchange = (e) => { addRefineFiles(e.target.files); e.target.value = ""; };
+  const ta = $("#refine-input");
+  if (ta) ta.addEventListener("paste", (e) => {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    const imgs = [];
+    for (const it of items) { if (it.type && it.type.indexOf("image") === 0) { const f = it.getAsFile(); if (f) imgs.push(f); } }
+    if (imgs.length) { e.preventDefault(); addRefineFiles(imgs); }
+  });
+}
+
 function refineCard(task) {
   if (task.zone !== "active") return "";
   const ct = (State.meta.content_types || []).find((c) => c.kind === task.kind);
@@ -1072,7 +1123,9 @@ function refineCard(task) {
     <h3>Ajustar com IA</h3>
     <p class="muted mt">${note}</p>
     <div class="refine-box mt">
-      <textarea id="refine-input" rows="2" placeholder="ex.: deixe o segundo slide mais direto e troque o CTA"></textarea>
+      <textarea id="refine-input" rows="2" placeholder="ex.: use um fluxo com ícones na tela 2 (como a imagem de referência)"></textarea>
+      <div class="refine-attach mt"><label class="btn btn-sm btn-ghost"><input type="file" id="refine-file" accept="image/*" multiple hidden> Anexar imagem de referência</label><span class="hint">a IA "vê" a imagem e usa como inspiração — ou cole com Ctrl+V</span></div>
+      <div class="refine-imgs" id="refine-imgs"></div>
       <button class="btn btn-primary mt" id="btn-refine" data-ct="${esc(ct.id)}" data-file="${esc(ct.file)}">Aplicar ajuste</button>
       <span id="refine-out" class="muted"></span>
     </div>
@@ -1088,7 +1141,7 @@ async function refineTask(folder, task) {
   btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> ajustando…';
   try {
     const current = await API.taskFile(folder, file);
-    const r = await API.refine({ content_type: ctId, current, instruction, campaign_id: s.campaign_id || undefined, pillar: task.pillar || undefined });
+    const r = await API.refine({ content_type: ctId, current, instruction, images: REFINE_IMAGES.slice(), campaign_id: s.campaign_id || undefined, pillar: task.pillar || undefined });
     if (r.simulated) toast("Ajuste simulado (configure a chave para usar a IA real)", "warn");
     await API.save({
       content_type: ctId,
@@ -1167,7 +1220,7 @@ async function viewTaskDetail(folder) {
   if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
   loadTaskCollections(folder);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
-  if ($("#btn-refine")) $("#btn-refine").onclick = () => refineTask(folder, task);
+  if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
     el.onchange = () => {
       document.querySelectorAll(".tpl-opt").forEach((o) => o.classList.toggle("is-active", o.dataset.tpl === el.value));
@@ -2607,9 +2660,178 @@ function setupTheme() {
   };
 }
 
+/* ============================ acesso (login + usuários) ============================ */
+let LOGIN_SHOWING = false;
+
+// Tela de login em tela cheia. Resolve com o usuário quando autenticado.
+function showLogin() {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "login-ov";
+    ov.innerHTML =
+      '<form class="login-card" autocomplete="on">'
+      + '<div class="login-brand">4<b>Selet</b><span>Marketing</span></div>'
+      + '<h1>Entrar</h1>'
+      + '<p class="muted">Acesse com o seu usuário e senha.</p>'
+      + '<div class="field"><label for="lg-user">Usuário</label><input id="lg-user" type="text" autocomplete="username" /></div>'
+      + '<div class="field"><label for="lg-pass">Senha</label><input id="lg-pass" type="password" autocomplete="current-password" /></div>'
+      + '<div class="login-err" hidden></div>'
+      + '<button class="btn btn-primary" type="submit">Entrar</button>'
+      + "</form>";
+    document.body.appendChild(ov);
+    document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const form = ov.querySelector("form");
+    const err = ov.querySelector(".login-err");
+    const userEl = ov.querySelector("#lg-user");
+    const passEl = ov.querySelector("#lg-pass");
+    userEl.focus();
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = "Entrando…";
+      try {
+        const { user } = await API.login(userEl.value.trim(), passEl.value);
+        document.body.classList.remove("no-scroll");
+        ov.classList.remove("open");
+        setTimeout(() => ov.remove(), 160);
+        resolve(user);
+      } catch (ex) {
+        err.textContent = (ex && ex.message) || "Não foi possível entrar.";
+        err.hidden = false;
+        btn.disabled = false; btn.textContent = "Entrar";
+        passEl.value = ""; passEl.focus();
+      }
+    });
+  });
+}
+
+async function requireAuth() {
+  try { const { user } = await API.me(); return user; }
+  catch (e) {
+    if (e && e.status === 401) { LOGIN_SHOWING = true; const u = await showLogin(); LOGIN_SHOWING = false; return u; }
+    throw e;
+  }
+}
+
+// Sessão expirou durante o uso: reabre o login e recarrega a view atual.
+async function onAuthExpired() {
+  if (LOGIN_SHOWING) return;
+  LOGIN_SHOWING = true;
+  try { State.user = await showLogin(); applyUserToChrome(); router(); }
+  finally { LOGIN_SHOWING = false; }
+}
+
+// Chip do usuário (rodapé da sidebar) + link "Usuários" no menu (só admin).
+function applyUserToChrome() {
+  const u = State.user; if (!u) return;
+  const foot = $(".sidebar-foot");
+  if (foot) {
+    let chip = $("#user-chip");
+    if (!chip) { chip = document.createElement("div"); chip.id = "user-chip"; chip.className = "user-chip"; foot.insertBefore(chip, foot.firstChild); }
+    chip.innerHTML =
+      '<div class="uc-info"><span class="uc-name">' + esc(u.username) + "</span>"
+      + '<span class="uc-role">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span></div>"
+      + '<div class="uc-actions"><button class="btn btn-ghost btn-sm" id="btn-chpass" title="Trocar minha senha">Senha</button>'
+      + '<button class="btn btn-ghost btn-sm" id="btn-logout" title="Sair">Sair</button></div>';
+    $("#btn-chpass").onclick = onChangeOwnPassword;
+    $("#btn-logout").onclick = async () => { try { await API.logout(); } catch (_) { /* ignora */ } location.reload(); };
+  }
+  if (u.role === "admin" && $("#nav") && !$('#nav a[data-route="usuarios"]')) {
+    const a = document.createElement("a");
+    a.href = "#/usuarios"; a.dataset.route = "usuarios";
+    a.innerHTML = '<span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Usuários';
+    const settingsLink = $('#nav a[data-route="settings"]');
+    if (settingsLink) settingsLink.parentNode.insertBefore(a, settingsLink); else $("#nav").appendChild(a);
+  }
+}
+
+async function onChangeOwnPassword() {
+  const v = await uiModal({ title: "Trocar minha senha", fields: [
+    { name: "current", label: "Senha atual", inputType: "password" },
+    { name: "password", label: "Nova senha (mín. 8 caracteres)", inputType: "password" },
+  ], confirmText: "Salvar" });
+  if (!v) return;
+  try { await API.changePassword(v.current, v.password); toast("Senha alterada.", "ok"); }
+  catch (e) { toast((e && e.message) || "Erro ao trocar a senha.", "error"); }
+}
+
+/* ---- view: Usuários (admin) ---- */
+function userRow(u) {
+  const isMe = State.user && u.username === State.user.username;
+  return '<tr data-u="' + esc(u.username) + '">'
+    + "<td><strong>" + esc(u.username) + "</strong>" + (isMe ? ' <span class="badge plain">você</span>' : "") + "</td>"
+    + '<td><select class="u-role"' + (isMe ? ' disabled title="Você não pode alterar o próprio perfil"' : "") + ">"
+      + '<option value="admin"' + (u.role === "admin" ? " selected" : "") + ">Administrador</option>"
+      + '<option value="membro"' + (u.role === "membro" ? " selected" : "") + ">Membro</option>"
+    + "</select></td>"
+    + '<td class="muted">' + esc(fmtDate(u.created_at)) + "</td>"
+    + '<td class="u-actions">'
+      + '<button class="btn btn-ghost btn-sm u-pass">Resetar senha</button>'
+      + (isMe ? "" : '<button class="btn btn-ghost btn-sm u-del">Remover</button>')
+    + "</td></tr>";
+}
+function wireUserRows() {
+  $$("#u-rows tr").forEach((tr) => {
+    const username = tr.dataset.u;
+    const roleSel = $(".u-role", tr);
+    if (roleSel && !roleSel.disabled) roleSel.onchange = async () => {
+      try { await API.setUserRole(username, roleSel.value); toast("Perfil atualizado.", "ok"); }
+      catch (e) { toast((e && e.message) || "Erro.", "error"); viewUsers(); }
+    };
+    const passBtn = $(".u-pass", tr);
+    if (passBtn) passBtn.onclick = async () => {
+      const v = await uiModal({ title: "Resetar senha", message: "Nova senha para “" + username + "” (mín. 8 caracteres).", fields: [{ name: "password", label: "Nova senha", inputType: "password" }], confirmText: "Salvar" });
+      if (!v) return;
+      try { await API.resetUserPassword(username, v.password); toast("Senha atualizada.", "ok"); }
+      catch (e) { toast((e && e.message) || "Erro.", "error"); }
+    };
+    const delBtn = $(".u-del", tr);
+    if (delBtn) delBtn.onclick = async () => {
+      if (!await uiConfirm("Remover o usuário “" + username + "”? Ele perde o acesso imediatamente.", { confirmText: "Remover", confirmKind: "danger" })) return;
+      try { await API.deleteUser(username); toast("Usuário removido.", "ok"); viewUsers(); }
+      catch (e) { toast((e && e.message) || "Erro.", "error"); }
+    };
+  });
+}
+async function onAddUser() {
+  const v = await uiModal({
+    title: "Adicionar usuário",
+    message: "A pessoa entra com esse login. O perfil começa como Membro — dá para promover a Administrador depois.",
+    fields: [
+      { name: "username", label: "Usuário", placeholder: "ex.: joao (minúsculas, números, . _ -)" },
+      { name: "password", label: "Senha (mín. 8 caracteres)", inputType: "password" },
+    ],
+    confirmText: "Criar",
+  });
+  if (!v) return;
+  try { await API.createUser({ username: v.username, password: v.password, role: "membro" }); toast("Usuário criado.", "ok"); viewUsers(); }
+  catch (e) { toast((e && e.message) || "Erro ao criar usuário.", "error"); }
+}
+async function viewUsers() {
+  setTitle("Usuários");
+  if (!State.user || State.user.role !== "admin") { setView('<div class="empty">Acesso restrito a administradores.</div>'); return; }
+  let users = [];
+  try { users = (await API.users()).users || []; }
+  catch (e) { setView('<div class="empty">Erro ao carregar usuários: ' + esc(e.message) + "</div>"); return; }
+  setView(
+    '<div class="section-head"><div><h2>Usuários</h2><p class="muted">Quem tem acesso ao painel. Cada pessoa entra com o próprio login.</p></div>'
+    + '<button class="btn btn-primary" id="u-add">Adicionar usuário</button></div>'
+    + '<div class="card"><table class="utable"><thead><tr><th>Usuário</th><th>Perfil</th><th>Criado</th><th></th></tr></thead>'
+    + '<tbody id="u-rows">' + users.map(userRow).join("") + "</tbody></table></div>"
+  );
+  $("#u-add").onclick = onAddUser;
+  wireUserRows();
+}
+
 /* ---- boot ---- */
 async function boot() {
   setupTheme();
+  // Portão de acesso: exige login antes de tudo (o tema já foi aplicado à tela de login).
+  try { State.user = await requireAuth(); }
+  catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
+  applyUserToChrome();
   setupAccent();
   setupScheme();
   setupMenu();
@@ -2619,6 +2841,7 @@ async function boot() {
   setupLightbox();
   await refreshKeyStatus();
   window.addEventListener("hashchange", router);
+  window.addEventListener("auth:expired", onAuthExpired);
   router();
 }
 boot();

@@ -34,6 +34,8 @@ router.get("/:folder/raw", (req, res) => {
   if (!rel) return res.status(400).json({ error: "parametro rel obrigatorio" });
   const f = content.resolveFile(req.params.folder, String(rel));
   if (!f) return res.status(404).json({ error: "arquivo nao encontrado" });
+  // no-cache: o navegador revalida (o front ainda versiona por ?v=mtime p/ garantir).
+  res.set("Cache-Control", "no-cache");
   res.sendFile(f.abs);
 });
 

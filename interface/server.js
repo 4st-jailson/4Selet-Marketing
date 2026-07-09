@@ -8,6 +8,7 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_PILLARS, CONTENT_TYPES, KIND_LABELS } = require("./lib/config");
 const ai = require("./lib/anthropic");
+const auth = require("./lib/auth");
 
 const app = express();
 // 16mb: precisa acomodar upload de imagem em base64 (acervo de fotos). As rotas
@@ -25,6 +26,18 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// --- Autenticacao do painel: login por pessoa + perfis (admin/membro) ---
+auth.bootstrap(); // garante um admin inicial (ADMIN_USERNAME/ADMIN_PASSWORD do .env)
+app.use("/api/auth", require("./routes/auth")); // login/logout/me — publico
+
+// Deste ponto em diante, TODAS as rotas /api exigem sessao valida.
+app.use("/api", (req, res, next) => {
+  const user = auth.userFromRequest(req);
+  if (!user) return res.status(401).json({ error: "não autenticado", code: "E_AUTH" });
+  req.user = user;
+  next();
+});
+
 // Metadados para o front (dropdowns, tema)
 app.get("/api/meta", (req, res) => {
   res.json({
@@ -37,6 +50,7 @@ app.get("/api/meta", (req, res) => {
   });
 });
 
+app.use("/api/users", require("./routes/users"));
 app.use("/api/settings", require("./routes/settings"));
 app.use("/api/campaigns", require("./routes/campaigns"));
 app.use("/api/collections", require("./routes/collections"));
@@ -84,7 +98,7 @@ const server = app.listen(PORT, HOST, () => {
   const where = HOST ? HOST : "0.0.0.0 (todas as interfaces)";
   console.log("Painel 4Selet rodando em http://localhost:" + PORT + "  [bind: " + where + "]");
   if (!HOST) {
-    console.log("[aviso] Painel sem autenticacao e acessivel pela rede. Para restringir ao acesso local, defina HOST=127.0.0.1 em interface/.env");
+    console.log("[info] Painel com login proprio (usuarios + senha). Em producao fica atras do proxy (Caddy) sob HTTPS.");
   }
   console.log("Raiz do projeto: " + PATHS.PROJECT_ROOT);
 });

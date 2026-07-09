@@ -11,6 +11,10 @@ const API = (() => {
     if (!r.ok) {
       const err = new Error((data && data.error) || ("HTTP " + r.status));
       err.status = r.status; err.data = data;
+      // Sessao ausente/expirada: avisa o app para reabrir o login (menos nas rotas de auth).
+      if (r.status === 401 && data && data.code === "E_AUTH" && !/\/api\/auth\//.test(url)) {
+        try { window.dispatchEvent(new CustomEvent("auth:expired")); } catch (_) { /* fora do browser */ }
+      }
       throw err;
     }
     return data;
@@ -55,5 +59,16 @@ const API = (() => {
     refine: (payload) => req("POST", "/api/generate/refine", payload),
     save: (payload) => req("POST", "/api/generate/save", payload),
     assistant: (question, context) => req("POST", "/api/generate/assistant", { question, context }),
+    // auth
+    me: () => req("GET", "/api/auth/me"),
+    login: (username, password) => req("POST", "/api/auth/login", { username, password }),
+    logout: () => req("POST", "/api/auth/logout"),
+    changePassword: (current, password) => req("POST", "/api/auth/password", { current, password }),
+    // usuarios (admin)
+    users: () => req("GET", "/api/users"),
+    createUser: (u) => req("POST", "/api/users", u),
+    deleteUser: (username) => req("DELETE", "/api/users/" + encodeURIComponent(username)),
+    resetUserPassword: (username, password) => req("POST", "/api/users/" + encodeURIComponent(username) + "/password", { password }),
+    setUserRole: (username, role) => req("POST", "/api/users/" + encodeURIComponent(username) + "/role", { role }),
   };
 })();

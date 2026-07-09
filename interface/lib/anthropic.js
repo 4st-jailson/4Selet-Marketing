@@ -184,6 +184,23 @@ async function testKey() {
   }
 }
 
+// Converte imagens (data URL "data:image/xxx;base64,..." ou URL http/https) nos
+// blocos de imagem do formato de mensagens da Anthropic (visao). Ignora invalidas.
+function imageBlocksFrom(images) {
+  const out = [];
+  for (const im of (Array.isArray(images) ? images : [])) {
+    if (!im) continue;
+    if (typeof im === "string") {
+      const m = im.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (m) out.push({ type: "image", source: { type: "base64", media_type: m[1], data: m[2] } });
+      else if (/^https?:\/\//i.test(im)) out.push({ type: "image", source: { type: "url", url: im } });
+    } else if (im && im.data && im.media_type) {
+      out.push({ type: "image", source: { type: "base64", media_type: im.media_type, data: im.data } });
+    }
+  }
+  return out;
+}
+
 // Geracao principal. Se nao houver chave, usa o simulador (rotulado).
 // opts: { system, prompt, maxTokens?, model?, simulate? () => string }
 async function complete(opts) {
@@ -199,14 +216,17 @@ async function complete(opts) {
   if (approxIn > 150000) {
     console.warn("[ai] AVISO contexto grande ~" + approxIn + " tokens (perto do limite) — considere encurtar o brief/exemplos");
   }
-  console.log("[ai] req " + new Date().toISOString() + " model=" + usedModel + " in≈" + approxIn + "tok max_out=" + maxTokens);
+  // Visao: se vierem imagens, o conteudo do usuario vira [imagens..., texto].
+  const imgBlocks = imageBlocksFrom(opts.images).slice(0, 8);
+  const userContent = imgBlocks.length ? imgBlocks.concat([{ type: "text", text: opts.prompt }]) : opts.prompt;
+  console.log("[ai] req " + new Date().toISOString() + " model=" + usedModel + " in≈" + approxIn + "tok max_out=" + maxTokens + (imgBlocks.length ? " imgs=" + imgBlocks.length : ""));
   let msg;
   try {
     msg = await createSerializedWithRetry({
       model: usedModel,
       max_tokens: maxTokens,
       system: opts.system,
-      messages: [{ role: "user", content: opts.prompt }],
+      messages: [{ role: "user", content: userContent }],
     });
   } catch (e) {
     const mapped = mapAnthropicError(e);

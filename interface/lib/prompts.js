@@ -24,8 +24,8 @@ const SCHEMAS = {
   instagram_carousel: `{
   "eyebrow": "rotulo curto da capa (ex.: tema/pilar)",
   "slides": [
-    { "title": "titulo curto do slide", "body": "texto de apoio (opcional se usar items/stats)", "layout": "cover|stat_grid|list|text|cta (opcional — o sistema infere pela posicao/conteudo se ausente)", "items": ["item curto de lista — use em slides de enumeracao"], "stats": [{ "value": "95%", "label": "rotulo curto do numero" }] }
-  ],  // 4-7 slides com VARIEDADE de layout: capa (gancho) -> 1-2 slides de desenvolvimento usando grade de numeros (stats) ou lista (items) quando fizer sentido -> slide final de CTA. Nem todo slide precisa de items/stats; use o layout que melhor comunica.
+    { "title": "titulo curto (use ==palavra== p/ realcar palavra em azul sublinhado)", "body": "texto de apoio (opcional)", "layout": "cover|stat_grid|list|text|flow|cta (opcional — inferido pela posicao/conteudo se ausente)", "image": "/uploads/... (SO na capa 'cover': foto de fundo do acervo)", "titleOffsetY": "numero, SO na capa: desloca o titulo N px na vertical (negativo sobe, ex.: -50)", "theme": "dark|light — SO em slide de FRASE (layout text): light = editorial claro (fundo Cloud, texto escuro, marca d'agua) — use p/ intercalar 1-2 slides claros no meio dos escuros e dar variedade/respiro", "watermark": "palavra da marca d'agua no slide text (padrao SELET; string vazia desliga)", "items": ["item de lista"], "stats": [{ "value": "95%", "label": "rotulo" }], "orient": "row (SO no layout flow: icones em linha + setas)", "tone": "muted|accent (SO no flow: cinza+alerta x azul+escudo)", "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }], "note": "frase da caixa de callout ao pe do flow (opcional)" }
+  ],  // 4-7 slides com VARIEDADE de layout: capa (gancho, pode ter foto no campo image) -> desenvolvimento (stat_grid p/ numeros; list p/ enumeracao; flow p/ diagrama de etapas com icones — use orient:"row" e um icon por no; text p/ frase forte) -> CTA. Escolha o layout que melhor comunica; nem todo slide precisa de items/stats/flow.
   "caption": "caption que acompanha o post",
   "hashtags": ["#4Selet", "..."],
   "cta": "CTA aprovado",
@@ -147,6 +147,10 @@ function refinementPrompt(req) {
   lines.push("ORIENTACAO DE AJUSTE DO USUARIO:");
   lines.push(String(req.instruction || ""));
   lines.push("");
+  if (Array.isArray(req.images) && req.images.length) {
+    lines.push("IMAGEM(NS) DE REFERENCIA ANEXADA(S) (" + req.images.length + "): voce CONSEGUE ve-la(s). Use como INSPIRACAO de layout/estrutura/estilo — ex.: se mostra um fluxo com icones, adote layout \"flow\" com \"orient\":\"row\" e um \"icon\" adequado por no; se mostra grade de numeros, use \"stat_grid\". NAO copie texto nem marcas de terceiros da imagem; mantenha a identidade e as regras da 4Selet.");
+    lines.push("");
+  }
   lines.push("Aplique SOMENTE o ajuste pedido (mais correcoes de marca, se necessario). Mantenha tom, estrutura e os campos nao mencionados. Continue cumprindo TODAS as regras de marca.");
   lines.push("");
   lines.push("FORMATO DE SAIDA — responda APENAS com um objeto JSON valido, sem texto fora do JSON, neste schema:");

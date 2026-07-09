@@ -137,7 +137,7 @@ const DEFAULT_FOOTER = "Para quem sabe que é Selet.";
 function headlineLen(html) { return String(html || "").replace(/<[^>]+>/g, "").length; }
 
 // 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
-function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
+function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots }) {
   const n = headlineLen(headline);
   const headlineSize = n > 36 ? 100 : n > 22 ? 120 : 168;
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
@@ -183,14 +183,14 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
   </div>
   <div class="bottom">
     ${cta ? `<span class="cta">${esc(cta)} →</span>` : "<span></span>"}
-    <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+    ${dots || ""}<span class="footer">${esc(dots ? "" : (footer || DEFAULT_FOOTER))}</span>
   </div>
 </div></body></html>`;
 }
 
 // 2) Bold — fundo Darker solido, simbolo "4" como marca d'agua, tudo centralizado.
 // Pensado p/ headlines curtas number-forward (ex.: "0%", "95%", "Os 4 numeros").
-function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
+function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots }) {
   const n = headlineLen(headline);
   const headlineSize = n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196;
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
@@ -233,14 +233,14 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
   </div>
   <div class="bottom">
     ${cta ? `<span class="cta">${esc(cta)} →</span>` : ""}
-    <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+    ${dots || ""}<span class="footer">${esc(dots ? "" : (footer || DEFAULT_FOOTER))}</span>
   </div>
 </div></body></html>`;
 }
 
 // 3) Split — banda superior clara (Cloud, logo dark + eyebrow) + banda inferior
 // escura (Navy/Darker) com headline e CTA. Contraste editorial.
-function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer }) {
+function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots }) {
   // Em formato quadrado (1080x1080) a banda inferior e mais curta — reduz a
   // tipografia e o padding para o subtexto e o CTA nao serem cortados.
   const square = height < 1200;
@@ -291,7 +291,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
     </div>
     <div class="bottom">
       ${cta ? `<span class="cta">${esc(cta)} →</span>` : "<span></span>"}
-      <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+      ${dots || ""}<span class="footer">${esc(dots ? "" : (footer || DEFAULT_FOOTER))}</span>
     </div>
   </div>
 </div></body></html>`;
@@ -302,7 +302,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
 // Espelha as capas humanizadas do feed @4selet (ver Referencia-Instagram): a arte
 // deixa de ser so cor solida + texto e passa a combinar foto (pessoa/objeto/cena)
 // com a copy por cima. Sem `image`, cai num fundo navy (nada quebra).
-function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image }) {
+function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image, dots, titleOffsetY }) {
   const n = headlineLen(headline);
   const headlineSize = n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156;
   const photo = image ? `<img class="photo" src="${escAttr(resolveImage(image))}" alt=""/>` : "";
@@ -349,13 +349,13 @@ function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, foote
     <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
     ${badge ? `<span class="badge">${esc(badge)}</span>` : "<span></span>"}
   </div>
-  <div class="content">
+  <div class="content"${titleOffsetY ? ` style="transform:translateY(${Number(titleOffsetY) || 0}px)"` : ""}>
     ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
     <div class="headline">${headline || ""}</div>
     ${subtext ? `<div class="subtext">${esc(subtext)}</div>` : ""}
     <div class="bottom">
       ${cta ? `<span class="cta">${esc(cta)} →</span>` : "<span></span>"}
-      <span class="footer">${esc(footer || DEFAULT_FOOTER)}</span>
+      ${dots || ""}<span class="footer">${esc(dots ? "" : (footer || DEFAULT_FOOTER))}</span>
     </div>
   </div>
 </div></body></html>`;
@@ -383,9 +383,59 @@ function pickTemplate(loc, requested) {
   return { id, build: resolveTemplate(id) };
 }
 
-// Destaca numeros/percentuais no headline (ex.: "0%", "R$ 1,99", "D+10").
+// Destaca numeros/percentuais no headline (ex.: "0%", "R$ 1,99", "D+10") e permite
+// realce MANUAL de palavra com o marcador ==palavra== (azul + sublinhado da marca).
+// Ordem importa: numeros primeiro (o marcador nao tem digito), depois o marcador —
+// assim os digitos do proprio estilo inline (0.07em) nunca sao confundidos com valor.
 function highlightHeadline(text) {
-  return esc(text).replace(/(\d+[%.,]?\d*\s*%?|R\$\s?\d[\d.,]*|D\+\d+)/g, '<span class="accent">$1</span>');
+  const HL = "color:" + PALETTE.sky + ";font-weight:800;text-decoration:underline;"
+    + "text-decoration-color:" + PALETTE.sky + ";text-decoration-thickness:0.07em;text-underline-offset:0.14em;";
+  return esc(text)
+    .replace(/(?<![A-Za-zÀ-ÿ])(\d+[%.,]?\d*\s*%?|R\$\s?\d[\d.,]*|D\+\d+)(?![A-Za-zÀ-ÿ])/g, '<span class="accent">$1</span>')
+    .replace(/==(.+?)==/g, '<span style="' + HL + '">$1</span>');
+}
+
+// Barra de navegacao do carrossel: bolinhas (dots), a atual vira uma pilula.
+// Estilo inline (autossuficiente) p/ funcionar tanto nos arquetipos (carDoc)
+// quanto na capa (templates de arte). Posicionada absoluta no rodape-centro.
+function dotsBar(n, total, theme) {
+  if (!total || total < 2) return "";
+  const on = (theme && theme.dotOn) || PALETTE.sky;
+  const dim = (theme && theme.dot) || (PALETTE.mist + "4d");
+  let d = "";
+  for (let i = 1; i <= total; i++) {
+    d += '<span style="display:inline-block;height:13px;border-radius:999px;width:'
+      + (i === n ? "38px" : "13px") + ";background:" + (i === n ? on : dim) + ';"></span>';
+  }
+  return '<div style="position:absolute;left:0;right:0;bottom:54px;display:flex;gap:13px;'
+    + 'align-items:center;justify-content:center;z-index:6;">' + d + "</div>";
+}
+
+// Temas do carrossel: ESCURO (padrao, sobrio) x CLARO (editorial, mais suave —
+// espelha a referencia do usuario: fundo Cloud + tipografia display + marca d'agua).
+// Trazer um slide claro no meio de slides escuros da RITMO e tira a cara de "IA dura".
+const THEME_DARK = {
+  bg: `linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%)`,
+  text: "#FFFFFF", eyebrow: PALETTE.sky, dotTex: PALETTE.sky + "1f",
+  dot: PALETTE.mist + "4d", dotOn: PALETTE.sky, logo: LOGO_LIGHT,
+  wm: PALETTE.sky, wmOp: 0.05,
+};
+const THEME_LIGHT = {
+  bg: `linear-gradient(155deg, #E9ECE6 0%, ${PALETTE.cloud} 55%, #CBD2CC 100%)`,
+  text: PALETTE.darker, eyebrow: PALETTE.blue, dotTex: PALETTE.navy + "12",
+  dot: PALETTE.navy + "33", dotOn: PALETTE.blue, logo: LOGO_DARK,
+  wm: PALETTE.mist, wmOp: 0.6,
+};
+function resolveTheme(v) { return String(v || "").toLowerCase() === "light" ? THEME_LIGHT : THEME_DARK; }
+
+// Marca d'agua tipografica: palavra display gigante transbordando a direita, ATRAS
+// do conteudo. Profundidade editorial que tira o "achatado/duro" das artes.
+function watermark(text, theme) {
+  const t = theme || THEME_DARK;
+  return '<div style="position:absolute;top:50%;right:-4%;transform:translateY(-50%);z-index:0;'
+    + "font-family:'Inter',sans-serif;font-weight:800;font-size:440px;line-height:0.78;letter-spacing:-14px;"
+    + "white-space:nowrap;pointer-events:none;color:" + t.wm + ";opacity:" + t.wmOp + ';">'
+    + esc(text) + "</div>";
 }
 
 // ---- Arquetipos de SLIDE do carrossel -------------------------------------
@@ -394,21 +444,22 @@ function highlightHeadline(text) {
 // design system real do feed @4selet (ver Referencia-Instagram), em vez de
 // repetir um unico template. A CAPA usa o template de arte escolhido
 // (editorial|bold|split); os demais slides usam estes arquetipos navy.
-function carBase(width, height) {
+function carBase(width, height, theme) {
+  const t = theme || THEME_DARK;
   return `* { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${width}px; height:${height}px; }
   .card { position:relative; width:${width}px; height:${height}px; overflow:hidden;
-    font-family:'Inter',sans-serif; color:${PALETTE.cloud};
-    background:linear-gradient(160deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);
+    font-family:'Inter',sans-serif; color:${t.text};
+    background:${t.bg};
     display:flex; flex-direction:column; padding:90px 86px; }
-  .dots { position:absolute; inset:0; background-image:radial-gradient(${PALETTE.sky}1f 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
-  .top { position:relative; display:flex; align-items:center; justify-content:space-between; }
+  .dots { position:absolute; inset:0; background-image:radial-gradient(${t.dotTex} 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
+  .top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; }
   .logo { height:46px; }
   .pageno { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.8; }
-  .eyebrow { font-family:'JetBrains Mono',monospace; color:${PALETTE.sky}; font-size:30px; letter-spacing:3px; text-transform:uppercase; margin-bottom:26px; }
-  .mid { position:relative; flex:1; display:flex; flex-direction:column; justify-content:center; }
-  .s-title { font-weight:700; font-size:84px; line-height:1.02; color:#FFFFFF; letter-spacing:-1.5px; }
-  .s-title .accent { color:${PALETTE.sky}; font-weight:900; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; color:${t.eyebrow}; font-size:30px; letter-spacing:3px; text-transform:uppercase; margin-bottom:26px; }
+  .mid { position:relative; z-index:2; flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .s-title { font-weight:700; font-size:84px; line-height:1.02; color:${t.text}; letter-spacing:-1.5px; }
+  .s-title .accent { color:${t.eyebrow}; font-weight:900; }
   .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }`;
 }
 function carDoc(ctx, extraCss, bodyInner) {
@@ -418,26 +469,37 @@ function carDoc(ctx, extraCss, bodyInner) {
   // A logo no topo-esquerda em todos os slides reforça o encadeamento.
   const TILE = 46;
   const offX = -((((ctx.n || 1) - 1) * (ctx.width || 1080)) % TILE);
+  const wm = ctx.watermark ? watermark(ctx.watermark, ctx.theme) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
-<style>${carBase(ctx.width, ctx.height)}${extraCss || ""}</style></head>
-<body><div class="card"><div class="dots" style="background-position:${offX}px 0;"></div>${bodyInner}</div></body></html>`;
+<style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
+<body><div class="card"><div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
 function carTop(ctx) {
-  return `<div class="top"><img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/><span class="pageno">${ctx.n} / ${ctx.total}</span></div>`;
+  const logo = (ctx.theme && ctx.theme.logo) || LOGO_LIGHT;
+  return `<div class="top"><img class="logo" src="${logo}" alt="4Selet"/></div>`;
 }
-// Slogan só no slide de fechamento (ctx.tagline) — evita repetir a frase em todo slide.
-function carFooter(ctx) { return ctx.tagline ? `<div class="footer">${esc(ctx.footer || DEFAULT_FOOTER)}</div>` : ""; }
+// Rodape textual aposentado: a navegacao do carrossel agora e visual (dotsBar em carDoc).
+function carFooter() { return ""; }
 
 // Texto (desenvolvimento): titulo forte + paragrafo de apoio.
 function slideText(slide, ctx) {
-  const css = `.s-body { margin-top:34px; font-size:42px; line-height:1.34; color:${PALETTE.mist}; max-width:94%; }`;
+  const light = String(slide.theme || "").toLowerCase() === "light";
+  ctx.theme = resolveTheme(slide.theme);
+  // Marca d'agua editorial no slide de frase (default "SELET"; "" desliga).
+  ctx.watermark = slide.watermark != null ? slide.watermark : "SELET";
+  const bodyColor = light ? PALETTE.navy : PALETTE.mist;
+  // No tema claro, o realce ==palavra== vai a Selet Blue (melhor contraste no Cloud).
+  const accentFix = light
+    ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }`
+    : "";
+  const css = `.s-body { margin-top:34px; font-size:42px; line-height:1.42; color:${bodyColor}; max-width:92%; }
+    ${accentFix}`;
   const inner = `${carTop(ctx)}
   <div class="mid">
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     <div class="s-title">${highlightHeadline(slide.title || "")}</div>
     ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
-  </div>
-  ${carFooter(ctx)}`;
+  </div>`;
   return carDoc(ctx, css, inner);
 }
 // Grade de numeros (2x2): ate 4 cartoes valor + rotulo.
@@ -481,35 +543,160 @@ function slideList(slide, ctx) {
 // CTA de fechamento: centralizado, logo + headline + pilula de CTA.
 function slideCta(slide, ctx) {
   const headline = slide.title || ctx.cta || "Para quem sabe que é Selet";
+  const hl = highlightHeadline(headline);
+  const n = headlineLen(hl);
+
+  // Variante CLARA (editorial, alinhada a esquerda) — igual a referencia do usuario:
+  // fundo Cloud, logo dark no topo-esquerda, headline display BOLD + enfase em Blue,
+  // corpo (ex.: "Venha para a 4Selet...") no mesmo tratamento + marca d'agua "SELET".
+  if (String(slide.theme || "").toLowerCase() === "light") {
+    ctx.theme = THEME_LIGHT;
+    ctx.watermark = slide.watermark != null ? slide.watermark : "SELET";
+    // Corpo no MESMO formato do headline (tamanho/peso/cor) — igual a referencia:
+    // texto uniforme, so o trecho de enfase muda de COR. Tamanho pelo total p/ caber.
+    const total = n + (slide.body ? String(slide.body).length : 0);
+    const sz = total > 120 ? 54 : total > 92 ? 62 : total > 60 ? 72 : 84;
+    const cssL = `.s-title.big { font-size:${sz}px; font-weight:700; line-height:1.07; }
+      .s-title.big span, .cta-body span { color:${PALETTE.blue} !important; font-weight:700 !important; text-decoration:none !important; }
+      .cta-body { margin-top:26px; font-size:${sz}px; font-weight:700; line-height:1.07; color:${PALETTE.darker}; max-width:94%; }
+      .cta-pill { align-self:flex-start; margin-top:48px; font-weight:800; font-size:36px; background:${PALETTE.blue}; color:#FFFFFF; padding:26px 54px; border-radius:999px; }`;
+    const innerL = `${carTop(ctx)}
+    <div class="mid">
+      <div class="s-title big">${hl}</div>
+      ${slide.body ? `<div class="cta-body">${highlightHeadline(slide.body)}</div>` : ""}
+      ${ctx.cta ? `<span class="cta-pill">${esc(ctx.cta)} &#8594;</span>` : ""}
+    </div>`;
+    return carDoc(ctx, cssL, innerL);
+  }
+
+  // Tamanho adaptativo p/ caber titulos-pergunta mais longos no fecho.
+  const size = n > 66 ? 58 : n > 46 ? 68 : n > 30 ? 80 : 92;
   const css = `.mid.center { align-items:center; text-align:center; }
     .logo-c { height:62px; margin-bottom:40px; }
-    .s-title.big { font-size:92px; }
+    /* Fecho em BOLD (700), sem extra-bold: enfase por COR, mesmo peso, sem sublinhado (ref. do usuario). */
+    .s-title.big { font-size:${size}px; font-weight:700; }
+    .s-title.big span { font-weight:700 !important; text-decoration:none !important; }
     .s-body { margin-top:28px; font-size:40px; line-height:1.32; color:${PALETTE.mist}; max-width:86%; }
     .cta { margin-top:52px; font-weight:800; font-size:40px; background:${PALETTE.blue}; color:#FFFFFF; padding:30px 60px; border-radius:999px; }`;
-  const inner = `<div class="top"><span></span><span class="pageno">${ctx.n} / ${ctx.total}</span></div>
+  const inner = `<div class="top"><span></span></div>
   <div class="mid center">
     <img class="logo-c" src="${LOGO_LIGHT}" alt="4Selet"/>
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
-    <div class="s-title big">${highlightHeadline(headline)}</div>
+    <div class="s-title big">${hl}</div>
     ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
     ${ctx.cta ? `<span class="cta">${esc(ctx.cta)} &#8594;</span>` : ""}
   </div>
   ${carFooter(ctx)}`;
   return carDoc(ctx, css, inner);
 }
-const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta };
+// Icones de tom (SVG inline, stroke=currentColor -> a cor vem do CSS do no).
+// Feather-style; sem emoji (regra de marca: glyph/SVG na arte).
+const ICON_ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const ICON_SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>';
+
+// Conjunto de icones nomeados p/ os nos do fluxo (feather-style, stroke=currentColor).
+const FLOW_ICONS = {
+  cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+  bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M4 10h16"/><path d="M5 6l7-3 7 3"/><path d="M5 10v11"/><path d="M9 10v11"/><path d="M15 10v11"/><path d="M19 10v11"/></svg>',
+  person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  shield: ICON_SHIELD,
+  alert: ICON_ALERT,
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+  money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+};
+function flowIcon(name) { return FLOW_ICONS[String(name || "").toLowerCase()] || ""; }
+
+// Fluxo (diagrama): sequencia de nos ligados por seta. Serve p/ "antes x depois".
+// tone: "muted" (cinza, alerta) x "accent" (azul, escudo). orient: "row" (icones em
+// linha + setas + rotulo abaixo, espelha a referencia) x padrao vertical (cartoes).
+// Cada no: { label, sub?, icon?, mark? }. slide.note -> caixa de callout ao pe.
+function slideFlow(slide, ctx) {
+  const nodes = (Array.isArray(slide.flow) ? slide.flow : []).slice(0, 4);
+  const accent = String(slide.tone || "").toLowerCase() === "accent";
+  const line = accent ? PALETTE.blue : PALETTE.mist;
+  const emph = accent ? PALETTE.sky : PALETTE.mist;
+  const toneIcon = accent ? ICON_SHIELD : ICON_ALERT;
+  const head = (slide.eyebrow ? '<div class="eyebrow">' + esc(slide.eyebrow) + "</div>" : "")
+    + (slide.title ? '<div class="s-title sm">' + highlightHeadline(slide.title) + "</div>" : "");
+  const note = slide.note
+    ? '<div class="fnote"><span class="fnote-ic">' + toneIcon + "</span><span>" + esc(slide.note) + "</span></div>"
+    : "";
+
+  if (String(slide.orient || "").toLowerCase() === "row") {
+    const cells = nodes.map((nd, i) => {
+      const label = typeof nd === "string" ? nd : (nd && nd.label) || "";
+      const sub = (nd && nd.sub) || "";
+      const hi = !!(nd && nd.mark);
+      const ic = flowIcon((nd && nd.icon) || "");
+      return (i > 0 ? '<div class="fr-arrow">&#8594;</div>' : "")
+        + '<div class="fr-cell"><div class="fr-ic' + (hi ? " hi" : "") + '">' + ic + "</div>"
+        + '<div class="fr-l">' + esc(label) + "</div>"
+        + (sub ? '<div class="fr-s">' + esc(sub) + "</div>" : "") + "</div>";
+    }).join("");
+    const css = ".s-title.sm { font-size:56px; margin-bottom:64px; line-height:1.05; }"
+      + ".frow { display:flex; align-items:flex-start; justify-content:center; gap:6px; }"
+      + ".fr-cell { flex:1 1 0; display:flex; flex-direction:column; align-items:center; text-align:center; gap:18px; max-width:240px; }"
+      + ".fr-ic { width:128px; height:128px; border-radius:38px; display:flex; align-items:center; justify-content:center; background:" + PALETTE.navy + "; border:1px solid " + PALETTE.blue + "33; box-shadow:0 14px 38px " + PALETTE.darker + "59; color:" + PALETTE.cloud + "; }"
+      + ".fr-ic.hi { border-color:" + (accent ? PALETTE.blue : PALETTE.mist) + "; background:" + (accent ? PALETTE.blue + "26" : PALETTE.navy) + "; color:" + emph + "; }"
+      + ".fr-ic svg { width:64px; height:64px; }"
+      + ".fr-l { font-size:28px; font-weight:800; color:#FFFFFF; line-height:1.15; text-transform:uppercase; letter-spacing:0.4px; }"
+      + ".fr-s { font-size:25px; color:" + PALETTE.mist + "; line-height:1.22; }"
+      + ".fr-arrow { align-self:flex-start; margin-top:44px; font-size:54px; line-height:1; color:" + line + "; font-weight:700; flex:0 0 auto; }"
+      + ".fnote { margin-top:66px; display:flex; gap:22px; align-items:center; background:" + PALETTE.navy + "; border:2px solid " + (accent ? PALETTE.blue : PALETTE.mist) + "40; border-left-width:8px; border-radius:20px; padding:32px 36px; }"
+      + ".fnote-ic { flex:0 0 auto; width:50px; height:50px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
+      + ".fnote-ic svg { width:50px; height:50px; }"
+      + ".fnote span:last-child { font-size:33px; line-height:1.3; color:" + PALETTE.cloud + "; }";
+    const inner = carTop(ctx) + '<div class="mid">' + head
+      + '<div class="frow">' + cells + "</div>" + note + "</div>" + carFooter(ctx);
+    return carDoc(ctx, css, inner);
+  }
+
+  // Vertical (padrao): cartoes empilhados ligados por seta descendente.
+  const nodeHtml = nodes.map((nd, i) => {
+    const label = typeof nd === "string" ? nd : (nd && nd.label) || "";
+    const sub = (nd && nd.sub) || "";
+    const hi = !!(nd && nd.mark);
+    const ic = flowIcon((nd && nd.icon) || "") || (hi ? toneIcon : "");
+    return (i > 0 ? '<div class="arrow">&#8595;</div>' : "")
+      + '<div class="node' + (hi ? " node-hi" : "") + '">'
+      + (ic ? '<span class="node-ic">' + ic + "</span>" : "")
+      + '<div class="node-tx"><div class="node-l">' + esc(label) + "</div>"
+      + (sub ? '<div class="node-s">' + esc(sub) + "</div>" : "") + "</div></div>";
+  }).join("");
+  const css = ".s-title.sm { font-size:58px; margin-bottom:40px; line-height:1.04; }"
+    + ".flow { display:flex; flex-direction:column; align-items:stretch; gap:16px; }"
+    + ".arrow { text-align:center; font-size:50px; line-height:0.6; color:" + line + "; font-weight:700; }"
+    + ".node { display:flex; align-items:center; gap:26px; background:" + PALETTE.navy + "; border:2px solid " + PALETTE.blue + "40; border-radius:26px; padding:34px 40px; }"
+    + ".node-hi { background:" + (accent ? PALETTE.blue + "26" : PALETTE.navy) + "; border-color:" + (accent ? PALETTE.blue : PALETTE.mist) + "; }"
+    + ".node-ic { flex:0 0 auto; width:62px; height:62px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
+    + ".node-ic svg { width:62px; height:62px; }"
+    + ".node-l { font-size:42px; font-weight:700; color:#FFFFFF; line-height:1.12; }"
+    + ".node-s { margin-top:8px; font-size:30px; color:" + PALETTE.mist + "; line-height:1.24; }"
+    + ".flow-note { margin-top:38px; font-size:34px; line-height:1.32; color:" + PALETTE.mist + "; }";
+  const inner = carTop(ctx) + '<div class="mid">' + head
+    + '<div class="flow">' + nodeHtml + "</div>"
+    + (slide.body ? '<div class="flow-note">' + esc(slide.body) + "</div>" : "")
+    + note + "</div>" + carFooter(ctx);
+  return carDoc(ctx, css, inner);
+}
+const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow };
 
 // Decide o arquetipo de um slide: override explicito (layout/type) > inferencia
-// por posicao (1o=capa, ultimo=cta) e por conteudo (stats=>grade, items=>lista).
+// por posicao (1o=capa, ultimo=cta) e por conteudo (flow=>fluxo, stats=>grade, items=>lista).
 function slideArchetype(slide, i, total) {
   const ex = String((slide && (slide.layout || slide.type)) || "").toLowerCase().replace(/[\s-]+/g, "_");
   if (ex === "stats" || ex === "grid" || ex === "stat_grid" || ex === "number_grid") return "stat_grid";
   if (ex === "list" || ex === "lista" || ex === "bullets") return "list";
+  if (ex === "flow" || ex === "fluxo" || ex === "diagram" || ex === "diagrama") return "flow";
   if (ex === "cover" || ex === "capa" || ex === "hook") return "cover";
   if (ex === "cta") return "cta";
   if (ex === "text" || ex === "texto") return "text";
   if (i === 0) return "cover";
   if (i === total - 1 && total > 1) return "cta";
+  if (Array.isArray(slide && slide.flow) && slide.flow.length) return "flow";
   if (Array.isArray(slide && slide.stats) && slide.stats.length) return "stat_grid";
   if (Array.isArray(slide && slide.items) && slide.items.length) return "list";
   return "text";
@@ -591,8 +778,10 @@ async function renderCarousel(folder, opts) {
         headline: highlightHeadline(s.title || ""),
         subtext: s.body || "",
         cta: "",
-        badge: concept.badge || "",
+        badge: "",
         image: (s && s.image) || concept.image || "",
+        dots: dotsBar(n, total),
+        titleOffsetY: s && s.titleOffsetY, // ajuste fino de posicao do titulo (camadas)
       });
     } else {
       const ctx = {

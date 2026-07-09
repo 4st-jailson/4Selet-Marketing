@@ -136,6 +136,7 @@ router.post("/refine", async (req, res, next) => {
       system,
       prompt: userPrompt,
       maxTokens: 2500,
+      images: Array.isArray(body.images) ? body.images : undefined, // referencia visual (visao)
       simulate: () => String(body.current), // sem chave: ecoa o atual (sinalizado como SIMULADO)
     });
 

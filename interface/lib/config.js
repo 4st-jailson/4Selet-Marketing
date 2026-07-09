@@ -17,6 +17,9 @@ const PATHS = {
   CAMPAIGNS_DIR: path.join(PROJECT_ROOT, "campaigns"),
   COLLECTIONS_DIR: path.join(PROJECT_ROOT, "collections"),
   ENV_FILE: path.join(INTERFACE_DIR, ".env"),
+  DATA_DIR: path.join(INTERFACE_DIR, "data"),
+  USERS_FILE: path.join(INTERFACE_DIR, "data", "users.json"),
+  SESSION_SECRET_FILE: path.join(INTERFACE_DIR, "data", ".session_secret"),
 };
 
 // Paleta oficial (brand_identity.md §Color Palette)

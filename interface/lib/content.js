@@ -126,7 +126,7 @@ function listFiles(dir, base) {
     if (stat.isDirectory()) {
       out.push(...listFiles(full, base));
     } else {
-      out.push({ rel: path.relative(base, full).split(path.sep).join("/"), size: stat.size });
+      out.push({ rel: path.relative(base, full).split(path.sep).join("/"), size: stat.size, mtime: Math.round(stat.mtimeMs) });
     }
   }
   return out;
@@ -141,6 +141,7 @@ function getTask(folder) {
   const annotated = files.map((f) => ({
     rel: f.rel,
     size: f.size,
+    mtime: f.mtime, // versao p/ cache-bust das imagens no front (muda a cada re-render)
     isImage: isImage(f.rel),
     isVideo: isVideo(f.rel),
   }));
