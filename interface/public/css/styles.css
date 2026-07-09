@@ -793,6 +793,20 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .ver-when { font-size: 12.5px; color: var(--text); font-weight: 600; }
 .ver-note { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---- Painel de Camadas (edição direta do carrossel) ---- */
+.layers-list { display: flex; flex-direction: column; gap: 14px; }
+.layer-block { border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: 12px 14px; background: var(--surface-2); }
+.layer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.layer-n { font-weight: 700; font-size: 13px; color: var(--text); }
+.layer-lab { display: block; font-size: 12px; color: var(--text-dim); margin: 9px 0 3px; }
+.layer-block input, .layer-block textarea, .layer-block select { width: 100%; }
+.layer-block textarea { resize: vertical; }
+
+/* ---- Usuários: nome de exibição + ações pequenas ---- */
+.btn-xs { padding: 1px 7px; font-size: 11px; line-height: 1.5; }
+.u-name-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.u-username { font-size: 12px; }
+
 /* ---- Chip do usuário (rodapé da sidebar) ---- */
 .user-chip { display: flex; align-items: center; gap: var(--s3); padding-bottom: var(--s3); margin-bottom: var(--s3); border-bottom: 1px solid var(--border-soft); }
 .user-chip .uc-info { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }

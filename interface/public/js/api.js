@@ -62,6 +62,7 @@ const API = (() => {
     // historico de versoes (desfazer/restaurar)
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
+    saveContent: (folder, rel, content) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/content", { rel, content }),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
@@ -79,5 +80,6 @@ const API = (() => {
     deleteUser: (username) => req("DELETE", "/api/users/" + encodeURIComponent(username)),
     resetUserPassword: (username, password) => req("POST", "/api/users/" + encodeURIComponent(username) + "/password", { password }),
     setUserRole: (username, role) => req("POST", "/api/users/" + encodeURIComponent(username) + "/role", { role }),
+    setUserName: (username, name) => req("POST", "/api/users/" + encodeURIComponent(username) + "/name", { name }),
   };
 })();

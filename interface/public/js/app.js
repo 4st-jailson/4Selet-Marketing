@@ -990,6 +990,17 @@ function chooseCollectionModal(collections, folder) {
 /* =====================================================================
    DETALHE DA TASK
    ===================================================================== */
+// Esconde da lista "Arquivos" o ruído: mídia que já aparece na galeria/strip e os
+// HTML intermediários do render (fonte dos slides/ads). Mantém dados + prévia.
+function visibleFiles(task) {
+  const files = task.files || [];
+  if (["carousel", "image", "feed", "video"].indexOf(task.kind) === -1) return files;
+  return files.filter((f) => {
+    if (f.isImage || f.isVideo) return false;
+    if (/(slides\/slide_\d+|ads\/(ad|feed))\.html?$/i.test(f.rel)) return false;
+    return true;
+  });
+}
 function fileRow(folder, f) {
   const media = f.isImage || f.isVideo;
   const isHtml = /\.html?$/i.test(f.rel);
@@ -1162,6 +1173,100 @@ function refineCard(task) {
   </div>`;
 }
 
+// Painel "Camadas" (A1): editar direto texto/tema de cada slide do carrossel, sem IA.
+function layersCard(task) {
+  if (task.zone !== "active" || ["carousel", "image", "feed"].indexOf(task.kind) === -1) return "";
+  return `<div class="card mt">
+    <div class="flex-between"><h3>Camadas</h3><span class="hint">editar direto, sem IA</span></div>
+    <p class="muted mt">Edite o texto da peça (no carrossel, por slide, com tema). <span class="codeblock">==palavra==</span> destaca em azul. Ao salvar, a arte re-renderiza e vira um ponto de retorno (Desfazer).</p>
+    <div id="layers-area" class="mt"><p class="hint"><span class="spinner"></span> carregando camadas…</p></div>
+  </div>`;
+}
+async function wireLayers(folder, task) {
+  const box = $("#layers-area"); if (!box) return;
+  if (task.kind === "image") return wireLayersImage(folder, task);
+  if (task.kind === "feed") return wireLayersFeed(folder, task);
+  return wireLayersCarousel(folder, task);
+}
+// Camadas de IMAGEM/ANÚNCIO (ads/concept.json): headline, subtexto, eyebrow, cta, badge.
+async function wireLayersImage(folder, task) {
+  const box = $("#layers-area");
+  let c;
+  try { c = JSON.parse(await API.taskFile(folder, "ads/concept.json")); }
+  catch (e) { box.innerHTML = '<p class="empty">Não consegui ler o conteúdo da imagem.</p>'; return; }
+  box.innerHTML = '<div class="layer-block">'
+    + '<label class="layer-lab">Rótulo (eyebrow)</label><input class="ly-f" data-k="eyebrow" value="' + esc(c.eyebrow || "") + '" placeholder="ex.: PROVA DA PLATAFORMA" />'
+    + '<label class="layer-lab">Headline <span class="hint">(==palavra== = azul)</span></label><textarea class="ly-f" data-k="headline" rows="2">' + esc(c.headline || "") + "</textarea>"
+    + '<label class="layer-lab">Subtexto</label><textarea class="ly-f" data-k="subtext" rows="2">' + esc(c.subtext || "") + "</textarea>"
+    + '<label class="layer-lab">CTA</label><input class="ly-f" data-k="cta" value="' + esc(c.cta || "") + '" />'
+    + '<label class="layer-lab">Selo (badge)</label><input class="ly-f" data-k="badge" value="' + esc(c.badge || "") + '" />'
+    + '</div><button class="btn btn-primary mt" id="ly-save">Salvar camadas e re-renderizar</button>';
+  $("#ly-save").onclick = async () => {
+    const btn = $("#ly-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
+    $$("#layers-area .ly-f").forEach((el) => { const k = el.dataset.k, v = el.tagName === "TEXTAREA" ? el.value : el.value.trim(); if (v) c[k] = v; else delete c[k]; });
+    try { await API.saveContent(folder, "ads/concept.json", JSON.stringify(c, null, 2) + "\n"); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); router(); }
+    catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
+  };
+}
+// Camadas de FEED (copy/instagram_caption.txt): a legenda; a 1a linha vira o título da arte.
+async function wireLayersFeed(folder, task) {
+  const box = $("#layers-area");
+  let text = "";
+  try { text = await API.taskFile(folder, "copy/instagram_caption.txt"); }
+  catch (e) { box.innerHTML = '<p class="empty">Não consegui ler a legenda.</p>'; return; }
+  box.innerHTML = '<label class="layer-lab">Legenda <span class="hint">(a 1ª linha vira o título da arte)</span></label>'
+    + '<textarea id="ly-caption" rows="8" style="width:100%">' + esc(text) + "</textarea>"
+    + '<button class="btn btn-primary mt" id="ly-save">Salvar camadas e re-renderizar</button>';
+  $("#ly-save").onclick = async () => {
+    const btn = $("#ly-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
+    try { await API.saveContent(folder, "copy/instagram_caption.txt", $("#ly-caption").value); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); router(); }
+    catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
+  };
+}
+// Camadas de CARROSSEL: por slide (título, texto, tema, callout).
+async function wireLayersCarousel(folder, task) {
+  const box = $("#layers-area"); if (!box) return;
+  let concept;
+  try { concept = JSON.parse(await API.taskFile(folder, "copy/instagram_carousel.json")); }
+  catch (e) { box.innerHTML = '<p class="empty">Não consegui ler o conteúdo do carrossel.</p>'; return; }
+  const slides = Array.isArray(concept.slides) ? concept.slides : [];
+  const LBL = { cover: "Capa", flow: "Fluxo", text: "Texto", stat_grid: "Números", list: "Lista", cta: "Fecho" };
+  const archOf = (s, i) => String(s.layout || (i === 0 ? "cover" : i === slides.length - 1 ? "cta" : "text")).toLowerCase();
+  const rows = slides.map((s, i) => {
+    const a = archOf(s, i);
+    const showEyebrow = a !== "cover", showBody = (a === "cover" || a === "text" || a === "cta"), showNote = a === "flow", showTheme = (a === "text" || a === "cta");
+    return `<div class="layer-block" data-i="${i}">
+      <div class="layer-head"><span class="layer-n">Slide ${i + 1}</span><span class="badge plain">${esc(LBL[a] || a)}</span></div>
+      ${showEyebrow ? `<label class="layer-lab">Rótulo</label><input class="ly-eyebrow" value="${esc(s.eyebrow || "")}" placeholder="ex.: O RISCO" />` : ""}
+      <label class="layer-lab">Título</label><textarea class="ly-title" rows="2">${esc(s.title || "")}</textarea>
+      ${showBody ? `<label class="layer-lab">Texto de apoio</label><textarea class="ly-body" rows="2">${esc(s.body || "")}</textarea>` : ""}
+      ${showNote ? `<label class="layer-lab">Caixa de destaque</label><input class="ly-note" value="${esc(s.note || "")}" />` : ""}
+      ${showTheme ? `<label class="layer-lab">Tema</label><select class="ly-theme"><option value="dark"${s.theme === "light" ? "" : " selected"}>Escuro</option><option value="light"${s.theme === "light" ? " selected" : ""}>Claro (editorial)</option></select>` : ""}
+    </div>`;
+  }).join("");
+  box.innerHTML = `<div class="field" style="max-width:340px"><label class="layer-lab">CTA do fecho <span class="hint">(botão do último slide)</span></label><input id="ly-cta" value="${esc(concept.cta || "")}" /></div>
+    <div class="layers-list mt">${rows}</div>
+    <button class="btn btn-primary mt" id="ly-save">Salvar camadas e re-renderizar</button>`;
+  $("#ly-save").onclick = async () => {
+    const btn = $("#ly-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
+    $$("#layers-area .layer-block").forEach((bl) => {
+      const s = slides[Number(bl.dataset.i)];
+      const eb = bl.querySelector(".ly-eyebrow"); if (eb) { const v = eb.value.trim(); if (v) s.eyebrow = v; else delete s.eyebrow; }
+      const ti = bl.querySelector(".ly-title"); if (ti) s.title = ti.value;
+      const bo = bl.querySelector(".ly-body"); if (bo) { if (bo.value.trim()) s.body = bo.value; else delete s.body; }
+      const no = bl.querySelector(".ly-note"); if (no) { const v = no.value.trim(); if (v) s.note = v; else delete s.note; }
+      const th = bl.querySelector(".ly-theme"); if (th) { if (th.value === "light") s.theme = "light"; else delete s.theme; }
+    });
+    const ctaEl = $("#ly-cta"); if (ctaEl) concept.cta = ctaEl.value.trim();
+    try {
+      await API.saveContent(folder, "copy/instagram_carousel.json", JSON.stringify(concept, null, 2) + "\n");
+      await API.renderMedia(folder, task.kind, selectedTemplate());
+      toast("Camadas salvas — arte atualizada.", "success");
+      router();
+    } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
+  };
+}
+
 // Area de "Desfazer" + histórico de versões da peça (após qualquer ajuste/edição).
 async function wireUndo(folder, task) {
   const box = $("#undo-area"); if (!box) return;
@@ -1246,11 +1351,12 @@ async function viewTaskDetail(folder) {
     <div class="grid grid-2 mt">
       <div class="card">
         <h3>Arquivos</h3>
-        ${task.files.length ? '<div class="list mt">' + task.files.map((f) => fileRow(folder, f)).join("") + "</div>" : '<div class="empty">Sem arquivos de conteúdo.</div>'}
+        ${visibleFiles(task).length ? '<div class="list mt">' + visibleFiles(task).map((f) => fileRow(folder, f)).join("") + "</div>" : '<div class="empty">Sem arquivos de conteúdo.</div>'}
         <div id="file-view" class="mt"></div>
       </div>
       <div>
         ${renderPanel(folder, task)}
+        ${layersCard(task)}
         ${refineCard(task)}
         <div class="card mt">
           <div class="flex-between"><h3>Tags</h3><button class="btn btn-sm" id="btn-tags">Editar</button></div>
@@ -1283,6 +1389,7 @@ async function viewTaskDetail(folder) {
   loadTaskCollections(folder);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
+  wireLayers(folder, task);
   wireUndo(folder, task);
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
     el.onchange = () => {
@@ -2842,7 +2949,7 @@ function applyUserToChrome() {
     let chip = $("#user-chip");
     if (!chip) { chip = document.createElement("div"); chip.id = "user-chip"; chip.className = "user-chip"; foot.insertBefore(chip, foot.firstChild); }
     chip.innerHTML =
-      '<div class="uc-info"><span class="uc-name">' + esc(u.username) + "</span>"
+      '<div class="uc-info"><span class="uc-name">' + esc(u.name || u.username) + "</span>"
       + '<span class="uc-role">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span></div>"
       + '<div class="uc-actions"><button class="btn btn-ghost btn-sm" id="btn-chpass" title="Trocar minha senha">Senha</button>'
       + '<button class="btn btn-ghost btn-sm" id="btn-logout" title="Sair">Sair</button></div>';
@@ -2871,12 +2978,15 @@ async function onChangeOwnPassword() {
 /* ---- view: Usuários (admin) ---- */
 function userRow(u) {
   const isMe = State.user && u.username === State.user.username;
-  return '<tr data-u="' + esc(u.username) + '">'
-    + "<td><strong>" + esc(u.username) + "</strong>" + (isMe ? ' <span class="badge plain">você</span>' : "") + "</td>"
-    + '<td><select class="u-role"' + (isMe ? ' disabled title="Você não pode alterar o próprio perfil"' : "") + ">"
-      + '<option value="admin"' + (u.role === "admin" ? " selected" : "") + ">Administrador</option>"
-      + '<option value="membro"' + (u.role === "membro" ? " selected" : "") + ">Membro</option>"
-    + "</select></td>"
+  const display = u.name || u.username;
+  return '<tr data-u="' + esc(u.username) + '" data-name="' + esc(u.name || "") + '">'
+    + '<td><div class="u-name-line"><strong>' + esc(display) + "</strong>" + (isMe ? ' <span class="badge plain">você</span>' : "")
+      + ' <button class="btn btn-ghost btn-xs u-editname" title="Editar nome de exibição">editar</button></div>'
+      + '<div class="muted u-username">@' + esc(u.username) + "</div></td>"
+    + "<td>" + (isMe
+        ? '<span class="badge ' + (u.role === "admin" ? "approved" : "plain") + '">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span>"
+        : '<select class="u-role"><option value="admin"' + (u.role === "admin" ? " selected" : "") + '>Administrador</option><option value="membro"' + (u.role === "membro" ? " selected" : "") + ">Membro</option></select>")
+    + "</td>"
     + '<td class="muted">' + esc(fmtDate(u.created_at)) + "</td>"
     + '<td class="u-actions">'
       + '<button class="btn btn-ghost btn-sm u-pass">Resetar senha</button>'
@@ -2886,6 +2996,17 @@ function userRow(u) {
 function wireUserRows() {
   $$("#u-rows tr").forEach((tr) => {
     const username = tr.dataset.u;
+    const nameBtn = tr.querySelector(".u-editname");
+    if (nameBtn) nameBtn.onclick = async () => {
+      const v = await uiModal({ title: "Nome de exibição", message: "Nome mostrado no painel para “" + username + "”.", fields: [{ name: "name", label: "Nome", value: tr.dataset.name || "" }], confirmText: "Salvar" });
+      if (!v) return;
+      try {
+        await API.setUserName(username, v.name);
+        toast("Nome atualizado.", "ok");
+        if (State.user && username === State.user.username) { State.user.name = v.name; applyUserToChrome(); }
+        viewUsers();
+      } catch (e) { toast((e && e.message) || "Erro.", "error"); }
+    };
     const roleSel = $(".u-role", tr);
     if (roleSel && !roleSel.disabled) roleSel.onchange = async () => {
       try { await API.setUserRole(username, roleSel.value); toast("Perfil atualizado.", "ok"); }
@@ -2911,13 +3032,14 @@ async function onAddUser() {
     title: "Adicionar usuário",
     message: "A pessoa entra com esse login. O perfil começa como Membro — dá para promover a Administrador depois.",
     fields: [
-      { name: "username", label: "Usuário", placeholder: "ex.: joao (minúsculas, números, . _ -)" },
+      { name: "name", label: "Nome de exibição (opcional)", placeholder: "ex.: Jailson Junior" },
+      { name: "username", label: "Usuário (login)", placeholder: "ex.: joao (minúsculas, números, . _ -)" },
       { name: "password", label: "Senha (mín. 8 caracteres)", inputType: "password" },
     ],
     confirmText: "Criar",
   });
   if (!v) return;
-  try { await API.createUser({ username: v.username, password: v.password, role: "membro" }); toast("Usuário criado.", "ok"); viewUsers(); }
+  try { await API.createUser({ username: v.username, password: v.password, name: v.name, role: "membro" }); toast("Usuário criado.", "ok"); viewUsers(); }
   catch (e) { toast((e && e.message) || "Erro ao criar usuário.", "error"); }
 }
 async function viewUsers() {

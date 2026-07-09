@@ -137,4 +137,18 @@ router.post("/:folder/restore", (req, res) => {
   }
 });
 
+// Edicao direta do conteudo (painel de Camadas) — grava o JSON/texto da peca.
+// Passa pelo writeContentFile: valida zona active + tira snapshot (Desfazer).
+router.post("/:folder/content", (req, res) => {
+  try {
+    const rel = (req.body || {}).rel;
+    const text = (req.body || {}).content;
+    if (!rel || text == null) return res.status(400).json({ error: "rel e content são obrigatórios" });
+    const file = content.writeContentFile(req.params.folder, String(rel), String(text), "edição de camadas");
+    res.json({ ok: true, file, task: content.getTask(req.params.folder) });
+  } catch (e) {
+    res.status(e.code === "E_NOT_EDITABLE" ? 409 : 400).json({ error: e.message, code: e.code });
+  }
+});
+
 module.exports = router;

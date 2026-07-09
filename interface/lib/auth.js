@@ -80,8 +80,9 @@ function findUser(username) {
   return loadUsers().find((x) => x.username === u) || null;
 }
 function publicUser(u) {
-  return u ? { username: u.username, role: u.role, created_at: u.created_at, created_by: u.created_by || null } : null;
+  return u ? { username: u.username, name: u.name || null, role: u.role, created_at: u.created_at, created_by: u.created_by || null } : null;
 }
+function cleanName(name) { const n = String(name == null ? "" : name).trim().slice(0, 60); return n || null; }
 
 // ---- validacoes ----
 function validUsername(u) { return /^[a-z0-9._-]{3,32}$/.test(normUsername(u)); }
@@ -90,14 +91,14 @@ function validRole(r) { return ROLES.includes(r); }
 function countAdmins(users) { return users.filter((x) => x.role === "admin").length; }
 
 // ---- CRUD ----
-function createUser({ username, password, role }, byUser) {
+function createUser({ username, password, role, name }, byUser) {
   const u = normUsername(username);
   if (!validUsername(u)) { const e = new Error("Usuário inválido (3 a 32 caracteres: minúsculas, números, . _ -)."); e.status = 400; throw e; }
   if (!validPassword(password)) { const e = new Error("A senha precisa ter ao menos 8 caracteres."); e.status = 400; throw e; }
   const r = validRole(role) ? role : "membro";
   const users = loadUsers();
   if (users.some((x) => x.username === u)) { const e = new Error("Já existe um usuário com esse nome."); e.status = 409; throw e; }
-  const rec = { username: u, role: r, hash: hashPassword(password), created_at: new Date().toISOString(), created_by: byUser || null };
+  const rec = { username: u, name: cleanName(name), role: r, hash: hashPassword(password), created_at: new Date().toISOString(), created_by: byUser || null };
   users.push(rec);
   saveUsers(users);
   return publicUser(rec);
@@ -129,6 +130,15 @@ function setRole(username, role) {
   if (!target) { const e = new Error("Usuário não encontrado."); e.status = 404; throw e; }
   if (target.role === "admin" && role !== "admin" && countAdmins(users) <= 1) { const e = new Error("Não é possível rebaixar o último admin."); e.status = 400; throw e; }
   target.role = role;
+  saveUsers(users);
+  return publicUser(target);
+}
+function setName(username, name) {
+  const u = normUsername(username);
+  const users = loadUsers();
+  const target = users.find((x) => x.username === u);
+  if (!target) { const e = new Error("Usuário não encontrado."); e.status = 404; throw e; }
+  target.name = cleanName(name);
   saveUsers(users);
   return publicUser(target);
 }
@@ -182,7 +192,7 @@ function verifySession(token) {
     if (!payload || typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
     const user = findUser(payload.u); // usuario removido => sessao invalida na hora
     if (!user) return null;
-    return { username: user.username, role: user.role };
+    return { username: user.username, name: user.name || null, role: user.role };
   } catch (_) { return null; }
 }
 
@@ -218,6 +228,6 @@ function userFromRequest(req) {
 
 module.exports = {
   ROLES, COOKIE, SESSION_TTL_S,
-  bootstrap, authenticate, listUsers, createUser, deleteUser, setPassword, setRole, findUser,
+  bootstrap, authenticate, listUsers, createUser, deleteUser, setPassword, setRole, setName, findUser,
   signSession, verifySession, setSessionCookie, clearSessionCookie, userFromRequest,
 };

@@ -17,8 +17,8 @@ router.get("/", (req, res) => res.json({ users: auth.listUsers() }));
 
 router.post("/", (req, res) => {
   try {
-    const { username, password, role } = req.body || {};
-    res.status(201).json({ user: auth.createUser({ username, password, role }, req.me.username) });
+    const { username, password, role, name } = req.body || {};
+    res.status(201).json({ user: auth.createUser({ username, password, role, name }, req.me.username) });
   } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
 
@@ -33,6 +33,11 @@ router.delete("/:username", (req, res) => {
 
 router.post("/:username/password", (req, res) => {
   try { res.json(auth.setPassword(req.params.username, (req.body || {}).password)); }
+  catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+
+router.post("/:username/name", (req, res) => {
+  try { res.json({ user: auth.setName(req.params.username, (req.body || {}).name) }); }
   catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
 
