@@ -3,7 +3,7 @@
 "use strict";
 const express = require("express");
 const router = express.Router();
-const ai = require("../lib/anthropic");
+const ai = require("../lib/ai"); // dispatcher multi-provedor (Claude / OpenAI / ...)
 const prompts = require("../lib/prompts");
 const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
@@ -87,6 +87,7 @@ router.post("/", async (req, res, next) => {
       system,
       prompt: userPrompt,
       maxTokens: 2500,
+      provider: body.provider, // IA escolhida na hora de gerar (default = padrao das Config.)
       simulate: () => prompts.simulate(req2),
     });
 
@@ -103,6 +104,7 @@ router.post("/", async (req, res, next) => {
     res.json({
       simulated: result.simulated,
       model: result.model,
+      provider: result.provider,
       parsed,
       raw: result.text,
       governance: gov,
@@ -136,6 +138,7 @@ router.post("/refine", async (req, res, next) => {
       system,
       prompt: userPrompt,
       maxTokens: 2500,
+      provider: body.provider, // IA escolhida na hora de ajustar
       images: Array.isArray(body.images) ? body.images : undefined, // referencia visual (visao)
       simulate: () => String(body.current), // sem chave: ecoa o atual (sinalizado como SIMULADO)
     });
@@ -146,6 +149,7 @@ router.post("/refine", async (req, res, next) => {
     res.json({
       simulated: result.simulated,
       model: result.model,
+      provider: result.provider,
       parsed,
       raw: result.text,
       governance: gov,
@@ -181,9 +185,10 @@ router.post("/assistant", async (req, res, next) => {
       system: prompts.assistantSystem(),
       prompt: question + ctx,
       maxTokens: 1200,
+      provider: (req.body && req.body.provider),
       simulate: () => "Assistente em modo SIMULADO — configure a chave Anthropic em Configuracoes para respostas reais.\n\nFluxo do painel: 1) crie/abra uma Campanha; 2) em 'Criar Conteudo', escolha o tipo, preencha o brief e gere com IA; 3) revise o preview e aprove.",
     });
-    res.json({ simulated: result.simulated, model: result.model, answer: result.text });
+    res.json({ simulated: result.simulated, model: result.model, provider: result.provider, answer: result.text });
   } catch (e) { next(e); }
 });
 
@@ -236,7 +241,7 @@ router.post("/save", async (req, res, next) => {
     const text = formatContentFile(ct, parsed, body.raw);
     let rel;
     try {
-      rel = content.writeContentFile(folder, ct.file, text);
+      rel = content.writeContentFile(folder, ct.file, text, body.brief); // note p/ o historico (desfazer)
     } catch (e) {
       return res.status(e.code === "E_NOT_EDITABLE" ? 409 : 500).json({ error: e.message, code: e.code });
     }

@@ -94,6 +94,7 @@ function listTasks() {
         campaign_angle: status.campaign_angle || null,
         platforms: status.platforms || [],
         last_updated_at: status.last_updated_at,
+        recency: files.reduce((m, f) => Math.max(m, f.mtime || 0), 0), // mtime mais novo = criado/ajustado por ultimo
         first_viewed_at: status.first_viewed_at || null,
         tags: Array.isArray(status.tags) ? status.tags : [],
         pillar: (typeof status.pillar === "string") ? status.pillar : null,
@@ -102,7 +103,8 @@ function listTasks() {
       });
     }
   }
-  out.sort((a, b) => String(b.last_updated_at || "").localeCompare(String(a.last_updated_at || "")));
+  // Mais recente no topo: pela atividade real (mtime dos arquivos), com last_updated_at de desempate.
+  out.sort((a, b) => (b.recency || 0) - (a.recency || 0) || String(b.last_updated_at || "").localeCompare(String(a.last_updated_at || "")));
   return out;
 }
 
@@ -193,9 +195,48 @@ function createTask({ task_name, task_date, platforms, angle }) {
   return runScript("orchestrator.js", argv);
 }
 
+// --- Historico de versoes (desfazer/restaurar ajustes) ---------------------
+// Guarda copias do conteudo ANTES de cada sobrescrita, FORA da pasta da task
+// (outputs/.history/, ignorado no git) — assim NAO interfere em listagem,
+// aprovacao ou content_hashes. Rede de seguranca: falha aqui e nao-critica.
+const HISTORY_ROOT = path.join(PATHS.OUTPUTS_DIR, ".history");
+const HISTORY_MAX = 25;
+function historyDir(folder) { return path.join(HISTORY_ROOT, String(folder).replace(/[^a-zA-Z0-9._-]/g, "_")); }
+function readHistoryIndex(folder) { const idx = readJsonSafe(path.join(historyDir(folder), "index.json")); return Array.isArray(idx) ? idx : []; }
+function writeHistoryIndex(folder, list) {
+  const dir = historyDir(folder); fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "index.json"), JSON.stringify(list, null, 2) + "\n", "utf8");
+}
+function snapshotContentFile(loc, folder, rel, note) {
+  const src = path.join(loc.path, rel);
+  if (!fs.existsSync(src)) return null; // 1a gravacao: nada anterior p/ guardar
+  const content = fs.readFileSync(src, "utf8");
+  const dir = historyDir(folder); fs.mkdirSync(dir, { recursive: true });
+  const id = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 6);
+  fs.writeFileSync(path.join(dir, id + ".snap"), content, "utf8");
+  let list = readHistoryIndex(folder);
+  list.unshift({ id, rel, ts: new Date().toISOString(), note: String(note || "").slice(0, 200), size: Buffer.byteLength(content) });
+  if (list.length > HISTORY_MAX) { // poda: mantem os mais recentes
+    for (const d of list.slice(HISTORY_MAX)) { try { fs.unlinkSync(path.join(dir, d.id + ".snap")); } catch (e) {} }
+    list = list.slice(0, HISTORY_MAX);
+  }
+  writeHistoryIndex(folder, list);
+  return id;
+}
+function listContentVersions(folder, rel) { return readHistoryIndex(folder).filter((e) => !rel || e.rel === rel); }
+function restoreContentVersion(folder, rel, id) {
+  const loc = findTask(folder);
+  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  const snap = path.join(historyDir(folder), String(id) + ".snap");
+  if (!fs.existsSync(snap)) { const e = new Error("versão não encontrada no histórico"); e.code = "E_VERSION_NOT_FOUND"; throw e; }
+  const content = fs.readFileSync(snap, "utf8");
+  // writeContentFile ja tira snapshot do estado ATUAL antes de sobrescrever (da p/ desfazer a restauracao).
+  return writeContentFile(folder, rel, content, "restauração de versão");
+}
+
 // Escreve um arquivo de conteudo gerado dentro da task (apenas zona active).
 // Respeita a regra CRITICAL: nunca escrever em outputs/approved/.
-function writeContentFile(folder, rel, content) {
+function writeContentFile(folder, rel, content, note) {
   const loc = findTask(folder);
   if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
   if (loc.zone !== "active") {
@@ -204,6 +245,8 @@ function writeContentFile(folder, rel, content) {
   }
   const target = path.normalize(path.join(loc.path, rel));
   if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
+  // Rede de seguranca p/ "desfazer": snapshot do estado ATUAL antes de sobrescrever. Nao-critico.
+  try { snapshotContentFile(loc, folder, rel, note); } catch (e) { console.warn("[history] snapshot falhou:", e && e.message); }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content, "utf8");
   return path.relative(loc.path, target).split(path.sep).join("/");
@@ -340,5 +383,6 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
+  listContentVersions, restoreContentVersion,
   setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

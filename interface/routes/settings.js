@@ -5,6 +5,7 @@ const fs = require("fs");
 const express = require("express");
 const router = express.Router();
 const ai = require("../lib/anthropic");
+const aihub = require("../lib/ai"); // multi-provedor (Claude / OpenAI / ...)
 const research = require("../lib/research");
 const { PATHS } = require("../lib/config");
 
@@ -99,6 +100,37 @@ router.post("/model", (req, res) => {
 router.post("/test", async (req, res) => {
   const r = await ai.testKey();
   res.status(r.ok ? 200 : 400).json(r);
+});
+
+// --- Multi-provedor de IA: listar/configurar Claude, ChatGPT (e futuros) ---
+// A chave e o MODELO de cada provedor sao controlados aqui (Configuracoes); a
+// ESCOLHA de qual usar acontece na hora de gerar. NUNCA retorna a chave em claro.
+router.get("/providers", (req, res) => {
+  res.json({ providers: aihub.providers(), default: aihub.defaultProvider() });
+});
+router.post("/provider/key", (req, res) => {
+  try {
+    const { provider, key } = req.body || {};
+    aihub.saveKey(provider, key);
+    res.json({ ok: true, providers: aihub.providers() });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post("/provider/model", (req, res) => {
+  try {
+    const { provider, model } = req.body || {};
+    const m = aihub.saveModel(provider, model);
+    res.json({ ok: true, model: m, providers: aihub.providers() });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post("/provider/test", async (req, res) => {
+  const r = await aihub.testKey((req.body || {}).provider);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+router.post("/provider/default", (req, res) => {
+  try {
+    const p = aihub.setDefaultProvider((req.body || {}).provider);
+    res.json({ ok: true, default: p, providers: aihub.providers() });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 module.exports = router;

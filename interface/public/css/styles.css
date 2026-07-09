@@ -756,19 +756,42 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .modal h3 { font-size: 16px; margin-bottom: 4px; }
 .modal .field { margin-top: var(--s4); }
 
-/* ---- Acesso: tela de login ---- */
-.login-ov { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: var(--s5); background: var(--bg); background-image: var(--bg-grad); opacity: 0; transition: opacity var(--tr); }
+/* ---- Acesso: tela de login (branded: fundo/cartao proprios, independente do tema do app) ---- */
+.login-ov { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: var(--s5); background: #07212B; background-image: radial-gradient(1100px 560px at 50% -12%, #0b3d51 0%, rgba(11,61,81,0) 62%), linear-gradient(160deg, #003554 0%, #07212B 100%); opacity: 0; transition: opacity var(--tr); }
+.login-ov::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(84,153,181,.12) 2px, transparent 2px); background-size: 46px 46px; pointer-events: none; }
 .login-ov.open { opacity: 1; }
-.login-card { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--s7); box-shadow: var(--shadow); }
-.login-brand { display: flex; align-items: center; gap: 2px; font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -.02em; margin-bottom: var(--s6); }
-.login-brand b { color: var(--accent); }
-.login-brand span { font-size: 10.5px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin-left: 8px; }
-.login-card h1 { font-size: 22px; letter-spacing: -.02em; margin-bottom: 4px; }
-.login-card > .muted { margin-bottom: var(--s5); }
+.login-card { position: relative; width: 100%; max-width: 400px; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.10); border-radius: var(--r-lg); padding: 46px 40px; box-shadow: 0 30px 80px rgba(0,0,0,.5); backdrop-filter: blur(6px); }
+.login-logo { display: block; height: 38px; width: auto; margin-bottom: 8px; }
+.login-sub { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #AFBCC9; margin-bottom: 30px; }
+.login-card h1 { font-size: 24px; letter-spacing: -.02em; margin-bottom: 4px; color: #FFFFFF; }
+.login-card > .muted { color: #AFBCC9; margin-bottom: var(--s5); }
 .login-card .field { margin-bottom: var(--s4); }
-.login-card input { width: 100%; }
-.login-card button[type="submit"] { width: 100%; margin-top: var(--s2); justify-content: center; }
-.login-err { background: var(--err-soft); color: var(--err); border: 1px solid var(--err); border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; margin-bottom: var(--s4); }
+.login-card .field label { color: #D9DCD6; }
+.login-card input { width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #FFFFFF; border-radius: var(--r-sm); padding: 12px 14px; }
+.login-card input::placeholder { color: #7f93a0; }
+.login-card input:focus { border-color: #5499B5; outline: none; box-shadow: 0 0 0 3px rgba(84,153,181,.25); }
+.login-card button[type="submit"] { width: 100%; margin-top: var(--s2); justify-content: center; background: #006494; border: none; color: #FFFFFF; font-weight: 700; padding: 13px; border-radius: var(--r-sm); }
+.login-card button[type="submit"]:hover:not(:disabled) { background: #0a72a5; }
+.login-err { background: rgba(196,64,64,.16); color: #ffb4b4; border: 1px solid rgba(196,64,64,.4); border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; margin-bottom: var(--s4); }
+
+/* ---- Olho de mostrar/ocultar senha (login + modais) ---- */
+.pass-wrap { position: relative; display: block; }
+.pass-wrap > input { padding-right: 42px !important; }
+.pass-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: var(--r-xs); padding: 0; }
+.pass-eye:hover { color: var(--text); background: var(--surface-2); }
+.pass-eye.on { color: var(--accent); }
+.login-card .pass-eye { color: #AFBCC9; }
+.login-card .pass-eye:hover { color: #FFFFFF; background: rgba(255,255,255,.08); }
+.login-card .pass-eye.on { color: #5499B5; }
+
+/* ---- Desfazer / histórico de versões da peça ---- */
+.undo-head { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ver-list { margin-top: 10px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); overflow: hidden; }
+.ver-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border-soft); }
+.ver-row:last-child { border-bottom: none; }
+.ver-main { display: flex; flex-direction: column; min-width: 0; }
+.ver-when { font-size: 12.5px; color: var(--text); font-weight: 600; }
+.ver-note { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Chip do usuário (rodapé da sidebar) ---- */
 .user-chip { display: flex; align-items: center; gap: var(--s3); padding-bottom: var(--s3); margin-bottom: var(--s3); border-bottom: 1px solid var(--border-soft); }

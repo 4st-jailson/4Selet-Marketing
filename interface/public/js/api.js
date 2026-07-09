@@ -27,6 +27,12 @@ const API = (() => {
     saveKey: (key) => req("POST", "/api/settings/key", { key }),
     saveModel: (model) => req("POST", "/api/settings/model", { model }),
     testKey: () => req("POST", "/api/settings/test"),
+    // provedores de IA (multi-IA: Claude / ChatGPT / ...)
+    providers: () => req("GET", "/api/settings/providers"),
+    saveProviderKey: (provider, key) => req("POST", "/api/settings/provider/key", { provider, key }),
+    saveProviderModel: (provider, model) => req("POST", "/api/settings/provider/model", { provider, model }),
+    testProvider: (provider) => req("POST", "/api/settings/provider/test", { provider }),
+    setDefaultProvider: (provider) => req("POST", "/api/settings/provider/default", { provider }),
     // campaigns
     campaigns: () => req("GET", "/api/campaigns"),
     campaign: (id) => req("GET", "/api/campaigns/" + encodeURIComponent(id)),
@@ -53,6 +59,9 @@ const API = (() => {
     discard: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/discard"),
     setTags: (folder, tags) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/tags", { tags }),
     promote: (folder, payload) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/promote", payload),
+    // historico de versoes (desfazer/restaurar)
+    contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
+    restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),

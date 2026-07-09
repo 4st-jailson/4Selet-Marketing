@@ -120,4 +120,21 @@ router.post("/:folder/promote", (req, res) => {
   res.status(r.ok ? 200 : 400).json(r);
 });
 
+// --- Historico de versoes: desfazer/restaurar ajustes (zona active) ---
+router.get("/:folder/versions", (req, res) => {
+  try { res.json({ versions: content.listContentVersions(req.params.folder, req.query.rel) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post("/:folder/restore", (req, res) => {
+  try {
+    const { rel, id } = req.body || {};
+    if (!rel || !id) return res.status(400).json({ error: "rel e id são obrigatórios" });
+    const file = content.restoreContentVersion(req.params.folder, rel, id);
+    res.json({ ok: true, file, task: content.getTask(req.params.folder) });
+  } catch (e) {
+    const code = e.code === "E_NOT_EDITABLE" ? 409 : (e.code === "E_VERSION_NOT_FOUND" ? 404 : 400);
+    res.status(code).json({ error: e.message, code: e.code });
+  }
+});
+
 module.exports = router;

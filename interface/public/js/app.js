@@ -7,6 +7,34 @@ const State = { meta: null, settings: null, campMap: null };
 /* ============================ helpers ============================ */
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+// Olho de mostrar/ocultar senha (reutilizavel: login + modais de senha). Envolve o
+// input num wrapper e injeta um botao que alterna type password<->text.
+const EYE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function wirePasswordEye(input) {
+  if (!input || input.dataset.eye) return;
+  input.dataset.eye = "1";
+  const wrap = document.createElement("div");
+  wrap.className = "pass-wrap";
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pass-eye";
+  btn.tabIndex = -1;
+  btn.setAttribute("aria-label", "Mostrar senha");
+  btn.innerHTML = EYE_SVG;
+  wrap.appendChild(btn);
+  btn.addEventListener("click", () => {
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.innerHTML = show ? EYE_OFF_SVG : EYE_SVG;
+    btn.classList.toggle("on", show);
+    btn.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+    input.focus();
+  });
+}
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function slugify(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); }
 function todayISO() { const d = new Date(); const p = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }
@@ -149,6 +177,7 @@ function uiModal(opts) {
         <button class="btn ${opts.confirmKind === "danger" ? "btn-danger" : "btn-primary"}" data-mx="ok">${esc(opts.confirmText || "Confirmar")}</button>
       </div></div>`;
     document.body.appendChild(ov);
+    fields.forEach((f, i) => { if (String(f.inputType) === "password") wirePasswordEye(ov.querySelector('[data-mf="' + i + '"]')); });
     document.body.classList.add("no-scroll");
     requestAnimationFrame(() => ov.classList.add("open"));
     const opener = document.activeElement;
@@ -1129,7 +1158,40 @@ function refineCard(task) {
       <button class="btn btn-primary mt" id="btn-refine" data-ct="${esc(ct.id)}" data-file="${esc(ct.file)}">Aplicar ajuste</button>
       <span id="refine-out" class="muted"></span>
     </div>
+    <div id="undo-area"></div>
   </div>`;
+}
+
+// Area de "Desfazer" + histórico de versões da peça (após qualquer ajuste/edição).
+async function wireUndo(folder, task) {
+  const box = $("#undo-area"); if (!box) return;
+  const ct = (State.meta.content_types || []).find((c) => c.kind === task.kind);
+  const file = ct && ct.file;
+  if (!file || task.zone !== "active") { box.innerHTML = ""; return; }
+  let versions = [];
+  try { versions = (await API.contentVersions(folder, file)).versions || []; } catch (e) { box.innerHTML = ""; return; }
+  if (!versions.length) {
+    box.innerHTML = '<p class="hint" style="margin-top:12px">Sem histórico ainda — o primeiro ajuste já cria um ponto de retorno.</p>';
+    return;
+  }
+  const rows = versions.map((v) => '<div class="ver-row"><div class="ver-main"><span class="ver-when">' + esc(fmtDateTime(v.ts)) + "</span>"
+    + (v.note ? '<span class="ver-note">' + esc(v.note) + "</span>" : "") + '</div><button class="btn btn-sm btn-ghost" data-restore="' + esc(v.id) + '">Restaurar</button></div>').join("");
+  box.innerHTML = '<div class="undo-head mt"><button class="btn btn-sm" id="btn-undo" title="Volta ao estado anterior ao último ajuste">&#8630; Desfazer último ajuste</button>'
+    + '<button class="btn btn-sm btn-ghost" id="btn-history">Histórico (' + versions.length + ')</button></div>'
+    + '<div class="ver-list" id="ver-list" hidden>' + rows + "</div>";
+  $("#btn-undo").onclick = () => doRestore(folder, file, versions[0].id, task);
+  $("#btn-history").onclick = () => { const l = $("#ver-list"); if (l) l.hidden = !l.hidden; };
+  $$("#ver-list [data-restore]").forEach((b) => { b.onclick = () => doRestore(folder, file, b.dataset.restore, task); });
+}
+async function doRestore(folder, file, id, task) {
+  if (!await uiConfirm("Restaurar esta versão? A versão atual fica guardada no histórico — dá para voltar depois.", { confirmText: "Restaurar" })) return;
+  toast("Restaurando…", "info");
+  try {
+    await API.restoreVersion(folder, file, id);
+    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate());
+    toast("Versão restaurada.", "success");
+    router();
+  } catch (e) { toast((e && e.message) || "Erro ao restaurar.", "error"); }
 }
 
 async function refineTask(folder, task) {
@@ -1221,6 +1283,7 @@ async function viewTaskDetail(folder) {
   loadTaskCollections(folder);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
+  wireUndo(folder, task);
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
     el.onchange = () => {
       document.querySelectorAll(".tpl-opt").forEach((o) => o.classList.toggle("is-active", o.dataset.tpl === el.value));
@@ -1519,6 +1582,9 @@ async function viewCreate(arg, query) {
   setTitle("Criar conteúdo");
   const { campaigns } = await API.campaigns();
   setCampMap(campaigns);
+  let providerList = [];
+  try { providerList = (await API.providers()).providers || []; } catch (e) { /* usa padrao do servidor */ }
+  const providerOpts = providerList.map((p) => '<option value="' + esc(p.id) + '"' + (p.is_default ? " selected" : "") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("");
   const preCamp = (query && query.campaign) || "";
   const preType = (query && query.type) || State.meta.content_types[0].id;
   const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}" ${c.id === preCamp ? "selected" : ""}>${esc(c.name)}</option>`).join("");
@@ -1545,6 +1611,7 @@ async function viewCreate(arg, query) {
           </div>
           <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
           <div class="field"><label>Campanha <span class="hint">(opcional — liga a peça à campanha e já sugere o tema)</span></label><select id="g-camp">${campOpts}</select></div>
+          <div class="field"><label>IA que vai gerar <span class="hint">(escolha o provedor; o modelo de cada um fica em Configurações)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
         </div>
 
         <div class="form-section">
@@ -1765,6 +1832,7 @@ async function runGenerate() {
   if (brief.length < 8) { $("#g-brief").classList.add("invalid"); $("#g-brief").setAttribute("aria-invalid", "true"); $("#e-brief").textContent = "Descreva o tema (mín. 8 caracteres)."; return; }
   const payload = {
     content_type: $("#g-type").value,
+    provider: ($("#g-provider") && $("#g-provider").value) || undefined,
     brief,
     campaign_id: $("#g-camp").value || undefined,
     platforms: collectChecks($("#view"), "gplat"),
@@ -1928,6 +1996,7 @@ async function refineGenerated() {
   const current = $("#g-edit").value;
   const payload = {
     content_type: LAST_GEN.req.content_type,
+    provider: ($("#g-provider") && $("#g-provider").value) || LAST_GEN.req.provider || undefined,
     current,
     instruction,
     campaign_id: LAST_GEN.req.campaign_id || undefined,
@@ -2204,6 +2273,10 @@ async function viewSettings() {
   setTitle("Configurações");
   const s = await API.settings();
   State.settings = s;
+  let provs = [];
+  try { provs = (await API.providers()).providers || []; } catch (e) { /* mostra so o card Claude */ }
+  const oai = provs.find((p) => p.id === "openai") || {};
+  const defProv = (provs.find((p) => p.is_default) || {}).id || "anthropic";
   let integ = [];
   try { const ri = await API.integrations(); integ = (ri && ri.integrations) || []; } catch (e) { integ = []; }
   const models = [
@@ -2248,6 +2321,21 @@ async function viewSettings() {
         <div class="k">Status</div><div>${s.has_key ? '<span class="badge approved">conectada</span>' : '<span class="badge paused">não configurada</span>'}</div>
         <div class="k">Modelo atual</div><div>${esc(s.model)}</div>
       </div>
+    </div>
+    <div class="card mt" style="max-width:660px">
+      <h3>ChatGPT (OpenAI)</h3>
+      <p class="muted mt">Adicione a chave da OpenAI para poder gerar com o ChatGPT. Ela fica só neste servidor (<span class="codeblock">interface/.env</span>) e nunca vai para o navegador.</p>
+      <div class="field mt"><label>Chave OpenAI (OPENAI_API_KEY)</label>
+        ${oai.configured ? `<div class="key-locked"><svg class="key-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="key-mask">${esc(oai.masked_key)}</span> <span class="badge ok">Ativa</span></div>` : ""}
+        <div class="key-edit ${oai.configured ? "mt" : ""}"><input id="oai-key" type="password" placeholder="${oai.configured ? "Cole uma nova chave para trocar..." : "sk-..."}" /><div class="flex mt"><button class="btn btn-primary" id="oai-save-key" disabled>${oai.configured ? "Trocar chave" : "Salvar chave"}</button></div></div>
+      </div>
+      <div class="field"><label>Modelo OpenAI <span class="hint">(ex.: gpt-4o, gpt-4.1, gpt-4o-mini — o que sua conta tiver)</span></label><input id="oai-model" value="${esc(oai.model || "gpt-4o")}" style="max-width:320px" /></div>
+      <div class="flex"><button class="btn" id="oai-save-model">Salvar modelo</button><button class="btn" id="oai-test">Testar conexão</button><span id="oai-test-out" class="muted"></span></div>
+    </div>
+    <div class="card mt" style="max-width:660px">
+      <h3>IA padrão</h3>
+      <p class="muted mt">Qual IA o painel usa quando você não escolhe outra na hora de gerar. Na tela de criação dá para trocar por peça.</p>
+      <div class="field mt"><select id="def-provider" style="max-width:320px">${provs.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === defProv ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("")}</select></div>
     </div>
     <div class="card mt" style="max-width:660px">
       <h3>Integrações</h3>
@@ -2320,6 +2408,27 @@ async function viewSettings() {
     catch (e) { toast(e.message, "error"); saveKeyBtn.disabled = false; saveKeyBtn.textContent = s.has_key ? "Salvar nova chave" : "Salvar chave"; }
   };
   $("#s-save-model").onclick = async () => { await API.saveModel($("#s-model").value); toast("Modelo salvo", "success"); await refreshKeyStatus(); };
+  // OpenAI (ChatGPT): chave + modelo + teste + IA padrao
+  const oaiKey = $("#oai-key"), oaiSaveKey = $("#oai-save-key");
+  if (oaiKey && oaiSaveKey) oaiKey.addEventListener("input", () => { oaiSaveKey.disabled = oaiKey.value.trim().length < 10; });
+  if (oaiSaveKey) oaiSaveKey.onclick = async () => {
+    oaiSaveKey.disabled = true; oaiSaveKey.innerHTML = '<span class="spinner"></span> salvando…';
+    try { await API.saveProviderKey("openai", oaiKey.value.trim()); toast("Chave OpenAI salva", "success"); viewSettings(); }
+    catch (e) { toast((e && e.message) || "Erro ao salvar", "error"); oaiSaveKey.disabled = false; oaiSaveKey.textContent = "Salvar chave"; }
+  };
+  if ($("#oai-save-model")) $("#oai-save-model").onclick = async () => {
+    try { await API.saveProviderModel("openai", $("#oai-model").value.trim()); toast("Modelo OpenAI salvo", "success"); }
+    catch (e) { toast((e && e.message) || "Erro", "error"); }
+  };
+  if ($("#oai-test")) $("#oai-test").onclick = async () => {
+    const out = $("#oai-test-out"); out.innerHTML = '<span class="spinner"></span> testando…';
+    try { const r = await API.testProvider("openai"); out.innerHTML = r.ok ? '<span class="t-ok">✓</span> OpenAI OK (' + esc(r.model || "") + ")" : '<span class="t-err">✕</span> ' + esc(r.error || "falhou"); }
+    catch (e) { out.innerHTML = '<span class="t-err">✕</span> ' + esc((e.data && e.data.error) || "falhou"); }
+  };
+  if ($("#def-provider")) $("#def-provider").onchange = async (e) => {
+    try { await API.setDefaultProvider(e.target.value); toast("IA padrão atualizada", "success"); }
+    catch (err) { toast((err && err.message) || "Erro", "error"); }
+  };
   $("#s-test").onclick = async () => {
     const out = $("#s-test-out"); out.innerHTML = '<span class="spinner"></span> testando…';
     try { const r = await API.testKey(); out.innerHTML = r.ok ? '<span class="t-ok">✓</span> Conexão bem-sucedida com ' + esc(r.model) : '<span class="t-err">✕</span> ' + (esc(r.error) || "Chave inválida ou sem acesso"); }
@@ -2670,7 +2779,8 @@ function showLogin() {
     ov.className = "login-ov";
     ov.innerHTML =
       '<form class="login-card" autocomplete="on">'
-      + '<div class="login-brand">4<b>Selet</b><span>Marketing</span></div>'
+      + '<img class="login-logo" src="/brand-assets/logo-4selet-light.png" alt="4Selet" />'
+      + '<div class="login-sub">Painel de Marketing</div>'
       + '<h1>Entrar</h1>'
       + '<p class="muted">Acesse com o seu usuário e senha.</p>'
       + '<div class="field"><label for="lg-user">Usuário</label><input id="lg-user" type="text" autocomplete="username" /></div>'
@@ -2685,6 +2795,7 @@ function showLogin() {
     const err = ov.querySelector(".login-err");
     const userEl = ov.querySelector("#lg-user");
     const passEl = ov.querySelector("#lg-pass");
+    wirePasswordEye(passEl);
     userEl.focus();
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
