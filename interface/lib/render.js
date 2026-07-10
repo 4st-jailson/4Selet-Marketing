@@ -34,7 +34,8 @@ function spawnAsync(args, opts) {
   return enqueueRender(() => new Promise((resolve) => {
     let child;
     try {
-      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT });
+      const env = opts.env ? Object.assign({}, process.env, opts.env) : process.env;
+      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT, env });
     } catch (e) {
       return resolve({ code: -1, stdout: "", stderr: "", error: (e && e.message) || String(e), timedOut: false, ok: false });
     }
@@ -110,11 +111,13 @@ function requireActive(folder) {
 
 // Executa o render_ad.js oficial (Playwright) — HTML -> PNG. Assincrono (spawn).
 // `scale` = deviceScaleFactor: 1 = base; 2 = ALTA RESOLUCAO (ex.: 2160px) p/ download.
-async function htmlToPng(htmlPath, outPng, width, height, scale) {
+async function htmlToPng(htmlPath, outPng, width, height, scale, opts) {
   const script = path.join(PATHS.SCRIPTS_DIR, "render_ad.js");
   const args = [script, htmlPath, outPng, String(width), String(height)];
   if (scale && scale !== 1) args.push(String(scale));
-  const r = await spawnAsync(args);
+  // strictNet: bloqueia rede externa no render (usado p/ HTML do editor, nao confiavel).
+  const spawnOpts = (opts && opts.strictNet) ? { env: { RENDER_STRICT_NET: "1" } } : undefined;
+  const r = await spawnAsync(args, spawnOpts);
   return { code: r.code, stdout: r.stdout, stderr: r.stderr || r.error, ok: r.ok };
 }
 
@@ -987,6 +990,53 @@ async function renderForDownload(folder, rel, scale) {
   return { path: outPng, width: reqW, height: reqH, temp: true };
 }
 
+// Sanitiza HTML vindo do EDITOR (nao confiavel — qualquer usuario logado envia).
+// Remove scripts, handlers on*, tags perigosas, javascript: e <link> externos que nao
+// sejam de fontes. E a defesa PRIMARIA; a secundaria e o bloqueio de rede no render
+// (RENDER_STRICT_NET), que impede SSRF/exfiltracao mesmo se algo escapar daqui.
+function sanitizeArtHtml(html) {
+  let s = String(html);
+  s = s.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");   // <script>...</script>
+  s = s.replace(/<script\b[^>]*>/gi, "");                     // <script ...> solto
+  s = s.replace(/<\/?(iframe|object|embed|base|form|meta|noscript|template|applet)\b[^>]*>/gi, "");
+  s = s.replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "");           // onload="..."
+  s = s.replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "");           // onload='...'
+  s = s.replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "");           // onload=x
+  s = s.replace(/(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, "$1=$2#$2");
+  // neutraliza src/href http(s) EXTERNOS (exceto fontes do Google) — defesa extra alem do bloqueio de rede
+  s = s.replace(/(src|href|xlink:href)\s*=\s*(["'])\s*https?:\/\/(?!fonts\.(?:googleapis|gstatic)\.com\/)[^"']*\2/gi, "$1=$2$2");
+  s = s.replace(/<link\b[^>]*>/gi, (m) => /fonts\.googleapis\.com/i.test(m) ? m : ""); // so <link> de fonte
+  return s;
+}
+
+// Editor HTML (item A): grava o HTML EDITADO da peca no proprio .html da arte e
+// re-renderiza o PNG via Playwright — pixel-perfect (a arte JA e HTML). So zona active.
+// Seguranca: SANITIZA o HTML (nao confiavel), so EDITA arte que ja existe, renderiza com
+// REDE BLOQUEADA (strictNet) e RESTAURA o HTML original se o render falhar.
+async function renderEditedHtml(folder, rel, html) {
+  const loc = findTask(folder);
+  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  if (loc.zone !== "active") { const e = new Error("edicao so na zona active (rode rework primeiro)"); e.code = "E_NOT_EDITABLE"; throw e; }
+  rel = String(rel || "").replace(/^[\\/]+/, "");
+  const root = path.resolve(loc.path);
+  const absPng = path.resolve(root, rel);
+  if (!(absPng === root || absPng.startsWith(root + path.sep)) || !/\.png$/i.test(absPng)) { const e = new Error("arquivo invalido"); e.code = "E_BAD_REL"; throw e; }
+  const htmlPath = absPng.replace(/\.png$/i, ".html");
+  // M5: so EDITA uma arte que JA existe — nao cria par .html/.png arbitrario.
+  if (!fs.existsSync(htmlPath)) { const e = new Error("origem (HTML) da peca nao encontrada para editar"); e.code = "E_NO_SOURCE_HTML"; throw e; }
+  const clean = sanitizeArtHtml(String(html));
+  const base = _pngBaseDims(clean);
+  if (!base) { const e = new Error("nao foi possivel ler as dimensoes do HTML editado"); e.code = "E_NO_DIMS"; throw e; }
+  const backup = fs.readFileSync(htmlPath, "utf8"); // p/ restaurar se o render falhar
+  fs.writeFileSync(htmlPath, clean, "utf8");
+  const r = await htmlToPng(htmlPath, absPng, base.w, base.h, RENDER_SCALE, { strictNet: true });
+  if (!r.ok || !fs.existsSync(absPng)) {
+    try { fs.writeFileSync(htmlPath, backup, "utf8"); } catch (e) { /* melhor esforco */ }
+    const e = new Error((r.stderr || "falha ao renderizar").slice(0, 300)); e.code = "E_RENDER_FAIL"; throw e;
+  }
+  return { ok: true, w: base.w, h: base.h, rel };
+}
+
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
 // Assincrono: o chamador (rota) deve usar `await render.render(...)`.
 async function render(folder, kind, opts) {
@@ -1001,6 +1051,6 @@ async function render(folder, kind, opts) {
 
 module.exports = {
   render, renderImage, renderFeed, renderCarousel, renderVideo, renderPreview,
-  renderForDownload,
+  renderForDownload, renderEditedHtml,
   TEMPLATE_IDS,
 };

@@ -1,0 +1,10 @@
+mkt.4st.co {
+	encode gzip
+
+	# TLS com o Cloudflare Origin Certificate (Cloudflare em modo Full/strict via Page Rule).
+	tls /etc/caddy/origin/cert.pem /etc/caddy/origin/key.pem
+
+	# SEM basic_auth: a autenticacao e o login do proprio painel (interface/lib/auth.js).
+	# (Removido em 2026-07-10 — antes havia um porteiro compartilhado "equipe".)
+	reverse_proxy panel:4500
+}

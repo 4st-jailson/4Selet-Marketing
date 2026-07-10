@@ -1,0 +1,9 @@
+node_modules
+interface/node_modules
+outputs
+.git
+*.log
+# segredos nunca entram na imagem (sao montados em runtime):
+.env
+**/.env
+deploy.env

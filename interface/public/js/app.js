@@ -175,7 +175,7 @@ function uiModal(opts) {
       ${opts.message ? '<p class="muted mt">' + esc(opts.message) + "</p>" : ""}
       ${fieldHtml}
       <div class="modal-actions">
-        <button class="btn btn-ghost" data-mx="cancel">${esc(opts.cancelText || "Cancelar")}</button>
+        ${opts.noCancel ? "" : '<button class="btn btn-ghost" data-mx="cancel">' + esc(opts.cancelText || "Cancelar") + "</button>"}
         <button class="btn ${opts.confirmKind === "danger" ? "btn-danger" : "btn-primary"}" data-mx="ok">${esc(opts.confirmText || "Confirmar")}</button>
       </div></div>`;
     document.body.appendChild(ov);
@@ -217,13 +217,13 @@ function uiModal(opts) {
       document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); restoreFocus(opener); resolve(val);
     };
     const onKey = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); done(null); }
+      if (e.key === "Escape") { if (!opts.noCancel) { e.preventDefault(); done(null); } }
       else if (e.key === "Enter" && !fields.some((f) => f.type === "textarea")) { e.preventDefault(); done(fields.length ? collect() : true); }
       else if (e.key === "Tab") trapTabKey(ov, e);
     };
     ov.querySelector("[data-mx='ok']").onclick = () => done(fields.length ? collect() : true);
-    ov.querySelector("[data-mx='cancel']").onclick = () => done(null);
-    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    const cancelBtn = ov.querySelector("[data-mx='cancel']"); if (cancelBtn) cancelBtn.onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov && !opts.noCancel) done(null); });
     document.addEventListener("keydown", onKey);
   });
 }
@@ -513,7 +513,7 @@ function dlMenu(baseUrl, label) {
 }
 // Fecha qualquer menu de resolução aberto ao clicar fora dele.
 document.addEventListener("click", (e) => {
-  document.querySelectorAll("details.dl-res[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
+  document.querySelectorAll("details.dl-res[open], details.ed-menu[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
 });
 
 function thumbHtml(t) {
@@ -1000,7 +1000,7 @@ function visibleFiles(task) {
   return files.filter((f) => {
     if (f.isImage || f.isVideo) return false;
     if (/(slides\/slide_\d+|ads\/(ad|feed))\.html?$/i.test(f.rel)) return false;
-    if (/\.canvas\.json$/i.test(f.rel)) return false; // sidecar do editor visual (não é entregável)
+    if (/\.(canvas|editable)\.json$/i.test(f.rel)) return false; // sidecars do editor visual (não entregáveis)
     return true;
   });
 }
@@ -1017,7 +1017,7 @@ function fileRow(folder, f) {
 }
 
 function mediaGallery(folder, task) {
-  const imgs = task.files.filter((f) => f.isImage);
+  const imgs = task.files.filter((f) => f.isImage && !/\.bg\.png$/i.test(f.rel));
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed");
@@ -1179,20 +1179,6 @@ function refineCard(task) {
   </div>`;
 }
 
-// ---- Editor visual (fabric.js) — v0.1: canvas livre p/ peca de Imagem ----
-let FABRIC_LOADING = null;
-function loadFabric() {
-  if (window.fabric) return Promise.resolve();
-  if (FABRIC_LOADING) return FABRIC_LOADING;
-  FABRIC_LOADING = new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js";
-    s.onload = () => resolve();
-    s.onerror = () => { FABRIC_LOADING = null; reject(new Error("Não consegui carregar o editor (fabric.js).")); };
-    document.head.appendChild(s);
-  });
-  return FABRIC_LOADING;
-}
 // Quais artes desta peca abrem no editor: carrossel -> 1 por slide; imagem/feed -> a arte principal.
 function editorTargets(task) {
   const files = (task && task.files) || [];
@@ -1207,321 +1193,291 @@ function editorTargets(task) {
     || files.find((f) => f.isImage && /\.png$/i.test(f.rel));
   return png ? [{ rel: png.rel, label: kindLabel(task.kind) || "Arte" }] : [];
 }
-function editorCard(task) {
-  if (task.zone !== "active") return "";
-  const targets = editorTargets(task);
-  if (!targets.length) return "";
-  const many = targets.length > 1;
-  const btns = targets.map((t) =>
-    `<button class="btn ${many ? "btn-sm" : "btn-primary"} editor-open" data-rel="${esc(t.rel)}">${esc(t.label)}</button>`
-  ).join(" ");
-  return `<div class="card mt"><div class="flex-between"><h3>Editor visual</h3><span class="hint">livre, arraste e edite (beta)</span></div>
-    <p class="muted mt">Abra a arte num editor livre (estilo Canva): adicione e mova textos e imagens, mude tamanho, peso e cor, e salve.${many ? " Escolha o slide:" : ""}</p>
-    <div class="editor-open-row mt">${btns}</div>
-    <p class="hint mt">O editor sobrescreve a arte final direto. Para descartar as edições e voltar ao padrão da marca, é só gerar a arte de novo (recria do zero, sem as edições manuais).</p></div>`;
+// ===== Editor HTML (item A / Opção 1): edita o HTML REAL da arte (pixel-perfect,
+// preserva accent/gradiente/fontes) e re-renderiza pra PNG via Playwright. =====
+function rgbToHex(c) {
+  const m = String(c || "").match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (!m) return /^#[0-9a-f]{6}$/i.test(String(c)) ? c : null;
+  return "#" + [1, 2, 3].map((i) => (+m[i]).toString(16).padStart(2, "0")).join("");
 }
-// Paleta oficial 4Selet + branco/quase-preto, p/ swatches rápidos no editor.
-const EDITOR_PALETTE = ["#07212B", "#003554", "#006494", "#5499B5", "#AFBCC9", "#D9DCD6", "#FFFFFF", "#101820"];
-const EDITOR_FONTS = ["Inter", "Archivo Black", "Playfair Display", "Bebas Neue", "JetBrains Mono", "Georgia"];
-let EDITOR_FONTS_LINKED = false;
-function ensureEditorFonts() {
-  if (EDITOR_FONTS_LINKED) return; EDITOR_FONTS_LINKED = true;
-  const l = document.createElement("link"); l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap";
-  document.head.appendChild(l);
-}
-// Editor visual (fabric) com 2 abas: "Editar livre" (canvas) + "Conteúdo & Marca" (camadas).
-async function openEditor(folder, task, rel) {
+async function openHtmlEditor(folder, task, rel) {
   const targets = editorTargets(task);
-  const artRel = rel || (targets[0] || {}).rel;
-  if (!artRel) { toast("Não há arte para editar aqui.", "error"); return; }
+  let curRel = rel || (targets[0] || {}).rel;
+  if (!curRel) { toast("Não há arte para editar aqui.", "error"); return; }
   toast("Abrindo editor…", "info");
-  try { await loadFabric(); } catch (e) { toast(e.message, "error"); return; }
-  ensureEditorFonts();
-  const pieceLabel = (targets.find((t) => t.rel === artRel) || {}).label || "Arte";
-  const STAGE_W = 600, STAGE_H = 600;
-  const fontOpts = EDITOR_FONTS.map((f) => '<option value="' + esc(f) + '">' + esc(f) + "</option>").join("");
-  const swatches = EDITOR_PALETTE.map((c) => '<button type="button" class="ed-sw" data-c="' + c + '" style="background:' + c + '" title="' + c + '"></button>').join("");
+  const multiSlide = targets.length > 1;
+  let assetMaps = [], dirty = false, current = null, curScale = 1; // [prefixo file://, token /url/]
+  let hist = [], hi = -1; // desfazer/refazer: pilha de innerHTML do .card
+  const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;}";
+  const FONTS = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap">';
+
   const ov = document.createElement("div");
   ov.className = "editor-ov";
   ov.innerHTML =
       '<div class="editor-top">'
-    +   '<span class="ed-piece">' + esc(pieceLabel) + '</span>'
-    +   '<div class="ed-tabs"><button class="ed-tab on" data-tab="canvas">Editar livre</button><button class="ed-tab" data-tab="content">Conteúdo &amp; Marca</button></div>'
+    +   '<span class="ed-piece" id="he-piece"></span>'
+    +   (multiSlide ? '<div class="ed-slidenav"><button class="ed-navbtn" id="he-prev" title="Slide anterior">‹</button><span class="ed-slide-count" id="he-count"></span><button class="ed-navbtn" id="he-next" title="Próximo slide">›</button></div>' : "")
     +   '<span style="flex:1"></span>'
-    +   '<button class="btn btn-sm btn-ghost" id="ed-close">Fechar</button>'
-    +   '<button class="btn btn-sm btn-primary" id="ed-save">Salvar arte</button>'
-    + '</div>'
-    + '<div class="ed-pane" id="ed-pane-canvas">'
-    +   '<div class="editor-bar">'
-    +     '<div class="ed-grp"><button class="btn btn-sm" id="ed-add-text">+ Texto</button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-add-rect" title="Retângulo">▭</button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-add-circle" title="Círculo">◯</button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-add-line" title="Linha / divisor">─</button>'
-    +       '<label class="btn btn-sm" style="cursor:pointer">+ Imagem<input type="file" id="ed-imgf" accept="image/*" hidden></label>'
-    +       '<button class="btn btn-sm" id="ed-add-logo" title="Logo 4Selet">+ Logo</button></div>'
-    +     '<span class="ed-sep"></span>'
-    +     '<div class="ed-grp"><select id="ed-font" title="Fonte">' + fontOpts + "</select>"
-    +       '<input type="number" id="ed-size" value="48" min="6" max="600" title="Tamanho">'
-    +       '<button class="btn btn-sm ed-ico" id="ed-bold" title="Negrito"><b>N</b></button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-italic" title="Itálico"><i>I</i></button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-underline" title="Sublinhado"><span style="text-decoration:underline">S</span></button>'
-    +       '<select id="ed-align" title="Alinhamento"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select></div>'
-    +     '<span class="ed-sep"></span>'
-    +     '<div class="ed-grp"><input type="color" id="ed-color" value="#ffffff" title="Cor"><div class="ed-swatches">' + swatches + "</div></div>"
-    +     '<span class="ed-sep"></span>'
-    +     '<div class="ed-grp"><button class="btn btn-sm ed-ico" id="ed-dup" title="Duplicar">⧉</button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-front" title="Trazer para frente">⤒</button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-back" title="Enviar para trás">⤓</button>'
-    +       '<label class="ed-op" title="Opacidade"><span>opac.</span><input type="range" id="ed-opacity" min="0" max="100" value="100"></label>'
-    +       '<button class="btn btn-sm btn-danger" id="ed-del" title="Remover (Del)">Remover</button></div>'
-    +     '<span class="ed-sep"></span>'
-    +     '<div class="ed-grp"><button class="btn btn-sm ed-ico" id="ed-undo" title="Desfazer (Ctrl+Z)" disabled>⟲</button>'
-    +       '<button class="btn btn-sm ed-ico" id="ed-redo" title="Refazer (Ctrl+Y)" disabled>⟳</button></div>'
-    +   "</div>"
-    +   '<div class="editor-stage"><canvas id="ed-canvas" width="' + STAGE_W + '" height="' + STAGE_H + '"></canvas></div>'
+    +   '<button class="btn btn-sm btn-ghost" id="he-close">Fechar</button>'
+    +   '<button class="btn btn-sm btn-primary" id="he-save">Salvar arte</button>'
     + "</div>"
-    + '<div class="ed-pane" id="ed-pane-content" hidden><div class="ed-content-form" id="ed-content-form"></div></div>';
+    + '<div class="he-bar" id="he-bar">'
+    +   '<button class="btn btn-sm" id="he-add-text">+ Texto</button>'
+    +   '<details class="ed-menu" id="he-logo-menu"><summary class="btn btn-sm">+ Logo</summary><div class="ed-pop">'
+    +     '<button data-src="/brand-assets/logo-4selet-light.png" data-w="0.32">Logo claro (fundo escuro)</button>'
+    +     '<button data-src="/brand-assets/logo-4selet.png" data-w="0.32">Logo escuro (fundo claro)</button>'
+    +     '<button data-src="/brand-assets/simbolo.svg" data-w="0.12">Só o símbolo "4"</button>'
+    +   "</div></details>"
+    +   '<details class="ed-menu" id="he-mark-menu"><summary class="btn btn-sm">+ Marca d’água</summary><div class="ed-pop">'
+    +     '<button data-mark="simbolo">Símbolo "4"</button>'
+    +     '<button data-mark="selet">Palavra "SELET"</button>'
+    +     '<button data-mark="4selet">"4SELET"</button>'
+    +   "</div></details>"
+    +   '<button class="btn btn-sm" id="he-add-img">+ Imagem</button>'
+    +   '<input type="file" id="he-file" accept="image/*" hidden>'
+    +   '<span class="ed-sep"></span>'
+    +   '<select id="he-font" title="Fonte">'
+    +     "<option value=\"'Inter',sans-serif\">Inter</option>"
+    +     "<option value=\"'Archivo Black',sans-serif\">Archivo Black</option>"
+    +     "<option value=\"'Playfair Display',serif\">Playfair</option>"
+    +     "<option value=\"'Bebas Neue',sans-serif\">Bebas Neue</option>"
+    +     "<option value=\"'JetBrains Mono',monospace\">JetBrains Mono</option>"
+    +     '<option value="Georgia,serif">Georgia</option>'
+    +   "</select>"
+    +   '<input type="number" id="he-size" value="40" min="6" max="600" title="Tamanho do texto">'
+    +   '<button class="btn btn-sm ed-ico" id="he-bold" title="Negrito"><b>N</b></button>'
+    +   '<button class="btn btn-sm ed-ico" id="he-italic" title="Itálico"><i>I</i></button>'
+    +   '<select id="he-align" title="Alinhamento"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select>'
+    +   '<input type="number" id="he-lh" step="0.05" min="0.8" max="3" title="Entrelinha" placeholder="1.2">'
+    +   '<input type="color" id="he-color" value="#ffffff" title="Cor do texto">'
+    +   '<span class="ed-sep"></span>'
+    +   '<button class="btn btn-sm ed-ico" id="he-undo" title="Desfazer (Ctrl+Z)">↶</button>'
+    +   '<button class="btn btn-sm ed-ico" id="he-redo" title="Refazer (Ctrl+Y)">↷</button>'
+    +   '<button class="btn btn-sm btn-danger" id="he-del" title="Remover (Del)">Remover</button>'
+    + "</div>"
+    + '<div class="editor-stage"><div class="he-wrap" id="he-wrap"><iframe id="he-frame" title="Editor visual" sandbox="allow-same-origin"></iframe><div class="he-handle" id="he-handle" style="display:none"></div></div></div>';
   document.body.appendChild(ov);
   document.body.classList.add("no-scroll");
+  const frame = $("#he-frame"), wrap = $("#he-wrap"), handle = $("#he-handle");
+  const gcs = (el) => frame.contentDocument.defaultView.getComputedStyle(el);
+  const getTf = (el) => { const t = el.style.transform || ""; const tr = t.match(/translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px/); const s = t.match(/scale\(\s*([\d.]+)/); return { x: tr ? parseFloat(tr[1]) : 0, y: tr ? parseFloat(tr[2]) : 0, s: s ? parseFloat(s[1]) : 1 }; };
+  const setTf = (el, x, y, s) => { el.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")"; };
 
-  const canvas = new fabric.Canvas("ed-canvas", { backgroundColor: "#07212B", preserveObjectStacking: true });
-  let exportMul = 1, currentColor = "#ffffff", dirty = false, contentLoaded = false;
-  const sel = () => canvas.getActiveObject();
-  const cx = () => canvas.getWidth() / 2, cy = () => canvas.getHeight() / 2;
-
-  // ---- histórico (desfazer/refazer) só dos objetos adicionados ----
-  let history = [], hIdx = -1, restoring = false;
-  const updateHist = () => { $("#ed-undo").disabled = hIdx <= 0; $("#ed-redo").disabled = hIdx >= history.length - 1; };
-  const snapshot = () => { if (restoring) return; history = history.slice(0, hIdx + 1); history.push(JSON.stringify(canvas.getObjects().map((o) => o.toObject()))); hIdx = history.length - 1; if (history.length > 1) dirty = true; updateHist(); };
-  const loadState = (idx) => {
-    restoring = true; canvas.remove.apply(canvas, canvas.getObjects().slice());
-    fabric.util.enlivenObjects(JSON.parse(history[idx] || "[]"), (list) => { list.forEach((o) => canvas.add(o)); canvas.discardActiveObject(); canvas.requestRenderAll(); restoring = false; updateHist(); });
-  };
-  canvas.on("object:added", snapshot); canvas.on("object:modified", snapshot); canvas.on("object:removed", snapshot);
-  const undo = () => { if (hIdx > 0) { hIdx--; loadState(hIdx); } };
-  const redo = () => { if (hIdx < history.length - 1) { hIdx++; loadState(hIdx); } };
-  $("#ed-undo").onclick = undo; $("#ed-redo").onclick = redo;
-
-  // ---- carrega a arte no canvas, proporcional; zera objetos e histórico ----
-  function loadArt(r) {
-    fabric.Image.fromURL(API.rawUrl(folder, r) + "&v=" + Date.now(), (img) => {
-      if (!img) { toast("Não consegui carregar a arte.", "error"); return; }
-      restoring = true; canvas.remove.apply(canvas, canvas.getObjects().slice()); restoring = false;
-      const natW = img.width || 1080, natH = img.height || 1080;
-      const scale = Math.min(STAGE_W / natW, STAGE_H / natH, 1);
-      const dispW = Math.max(1, Math.round(natW * scale)), dispH = Math.max(1, Math.round(natH * scale));
-      canvas.setWidth(dispW); canvas.setHeight(dispH);
-      img.set({ selectable: false, evented: false, left: 0, top: 0, originX: "left", originY: "top", scaleX: dispW / natW, scaleY: dispH / natH });
-      canvas.setBackgroundImage(img, canvas.requestRenderAll.bind(canvas));
-      exportMul = natW / dispW; history = []; hIdx = -1; snapshot();
+  function loadInto(r2) {
+    curRel = r2; dirty = false; current = null; hist = []; hi = -1;
+    $("#he-piece").textContent = (targets.find((t) => t.rel === curRel) || {}).label || "Arte";
+    updateNav();
+    API.taskHtml(folder, curRel.replace(/\.png$/i, ".html")).then((raw) => {
+      if (!/<html/i.test(raw)) { toast("Esta peça não tem HTML editável (gere a arte de novo).", "error"); return; }
+      // Reescreve assets file:// p/ URLs servidas (brand-assets = assets/ da marca;
+      // uploads = fotos em interface/public/uploads/). Guarda p/ reverter ao salvar.
+      assetMaps = [];
+      const am = raw.match(/(file:\/\/\/[^"']*\/assets\/)/i); if (am) assetMaps.push([am[1], "/brand-assets/"]);
+      const um = raw.match(/(file:\/\/\/[^"']*\/uploads\/)/i); if (um) assetMaps.push([um[1], "/uploads/"]);
+      let disp = raw; assetMaps.forEach((mp) => { disp = disp.split(mp[0]).join(mp[1]); });
+      disp = disp.replace(/<\/head>/i, FONTS + '<style id="he-editstyle">' + SEL_CSS + "</style></head>");
+      frame.onload = () => { try { wireDoc(frame.contentDocument); } catch (e) { toast("Erro ao preparar a arte: " + e.message, "error"); } };
+      frame.srcdoc = disp;
+    }).catch(() => toast("Não achei o HTML da arte.", "error"));
+  }
+  function wireDoc(doc) {
+    const card = doc.querySelector(".card") || doc.body;
+    const artW = card.offsetWidth || 1080, artH = card.offsetHeight || 1080;
+    frame.style.width = artW + "px"; frame.style.height = artH + "px";
+    const stage = ov.querySelector(".editor-stage");
+    curScale = Math.min((stage.clientWidth - 48) / artW, (stage.clientHeight - 48) / artH, 1);
+    frame.style.transform = "scale(" + curScale + ")";
+    wrap.style.width = Math.round(artW * curScale) + "px"; wrap.style.height = Math.round(artH * curScale) + "px";
+    const INLINE = ["SPAN", "B", "I", "EM", "STRONG", "BR", "A", "SUP", "SUB", "SMALL", "MARK", "U"];
+    const inlineOnly = (el) => Array.from(el.children).every((c) => INLINE.indexOf(c.tagName) >= 0);
+    // NÃO converte pra absoluto (quebrava o layout flex). Mantém o layout EXATO da arte
+    // e move/redimensiona via transform (translate + scale) — pixel-perfect no re-render.
+    Array.from(doc.querySelectorAll("body *")).forEach((el) => {
+      if (el === card) return;
+      const cs = doc.defaultView.getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden") return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return;
+      if (el.tagName !== "IMG") {
+        const txt = (el.textContent || "").trim();
+        const parentInline = el.parentElement && inlineOnly(el.parentElement) && (el.parentElement.textContent || "").trim();
+        if (!txt || !inlineOnly(el) || parentInline) return;
+      }
+      el.setAttribute("data-he", "1");
+      interactive(doc, el);
+    });
+    card.addEventListener("mousedown", (e) => { if (e.target === card) select(null); });
+    select(null); snapshot(); // baseline p/ desfazer
+  }
+  function interactive(doc, el) {
+    el.addEventListener("mousedown", (e) => {
+      if (el.isContentEditable) return;
+      e.preventDefault(); e.stopPropagation(); select(el);
+      const sx = e.clientX, sy = e.clientY, tf = getTf(el);
+      const mv = (ev) => { setTf(el, tf.x + (ev.clientX - sx), tf.y + (ev.clientY - sy), tf.s); positionHandle(); dirty = true; };
+      const up = () => { doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up); snapshot(); };
+      doc.addEventListener("mousemove", mv); doc.addEventListener("mouseup", up);
+    });
+    el.addEventListener("dblclick", () => {
+      if (el.tagName === "IMG") return;
+      el.contentEditable = "true"; el.focus();
+      const done = () => { el.contentEditable = "false"; el.removeEventListener("blur", done); dirty = true; snapshot(); };
+      el.addEventListener("blur", done);
     });
   }
-  loadArt(artRel);
-
-  // ---- adicionar elementos ----
-  const addObj = (o) => { canvas.add(o); canvas.setActiveObject(o); canvas.requestRenderAll(); };
-  $("#ed-add-text").onclick = () => addObj(new fabric.IText("Texto", { left: cx(), top: cy(), originX: "center", originY: "center", fill: currentColor, fontFamily: $("#ed-font").value || "Inter", fontSize: parseInt($("#ed-size").value, 10) || 48, fontWeight: 700, textAlign: "center" }));
-  $("#ed-add-rect").onclick = () => addObj(new fabric.Rect({ left: cx(), top: cy(), originX: "center", originY: "center", width: canvas.getWidth() * 0.42, height: canvas.getWidth() * 0.22, fill: currentColor, rx: 10, ry: 10 }));
-  $("#ed-add-circle").onclick = () => addObj(new fabric.Circle({ left: cx(), top: cy(), originX: "center", originY: "center", radius: canvas.getWidth() * 0.14, fill: currentColor }));
-  $("#ed-add-line").onclick = () => { const w = canvas.getWidth() * 0.42; addObj(new fabric.Line([cx() - w / 2, cy(), cx() + w / 2, cy()], { stroke: currentColor, strokeWidth: 6 })); };
-  $("#ed-add-logo").onclick = () => fabric.Image.fromURL("/brand-assets/logo-4selet-light.png", (im) => { if (!im) { toast("Logo não encontrado.", "error"); return; } im.scaleToWidth(canvas.getWidth() * 0.34); im.set({ left: cx(), top: cy(), originX: "center", originY: "center" }); addObj(im); });
-  $("#ed-imgf").onchange = (e) => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => fabric.Image.fromURL(rd.result, (im) => { im.scaleToWidth(canvas.getWidth() * 0.4); im.set({ left: cx(), top: cy(), originX: "center", originY: "center" }); addObj(im); }); rd.readAsDataURL(f); e.target.value = ""; };
-
-  // ---- texto / estilo (agem no objeto selecionado) ----
-  const applyObj = (fn, snap) => { const o = sel(); if (!o || !o.set) return; fn(o); canvas.requestRenderAll(); if (snap !== false) snapshot(); };
-  $("#ed-font").onchange = () => { const v = $("#ed-font").value; document.fonts.load('24px "' + v + '"').then(() => applyObj((o) => { if ("fontFamily" in o) o.set("fontFamily", v); })).catch(() => applyObj((o) => { if ("fontFamily" in o) o.set("fontFamily", v); })); };
-  $("#ed-size").oninput = () => applyObj((o) => { if ("fontSize" in o) o.set("fontSize", parseInt($("#ed-size").value, 10) || 48); }, false);
-  $("#ed-size").onchange = () => snapshot();
-  $("#ed-bold").onclick = () => applyObj((o) => { if ("fontWeight" in o) o.set("fontWeight", (o.fontWeight === 700 || o.fontWeight === "bold") ? 400 : 700); });
-  $("#ed-italic").onclick = () => applyObj((o) => { if ("fontStyle" in o) o.set("fontStyle", o.fontStyle === "italic" ? "normal" : "italic"); });
-  $("#ed-underline").onclick = () => applyObj((o) => { if ("underline" in o) o.set("underline", !o.underline); });
-  $("#ed-align").onchange = () => applyObj((o) => { if ("textAlign" in o) o.set("textAlign", $("#ed-align").value); });
-  const setColor = (c) => { currentColor = c; $("#ed-color").value = c; applyObj((o) => o.set(o.type === "line" ? "stroke" : "fill", c)); };
-  $("#ed-color").oninput = () => setColor($("#ed-color").value);
-  $$(".ed-sw", ov).forEach((b) => (b.onclick = () => setColor(b.dataset.c)));
-  $("#ed-opacity").oninput = () => applyObj((o) => o.set("opacity", (parseInt($("#ed-opacity").value, 10) || 0) / 100), false);
-  $("#ed-opacity").onchange = () => snapshot();
-
-  // ---- objeto: duplicar / ordem / remover ----
-  $("#ed-dup").onclick = () => { const o = sel(); if (!o) return; o.clone((cl) => { cl.set({ left: o.left + 24, top: o.top + 24 }); canvas.add(cl); canvas.setActiveObject(cl); canvas.requestRenderAll(); }); };
-  $("#ed-front").onclick = () => { const o = sel(); if (o) { canvas.bringToFront(o); canvas.requestRenderAll(); snapshot(); } };
-  $("#ed-back").onclick = () => { const o = sel(); if (o) { canvas.sendToBack(o); canvas.requestRenderAll(); snapshot(); } };
-  $("#ed-del").onclick = () => { const o = sel(); if (o) { canvas.remove(o); canvas.discardActiveObject(); canvas.requestRenderAll(); } };
-
-  const syncBar = () => {
-    const o = sel(); if (!o) return;
-    if (o.fontSize) $("#ed-size").value = Math.round(o.fontSize);
-    if (o.fontFamily) $("#ed-font").value = o.fontFamily;
-    if (o.textAlign) $("#ed-align").value = o.textAlign;
-    const col = o.type === "line" ? o.stroke : o.fill;
-    if (typeof col === "string" && /^#[0-9a-f]{6}$/i.test(col)) $("#ed-color").value = col;
-    $("#ed-opacity").value = Math.round((o.opacity == null ? 1 : o.opacity) * 100);
+  function positionHandle() {
+    if (!current) { handle.style.display = "none"; return; }
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const cr = card.getBoundingClientRect(), r = current.getBoundingClientRect();
+    handle.style.left = ((r.right - cr.left) * curScale - 7) + "px";
+    handle.style.top = ((r.bottom - cr.top) * curScale - 7) + "px";
+    handle.style.display = "block";
+  }
+  handle.addEventListener("mousedown", (e) => {
+    e.preventDefault(); e.stopPropagation(); if (!current) return;
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const tf = getTf(current), cr = card.getBoundingClientRect(), r = current.getBoundingClientRect();
+    const cx = (r.left + r.right) / 2 - cr.left, cy = (r.top + r.bottom) / 2 - cr.top;
+    const wr = wrap.getBoundingClientRect();
+    const toIf = (mx, my) => [(mx - wr.left) / curScale, (my - wr.top) / curScale];
+    const p0 = toIf(e.clientX, e.clientY), d0 = Math.hypot(p0[0] - cx, p0[1] - cy) || 1;
+    const mv = (ev) => { const p = toIf(ev.clientX, ev.clientY); const s = Math.max(0.1, Math.min(8, tf.s * Math.hypot(p[0] - cx, p[1] - cy) / d0)); setTf(current, tf.x, tf.y, s); positionHandle(); dirty = true; };
+    const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); snapshot(); };
+    document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
+  });
+  function select(el) {
+    if (current) current.removeAttribute("data-he-sel");
+    current = el;
+    if (!el) { handle.style.display = "none"; return; }
+    el.setAttribute("data-he-sel", "1");
+    const isImg = el.tagName === "IMG";
+    ["he-font", "he-size", "he-bold", "he-italic", "he-align", "he-lh", "he-color"].forEach((id) => { const n = $("#" + id); if (n) n.disabled = isImg; });
+    if (!isImg) {
+      const cs = gcs(el);
+      $("#he-size").value = Math.round(parseFloat(cs.fontSize)) || 40;
+      const c = rgbToHex(cs.color); if (c) $("#he-color").value = c;
+      const fam = (cs.fontFamily || "").split(",")[0].replace(/['"]/g, "").trim().toLowerCase();
+      const fs = $("#he-font"); if (fs) Array.from(fs.options).forEach((o) => { if (o.value.toLowerCase().indexOf(fam) >= 0) fs.value = o.value; });
+      $("#he-align").value = cs.textAlign === "center" ? "center" : (cs.textAlign === "right" || cs.textAlign === "end" ? "right" : "left");
+      const lh = parseFloat(cs.lineHeight) / (parseFloat(cs.fontSize) || 1); $("#he-lh").value = isFinite(lh) ? Math.round(lh * 100) / 100 : "";
+      $("#he-bold").classList.toggle("on", (parseInt(cs.fontWeight, 10) || 400) >= 700);
+      $("#he-italic").classList.toggle("on", cs.fontStyle === "italic");
+    }
+    positionHandle();
+  }
+  // --- Desfazer/refazer: snapshot do innerHTML do card (sem marcações de seleção) ---
+  function snapshot() {
+    const doc = frame.contentDocument; if (!doc) return; const card = doc.querySelector(".card") || doc.body;
+    const sel = card.querySelector("[data-he-sel]"); if (sel) sel.removeAttribute("data-he-sel");
+    const html = card.innerHTML;
+    if (sel) sel.setAttribute("data-he-sel", "1");
+    hist = hist.slice(0, hi + 1); hist.push(html); hi = hist.length - 1;
+    if (hist.length > 60) { hist.shift(); hi--; }
+    updateUndo();
+  }
+  function updateUndo() { const u = $("#he-undo"), r = $("#he-redo"); if (u) u.disabled = hi <= 0; if (r) r.disabled = hi >= hist.length - 1; }
+  function applyHist() {
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    current = null; handle.style.display = "none";
+    card.innerHTML = hist[hi];
+    card.querySelectorAll("[data-he]").forEach((el) => { el.removeAttribute("data-he-sel"); interactive(doc, el); });
+    dirty = true;
+  }
+  function undo() { if (hi > 0) { hi--; applyHist(); updateUndo(); } }
+  function redo() { if (hi < hist.length - 1) { hi++; applyHist(); updateUndo(); } }
+  // --- Adicionar elementos ---
+  function addImgNode(src, opts) {
+    opts = opts || {};
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const img = doc.createElement("img"); img.src = src; img.setAttribute("data-he", "1");
+    const w = opts.width || Math.round(card.offsetWidth * 0.3);
+    img.style.cssText = "position:absolute;left:" + (opts.left != null ? opts.left : Math.round((card.offsetWidth - w) / 2)) + "px;top:" + (opts.top != null ? opts.top : Math.round(card.offsetHeight * 0.4)) + "px;width:" + w + "px;height:auto;" + (opts.opacity != null ? "opacity:" + opts.opacity + ";" : "");
+    card.appendChild(img); interactive(doc, img); select(img); dirty = true; snapshot();
+  }
+  function addMark(type) {
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    if (type === "simbolo") { const w = Math.round(card.offsetWidth * 0.7); addImgNode("/brand-assets/simbolo.svg", { width: w, left: Math.round(card.offsetWidth * 0.5), top: Math.round(card.offsetHeight * 0.55), opacity: 0.06 }); return; }
+    const el = doc.createElement("div"); el.textContent = type === "4selet" ? "4SELET" : "SELET"; el.setAttribute("data-he", "1");
+    el.style.cssText = "position:absolute;left:" + Math.round(card.offsetWidth * 0.06) + "px;top:" + Math.round(card.offsetHeight * 0.42) + "px;font-family:'Inter',sans-serif;font-weight:900;font-size:200px;color:#FFFFFF;opacity:0.05;letter-spacing:-4px;white-space:nowrap;";
+    card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot();
+  }
+  $("#he-add-text").onclick = () => {
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const el = doc.createElement("div"); el.textContent = "Novo texto";
+    el.style.cssText = "position:absolute;left:" + Math.round(card.offsetWidth * 0.28) + "px;top:" + Math.round(card.offsetHeight * 0.45) + "px;font-family:'Inter',sans-serif;font-size:56px;font-weight:700;color:#FFFFFF;";
+    el.setAttribute("data-he", "1"); card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot();
   };
-  canvas.on("selection:created", syncBar); canvas.on("selection:updated", syncBar);
-
-  // ---- teclado ----
-  const onKey = (ev) => {
-    const o = sel();
-    if (o && o.isEditing) return;
-    if (ev.key === "Escape") { close(); return; }
-    if ((ev.key === "Delete" || ev.key === "Backspace") && o) { ev.preventDefault(); canvas.remove(o); canvas.discardActiveObject(); canvas.requestRenderAll(); return; }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "y") { ev.preventDefault(); redo(); return; }
-  };
+  $("#he-logo-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addImgNode(b.dataset.src, { width: Math.round((frame.contentDocument.querySelector(".card") || {}).offsetWidth * (parseFloat(b.dataset.w) || 0.3)), top: 80 }); $("#he-logo-menu").removeAttribute("open"); }; });
+  $("#he-mark-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addMark(b.dataset.mark); $("#he-mark-menu").removeAttribute("open"); }; });
+  $("#he-add-img").onclick = () => $("#he-file").click();
+  $("#he-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => addImgNode(rd.result, { top: 120 }); rd.readAsDataURL(f); e.target.value = ""; };
+  // --- Controles de texto ---
+  const applyStyle = (fn) => { if (current && current.tagName !== "IMG") { fn(current); dirty = true; } };
+  $("#he-size").oninput = () => applyStyle((el) => { el.style.fontSize = (parseInt($("#he-size").value, 10) || 40) + "px"; positionHandle(); });
+  $("#he-size").onchange = () => { if (current) snapshot(); };
+  $("#he-font").onchange = () => { applyStyle((el) => { el.style.fontFamily = $("#he-font").value; }); positionHandle(); if (current) snapshot(); };
+  $("#he-align").onchange = () => { applyStyle((el) => { el.style.textAlign = $("#he-align").value; }); if (current) snapshot(); };
+  $("#he-lh").oninput = () => applyStyle((el) => { el.style.lineHeight = $("#he-lh").value || ""; positionHandle(); });
+  $("#he-lh").onchange = () => { if (current) snapshot(); };
+  $("#he-bold").onclick = () => { applyStyle((el) => { const w = parseInt(gcs(el).fontWeight, 10) || 400; el.style.fontWeight = w >= 700 ? "400" : "700"; $("#he-bold").classList.toggle("on", w < 700); }); if (current) snapshot(); };
+  $("#he-italic").onclick = () => { applyStyle((el) => { const it = gcs(el).fontStyle === "italic"; el.style.fontStyle = it ? "normal" : "italic"; $("#he-italic").classList.toggle("on", !it); }); if (current) snapshot(); };
+  $("#he-color").oninput = () => applyStyle((el) => { el.style.color = $("#he-color").value; });
+  $("#he-color").onchange = () => { if (current) snapshot(); };
+  $("#he-del").onclick = () => { if (current) { current.remove(); select(null); dirty = true; snapshot(); } };
+  $("#he-undo").onclick = undo; $("#he-redo").onclick = redo;
+  // fecha menus abertos ao clicar fora
+  ov.addEventListener("click", (e) => { if (!e.target.closest("details.ed-menu")) ov.querySelectorAll("details.ed-menu[open]").forEach((d) => d.removeAttribute("open")); });
+  // atalhos de teclado
+  function onKey(e) {
+    const fd = frame.contentDocument, ae = fd && fd.activeElement;
+    if (ae && ae.isContentEditable) return;
+    const t = (document.activeElement || {}).tagName;
+    if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
+    if ((e.key === "Delete" || e.key === "Backspace") && current) { e.preventDefault(); current.remove(); select(null); dirty = true; snapshot(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); }
+  }
   document.addEventListener("keydown", onKey);
+  function updateNav() {
+    if (!multiSlide) return;
+    const i = targets.findIndex((t) => t.rel === curRel);
+    const c = $("#he-count"); if (c) c.textContent = (i + 1) + " / " + targets.length;
+    const p = $("#he-prev"), n = $("#he-next"); if (p) p.disabled = i <= 0; if (n) n.disabled = i >= targets.length - 1;
+  }
+  async function goSlide(d) {
+    const i = targets.findIndex((t) => t.rel === curRel), ni = i + d;
+    if (ni < 0 || ni >= targets.length) return;
+    if (dirty && !(await uiConfirm("Trocar de slide descarta as edições não salvas. Continuar?", { confirmText: "Trocar" }))) return;
+    loadInto(targets[ni].rel);
+  }
+  if (multiSlide) { $("#he-prev").onclick = () => goSlide(-1); $("#he-next").onclick = () => goSlide(1); }
   const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); if (dirty) router(); };
-  $("#ed-close").onclick = close;
-
-  // ---- abas: canvas <-> conteúdo & marca ----
-  const showTab = (name) => {
-    $$(".ed-tab", ov).forEach((x) => x.classList.toggle("on", x.dataset.tab === name));
-    $("#ed-pane-canvas").hidden = name !== "canvas";
-    $("#ed-pane-content").hidden = name !== "content";
-    $("#ed-save").style.display = name === "canvas" ? "" : "none";
-    if (name === "content" && !contentLoaded) { contentLoaded = true; renderLayers($("#ed-content-form"), folder, task, onContentSaved); }
-  };
-  const onContentSaved = () => { dirty = true; loadArt(artRel); showTab("canvas"); };
-  $$(".ed-tab", ov).forEach((tb) => (tb.onclick = () => showTab(tb.dataset.tab)));
-
-  // ---- salvar a arte (achata o canvas no PNG) ----
-  $("#ed-save").onclick = async () => {
-    const btn = $("#ed-save"); btn.disabled = true; const orig = btn.textContent; btn.textContent = "Salvando…";
+  $("#he-close").onclick = close;
+  $("#he-save").onclick = async () => {
+    const btn = $("#he-save"); btn.disabled = true; const o = btn.textContent; btn.textContent = "Salvando…";
     try {
-      canvas.discardActiveObject(); canvas.requestRenderAll();
-      const png = canvas.toDataURL({ format: "png", multiplier: exportMul });
-      await API.saveCanvas(folder, artRel, png, JSON.stringify(canvas.toJSON()));
-      dirty = true; toast("Arte salva.", "success"); loadArt(artRel);
+      const doc = frame.contentDocument;
+      const st = doc.getElementById("he-editstyle"); if (st) st.remove(); // mantém #he-fonts (re-render precisa)
+      doc.querySelectorAll("[data-he]").forEach((el) => { el.removeAttribute("data-he"); el.removeAttribute("data-he-sel"); el.contentEditable = "false"; });
+      // reverte assets (/brand-assets//uploads/ -> file://) SÓ nos atributos src/href do DOM,
+      // não na string inteira (evita corromper texto que contenha o token).
+      doc.querySelectorAll("[src],[href]").forEach((el) => {
+        ["src", "href"].forEach((attr) => {
+          const v = el.getAttribute(attr); if (!v) return;
+          for (const mp of assetMaps) { if (v.indexOf(mp[1]) === 0) { el.setAttribute(attr, mp[0] + v.slice(mp[1].length)); break; } }
+        });
+      });
+      const html = "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+      const r = await API.saveEditedHtml(folder, curRel, html);
+      dirty = false; toast("Arte salva.", "success");
+      if (!r || !r.ok) toast("Aviso: verifique a arte.", "warn");
     } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); }
-    btn.disabled = false; btn.textContent = orig;
+    btn.disabled = false; btn.textContent = o;
   };
+  loadInto(curRel);
 }
 
 // Painel "Camadas" (A1): editar direto texto/tema de cada slide do carrossel, sem IA.
-function layersCard(task) {
-  if (task.zone !== "active" || ["carousel", "image", "feed"].indexOf(task.kind) === -1) return "";
-  return `<div class="card mt">
-    <div class="flex-between"><h3>Camadas</h3><span class="hint">editar direto, sem IA</span></div>
-    <p class="muted mt">Edite a peça direto, sem a IA: textos, tema (claro/escuro), marca d'água e — na capa — a posição e o tamanho do título. Para destacar uma palavra em azul, coloque-a entre <span class="codeblock">==assim==</span>. Ao salvar, a arte é gerada de novo na hora e a versão anterior fica guardada (dá para desfazer).</p>
-    <div id="layers-area" class="mt"><p class="hint"><span class="spinner"></span> carregando camadas…</p></div>
-  </div>`;
-}
-async function wireLayers(folder, task) { const box = $("#layers-area"); if (box) renderLayers(box, folder, task, () => router()); }
-// Renderiza o form de "Camadas" num CONTAINER dado — reusado no card da peça e na aba
-// "Conteúdo & Marca" do editor. onSaved() roda após salvar+re-renderizar.
-async function renderLayers(container, folder, task, onSaved) {
-  if (!container) return;
-  if (task.kind === "image") return layersImage(container, folder, task, onSaved);
-  if (task.kind === "feed") return layersFeed(container, folder, task, onSaved);
-  return layersCarousel(container, folder, task, onSaved);
-}
-// Camadas de IMAGEM/ANÚNCIO (ads/concept.json): headline, subtexto, eyebrow, cta, badge.
-async function layersImage(container, folder, task, onSaved) {
-  let c;
-  try { c = JSON.parse(await API.taskFile(folder, "ads/concept.json")); }
-  catch (e) { container.innerHTML = '<p class="empty">Não consegui ler o conteúdo da imagem.</p>'; return; }
-  container.innerHTML = '<div class="layer-block">'
-    + '<label class="layer-lab">Rótulo (eyebrow)</label><input class="ly-f" data-k="eyebrow" value="' + esc(c.eyebrow || "") + '" placeholder="ex.: PROVA DA PLATAFORMA" />'
-    + '<label class="layer-lab">Headline <span class="hint">(==palavra== = azul)</span></label><textarea class="ly-f" data-k="headline" rows="2">' + esc(c.headline || "") + "</textarea>"
-    + '<label class="layer-lab">Subtexto</label><textarea class="ly-f" data-k="subtext" rows="2">' + esc(c.subtext || "") + "</textarea>"
-    + '<label class="layer-lab">CTA</label><input class="ly-f" data-k="cta" value="' + esc(c.cta || "") + '" />'
-    + '<label class="layer-lab">Selo (badge)</label><input class="ly-f" data-k="badge" value="' + esc(c.badge || "") + '" />'
-    + '</div><button class="btn btn-primary mt ly-save">Salvar camadas e re-renderizar</button>';
-  $(".ly-save", container).onclick = async () => {
-    const btn = $(".ly-save", container); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
-    $$(".ly-f", container).forEach((el) => { const k = el.dataset.k, v = el.tagName === "TEXTAREA" ? el.value : el.value.trim(); if (v) c[k] = v; else delete c[k]; });
-    try { await API.saveContent(folder, "ads/concept.json", JSON.stringify(c, null, 2) + "\n"); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); onSaved && onSaved(); }
-    catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
-  };
-}
-// Camadas de FEED (copy/instagram_caption.txt): a legenda; a 1a linha vira o título da arte.
-async function layersFeed(container, folder, task, onSaved) {
-  let text = "";
-  try { text = await API.taskFile(folder, "copy/instagram_caption.txt"); }
-  catch (e) { container.innerHTML = '<p class="empty">Não consegui ler a legenda.</p>'; return; }
-  container.innerHTML = '<label class="layer-lab">Legenda <span class="hint">(a 1ª linha vira o título da arte)</span></label>'
-    + '<textarea class="ly-caption" rows="8" style="width:100%">' + esc(text) + "</textarea>"
-    + '<button class="btn btn-primary mt ly-save">Salvar camadas e re-renderizar</button>';
-  $(".ly-save", container).onclick = async () => {
-    const btn = $(".ly-save", container); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
-    try { await API.saveContent(folder, "copy/instagram_caption.txt", $(".ly-caption", container).value); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); onSaved && onSaved(); }
-    catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
-  };
-}
-// Camadas de CARROSSEL: por slide (título, texto, tema, callout).
-// Marca d'água: preset <-> objeto {text, style} do renderizador.
-function wmPresetOf(wm) {
-  if (wm == null) return "";
-  if (typeof wm === "object") {
-    const st = String(wm.style || "").toLowerCase();
-    if (st === "none") return "none";
-    if (st === "symbol") return "symbol";
-    if (st === "outline") return "outline";
-    return String(wm.text || "") === "4SELET" ? "4selet" : "selet";
-  }
-  return "selet";
-}
-function wmFromPreset(p) {
-  if (p === "none") return { style: "none" };
-  if (p === "symbol") return { style: "symbol" };
-  if (p === "outline") return { text: "SELET", style: "outline" };
-  if (p === "4selet") return { text: "4SELET", style: "word" };
-  if (p === "selet") return { text: "SELET", style: "word" };
-  return undefined; // "" = padrão (não grava campo)
-}
-function wmOptions(sel) {
-  const O = (v, lab) => '<option value="' + v + '"' + (sel === v ? " selected" : "") + ">" + lab + "</option>";
-  return O("", "Padrão (SELET)") + O("4selet", "4SELET") + O("outline", "SELET vazada") + O("symbol", 'Símbolo “4”') + O("none", "Nenhuma");
-}
-async function layersCarousel(container, folder, task, onSaved) {
-  const box = container; if (!box) return;
-  let concept;
-  try { concept = JSON.parse(await API.taskFile(folder, "copy/instagram_carousel.json")); }
-  catch (e) { box.innerHTML = '<p class="empty">Não consegui ler o conteúdo do carrossel.</p>'; return; }
-  const slides = Array.isArray(concept.slides) ? concept.slides : [];
-  const LBL = { cover: "Capa", flow: "Fluxo", text: "Texto", stat_grid: "Números", list: "Lista", cta: "Fecho" };
-  const archOf = (s, i) => String(s.layout || (i === 0 ? "cover" : i === slides.length - 1 ? "cta" : "text")).toLowerCase();
-  const rows = slides.map((s, i) => {
-    const a = archOf(s, i);
-    const showEyebrow = a !== "cover", showBody = (a === "cover" || a === "text" || a === "cta"), showNote = a === "flow", showTheme = (a === "text" || a === "cta"), showWm = (a === "text" || a === "cta"), showPos = (a === "cover");
-    return `<div class="layer-block" data-i="${i}">
-      <div class="layer-head"><span class="layer-n">Slide ${i + 1}</span><span class="badge plain">${esc(LBL[a] || a)}</span></div>
-      ${showEyebrow ? `<label class="layer-lab">Rótulo</label><input class="ly-eyebrow" value="${esc(s.eyebrow || "")}" placeholder="ex.: O RISCO" />` : ""}
-      <label class="layer-lab">Título</label><textarea class="ly-title" rows="2">${esc(s.title || "")}</textarea>
-      ${showBody ? `<label class="layer-lab">Texto de apoio</label><textarea class="ly-body" rows="2">${esc(s.body || "")}</textarea>` : ""}
-      ${showNote ? `<label class="layer-lab">Caixa de destaque</label><input class="ly-note" value="${esc(s.note || "")}" />` : ""}
-      ${showTheme ? `<label class="layer-lab">Tema</label><select class="ly-theme"><option value="dark"${s.theme === "light" ? "" : " selected"}>Escuro</option><option value="light"${s.theme === "light" ? " selected" : ""}>Claro (editorial)</option></select>` : ""}
-      ${showWm ? `<label class="layer-lab">Marca d'água</label><select class="ly-wm">${wmOptions(wmPresetOf(s.watermark))}</select>` : ""}
-      ${showPos ? `<label class="layer-lab">Posição e tamanho do título <span class="hint">(X / Y em px · tamanho %)</span></label><div class="ly-pos"><input class="ly-ox" type="number" step="10" value="${Number(s.titleOffsetX) || 0}" title="Horizontal (px)" /><input class="ly-oy" type="number" step="10" value="${Number(s.titleOffsetY) || 0}" title="Vertical (px)" /><input class="ly-sc" type="number" step="5" min="40" max="220" value="${Math.round((Number(s.titleScale) || 1) * 100)}" title="Tamanho (%)" /></div>` : ""}
-    </div>`;
-  }).join("");
-  box.innerHTML = `<div class="field" style="max-width:340px"><label class="layer-lab">CTA do fecho <span class="hint">(botão do último slide)</span></label><input class="ly-cta" value="${esc(concept.cta || "")}" /></div>
-    <div class="layers-list mt">${rows}</div>
-    <button class="btn btn-primary mt ly-save">Salvar camadas e re-renderizar</button>`;
-  $(".ly-save", box).onclick = async () => {
-    const btn = $(".ly-save", box); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
-    $$(".layer-block", box).forEach((bl) => {
-      const s = slides[Number(bl.dataset.i)];
-      const eb = bl.querySelector(".ly-eyebrow"); if (eb) { const v = eb.value.trim(); if (v) s.eyebrow = v; else delete s.eyebrow; }
-      const ti = bl.querySelector(".ly-title"); if (ti) s.title = ti.value;
-      const bo = bl.querySelector(".ly-body"); if (bo) { if (bo.value.trim()) s.body = bo.value; else delete s.body; }
-      const no = bl.querySelector(".ly-note"); if (no) { const v = no.value.trim(); if (v) s.note = v; else delete s.note; }
-      const th = bl.querySelector(".ly-theme"); if (th) { if (th.value === "light") s.theme = "light"; else delete s.theme; }
-      const wm = bl.querySelector(".ly-wm"); if (wm) { const p = wmFromPreset(wm.value); if (p) s.watermark = p; else delete s.watermark; }
-      const ox = bl.querySelector(".ly-ox"); if (ox) { const v = parseInt(ox.value, 10) || 0; if (v) s.titleOffsetX = v; else delete s.titleOffsetX; }
-      const oy = bl.querySelector(".ly-oy"); if (oy) { const v = parseInt(oy.value, 10) || 0; if (v) s.titleOffsetY = v; else delete s.titleOffsetY; }
-      const sc = bl.querySelector(".ly-sc"); if (sc) { const v = (parseInt(sc.value, 10) || 100) / 100; if (Math.abs(v - 1) > 0.001) s.titleScale = v; else delete s.titleScale; }
-    });
-    const ctaEl = $(".ly-cta", box); if (ctaEl) concept.cta = ctaEl.value.trim();
-    try {
-      await API.saveContent(folder, "copy/instagram_carousel.json", JSON.stringify(concept, null, 2) + "\n");
-      await API.renderMedia(folder, task.kind, selectedTemplate());
-      toast("Camadas salvas — arte atualizada.", "success");
-      onSaved && onSaved();
-    } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
-  };
-}
-
 // Area de "Desfazer" + histórico de versões da peça (após qualquer ajuste/edição).
 async function wireUndo(folder, task) {
   const box = $("#undo-area"); if (!box) return;
@@ -1759,7 +1715,7 @@ async function openFile(folder, rel) {
       const url = URL.createObjectURL(new Blob([text], { type: "text/html" }));
       host.innerHTML = '<div class="gen-out"><div class="flex-between mb"><strong>' + esc(rel) + '</strong>'
         + '<a class="btn btn-sm btn-ghost" href="' + url + '" target="_blank" rel="noopener">abrir em nova aba ↗</a></div>'
-        + '<iframe class="file-frame" src="' + url + '" title="' + esc(rel) + '"></iframe></div>';
+        + '<iframe class="file-frame" src="' + url + '" title="' + esc(rel) + '" sandbox="allow-scripts"></iframe></div>';
       host.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
@@ -1820,7 +1776,7 @@ function renderLbItem() {
   }
   const ed = $("#lightbox-edit");
   if (ed) {
-    if (it.editable && it.folder && it.rel && State.task) { ed.style.display = ""; ed.onclick = () => { closeLightbox(); openEditor(it.folder, State.task, it.rel); }; }
+    if (it.editable && it.folder && it.rel && State.task) { ed.style.display = ""; ed.onclick = () => { closeLightbox(); openHtmlEditor(it.folder, State.task, it.rel); }; }
     else ed.style.display = "none";
   }
   const multi = _lbItems.length > 1;
@@ -1894,7 +1850,7 @@ async function openHtmlLightbox(folder, rel, dlUrl) {
     const text = await API.taskFile(folder, rel);
     if (_lbBlobUrl) { URL.revokeObjectURL(_lbBlobUrl); _lbBlobUrl = null; }
     _lbBlobUrl = URL.createObjectURL(new Blob([text], { type: "text/html" }));
-    stage.innerHTML = `<iframe class="lightbox-frame" src="${_lbBlobUrl}" title="${esc(rel)}"></iframe>`;
+    stage.innerHTML = `<iframe class="lightbox-frame" src="${_lbBlobUrl}" title="${esc(rel)}" sandbox="allow-scripts"></iframe>`;
     setLightboxNewTab(_lbBlobUrl);
     const dl = $("#lightbox-dl");
     const lbRes = $("#lightbox-res");
@@ -2390,20 +2346,6 @@ function composeText(parsed, raw) {
     return t;
   }
   return raw || "";
-}
-function structuredPreview(type, p) {
-  if (!p) return "";
-  if (type === "instagram_carousel" && Array.isArray(p.slides)) {
-    return '<div class="gen-out">' + p.slides.map((s, i) => `<div class="slide-card"><div class="sc-title">Slide ${i + 1}: ${esc(s.title || "")}</div><div class="sc-body">${esc(s.body || "")}</div></div>`).join("") + "</div>";
-  }
-  if (type === "ad_creative") {
-    return `<div class="gen-out"><div class="slide-card"><div class="sc-title">${esc(p.headline || "")}</div><div class="sc-body">${esc(p.subtext || "")}</div><div class="muted mt">CTA: ${esc(p.cta || "")} · ${esc(p.layout_type || "")}</div></div></div>`;
-  }
-  if (type === "video_idea" && Array.isArray(p.scenes)) {
-    return '<div class="gen-out">' + `<div class="slide-card"><div class="sc-title">${esc(p.concept || "")}</div><div class="sc-body">Hook: ${esc(p.hook || "")}</div></div>` +
-      p.scenes.map((s, i) => `<div class="slide-card"><div class="sc-title">Cena ${i + 1} · ${esc(s.type || "")}</div><div class="sc-body">${esc(s.text || "")} <span class="dim">— ${esc(s.visual || "")}</span></div></div>`).join("") + "</div>";
-  }
-  return "";
 }
 // ---- Editor estruturado (slides do carrossel / cenas do vídeo / anúncio) ----
 // Substitui o JSON cru por campos editáveis. Mantém o textarea #g-edit (oculto
@@ -3207,11 +3149,15 @@ function applyUserToChrome() {
   if (foot) {
     let chip = $("#user-chip");
     if (!chip) { chip = document.createElement("div"); chip.id = "user-chip"; chip.className = "user-chip"; foot.insertBefore(chip, foot.firstChild); }
+    const keyIco = '<svg class="mi" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m16.5 6.5 3 3"/></svg>';
+    const outIco = '<svg class="mi" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
     chip.innerHTML =
-      '<div class="uc-info"><span class="uc-name">' + esc(u.name || u.username) + "</span>"
-      + '<span class="uc-role">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span></div>"
-      + '<div class="uc-actions"><button class="btn btn-ghost btn-sm" id="btn-chpass" title="Trocar minha senha">Senha</button>'
-      + '<button class="btn btn-ghost btn-sm" id="btn-logout" title="Sair">Sair</button></div>';
+      '<div class="uc-top"><div class="uc-avatar" aria-hidden="true">' + esc(userInitials(u.name || u.username)) + "</div>"
+      + '<div class="uc-info"><span class="uc-name">' + esc(u.name || u.username) + "</span>"
+      + '<span class="uc-role">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span></div></div>"
+      + '<div class="uc-actions">'
+      + '<button class="btn btn-ghost btn-sm" id="btn-chpass" title="Trocar minha senha">' + keyIco + "Senha</button>"
+      + '<button class="btn btn-ghost btn-sm" id="btn-logout" title="Sair da conta">' + outIco + "Sair</button></div>";
     $("#btn-chpass").onclick = onChangeOwnPassword;
     $("#btn-logout").onclick = async () => { try { await API.logout(); } catch (_) { /* ignora */ } location.reload(); };
   }
@@ -3234,20 +3180,82 @@ async function onChangeOwnPassword() {
   catch (e) { toast((e && e.message) || "Erro ao trocar a senha.", "error"); }
 }
 
+// Iniciais p/ o avatar (ex.: "Flavio Del Lima" -> "FD").
+function userInitials(name) {
+  const p = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return "?";
+  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+  return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+}
+// Aceite de LINK DE CONVITE: se a URL veio como #/convite?t=TOKEN, troca o token por uma
+// sessão (sem senha na URL) e limpa o token da barra. Depois o boot força a definição de
+// senha (must_change). Roda antes do requireAuth.
+async function tryAcceptInvite() {
+  const h = String(location.hash || "");
+  const m = h.match(/convite\?t=([^&]+)/i);
+  if (!m) return;
+  const token = decodeURIComponent(m[1]);
+  try { await API.acceptInvite(token); toast("Convite aceito. Defina a sua senha para entrar.", "ok"); }
+  catch (e) { toast((e && e.message) || "Convite inválido ou expirado.", "error"); }
+  try { history.replaceState(null, "", location.pathname + location.search + "#/"); } catch (_) { location.hash = "#/"; }
+}
+// Mostra o link de convite gerado, com botão de copiar (o token só aparece aqui, uma vez).
+function showInviteLink(url, username) {
+  const ov = document.createElement("div"); ov.className = "modal-ov";
+  ov.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><h3>Link de convite</h3>'
+    + '<p class="muted mt">Envie este link para <strong>' + esc(username) + "</strong>. Ao abrir, a pessoa entra direto e define a própria senha — sem digitar login nem senha. Vale por 7 dias e funciona uma única vez.</p>"
+    + '<div class="field"><label>Link</label><input id="inv-url" type="text" readonly value="' + esc(url) + '"></div>'
+    + '<div class="modal-actions"><button class="btn btn-ghost" data-mx="close">Fechar</button><button class="btn btn-primary" id="inv-copy">Copiar link</button></div></div>';
+  document.body.appendChild(ov); document.body.classList.add("no-scroll");
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  ov.querySelector("[data-mx='close']").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  const inp = ov.querySelector("#inv-url"); setTimeout(() => { try { inp.focus(); inp.select(); } catch (_) { /* */ } }, 60);
+  ov.querySelector("#inv-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(url); toast("Link copiado.", "ok"); }
+    catch (e) { try { inp.focus(); inp.select(); document.execCommand("copy"); toast("Link copiado.", "ok"); } catch (_) { toast("Selecione o link e copie (Ctrl+C).", "info"); } }
+  };
+}
+// Troca de senha OBRIGATÓRIA no 1o acesso (conta marcada must_change): modal não
+// cancelável — a pessoa define uma senha só dela antes de usar o painel.
+async function forcePasswordChange() {
+  for (;;) {
+    const v = await uiModal({
+      title: "Defina a sua senha",
+      message: "Primeiro acesso: crie uma senha só sua (mín. 8 caracteres). Ela substitui a senha temporária que você recebeu.",
+      fields: [
+        { name: "password", label: "Nova senha", inputType: "password" },
+        { name: "confirm", label: "Confirmar nova senha", inputType: "password" },
+      ],
+      confirmText: "Salvar e entrar",
+      noCancel: true,
+    });
+    if (!v) continue;
+    if ((v.password || "").length < 8) { toast("A senha precisa de ao menos 8 caracteres.", "error"); continue; }
+    if (v.password !== v.confirm) { toast("As senhas não conferem.", "error"); continue; }
+    try { await API.firstPassword(v.password); if (State.user) State.user.must_change = false; toast("Senha definida. Bem-vindo(a)!", "ok"); return; }
+    catch (e) { toast((e && e.message) || "Não consegui definir a senha.", "error"); }
+  }
+}
+
 /* ---- view: Usuários (admin) ---- */
 function userRow(u) {
   const isMe = State.user && u.username === State.user.username;
   const display = u.name || u.username;
+  const pend = u.must_change ? ' <span class="badge warn" title="Ainda usa a senha temporária — vai definir a própria no próximo acesso">senha temporária</span>' : "";
   return '<tr data-u="' + esc(u.username) + '" data-name="' + esc(u.name || "") + '">'
-    + '<td><div class="u-name-line"><strong>' + esc(display) + "</strong>" + (isMe ? ' <span class="badge plain">você</span>' : "")
+    + '<td><div class="u-cell"><div class="u-avatar" aria-hidden="true">' + esc(userInitials(display)) + "</div>"
+      + '<div class="u-idcol"><div class="u-name-line"><strong>' + esc(display) + "</strong>" + (isMe ? ' <span class="badge plain">você</span>' : "") + pend
       + ' <button class="btn btn-ghost btn-xs u-editname" title="Editar nome e login">editar</button></div>'
-      + '<div class="muted u-username">@' + esc(u.username) + "</div></td>"
+      + '<div class="muted u-username">@' + esc(u.username) + "</div></div></div></td>"
     + "<td>" + (isMe
         ? '<span class="badge ' + (u.role === "admin" ? "approved" : "plain") + '">' + (u.role === "admin" ? "Administrador" : "Membro") + "</span>"
         : '<select class="u-role"><option value="admin"' + (u.role === "admin" ? " selected" : "") + '>Administrador</option><option value="membro"' + (u.role === "membro" ? " selected" : "") + ">Membro</option></select>")
     + "</td>"
     + '<td class="muted">' + esc(fmtDate(u.created_at)) + "</td>"
     + '<td class="u-actions">'
+      + '<button class="btn btn-ghost btn-sm u-invite" title="Gerar um link de convite (a pessoa entra e define a própria senha)">Convidar</button>'
       + '<button class="btn btn-ghost btn-sm u-pass">Resetar senha</button>'
       + (isMe ? "" : '<button class="btn btn-ghost btn-sm u-del">Remover</button>')
     + "</td></tr>";
@@ -3295,9 +3303,18 @@ function wireUserRows() {
       try { await API.setUserRole(username, roleSel.value); toast("Perfil atualizado.", "ok"); }
       catch (e) { toast((e && e.message) || "Erro.", "error"); viewUsers(); }
     };
+    const invBtn = $(".u-invite", tr);
+    if (invBtn) invBtn.onclick = async () => {
+      try {
+        const r = await API.createInvite(username);
+        const url = location.origin + "/#/convite?t=" + encodeURIComponent(r.token);
+        showInviteLink(url, tr.dataset.name || username);
+        viewUsers();
+      } catch (e) { toast((e && e.message) || "Erro ao gerar o convite.", "error"); }
+    };
     const passBtn = $(".u-pass", tr);
     if (passBtn) passBtn.onclick = async () => {
-      const v = await uiModal({ title: "Resetar senha", message: "Nova senha para “" + username + "” (mín. 8 caracteres).", fields: [{ name: "password", label: "Nova senha", inputType: "password" }], confirmText: "Salvar" });
+      const v = await uiModal({ title: "Resetar senha", message: "Defina uma senha temporária para “" + username + "” (mín. 8 caracteres). A pessoa cria a própria no próximo acesso.", fields: [{ name: "password", label: "Senha temporária", inputType: "password" }], confirmText: "Salvar" });
       if (!v) return;
       try { await API.resetUserPassword(username, v.password); toast("Senha atualizada.", "ok"); }
       catch (e) { toast((e && e.message) || "Erro.", "error"); }
@@ -3313,11 +3330,11 @@ function wireUserRows() {
 async function onAddUser() {
   const v = await uiModal({
     title: "Adicionar usuário",
-    message: "A pessoa entra com esse login e senha. Escolha o nível de acesso.",
+    message: "A pessoa entra com esse login e uma senha temporária. No primeiro acesso ela define uma senha só dela. Escolha o nível de acesso.",
     fields: [
       { name: "name", label: "Nome de exibição (opcional)", placeholder: "ex.: Jailson Junior" },
       { name: "username", label: "Usuário (login)", placeholder: "ex.: joao (minúsculas, números, . _ -)" },
-      { name: "password", label: "Senha (mín. 8 caracteres)", inputType: "password" },
+      { name: "password", label: "Senha temporária (mín. 8 caracteres)", inputType: "password" },
       { name: "role", label: "Nível de acesso", type: "select", value: "membro", options: [
         { value: "membro", label: "Membro — usa o painel" },
         { value: "admin", label: "Administrador — usa o painel e gerencia usuários" },
@@ -3348,9 +3365,11 @@ async function viewUsers() {
 /* ---- boot ---- */
 async function boot() {
   setupTheme();
+  await tryAcceptInvite(); // se veio de um link de convite (#/convite?t=...), cria a sessão
   // Portão de acesso: exige login antes de tudo (o tema já foi aplicado à tela de login).
   try { State.user = await requireAuth(); }
   catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
+  if (State.user && State.user.must_change) await forcePasswordChange(); // troca obrigatória no 1o acesso
   applyUserToChrome();
   setupAccent();
   setupScheme();

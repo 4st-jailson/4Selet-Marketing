@@ -64,7 +64,8 @@ const API = (() => {
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
     saveContent: (folder, rel, content) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/content", { rel, content }),
-    saveCanvas: (folder, rel, png, doc) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/canvas", { rel, png, doc }),
+    saveEditedHtml: (folder, rel, html) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/edit-html", { rel, html }),
+    taskHtml: (folder, rel) => fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent(rel)).then((r) => r.text()),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
@@ -76,6 +77,8 @@ const API = (() => {
     login: (username, password) => req("POST", "/api/auth/login", { username, password }),
     logout: () => req("POST", "/api/auth/logout"),
     changePassword: (current, password) => req("POST", "/api/auth/password", { current, password }),
+    firstPassword: (password) => req("POST", "/api/auth/first-password", { password }),
+    acceptInvite: (token) => req("POST", "/api/auth/invite/accept", { token }),
     // usuarios (admin)
     users: () => req("GET", "/api/users"),
     createUser: (u) => req("POST", "/api/users", u),
@@ -84,5 +87,6 @@ const API = (() => {
     setUserRole: (username, role) => req("POST", "/api/users/" + encodeURIComponent(username) + "/role", { role }),
     setUserName: (username, name) => req("POST", "/api/users/" + encodeURIComponent(username) + "/name", { name }),
     setUsername: (username, newUsername) => req("POST", "/api/users/" + encodeURIComponent(username) + "/username", { username: newUsername }),
+    createInvite: (username) => req("POST", "/api/users/" + encodeURIComponent(username) + "/invite", {}),
   };
 })();

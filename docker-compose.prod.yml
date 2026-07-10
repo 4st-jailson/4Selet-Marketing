@@ -1,0 +1,44 @@
+# Producao do Painel 4Selet — painel (interno) + Caddy (borda: TLS + proxy) no IP publico.
+# A autenticacao e o LOGIN DO PROPRIO PAINEL (lib/auth.js); o Caddy nao faz mais login.
+# Subir com:  docker compose -f docker-compose.prod.yml up -d --build
+services:
+  panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      HOST: "0.0.0.0"      # so na rede do compose; porta NAO publicada ao host
+      PORT: "4500"
+      # Opcional (recomendado): fixar o segredo de sessao e o admin inicial por env,
+      # senao o volume ./interface/data abaixo ja persiste ambos entre rebuilds.
+      # SESSION_SECRET: "<hex >=16 chars>"
+      # ADMIN_USERNAME: "admin"
+      # ADMIN_PASSWORD: "<senha forte>"
+    volumes:
+      - ./interface/.env:/app/interface/.env:ro   # chave Anthropic (fora do git)
+      - ./interface/data:/app/interface/data      # usuarios + .session_secret — PERSISTE (senao todo login some a cada rebuild)
+      - panel_outputs:/app/outputs                # drafts / trabalho em andamento
+      - ./outputs/approved:/app/outputs/approved  # conteudo APROVADO (fonte de verdade versionada em git)
+      - ./outputs/archive:/app/outputs/archive    # conteudo arquivado (versionado em git)
+    restart: unless-stopped
+    # sem 'ports:' -> so o Caddy alcança (nada exposto direto)
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/origin:/etc/caddy/origin:ro   # Cloudflare Origin Certificate (cert.pem + key.pem)
+      - caddy_data:/data      # certificados (persistente — nao re-emitir a cada deploy)
+      - caddy_config:/config
+    restart: unless-stopped
+    depends_on:
+      - panel
+
+volumes:
+  panel_outputs:
+  caddy_data:
+  caddy_config:

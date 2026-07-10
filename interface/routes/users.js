@@ -32,7 +32,14 @@ router.delete("/:username", (req, res) => {
 });
 
 router.post("/:username/password", (req, res) => {
-  try { res.json(auth.setPassword(req.params.username, (req.body || {}).password)); }
+  // reset por admin: a pessoa troca por uma senha própria no próximo acesso (mustChange=true)
+  try { res.json(auth.setPassword(req.params.username, (req.body || {}).password, true)); }
+  catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+
+// gera um LINK DE CONVITE (token de uso único) p/ a pessoa entrar e definir a própria senha
+router.post("/:username/invite", (req, res) => {
+  try { res.json(auth.createInvite(req.params.username)); }
   catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
 

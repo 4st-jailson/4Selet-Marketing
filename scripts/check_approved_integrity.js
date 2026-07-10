@@ -32,6 +32,15 @@ function writeJsonAtomic(p, obj) {
 }
 function info(msg) { console.log("[check_approved_integrity] " + msg); }
 function warn(msg) { console.error("[check_approved_integrity] WARN: " + msg); }
+// Nomes das tasks aprovadas versionadas em git HEAD (p/ detectar delecao inteira do disco).
+function gitApprovedDirs() {
+  try {
+    const { spawnSync } = require("child_process");
+    const r = spawnSync("git", ["ls-tree", "-d", "--name-only", "HEAD", "outputs/approved/"], { encoding: "utf8" });
+    if (r.status !== 0 || !r.stdout) return null;
+    return r.stdout.split("\n").map((l) => l.trim()).filter(Boolean).map((p) => path.basename(p));
+  } catch (e) { return null; }
+}
 
 const autoRevert = process.argv.includes("--auto-revert");
 const approvedDir = path.resolve("outputs", "approved");
@@ -61,8 +70,17 @@ try {
     }
     const current = hashDirectory(taskDir, ["status.json", "preview.html"]);
     const divs = diffHashes(status.content_hashes, current);
+    // B9: verifica o hash do preview.html aprovado (se registrado). Tasks antigas sem
+    // preview_hash sao puladas — sem falso positivo.
+    let previewBad = false;
+    if (status.preview_hash) {
+      const pvp = path.join(taskDir, "preview.html");
+      const cur = fs.existsSync(pvp) ? require("crypto").createHash("sha256").update(fs.readFileSync(pvp)).digest("hex") : null;
+      if (cur !== status.preview_hash) { previewBad = true; warn(ent.name + ": preview.html alterado/ausente"); logLines.push("[" + ent.name + "] preview.html divergente"); }
+    }
     if (divs.length === 0) {
-      logLines.push("[" + ent.name + "] OK (" + Object.keys(current).length + " arquivos)");
+      if (previewBad) divergentTasks++; // preview divergente conta, mas nao dispara auto-revert
+      logLines.push("[" + ent.name + "] " + (previewBad ? "preview divergente" : "OK") + " (" + Object.keys(current).length + " arquivos)");
       continue;
     }
     divergentTasks++;
@@ -99,6 +117,22 @@ try {
       warn("  falha auto-revert: " + e.message);
       logLines.push("  ERROR auto-revert: " + e.message);
     }
+  }
+
+  // Reconciliacao disco-vs-git (A5/M6): task APROVADA que existe em git HEAD mas sumiu do
+  // disco (delecao crua, fora do workflow) — o loop acima nao a veria. Aqui vira divergencia.
+  const gitDirs = gitApprovedDirs();
+  if (gitDirs) {
+    const onDisk = new Set(dirs.map((e) => e.name));
+    for (const name of gitDirs) {
+      if (!onDisk.has(name)) {
+        divergentTasks++;
+        warn(name + ": APROVADA presente em git HEAD mas AUSENTE do disco (E_APPROVED_MISSING). Restaure: git restore outputs/approved/" + name);
+        logLines.push("[" + name + "] MISSING FROM DISK (em git HEAD, ausente no disco)");
+      }
+    }
+  } else {
+    logLines.push("(reconciliacao git indisponivel — sem repo/HEAD)");
   }
 
   fs.writeFileSync(logPath, logLines.join("\n") + "\n", "utf8");

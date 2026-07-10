@@ -36,6 +36,8 @@ router.get("/:folder/raw", (req, res) => {
   if (!f) return res.status(404).json({ error: "arquivo nao encontrado" });
   // no-cache: o navegador revalida (o front ainda versiona por ?v=mtime p/ garantir).
   res.set("Cache-Control", "no-cache");
+  // M4: HTML/SVG servido inline nunca deve executar — serve como texto puro.
+  if (/\.(html?|svg)$/i.test(String(rel))) { try { return res.type("text/plain").send(fs.readFileSync(f.abs)); } catch (e) { return res.status(404).end(); } }
   res.sendFile(f.abs);
 });
 
@@ -151,18 +153,6 @@ router.post("/:folder/content", (req, res) => {
   }
 });
 
-// Editor visual (fabric): salva o PNG do canvas na arte + o doc editavel.
-router.post("/:folder/canvas", (req, res) => {
-  try {
-    const body = req.body || {};
-    if (!body.rel || !/^data:image\/png;base64,/.test(String(body.png || ""))) {
-      return res.status(400).json({ error: "rel e png (dataURL PNG) são obrigatórios" });
-    }
-    const file = content.saveCanvasArt(req.params.folder, String(body.rel), String(body.png), body.doc);
-    res.json({ ok: true, file, task: content.getTask(req.params.folder) });
-  } catch (e) { res.status(e.code === "E_NOT_EDITABLE" ? 409 : 400).json({ error: e.message, code: e.code }); }
-});
-
 // Baixa TODAS as artes da peca (png/jpg/webp/mp4) num unico .zip. Sem dependencia (lib/zip).
 router.get("/:folder/zip", (req, res) => {
   try {
@@ -178,6 +168,20 @@ router.get("/:folder/zip", (req, res) => {
     res.send(zip);
   } catch (e) {
     res.status(e.code === "E_TASK_NOT_FOUND" ? 404 : 400).json({ error: e.message, code: e.code });
+  }
+});
+
+// Editor HTML (item A): grava o HTML editado da peca + re-renderiza o PNG (pixel-perfect).
+router.post("/:folder/edit-html", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.rel || !body.html) return res.status(400).json({ error: "rel e html são obrigatórios" });
+    if (String(body.html).length > 4 * 1024 * 1024) return res.status(413).json({ error: "HTML muito grande (máx. 4 MB)." });
+    const r = await render.renderEditedHtml(req.params.folder, String(body.rel), String(body.html));
+    res.json(Object.assign({ ok: true, task: content.getTask(req.params.folder) }, r));
+  } catch (e) {
+    const code = e.code === "E_NOT_EDITABLE" ? 409 : (e.code === "E_RENDER_FAIL" ? 422 : 400);
+    res.status(code).json({ error: e.message, code: e.code });
   }
 });
 

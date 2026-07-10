@@ -156,6 +156,12 @@ if (target === "approved") {
   } catch (e) {
     warn("falha ao calcular content_hashes (seguindo sem): " + e.message);
   }
+  // B9: hash separado do preview.html aprovado (registro visual do que foi aprovado).
+  // Separado dos content_hashes p/ nao quebrar tasks aprovadas antes desta mudanca.
+  try {
+    const pvp = path.join(src.path, "preview.html");
+    if (fs.existsSync(pvp)) status.preview_hash = require("crypto").createHash("sha256").update(fs.readFileSync(pvp)).digest("hex");
+  } catch (e) { /* preview.html e opcional */ }
 } else if (target === "rejected") {
   status.rejected_by = by || "unknown";
   status.rejected_at = now;

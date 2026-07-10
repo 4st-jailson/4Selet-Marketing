@@ -252,24 +252,6 @@ function writeContentFile(folder, rel, content, note) {
   return path.relative(loc.path, target).split(path.sep).join("/");
 }
 
-// Editor visual (canvas): grava o PNG (dataURL) no arquivo da arte + o doc editavel
-// (fabric JSON) ao lado (<arte>.canvas.json) para reabrir. Zona active.
-function saveCanvasArt(folder, rel, pngDataUrl, doc) {
-  const loc = findTask(folder);
-  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
-  if (loc.zone !== "active") { const e = new Error("edicao so na zona active (rode rework primeiro)"); e.code = "E_NOT_EDITABLE"; throw e; }
-  const target = path.normalize(path.join(loc.path, rel));
-  if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
-  const b64 = String(pngDataUrl).replace(/^data:image\/png;base64,/, "");
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, Buffer.from(b64, "base64"));
-  if (doc != null) {
-    const docPath = target.replace(/\.[a-z0-9]+$/i, "") + ".canvas.json";
-    try { fs.writeFileSync(docPath, typeof doc === "string" ? doc : JSON.stringify(doc), "utf8"); } catch (e) { /* nao-critico */ }
-  }
-  return path.relative(loc.path, target).split(path.sep).join("/");
-}
-
 // Junta as ARTES (png/jpg/webp/mp4) de uma peca para baixar em .zip. Ignora HTML/JSON/logs.
 // Ordena os slides do carrossel numericamente (slide_1, slide_2, ...), depois o resto por nome.
 function collectMediaForZip(folder) {
@@ -284,7 +266,7 @@ function collectMediaForZip(folder) {
       for (const c of fs.readdirSync(abs)) walk(rel ? rel + "/" + c : c);
       return;
     }
-    if (/\.(png|jpe?g|webp|mp4)$/i.test(rel)) out.push({ name: rel, buffer: fs.readFileSync(abs), mtime: st.mtime });
+    if (/\.(png|jpe?g|webp|mp4)$/i.test(rel) && !/\.bg\.png$/i.test(rel)) out.push({ name: rel, buffer: fs.readFileSync(abs), mtime: st.mtime });
   };
   walk("");
   out.sort((a, b) => {
@@ -429,6 +411,6 @@ function discardTask(folder) {
 
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
-  listContentVersions, restoreContentVersion, saveCanvasArt, collectMediaForZip,
+  listContentVersions, restoreContentVersion, collectMediaForZip,
   setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
 };

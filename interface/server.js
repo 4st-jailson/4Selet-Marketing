@@ -15,15 +15,31 @@ const app = express();
 // validam o tamanho real da imagem (uploads.js limita a 10MB por arquivo).
 app.use(express.json({ limit: "16mb" }));
 
-// Health-check — usado por scripts de auto-restart/monitoramento na VPS.
+// --- Cabecalhos de seguranca (M3) + checagem de Origin anti-CSRF (B3) ---
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("Content-Security-Policy",
+    "default-src 'self'; img-src 'self' data: blob:; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; " +
+    "script-src 'self' 'unsafe-inline'; frame-src 'self' blob:; connect-src 'self'; " +
+    "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
+  // anti-CSRF: rejeita mutacoes cujo Origin nao bate com o host (quando o header existe)
+  if (req.method === "POST" || req.method === "PUT" || req.method === "DELETE" || req.method === "PATCH") {
+    const origin = req.headers.origin;
+    if (origin) {
+      try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: "origem inválida", code: "E_BAD_ORIGIN" }); }
+      catch (e) { return res.status(403).json({ error: "origem inválida", code: "E_BAD_ORIGIN" }); }
+    }
+  }
+  next();
+});
+
+// Health-check — usado por scripts de auto-restart/monitoramento na VPS. Publico:
+// so um sinal de vida, sem expor estado interno (ex.: presenca de chave de IA).
 app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "painel-4selet",
-    uptime_s: Math.round(process.uptime()),
-    ai_key: ai.hasKey(),
-    now: new Date().toISOString(),
-  });
+  res.json({ ok: true, service: "painel-4selet", uptime_s: Math.round(process.uptime()) });
 });
 
 // --- Autenticacao do painel: login por pessoa + perfis (admin/membro) ---
@@ -35,6 +51,15 @@ app.use("/api", (req, res, next) => {
   const user = auth.userFromRequest(req);
   if (!user) return res.status(401).json({ error: "não autenticado", code: "E_AUTH" });
   req.user = user;
+  next();
+});
+
+// Enforcement server-side da troca de senha obrigatoria (M1): uma conta marcada
+// must_change so consegue usar /api/auth/* (login/logout/me/first-password — montadas
+// ANTES deste gate). Todo o resto fica bloqueado ate ela definir a propria senha, entao
+// nao adianta pular o front (curl) para usar o painel com a senha temporaria.
+app.use("/api", (req, res, next) => {
+  if (req.user && req.user.must_change) return res.status(403).json({ error: "Defina uma nova senha antes de continuar.", code: "E_MUST_CHANGE" });
   next();
 });
 
@@ -58,8 +83,12 @@ app.use("/api/content", require("./routes/content"));
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
 
-// Servir assets de marca (logos) read-only
-app.use("/brand-assets", express.static(PATHS.ASSETS_DIR));
+// Servir assets de marca (logos) read-only. Filtro de extensao (B6): so mídia/fontes/css
+// — nunca serve .env/.json/.md/etc. que por acaso caiam em assets/. Publico (fora do gate).
+app.use("/brand-assets", (req, res, next) => {
+  if (!/\.(png|jpe?g|webp|svg|gif|ico|woff2?|ttf|otf|css)$/i.test(req.path)) return res.status(404).end();
+  next();
+}, express.static(PATHS.ASSETS_DIR));
 // Front. HTML/JS/CSS com "no-cache" (revalida sempre): o navegador guarda, mas
 // confere antes de usar — 304 quando nada mudou (rapido), 200 com o novo quando
 // mudou. Evita o painel exibir JS/CSS antigos depois de uma atualizacao.

@@ -80,7 +80,7 @@ function findUser(username) {
   return loadUsers().find((x) => x.username === u) || null;
 }
 function publicUser(u) {
-  return u ? { username: u.username, name: u.name || null, role: u.role, created_at: u.created_at, created_by: u.created_by || null } : null;
+  return u ? { username: u.username, name: u.name || null, role: u.role, created_at: u.created_at, created_by: u.created_by || null, must_change: !!u.must_change_password, has_invite: !!(u && u.invite && u.invite.exp > Date.now()) } : null;
 }
 function cleanName(name) { const n = String(name == null ? "" : name).trim().slice(0, 60); return n || null; }
 
@@ -98,7 +98,7 @@ function createUser({ username, password, role, name }, byUser) {
   const r = validRole(role) ? role : "membro";
   const users = loadUsers();
   if (users.some((x) => x.username === u)) { const e = new Error("Já existe um usuário com esse nome."); e.status = 409; throw e; }
-  const rec = { username: u, name: cleanName(name), role: r, hash: hashPassword(password), created_at: new Date().toISOString(), created_by: byUser || null };
+  const rec = { username: u, name: cleanName(name), role: r, hash: hashPassword(password), created_at: new Date().toISOString(), created_by: byUser || null, must_change_password: true };
   users.push(rec);
   saveUsers(users);
   return publicUser(rec);
@@ -112,13 +112,17 @@ function deleteUser(username) {
   saveUsers(users.filter((x) => x.username !== u));
   return { ok: true };
 }
-function setPassword(username, password) {
+// mustChange: se true, marca a conta p/ trocar a senha no proximo acesso (reset por
+// admin/criacao); se false, limpa a marca (a propria pessoa definiu a senha dela).
+function setPassword(username, password, mustChange) {
   if (!validPassword(password)) { const e = new Error("A senha precisa ter ao menos 8 caracteres."); e.status = 400; throw e; }
   const u = normUsername(username);
   const users = loadUsers();
   const target = users.find((x) => x.username === u);
   if (!target) { const e = new Error("Usuário não encontrado."); e.status = 404; throw e; }
   target.hash = hashPassword(password);
+  target.must_change_password = !!mustChange;
+  target.session_epoch = (target.session_epoch || 0) + 1; // derruba sessoes antigas (M2)
   saveUsers(users);
   return { ok: true };
 }
@@ -158,6 +162,34 @@ function setUsername(oldUsername, newUsername) {
   saveUsers(users);
   return publicUser(target);
 }
+// ---- convites (magic link) ----
+// Token de uso unico, alta entropia, GUARDADO COMO HASH (sha256) no user. Ao aceitar,
+// cria sessao sem senha e marca must_change (a pessoa define a propria senha). O token
+// em claro so existe no retorno de createInvite (mostrado uma vez pro admin copiar).
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+function sha256hex(s) { return crypto.createHash("sha256").update(String(s)).digest("hex"); }
+function createInvite(username) {
+  const u = normUsername(username);
+  const users = loadUsers();
+  const target = users.find((x) => x.username === u);
+  if (!target) { const e = new Error("Usuário não encontrado."); e.status = 404; throw e; }
+  const token = b64url(crypto.randomBytes(24)); // 192 bits
+  target.invite = { hash: sha256hex(token), exp: Date.now() + INVITE_TTL_MS };
+  target.must_change_password = true; // ao aceitar, define a propria senha
+  saveUsers(users);
+  return { username: u, token, expires_at: new Date(target.invite.exp).toISOString() };
+}
+function acceptInvite(token) {
+  if (!token || String(token).length < 16) return null;
+  const h = sha256hex(token);
+  const users = loadUsers();
+  const target = users.find((x) => x.invite && x.invite.hash === h);
+  if (!target) return null;
+  const valid = target.invite.exp && target.invite.exp >= Date.now();
+  delete target.invite; // uso unico: consome sempre (valido ou expirado)
+  saveUsers(users);
+  return valid ? publicUser(target) : null;
+}
 function listUsers() {
   return loadUsers().map(publicUser).sort((a, b) => a.username.localeCompare(b.username));
 }
@@ -191,7 +223,8 @@ function bootstrap() {
 function b64url(buf) { return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
 function b64urlDecode(str) { return Buffer.from(String(str).replace(/-/g, "+").replace(/_/g, "/"), "base64"); }
 function signSession(user) {
-  const payload = { u: user.username, r: user.role, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_S };
+  const full = findUser(user.username); // pv (session_epoch) liga a sessao a versao atual da senha
+  const payload = { u: user.username, r: user.role, pv: full ? (full.session_epoch || 0) : 0, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_S };
   const body = b64url(JSON.stringify(payload));
   const mac = b64url(crypto.createHmac("sha256", sessionSecret()).update(body).digest());
   return body + "." + mac;
@@ -208,7 +241,8 @@ function verifySession(token) {
     if (!payload || typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
     const user = findUser(payload.u); // usuario removido => sessao invalida na hora
     if (!user) return null;
-    return { username: user.username, name: user.name || null, role: user.role };
+    if ((user.session_epoch || 0) !== (payload.pv || 0)) return null; // senha trocada/resetada => sessoes antigas caem (M2)
+    return { username: user.username, name: user.name || null, role: user.role, must_change: !!user.must_change_password };
   } catch (_) { return null; }
 }
 
@@ -245,5 +279,6 @@ function userFromRequest(req) {
 module.exports = {
   ROLES, COOKIE, SESSION_TTL_S,
   bootstrap, authenticate, listUsers, createUser, deleteUser, setPassword, setRole, setName, setUsername, findUser,
+  createInvite, acceptInvite,
   signSession, verifySession, setSessionCookie, clearSessionCookie, userFromRequest,
 };
