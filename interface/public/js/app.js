@@ -1020,10 +1020,11 @@ function mediaGallery(folder, task) {
   const imgs = task.files.filter((f) => f.isImage);
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
+  const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed");
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
-  return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">Clique na imagem para ampliar dentro do site.</p><div class="media-gallery mt">${items.join("")}</div></div>`;
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
+  return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">${editable ? "Clique para ampliar e editar — adicionar textos, formas, logo e ajustar." : "Clique na imagem para ampliar dentro do site."}</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
 // #2 — Galeria única e ordenada dos slides de um carrossel (slide_1..n): cada slide
@@ -1034,10 +1035,11 @@ function carouselStrip(folder, task) {
     .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
     .sort((a, b) => a.n - b.n);
   if (slides.length < 2) return "";
+  const editable = task.zone === "active";
   const items = slides.map((s) =>
     `<div class="media-item"><div class="media-frame">
       <span class="slide-num">${s.n}</span>
-      <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" loading="lazy" onclick="openLightboxFromEl(this)" />
+      <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
     </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
@@ -1203,7 +1205,7 @@ function editorTargets(task) {
   }
   const png = files.find((f) => f.isImage && /ads\/(ad|feed)\.png$/i.test(f.rel))
     || files.find((f) => f.isImage && /\.png$/i.test(f.rel));
-  return png ? [{ rel: png.rel, label: "Abrir no editor" }] : [];
+  return png ? [{ rel: png.rel, label: kindLabel(task.kind) || "Arte" }] : [];
 }
 function editorCard(task) {
   if (task.zone !== "active") return "";
@@ -1218,72 +1220,180 @@ function editorCard(task) {
     <div class="editor-open-row mt">${btns}</div>
     <p class="hint mt">O editor sobrescreve a arte final direto. Para descartar as edições e voltar ao padrão da marca, é só gerar a arte de novo (recria do zero, sem as edições manuais).</p></div>`;
 }
+// Paleta oficial 4Selet + branco/quase-preto, p/ swatches rápidos no editor.
+const EDITOR_PALETTE = ["#07212B", "#003554", "#006494", "#5499B5", "#AFBCC9", "#D9DCD6", "#FFFFFF", "#101820"];
+const EDITOR_FONTS = ["Inter", "Archivo Black", "Playfair Display", "Bebas Neue", "JetBrains Mono", "Georgia"];
+let EDITOR_FONTS_LINKED = false;
+function ensureEditorFonts() {
+  if (EDITOR_FONTS_LINKED) return; EDITOR_FONTS_LINKED = true;
+  const l = document.createElement("link"); l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap";
+  document.head.appendChild(l);
+}
+// Editor visual (fabric) com 2 abas: "Editar livre" (canvas) + "Conteúdo & Marca" (camadas).
 async function openEditor(folder, task, rel) {
-  const artRel = rel || (editorTargets(task)[0] || {}).rel;
+  const targets = editorTargets(task);
+  const artRel = rel || (targets[0] || {}).rel;
   if (!artRel) { toast("Não há arte para editar aqui.", "error"); return; }
   toast("Abrindo editor…", "info");
   try { await loadFabric(); } catch (e) { toast(e.message, "error"); return; }
-  const pieceLabel = (editorTargets(task).find((t) => t.rel === artRel) || {}).label || "";
+  ensureEditorFonts();
+  const pieceLabel = (targets.find((t) => t.rel === artRel) || {}).label || "Arte";
+  const STAGE_W = 600, STAGE_H = 600;
+  const fontOpts = EDITOR_FONTS.map((f) => '<option value="' + esc(f) + '">' + esc(f) + "</option>").join("");
+  const swatches = EDITOR_PALETTE.map((c) => '<button type="button" class="ed-sw" data-c="' + c + '" style="background:' + c + '" title="' + c + '"></button>').join("");
   const ov = document.createElement("div");
   ov.className = "editor-ov";
-  ov.innerHTML = '<div class="editor-bar">'
-    + '<span class="ed-piece">' + esc(pieceLabel) + '</span>'
-    + '<button class="btn btn-sm" id="ed-text">+ Texto</button>'
-    + '<label class="btn btn-sm" style="cursor:pointer">+ Imagem<input type="file" id="ed-imgf" accept="image/*" hidden></label>'
-    + '<span class="ed-sep"></span>'
-    + '<input type="number" id="ed-size" value="48" min="8" max="600" title="Tamanho do texto" style="width:66px">'
-    + '<button class="btn btn-sm" id="ed-bold" title="Negrito"><b>N</b></button>'
-    + '<input type="color" id="ed-color" value="#ffffff" title="Cor do texto">'
-    + '<button class="btn btn-sm btn-danger" id="ed-del" title="Remover selecionado">Remover</button>'
-    + '<span style="flex:1"></span>'
-    + '<button class="btn btn-sm btn-ghost" id="ed-close">Fechar</button>'
-    + '<button class="btn btn-sm btn-primary" id="ed-save">Salvar</button>'
-    + '</div><div class="editor-stage"><canvas id="ed-canvas" width="560" height="560"></canvas></div>';
+  ov.innerHTML =
+      '<div class="editor-top">'
+    +   '<span class="ed-piece">' + esc(pieceLabel) + '</span>'
+    +   '<div class="ed-tabs"><button class="ed-tab on" data-tab="canvas">Editar livre</button><button class="ed-tab" data-tab="content">Conteúdo &amp; Marca</button></div>'
+    +   '<span style="flex:1"></span>'
+    +   '<button class="btn btn-sm btn-ghost" id="ed-close">Fechar</button>'
+    +   '<button class="btn btn-sm btn-primary" id="ed-save">Salvar arte</button>'
+    + '</div>'
+    + '<div class="ed-pane" id="ed-pane-canvas">'
+    +   '<div class="editor-bar">'
+    +     '<div class="ed-grp"><button class="btn btn-sm" id="ed-add-text">+ Texto</button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-add-rect" title="Retângulo">▭</button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-add-circle" title="Círculo">◯</button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-add-line" title="Linha / divisor">─</button>'
+    +       '<label class="btn btn-sm" style="cursor:pointer">+ Imagem<input type="file" id="ed-imgf" accept="image/*" hidden></label>'
+    +       '<button class="btn btn-sm" id="ed-add-logo" title="Logo 4Selet">+ Logo</button></div>'
+    +     '<span class="ed-sep"></span>'
+    +     '<div class="ed-grp"><select id="ed-font" title="Fonte">' + fontOpts + "</select>"
+    +       '<input type="number" id="ed-size" value="48" min="6" max="600" title="Tamanho">'
+    +       '<button class="btn btn-sm ed-ico" id="ed-bold" title="Negrito"><b>N</b></button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-italic" title="Itálico"><i>I</i></button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-underline" title="Sublinhado"><span style="text-decoration:underline">S</span></button>'
+    +       '<select id="ed-align" title="Alinhamento"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select></div>'
+    +     '<span class="ed-sep"></span>'
+    +     '<div class="ed-grp"><input type="color" id="ed-color" value="#ffffff" title="Cor"><div class="ed-swatches">' + swatches + "</div></div>"
+    +     '<span class="ed-sep"></span>'
+    +     '<div class="ed-grp"><button class="btn btn-sm ed-ico" id="ed-dup" title="Duplicar">⧉</button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-front" title="Trazer para frente">⤒</button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-back" title="Enviar para trás">⤓</button>'
+    +       '<label class="ed-op" title="Opacidade"><span>opac.</span><input type="range" id="ed-opacity" min="0" max="100" value="100"></label>'
+    +       '<button class="btn btn-sm btn-danger" id="ed-del" title="Remover (Del)">Remover</button></div>'
+    +     '<span class="ed-sep"></span>'
+    +     '<div class="ed-grp"><button class="btn btn-sm ed-ico" id="ed-undo" title="Desfazer (Ctrl+Z)" disabled>⟲</button>'
+    +       '<button class="btn btn-sm ed-ico" id="ed-redo" title="Refazer (Ctrl+Y)" disabled>⟳</button></div>'
+    +   "</div>"
+    +   '<div class="editor-stage"><canvas id="ed-canvas" width="' + STAGE_W + '" height="' + STAGE_H + '"></canvas></div>'
+    + "</div>"
+    + '<div class="ed-pane" id="ed-pane-content" hidden><div class="ed-content-form" id="ed-content-form"></div></div>';
   document.body.appendChild(ov);
   document.body.classList.add("no-scroll");
+
   const canvas = new fabric.Canvas("ed-canvas", { backgroundColor: "#07212B", preserveObjectStacking: true });
-  let exportMul = 1; // multiplicador p/ exportar na resolucao real da arte
-  fabric.Image.fromURL(API.rawUrl(folder, artRel) + "&v=" + Date.now(), (img) => {
-    if (!img) { toast("Não consegui carregar a arte.", "error"); return; }
-    const natW = img.width || 1080, natH = img.height || 1080;
-    const scale = Math.min(560 / natW, 640 / natH, 1); // cabe no palco preservando proporcao
-    const dispW = Math.max(1, Math.round(natW * scale)), dispH = Math.max(1, Math.round(natH * scale));
-    canvas.setWidth(dispW); canvas.setHeight(dispH);
-    img.set({ selectable: false, evented: false, left: 0, top: 0, originX: "left", originY: "top", scaleX: dispW / natW, scaleY: dispH / natH });
-    canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-    exportMul = natW / dispW;
-  });
+  let exportMul = 1, currentColor = "#ffffff", dirty = false, contentLoaded = false;
   const sel = () => canvas.getActiveObject();
   const cx = () => canvas.getWidth() / 2, cy = () => canvas.getHeight() / 2;
-  $("#ed-text").onclick = () => {
-    const t = new fabric.IText("Texto", { left: cx(), top: cy(), originX: "center", originY: "center", fill: $("#ed-color").value, fontFamily: "Inter", fontSize: parseInt($("#ed-size").value, 10) || 48, fontWeight: 700, textAlign: "center" });
-    canvas.add(t); canvas.setActiveObject(t); canvas.renderAll();
+
+  // ---- histórico (desfazer/refazer) só dos objetos adicionados ----
+  let history = [], hIdx = -1, restoring = false;
+  const updateHist = () => { $("#ed-undo").disabled = hIdx <= 0; $("#ed-redo").disabled = hIdx >= history.length - 1; };
+  const snapshot = () => { if (restoring) return; history = history.slice(0, hIdx + 1); history.push(JSON.stringify(canvas.getObjects().map((o) => o.toObject()))); hIdx = history.length - 1; if (history.length > 1) dirty = true; updateHist(); };
+  const loadState = (idx) => {
+    restoring = true; canvas.remove.apply(canvas, canvas.getObjects().slice());
+    fabric.util.enlivenObjects(JSON.parse(history[idx] || "[]"), (list) => { list.forEach((o) => canvas.add(o)); canvas.discardActiveObject(); canvas.requestRenderAll(); restoring = false; updateHist(); });
   };
-  $("#ed-imgf").onchange = (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = () => fabric.Image.fromURL(r.result, (im) => { im.scaleToWidth(canvas.getWidth() * 0.4); im.set({ left: cx(), top: cy(), originX: "center", originY: "center" }); canvas.add(im); canvas.setActiveObject(im); canvas.renderAll(); });
-    r.readAsDataURL(f); e.target.value = "";
+  canvas.on("object:added", snapshot); canvas.on("object:modified", snapshot); canvas.on("object:removed", snapshot);
+  const undo = () => { if (hIdx > 0) { hIdx--; loadState(hIdx); } };
+  const redo = () => { if (hIdx < history.length - 1) { hIdx++; loadState(hIdx); } };
+  $("#ed-undo").onclick = undo; $("#ed-redo").onclick = redo;
+
+  // ---- carrega a arte no canvas, proporcional; zera objetos e histórico ----
+  function loadArt(r) {
+    fabric.Image.fromURL(API.rawUrl(folder, r) + "&v=" + Date.now(), (img) => {
+      if (!img) { toast("Não consegui carregar a arte.", "error"); return; }
+      restoring = true; canvas.remove.apply(canvas, canvas.getObjects().slice()); restoring = false;
+      const natW = img.width || 1080, natH = img.height || 1080;
+      const scale = Math.min(STAGE_W / natW, STAGE_H / natH, 1);
+      const dispW = Math.max(1, Math.round(natW * scale)), dispH = Math.max(1, Math.round(natH * scale));
+      canvas.setWidth(dispW); canvas.setHeight(dispH);
+      img.set({ selectable: false, evented: false, left: 0, top: 0, originX: "left", originY: "top", scaleX: dispW / natW, scaleY: dispH / natH });
+      canvas.setBackgroundImage(img, canvas.requestRenderAll.bind(canvas));
+      exportMul = natW / dispW; history = []; hIdx = -1; snapshot();
+    });
+  }
+  loadArt(artRel);
+
+  // ---- adicionar elementos ----
+  const addObj = (o) => { canvas.add(o); canvas.setActiveObject(o); canvas.requestRenderAll(); };
+  $("#ed-add-text").onclick = () => addObj(new fabric.IText("Texto", { left: cx(), top: cy(), originX: "center", originY: "center", fill: currentColor, fontFamily: $("#ed-font").value || "Inter", fontSize: parseInt($("#ed-size").value, 10) || 48, fontWeight: 700, textAlign: "center" }));
+  $("#ed-add-rect").onclick = () => addObj(new fabric.Rect({ left: cx(), top: cy(), originX: "center", originY: "center", width: canvas.getWidth() * 0.42, height: canvas.getWidth() * 0.22, fill: currentColor, rx: 10, ry: 10 }));
+  $("#ed-add-circle").onclick = () => addObj(new fabric.Circle({ left: cx(), top: cy(), originX: "center", originY: "center", radius: canvas.getWidth() * 0.14, fill: currentColor }));
+  $("#ed-add-line").onclick = () => { const w = canvas.getWidth() * 0.42; addObj(new fabric.Line([cx() - w / 2, cy(), cx() + w / 2, cy()], { stroke: currentColor, strokeWidth: 6 })); };
+  $("#ed-add-logo").onclick = () => fabric.Image.fromURL("/brand-assets/logo-4selet-light.png", (im) => { if (!im) { toast("Logo não encontrado.", "error"); return; } im.scaleToWidth(canvas.getWidth() * 0.34); im.set({ left: cx(), top: cy(), originX: "center", originY: "center" }); addObj(im); });
+  $("#ed-imgf").onchange = (e) => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => fabric.Image.fromURL(rd.result, (im) => { im.scaleToWidth(canvas.getWidth() * 0.4); im.set({ left: cx(), top: cy(), originX: "center", originY: "center" }); addObj(im); }); rd.readAsDataURL(f); e.target.value = ""; };
+
+  // ---- texto / estilo (agem no objeto selecionado) ----
+  const applyObj = (fn, snap) => { const o = sel(); if (!o || !o.set) return; fn(o); canvas.requestRenderAll(); if (snap !== false) snapshot(); };
+  $("#ed-font").onchange = () => { const v = $("#ed-font").value; document.fonts.load('24px "' + v + '"').then(() => applyObj((o) => { if ("fontFamily" in o) o.set("fontFamily", v); })).catch(() => applyObj((o) => { if ("fontFamily" in o) o.set("fontFamily", v); })); };
+  $("#ed-size").oninput = () => applyObj((o) => { if ("fontSize" in o) o.set("fontSize", parseInt($("#ed-size").value, 10) || 48); }, false);
+  $("#ed-size").onchange = () => snapshot();
+  $("#ed-bold").onclick = () => applyObj((o) => { if ("fontWeight" in o) o.set("fontWeight", (o.fontWeight === 700 || o.fontWeight === "bold") ? 400 : 700); });
+  $("#ed-italic").onclick = () => applyObj((o) => { if ("fontStyle" in o) o.set("fontStyle", o.fontStyle === "italic" ? "normal" : "italic"); });
+  $("#ed-underline").onclick = () => applyObj((o) => { if ("underline" in o) o.set("underline", !o.underline); });
+  $("#ed-align").onchange = () => applyObj((o) => { if ("textAlign" in o) o.set("textAlign", $("#ed-align").value); });
+  const setColor = (c) => { currentColor = c; $("#ed-color").value = c; applyObj((o) => o.set(o.type === "line" ? "stroke" : "fill", c)); };
+  $("#ed-color").oninput = () => setColor($("#ed-color").value);
+  $$(".ed-sw", ov).forEach((b) => (b.onclick = () => setColor(b.dataset.c)));
+  $("#ed-opacity").oninput = () => applyObj((o) => o.set("opacity", (parseInt($("#ed-opacity").value, 10) || 0) / 100), false);
+  $("#ed-opacity").onchange = () => snapshot();
+
+  // ---- objeto: duplicar / ordem / remover ----
+  $("#ed-dup").onclick = () => { const o = sel(); if (!o) return; o.clone((cl) => { cl.set({ left: o.left + 24, top: o.top + 24 }); canvas.add(cl); canvas.setActiveObject(cl); canvas.requestRenderAll(); }); };
+  $("#ed-front").onclick = () => { const o = sel(); if (o) { canvas.bringToFront(o); canvas.requestRenderAll(); snapshot(); } };
+  $("#ed-back").onclick = () => { const o = sel(); if (o) { canvas.sendToBack(o); canvas.requestRenderAll(); snapshot(); } };
+  $("#ed-del").onclick = () => { const o = sel(); if (o) { canvas.remove(o); canvas.discardActiveObject(); canvas.requestRenderAll(); } };
+
+  const syncBar = () => {
+    const o = sel(); if (!o) return;
+    if (o.fontSize) $("#ed-size").value = Math.round(o.fontSize);
+    if (o.fontFamily) $("#ed-font").value = o.fontFamily;
+    if (o.textAlign) $("#ed-align").value = o.textAlign;
+    const col = o.type === "line" ? o.stroke : o.fill;
+    if (typeof col === "string" && /^#[0-9a-f]{6}$/i.test(col)) $("#ed-color").value = col;
+    $("#ed-opacity").value = Math.round((o.opacity == null ? 1 : o.opacity) * 100);
   };
-  $("#ed-size").oninput = () => { const o = sel(); if (o && o.set && "fontSize" in o) { o.set("fontSize", parseInt($("#ed-size").value, 10) || 48); canvas.renderAll(); } };
-  $("#ed-bold").onclick = () => { const o = sel(); if (o && o.set && "fontWeight" in o) { o.set("fontWeight", o.fontWeight === 700 ? 400 : 700); canvas.renderAll(); } };
-  $("#ed-color").oninput = () => { const o = sel(); if (o && o.set) { o.set("fill", $("#ed-color").value); canvas.renderAll(); } };
-  $("#ed-del").onclick = () => { const o = sel(); if (o) { canvas.remove(o); canvas.discardActiveObject(); canvas.renderAll(); } };
-  const onKey = (ev) => { if (ev.key === "Escape") { const o = sel(); if (!(o && o.isEditing)) close(); } };
-  const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); };
+  canvas.on("selection:created", syncBar); canvas.on("selection:updated", syncBar);
+
+  // ---- teclado ----
+  const onKey = (ev) => {
+    const o = sel();
+    if (o && o.isEditing) return;
+    if (ev.key === "Escape") { close(); return; }
+    if ((ev.key === "Delete" || ev.key === "Backspace") && o) { ev.preventDefault(); canvas.remove(o); canvas.discardActiveObject(); canvas.requestRenderAll(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "y") { ev.preventDefault(); redo(); return; }
+  };
   document.addEventListener("keydown", onKey);
+  const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); if (dirty) router(); };
   $("#ed-close").onclick = close;
-  const syncBar = () => { const o = sel(); if (o && o.fontSize) $("#ed-size").value = o.fontSize; if (o && typeof o.fill === "string" && /^#[0-9a-f]{6}$/i.test(o.fill)) $("#ed-color").value = o.fill; };
-  canvas.on("selection:created", syncBar);
-  canvas.on("selection:updated", syncBar);
+
+  // ---- abas: canvas <-> conteúdo & marca ----
+  const showTab = (name) => {
+    $$(".ed-tab", ov).forEach((x) => x.classList.toggle("on", x.dataset.tab === name));
+    $("#ed-pane-canvas").hidden = name !== "canvas";
+    $("#ed-pane-content").hidden = name !== "content";
+    $("#ed-save").style.display = name === "canvas" ? "" : "none";
+    if (name === "content" && !contentLoaded) { contentLoaded = true; renderLayers($("#ed-content-form"), folder, task, onContentSaved); }
+  };
+  const onContentSaved = () => { dirty = true; loadArt(artRel); showTab("canvas"); };
+  $$(".ed-tab", ov).forEach((tb) => (tb.onclick = () => showTab(tb.dataset.tab)));
+
+  // ---- salvar a arte (achata o canvas no PNG) ----
   $("#ed-save").onclick = async () => {
-    const btn = $("#ed-save"); btn.disabled = true; btn.textContent = "Salvando…";
+    const btn = $("#ed-save"); btn.disabled = true; const orig = btn.textContent; btn.textContent = "Salvando…";
     try {
-      canvas.discardActiveObject(); canvas.renderAll();
+      canvas.discardActiveObject(); canvas.requestRenderAll();
       const png = canvas.toDataURL({ format: "png", multiplier: exportMul });
       await API.saveCanvas(folder, artRel, png, JSON.stringify(canvas.toJSON()));
-      toast("Arte salva do editor.", "success"); close(); router();
-    } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar"; }
+      dirty = true; toast("Arte salva.", "success"); loadArt(artRel);
+    } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); }
+    btn.disabled = false; btn.textContent = orig;
   };
 }
 
@@ -1296,44 +1406,45 @@ function layersCard(task) {
     <div id="layers-area" class="mt"><p class="hint"><span class="spinner"></span> carregando camadas…</p></div>
   </div>`;
 }
-async function wireLayers(folder, task) {
-  const box = $("#layers-area"); if (!box) return;
-  if (task.kind === "image") return wireLayersImage(folder, task);
-  if (task.kind === "feed") return wireLayersFeed(folder, task);
-  return wireLayersCarousel(folder, task);
+async function wireLayers(folder, task) { const box = $("#layers-area"); if (box) renderLayers(box, folder, task, () => router()); }
+// Renderiza o form de "Camadas" num CONTAINER dado — reusado no card da peça e na aba
+// "Conteúdo & Marca" do editor. onSaved() roda após salvar+re-renderizar.
+async function renderLayers(container, folder, task, onSaved) {
+  if (!container) return;
+  if (task.kind === "image") return layersImage(container, folder, task, onSaved);
+  if (task.kind === "feed") return layersFeed(container, folder, task, onSaved);
+  return layersCarousel(container, folder, task, onSaved);
 }
 // Camadas de IMAGEM/ANÚNCIO (ads/concept.json): headline, subtexto, eyebrow, cta, badge.
-async function wireLayersImage(folder, task) {
-  const box = $("#layers-area");
+async function layersImage(container, folder, task, onSaved) {
   let c;
   try { c = JSON.parse(await API.taskFile(folder, "ads/concept.json")); }
-  catch (e) { box.innerHTML = '<p class="empty">Não consegui ler o conteúdo da imagem.</p>'; return; }
-  box.innerHTML = '<div class="layer-block">'
+  catch (e) { container.innerHTML = '<p class="empty">Não consegui ler o conteúdo da imagem.</p>'; return; }
+  container.innerHTML = '<div class="layer-block">'
     + '<label class="layer-lab">Rótulo (eyebrow)</label><input class="ly-f" data-k="eyebrow" value="' + esc(c.eyebrow || "") + '" placeholder="ex.: PROVA DA PLATAFORMA" />'
     + '<label class="layer-lab">Headline <span class="hint">(==palavra== = azul)</span></label><textarea class="ly-f" data-k="headline" rows="2">' + esc(c.headline || "") + "</textarea>"
     + '<label class="layer-lab">Subtexto</label><textarea class="ly-f" data-k="subtext" rows="2">' + esc(c.subtext || "") + "</textarea>"
     + '<label class="layer-lab">CTA</label><input class="ly-f" data-k="cta" value="' + esc(c.cta || "") + '" />'
     + '<label class="layer-lab">Selo (badge)</label><input class="ly-f" data-k="badge" value="' + esc(c.badge || "") + '" />'
-    + '</div><button class="btn btn-primary mt" id="ly-save">Salvar camadas e re-renderizar</button>';
-  $("#ly-save").onclick = async () => {
-    const btn = $("#ly-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
-    $$("#layers-area .ly-f").forEach((el) => { const k = el.dataset.k, v = el.tagName === "TEXTAREA" ? el.value : el.value.trim(); if (v) c[k] = v; else delete c[k]; });
-    try { await API.saveContent(folder, "ads/concept.json", JSON.stringify(c, null, 2) + "\n"); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); router(); }
+    + '</div><button class="btn btn-primary mt ly-save">Salvar camadas e re-renderizar</button>';
+  $(".ly-save", container).onclick = async () => {
+    const btn = $(".ly-save", container); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
+    $$(".ly-f", container).forEach((el) => { const k = el.dataset.k, v = el.tagName === "TEXTAREA" ? el.value : el.value.trim(); if (v) c[k] = v; else delete c[k]; });
+    try { await API.saveContent(folder, "ads/concept.json", JSON.stringify(c, null, 2) + "\n"); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); onSaved && onSaved(); }
     catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
   };
 }
 // Camadas de FEED (copy/instagram_caption.txt): a legenda; a 1a linha vira o título da arte.
-async function wireLayersFeed(folder, task) {
-  const box = $("#layers-area");
+async function layersFeed(container, folder, task, onSaved) {
   let text = "";
   try { text = await API.taskFile(folder, "copy/instagram_caption.txt"); }
-  catch (e) { box.innerHTML = '<p class="empty">Não consegui ler a legenda.</p>'; return; }
-  box.innerHTML = '<label class="layer-lab">Legenda <span class="hint">(a 1ª linha vira o título da arte)</span></label>'
-    + '<textarea id="ly-caption" rows="8" style="width:100%">' + esc(text) + "</textarea>"
-    + '<button class="btn btn-primary mt" id="ly-save">Salvar camadas e re-renderizar</button>';
-  $("#ly-save").onclick = async () => {
-    const btn = $("#ly-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
-    try { await API.saveContent(folder, "copy/instagram_caption.txt", $("#ly-caption").value); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); router(); }
+  catch (e) { container.innerHTML = '<p class="empty">Não consegui ler a legenda.</p>'; return; }
+  container.innerHTML = '<label class="layer-lab">Legenda <span class="hint">(a 1ª linha vira o título da arte)</span></label>'
+    + '<textarea class="ly-caption" rows="8" style="width:100%">' + esc(text) + "</textarea>"
+    + '<button class="btn btn-primary mt ly-save">Salvar camadas e re-renderizar</button>';
+  $(".ly-save", container).onclick = async () => {
+    const btn = $(".ly-save", container); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
+    try { await API.saveContent(folder, "copy/instagram_caption.txt", $(".ly-caption", container).value); await API.renderMedia(folder, task.kind, selectedTemplate()); toast("Camadas salvas — arte atualizada.", "success"); onSaved && onSaved(); }
     catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
   };
 }
@@ -1362,8 +1473,8 @@ function wmOptions(sel) {
   const O = (v, lab) => '<option value="' + v + '"' + (sel === v ? " selected" : "") + ">" + lab + "</option>";
   return O("", "Padrão (SELET)") + O("4selet", "4SELET") + O("outline", "SELET vazada") + O("symbol", 'Símbolo “4”') + O("none", "Nenhuma");
 }
-async function wireLayersCarousel(folder, task) {
-  const box = $("#layers-area"); if (!box) return;
+async function layersCarousel(container, folder, task, onSaved) {
+  const box = container; if (!box) return;
   let concept;
   try { concept = JSON.parse(await API.taskFile(folder, "copy/instagram_carousel.json")); }
   catch (e) { box.innerHTML = '<p class="empty">Não consegui ler o conteúdo do carrossel.</p>'; return; }
@@ -1384,12 +1495,12 @@ async function wireLayersCarousel(folder, task) {
       ${showPos ? `<label class="layer-lab">Posição e tamanho do título <span class="hint">(X / Y em px · tamanho %)</span></label><div class="ly-pos"><input class="ly-ox" type="number" step="10" value="${Number(s.titleOffsetX) || 0}" title="Horizontal (px)" /><input class="ly-oy" type="number" step="10" value="${Number(s.titleOffsetY) || 0}" title="Vertical (px)" /><input class="ly-sc" type="number" step="5" min="40" max="220" value="${Math.round((Number(s.titleScale) || 1) * 100)}" title="Tamanho (%)" /></div>` : ""}
     </div>`;
   }).join("");
-  box.innerHTML = `<div class="field" style="max-width:340px"><label class="layer-lab">CTA do fecho <span class="hint">(botão do último slide)</span></label><input id="ly-cta" value="${esc(concept.cta || "")}" /></div>
+  box.innerHTML = `<div class="field" style="max-width:340px"><label class="layer-lab">CTA do fecho <span class="hint">(botão do último slide)</span></label><input class="ly-cta" value="${esc(concept.cta || "")}" /></div>
     <div class="layers-list mt">${rows}</div>
-    <button class="btn btn-primary mt" id="ly-save">Salvar camadas e re-renderizar</button>`;
-  $("#ly-save").onclick = async () => {
-    const btn = $("#ly-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
-    $$("#layers-area .layer-block").forEach((bl) => {
+    <button class="btn btn-primary mt ly-save">Salvar camadas e re-renderizar</button>`;
+  $(".ly-save", box).onclick = async () => {
+    const btn = $(".ly-save", box); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando e renderizando…';
+    $$(".layer-block", box).forEach((bl) => {
       const s = slides[Number(bl.dataset.i)];
       const eb = bl.querySelector(".ly-eyebrow"); if (eb) { const v = eb.value.trim(); if (v) s.eyebrow = v; else delete s.eyebrow; }
       const ti = bl.querySelector(".ly-title"); if (ti) s.title = ti.value;
@@ -1401,12 +1512,12 @@ async function wireLayersCarousel(folder, task) {
       const oy = bl.querySelector(".ly-oy"); if (oy) { const v = parseInt(oy.value, 10) || 0; if (v) s.titleOffsetY = v; else delete s.titleOffsetY; }
       const sc = bl.querySelector(".ly-sc"); if (sc) { const v = (parseInt(sc.value, 10) || 100) / 100; if (Math.abs(v - 1) > 0.001) s.titleScale = v; else delete s.titleScale; }
     });
-    const ctaEl = $("#ly-cta"); if (ctaEl) concept.cta = ctaEl.value.trim();
+    const ctaEl = $(".ly-cta", box); if (ctaEl) concept.cta = ctaEl.value.trim();
     try {
       await API.saveContent(folder, "copy/instagram_carousel.json", JSON.stringify(concept, null, 2) + "\n");
       await API.renderMedia(folder, task.kind, selectedTemplate());
       toast("Camadas salvas — arte atualizada.", "success");
-      router();
+      onSaved && onSaved();
     } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); btn.disabled = false; btn.textContent = "Salvar camadas e re-renderizar"; }
   };
 }
@@ -1489,6 +1600,7 @@ async function viewTaskDetail(folder) {
   const canDiscard = task.zone !== "approved";
   const techSlug = s.title ? `<span class="dim" style="font-size:12.5px">identificador: <span class="codeblock">${esc(s.task_name)}</span></span>` : "";
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
+  State.task = task; // o "Editar" do lightbox usa a peça atual
   setView(`
     <div class="flex flex-wrap mb">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
@@ -1500,8 +1612,6 @@ async function viewTaskDetail(folder) {
       </div>
       <div>
         ${renderPanel(folder, task)}
-        ${editorCard(task)}
-        ${layersCard(task)}
         ${refineCard(task)}
         <div class="card mt">
           <div class="flex-between"><h3>Tags</h3><button class="btn btn-sm" id="btn-tags">Editar</button></div>
@@ -1534,8 +1644,6 @@ async function viewTaskDetail(folder) {
   loadTaskCollections(folder);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
-  $$(".editor-open").forEach((b) => (b.onclick = () => openEditor(folder, task, b.dataset.rel)));
-  wireLayers(folder, task);
   wireUndo(folder, task);
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
     el.onchange = () => {
@@ -1687,12 +1795,12 @@ let _lbIdx = 0;
 function lbItemFromMedia(m) {
   const isVid = m.tagName === "VIDEO";
   const src = m.getAttribute("src") || "";
-  return { url: src, type: isVid ? "video" : "image", dlUrl: src.replace("/raw?", "/download?") };
+  return { url: src, type: isVid ? "video" : "image", dlUrl: src.replace("/raw?", "/download?"), folder: m.dataset.folder || "", rel: m.dataset.rel || "", editable: m.dataset.edit === "1" };
 }
 // Esconde a navegação (preview de texto/HTML e ao fechar) e zera o grupo.
 function hideLbNav() {
   _lbItems = []; _lbIdx = 0;
-  ["#lightbox-prev", "#lightbox-next", "#lightbox-count"].forEach((s) => { const e = $(s); if (e) e.style.display = "none"; });
+  ["#lightbox-prev", "#lightbox-next", "#lightbox-count", "#lightbox-edit"].forEach((s) => { const e = $(s); if (e) e.style.display = "none"; });
 }
 // Renderiza o item atual no palco + ações (download) + navegação (setas/contador).
 function renderLbItem() {
@@ -1709,6 +1817,11 @@ function renderLbItem() {
   } else {
     if (res) { res.innerHTML = ""; res.style.display = "none"; }
     if (dl) { dl.href = it.dlUrl || it.url; dl.style.display = (it.dlUrl || it.url) ? "" : "none"; }
+  }
+  const ed = $("#lightbox-edit");
+  if (ed) {
+    if (it.editable && it.folder && it.rel && State.task) { ed.style.display = ""; ed.onclick = () => { closeLightbox(); openEditor(it.folder, State.task, it.rel); }; }
+    else ed.style.display = "none";
   }
   const multi = _lbItems.length > 1;
   const prev = $("#lightbox-prev"), next = $("#lightbox-next"), count = $("#lightbox-count");

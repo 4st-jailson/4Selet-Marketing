@@ -804,15 +804,33 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .ly-pos { display: flex; gap: 8px; }
 .ly-pos input { width: 33%; text-align: center; }
 
-/* ---- Editor visual (fabric.js) ---- */
+/* ---- Editor visual (fabric.js) — editor de 2 abas ---- */
 .editor-ov { position: fixed; inset: 0; z-index: 1400; background: rgba(7,33,43,.97); display: flex; flex-direction: column; }
-.editor-bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.editor-bar .ed-sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+.editor-top { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.editor-top .ed-piece { font-weight: 600; color: var(--text); white-space: nowrap; }
+.ed-tabs { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 2px; }
+.ed-tab { border: none; background: transparent; color: var(--text-2); font: inherit; font-size: 13px; padding: 5px 15px; border-radius: 999px; cursor: pointer; }
+.ed-tab.on { background: var(--accent); color: #fff; }
+.ed-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ed-pane[hidden] { display: none; }
+#ed-pane-content { overflow-y: auto; }
+.editor-bar { display: flex; gap: 6px; align-items: center; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.editor-bar .ed-sep { width: 1px; height: 24px; background: var(--border); margin: 0 3px; }
+.editor-bar .ed-grp { display: inline-flex; gap: 5px; align-items: center; }
 .editor-bar input[type="color"] { width: 34px; height: 30px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-xs); background: var(--surface-2); cursor: pointer; }
-.editor-stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 20px; }
+.editor-bar #ed-size { width: 60px; }
+.editor-bar #ed-font { max-width: 132px; }
+.editor-bar #ed-align { width: auto; }
+.editor-bar .ed-ico { min-width: 34px; padding-left: 8px; padding-right: 8px; text-align: center; font-size: 14px; line-height: 1; }
+.ed-swatches { display: inline-flex; gap: 3px; }
+.ed-sw { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(255,255,255,.28); cursor: pointer; padding: 0; transition: transform .1s ease; }
+.ed-sw:hover { transform: scale(1.15); }
+.ed-op { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); }
+.ed-op input[type="range"] { width: 76px; }
+.editor-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 20px; }
 .editor-stage .canvas-container { box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.ed-content-form { max-width: 720px; margin: 24px auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
 .editor-open-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.editor-bar .ed-piece { font-weight: 600; color: var(--text); margin-right: 4px; white-space: nowrap; }
 
 /* ---- Usuários: nome de exibição + ações pequenas ---- */
 .btn-xs { padding: 1px 7px; font-size: 11px; line-height: 1.5; }
@@ -882,6 +900,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .lightbox-loading { color: #fff; font-size: 14px; display: flex; align-items: center; gap: 10px; padding: var(--s7); }
 /* #7 — botão "abrir em nova aba" (HTML preview) ao lado do "Baixar" */
 .lightbox-newtab { position: absolute; top: 24px; left: 112px; }
+/* "Editar" no lightbox: entrada principal do editor visual (só p/ artes editáveis). */
+.lightbox-edit { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 6; box-shadow: 0 2px 12px rgba(0,0,0,.35); }
 /* Ações do lightbox (Baixar / Abrir em nova aba / menu de resolução): fundo sólido frostado
    para ficarem legíveis sobre QUALQUER arte por trás (fundo claro ou escuro). */
 .lightbox-dl.btn, .lightbox-newtab.btn, .lightbox-res .dl-res > summary {
