@@ -2695,8 +2695,11 @@ async function viewSettings() {
     <div class="card mt" style="max-width:660px">
       <h3>Publicação no Instagram</h3>
       <p class="muted mt">Conecte a conta (Graph API da Meta) para publicar peças <strong>aprovadas</strong> direto do painel. O token e o ID ficam só no servidor (em <span class="codeblock">interface/data</span>, fora do git) e nunca vão para o navegador. Enquanto não conectar, a publicação roda em <strong>modo simulado</strong>.</p>
+      ${ig.configured
+        ? `<div class="ig-connected mt"><span class="badge ok">Conectado</span> <strong>@${esc(ig.username || "conta")}</strong><div class="hint">As publicações vão para esta conta <strong>de verdade</strong> (não é mais simulado).</div></div>`
+        : `<div class="kv mt"><div class="k">Status</div><div><span class="badge paused">Não conectado</span> <span class="hint">— publicação em modo simulado (não posta nada)</span></div></div>`}
       <div class="kv mt">
-        <div class="k">Status</div><div>${ig.configured ? '<span class="badge ok">conectado' + (ig.username ? " — @" + esc(ig.username) : "") + "</span>" : '<span class="badge paused">não conectado (simulado)</span>'}</div>
+        ${ig.ig_user_id ? `<div class="k">Conta (ID)</div><div class="muted">${esc(ig.ig_user_id)}</div>` : ""}
         ${ig.token_hint ? `<div class="k">Token</div><div>termina em <span class="codeblock">${esc(ig.token_hint)}</span></div>` : ""}
       </div>
       <hr class="sep" />
@@ -2746,8 +2749,11 @@ async function viewSettings() {
   };
   if ($("#ig-test")) $("#ig-test").onclick = async () => {
     const out = $("#ig-out"); out.textContent = "Testando…";
-    try { const r = await API.testPublish(); out.textContent = r.ok ? ("Conectado" + (r.username ? " como @" + r.username : "") + ".") : ("Falhou: " + (r.error || "erro")); }
-    catch (e) { out.textContent = "Falhou: " + ((e && e.message) || "erro"); }
+    try {
+      const r = await API.testPublish();
+      if (r.ok) { toast("Conectado como @" + (r.username || "conta") + ".", "ok"); viewSettings(); } // re-render: Status vira verde
+      else out.textContent = "Falhou: " + (r.error || "erro");
+    } catch (e) { out.textContent = "Falhou: " + ((e && e.message) || "erro"); }
   };
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");
