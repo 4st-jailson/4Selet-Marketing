@@ -42,6 +42,15 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "painel-4selet", uptime_s: Math.round(process.uptime()) });
 });
 
+// Link PÚBLICO TEMPORÁRIO de mídia (fora do login): a Meta busca a imagem da arte por
+// aqui na hora de publicar no Instagram. Token opaco + expira (lib/media_tokens).
+app.get("/m/:token", (req, res) => {
+  const abs = require("./lib/media_tokens").resolve(req.params.token);
+  if (!abs) return res.status(404).end();
+  res.set("Cache-Control", "no-store");
+  res.sendFile(abs);
+});
+
 // --- Autenticacao do painel: login por pessoa + perfis (admin/membro) ---
 auth.bootstrap(); // garante um admin inicial (ADMIN_USERNAME/ADMIN_PASSWORD do .env)
 app.use("/api/auth", require("./routes/auth")); // login/logout/me — publico
@@ -82,6 +91,7 @@ app.use("/api/collections", require("./routes/collections"));
 app.use("/api/content", require("./routes/content"));
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
+app.use("/api/publish", require("./routes/publish"));
 
 // Servir assets de marca (logos) read-only. Filtro de extensao (B6): so mídia/fontes/css
 // — nunca serve .env/.json/.md/etc. que por acaso caiam em assets/. Publico (fora do gate).

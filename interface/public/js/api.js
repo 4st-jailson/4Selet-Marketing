@@ -66,6 +66,11 @@ const API = (() => {
     saveContent: (folder, rel, content) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/content", { rel, content }),
     saveEditedHtml: (folder, rel, html) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/edit-html", { rel, html }),
     taskHtml: (folder, rel) => fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent(rel)).then((r) => r.text()),
+    // publicação (Instagram)
+    publishStatus: () => req("GET", "/api/publish/status"),
+    savePublishConfig: (cfg) => req("POST", "/api/publish/config", cfg),
+    testPublish: () => req("POST", "/api/publish/test"),
+    publishPiece: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder), payload || {}),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),

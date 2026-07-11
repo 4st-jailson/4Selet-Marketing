@@ -1670,7 +1670,7 @@ function workflowActions(task) {
   const s = task.status.status;
   if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Enviar para revisão</button>`;
   if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Gerar prévia de novo</button>`;
-  if (s === "approved") return `<span class="badge approved">aprovada e salva</span><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
+  if (s === "approved") return `<span class="badge approved">aprovada e salva</span><button class="btn btn-primary" data-wf="publish">Publicar no Instagram</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
   if (s === "rejected") return `<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
   return "";
 }
@@ -1685,6 +1685,7 @@ function bindWorkflow(task) {
   $$("#wf-actions [data-wf]").forEach((btn) => {
     btn.onclick = async () => {
       const wf = btn.dataset.wf;
+      if (wf === "publish") { openPublishModal(task); return; }
       const orig = btn.innerHTML;
       const busy = () => { $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = true)); btn.innerHTML = '<span class="spinner"></span> processando…'; };
       try {
@@ -1705,6 +1706,30 @@ function bindWorkflow(task) {
       } catch (e) { toast(e.message, "error"); $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = false)); btn.innerHTML = orig; }
     };
   });
+}
+
+// Publicar uma peça aprovada no Instagram. Se a conta não estiver conectada, roda em
+// modo SIMULADO (não publica). Se estiver, confirma de forma explícita antes do post real.
+async function openPublishModal(task) {
+  let st = {};
+  try { st = (await API.publishStatus()).instagram || {}; } catch (e) { /* segue como não-conectado */ }
+  const connected = !!st.configured;
+  const who = st.username ? "@" + st.username : "sua conta";
+  const v = await uiModal({
+    title: connected ? "Publicar no Instagram" : "Publicar (modo simulado)",
+    message: connected
+      ? "Isto PUBLICA de verdade em " + who + " agora. Revise a legenda (deixe vazio para usar a legenda gerada na peça)."
+      : "O Instagram ainda não está conectado, então isto roda em MODO SIMULADO — não publica nada de verdade. Conecte a conta em Configurações para publicar.",
+    fields: [{ name: "caption", label: "Legenda (opcional — vazio usa a da peça)", type: "textarea", placeholder: "Deixe vazio para usar a legenda gerada." }],
+    confirmText: connected ? "Publicar agora" : "Simular publicação",
+    confirmKind: connected ? "danger" : undefined,
+  });
+  if (v === null) return;
+  try {
+    const r = await API.publishPiece(task.folder, { caption: (v.caption && v.caption.trim()) || undefined, dryRun: !connected });
+    if (r.dry_run) toast("Simulado (" + r.type + "): " + r.reason, "info");
+    else toast("Publicado no Instagram (" + r.type + ")!", "ok");
+  } catch (e) { toast((e && e.message) || "Falha ao publicar.", "error"); }
 }
 
 async function openFile(folder, rel) {
@@ -2587,6 +2612,8 @@ async function viewSettings() {
   const defProv = (provs.find((p) => p.is_default) || {}).id || "anthropic";
   let integ = [];
   try { const ri = await API.integrations(); integ = (ri && ri.integrations) || []; } catch (e) { integ = []; }
+  let ig = {};
+  try { ig = (await API.publishStatus()).instagram || {}; } catch (e) { ig = {}; }
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
@@ -2666,6 +2693,20 @@ async function viewSettings() {
       </ul>
     </div>
     <div class="card mt" style="max-width:660px">
+      <h3>Publicação no Instagram</h3>
+      <p class="muted mt">Conecte a conta (Graph API da Meta) para publicar peças <strong>aprovadas</strong> direto do painel. O token e o ID ficam só no servidor (em <span class="codeblock">interface/data</span>, fora do git) e nunca vão para o navegador. Enquanto não conectar, a publicação roda em <strong>modo simulado</strong>.</p>
+      <div class="kv mt">
+        <div class="k">Status</div><div>${ig.configured ? '<span class="badge ok">conectado' + (ig.username ? " — @" + esc(ig.username) : "") + "</span>" : '<span class="badge paused">não conectado (simulado)</span>'}</div>
+        ${ig.token_hint ? `<div class="k">Token</div><div>termina em <span class="codeblock">${esc(ig.token_hint)}</span></div>` : ""}
+      </div>
+      <hr class="sep" />
+      <div class="field"><label>Token de acesso <span class="hint">(longa duração, gerado na Meta)</span></label><input id="ig-token" type="password" placeholder="${ig.configured ? "Cole um novo token para trocar..." : "Cole o token aqui e clique em Testar conexão..."}" /></div>
+      <div class="field"><label>ID da conta do Instagram <span class="hint">(opcional — deixe vazio que o painel descobre pelo token)</span></label><input id="ig-id" value="${esc(ig.ig_user_id || "")}" placeholder="descoberto automaticamente ao testar" /></div>
+      <div class="field"><label>Endereço público do painel <span class="hint">(a Meta busca a imagem por aqui)</span></label><input id="ig-base" value="${esc(ig.public_base_url || "https://mkt.4st.co")}" style="max-width:340px" /></div>
+      <div class="flex"><button class="btn btn-primary" id="ig-save">Salvar conexão</button><button class="btn" id="ig-test">Testar conexão</button><span id="ig-out" class="muted"></span></div>
+      <p class="hint mt">Só administradores configuram. O token e o ID você gera na Meta (te passo o passo a passo).</p>
+    </div>
+    <div class="card mt" style="max-width:660px">
       <h3>Aparência</h3>
       <p class="muted mt">Cor de destaque da interface (preferência local, só do seu navegador). Não altera as cores das peças geradas — a marca permanece travada.</p>
       <div class="field mt"><label>Cor de destaque</label>
@@ -2693,6 +2734,21 @@ async function viewSettings() {
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
   if ($("#scheme-open")) $("#scheme-open").onclick = openSchemeCarousel;
+  // Publicação Instagram: salvar conexão + testar
+  if ($("#ig-save")) $("#ig-save").onclick = async () => {
+    const out = $("#ig-out"); out.textContent = "Salvando…";
+    try {
+      const payload = { ig_user_id: $("#ig-id").value.trim(), public_base_url: $("#ig-base").value.trim() };
+      const tok = $("#ig-token").value.trim(); if (tok) payload.access_token = tok;
+      await API.savePublishConfig(payload);
+      toast("Conexão salva.", "ok"); viewSettings();
+    } catch (e) { out.textContent = ""; toast((e && e.message) || "Erro ao salvar.", "error"); }
+  };
+  if ($("#ig-test")) $("#ig-test").onclick = async () => {
+    const out = $("#ig-out"); out.textContent = "Testando…";
+    try { const r = await API.testPublish(); out.textContent = r.ok ? ("Conectado" + (r.username ? " como @" + r.username : "") + ".") : ("Falhou: " + (r.error || "erro")); }
+    catch (e) { out.textContent = "Falhou: " + ((e && e.message) || "erro"); }
+  };
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");
   const saveKeyBtn = $("#s-save-key");
