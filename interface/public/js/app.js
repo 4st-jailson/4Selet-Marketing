@@ -252,6 +252,7 @@ const Routes = {
   create: viewCreate,
   settings: viewSettings,
   usuarios: viewUsers,
+  agendados: viewSchedule,
 };
 
 // Skeleton de carregamento com o formato do destino — load parece intencional,
@@ -1708,28 +1709,121 @@ function bindWorkflow(task) {
   });
 }
 
-// Publicar uma peça aprovada no Instagram. Se a conta não estiver conectada, roda em
-// modo SIMULADO (não publica). Se estiver, confirma de forma explícita antes do post real.
+// Prévia REALISTA de como a peça fica no Instagram (mockup do feed).
+function instagramPreview(imgUrls, caption, username) {
+  username = username || "4selet";
+  const multi = imgUrls.length > 1;
+  const cap = esc(caption || "").replace(/\n/g, "<br>");
+  const ic = {
+    heart: '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>',
+    comment: '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>',
+    share: '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+    save: '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  };
+  const chev = (d) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="' + (d < 0 ? "15 18 9 12 15 6" : "9 18 15 12 9 6") + '"/></svg>';
+  return `<div class="ig-post">
+    <div class="ig-post-head"><span class="ig-post-av">4</span><span class="ig-post-name">${esc(username)}</span><span class="ig-post-more">•••</span></div>
+    <div class="ig-post-media">
+      <img class="ig-post-img" src="${esc(imgUrls[0] || "")}" alt="">
+      ${multi ? '<button class="ig-nav ig-prev" data-d="-1" aria-label="Anterior">' + chev(-1) + '</button><button class="ig-nav ig-next" data-d="1" aria-label="Próximo">' + chev(1) + '</button><div class="ig-count"><span class="igp-idx">1</span>/' + imgUrls.length + "</div>" : ""}
+    </div>
+    ${multi ? '<div class="ig-dots">' + imgUrls.map((_, i) => '<span class="ig-dot' + (i === 0 ? " on" : "") + '"></span>').join("") + "</div>" : ""}
+    <div class="ig-post-actions"><span class="ig-ic">${ic.heart}</span><span class="ig-ic">${ic.comment}</span><span class="ig-ic">${ic.share}</span><span class="ig-ic ig-save">${ic.save}</span></div>
+    <div class="ig-post-caption"><strong>${esc(username)}</strong> <span class="igp-cap">${cap}</span></div>
+  </div>`;
+}
+function wireIgPreview(root, imgUrls) {
+  if (imgUrls.length < 2) return;
+  let i = 0;
+  const img = root.querySelector(".ig-post-img"), idx = root.querySelector(".igp-idx");
+  const dots = root.querySelectorAll(".ig-dot");
+  const show = () => { img.src = imgUrls[i]; if (idx) idx.textContent = i + 1; dots.forEach((d, k) => d.classList.toggle("on", k === i)); };
+  root.querySelectorAll(".ig-nav").forEach((b) => { b.onclick = () => { i = (i + parseInt(b.dataset.d, 10) + imgUrls.length) % imgUrls.length; show(); }; });
+}
+
+// Modal de publicar/agendar com a PRÉVIA do Instagram. Conectado = publica de verdade
+// (confirma explícito); não conectado = simulado. Também dá pra AGENDAR (data/hora).
 async function openPublishModal(task) {
   let st = {};
   try { st = (await API.publishStatus()).instagram || {}; } catch (e) { /* segue como não-conectado */ }
   const connected = !!st.configured;
-  const who = st.username ? "@" + st.username : "sua conta";
-  const v = await uiModal({
-    title: connected ? "Publicar no Instagram" : "Publicar (modo simulado)",
-    message: connected
-      ? "Isto PUBLICA de verdade em " + who + " agora. Revise a legenda (deixe vazio para usar a legenda gerada na peça)."
-      : "O Instagram ainda não está conectado, então isto roda em MODO SIMULADO — não publica nada de verdade. Conecte a conta em Configurações para publicar.",
-    fields: [{ name: "caption", label: "Legenda (opcional — vazio usa a da peça)", type: "textarea", placeholder: "Deixe vazio para usar a legenda gerada." }],
-    confirmText: connected ? "Publicar agora" : "Simular publicação",
-    confirmKind: connected ? "danger" : undefined,
-  });
-  if (v === null) return;
-  try {
-    const r = await API.publishPiece(task.folder, { caption: (v.caption && v.caption.trim()) || undefined, dryRun: !connected });
-    if (r.dry_run) toast("Simulado (" + r.type + "): " + r.reason, "info");
-    else toast("Publicado no Instagram (" + r.type + ")!", "ok");
-  } catch (e) { toast((e && e.message) || "Falha ao publicar.", "error"); }
+  const uname = st.username || "4selet";
+  const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
+  if (!imgs.length) { toast("Esta peça não tem imagem publicável.", "error"); return; }
+  let caption = "";
+  try { caption = (await API.taskFile(task.folder, "copy/instagram_caption.txt")) || ""; } catch (e) { /* sem legenda */ }
+
+  const ov = document.createElement("div"); ov.className = "modal-ov pub-ov";
+  ov.innerHTML = `<div class="modal pub-modal" role="dialog" aria-modal="true">
+    <div class="pub-head"><h3>Publicar no Instagram</h3><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>
+    <div class="pub-body">
+      <div class="pub-preview">${instagramPreview(imgs, caption, uname)}</div>
+      <div class="pub-form">
+        <div class="pub-status">${connected ? '<span class="badge ok">Conectado</span> @' + esc(uname) + ' — <span class="hint">publica de verdade</span>' : '<span class="badge paused">Não conectado</span> <span class="hint">— modo simulado (não posta)</span>'}</div>
+        <label class="layer-lab">Legenda</label>
+        <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
+        <p class="hint">Edite a legenda e veja a prévia atualizar ao lado.</p>
+        <hr class="sep">
+        <div class="pub-actions">
+          <button class="btn btn-primary" id="pub-now">${connected ? "Publicar agora" : "Simular agora"}</button>
+          <div class="pub-sched">
+            <label class="layer-lab">Ou agendar para</label>
+            <div class="flex"><input type="datetime-local" id="pub-when"><button class="btn" id="pub-schedule">Agendar</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov); document.body.classList.add("no-scroll");
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  ov.querySelector("[data-x='close']").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  wireIgPreview(ov, imgs);
+  const capEl = ov.querySelector("#pub-caption");
+  capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
+  ov.querySelector("#pub-now").onclick = async () => {
+    const cap = capEl.value.trim();
+    if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora", confirmKind: "danger" }))) return;
+    const btn = ov.querySelector("#pub-now"); btn.disabled = true; btn.textContent = "Publicando…";
+    try {
+      const r = await API.publishPiece(task.folder, { caption: cap || undefined, dryRun: !connected });
+      toast(r.dry_run ? ("Simulado (" + r.type + "): " + r.reason) : "Publicado no Instagram!", r.dry_run ? "info" : "ok");
+      close();
+    } catch (e) { toast((e && e.message) || "Falha ao publicar.", "error"); btn.disabled = false; btn.textContent = connected ? "Publicar agora" : "Simular agora"; }
+  };
+  ov.querySelector("#pub-schedule").onclick = async () => {
+    const when = ov.querySelector("#pub-when").value;
+    if (!when) { toast("Escolha a data e a hora.", "error"); return; }
+    const iso = new Date(when).toISOString();
+    if (new Date(iso).getTime() < Date.now() + 30000) { toast("Escolha um horário no futuro.", "error"); return; }
+    try {
+      await API.schedulePost(task.folder, { caption: capEl.value.trim() || undefined, scheduled_at: iso, label: displayName(task) });
+      toast("Agendado. Veja em Agendados.", "ok"); close();
+    } catch (e) { toast((e && e.message) || "Falha ao agendar.", "error"); }
+  };
+}
+
+// View "Agendados": fila de publicações agendadas (revisar / cancelar).
+async function viewSchedule() {
+  setTitle("Agendados");
+  let items = [];
+  try { items = (await API.listSchedule()).items || []; } catch (e) { setView('<div class="empty">Erro ao carregar os agendamentos.</div>'); return; }
+  const fmt = (iso) => { try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso; } };
+  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], published: ["approved", "Publicado"], simulado: ["plain", "Simulado"], failed: ["rejected", "Falhou"], cancelled: ["plain", "Cancelado"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
+  const rows = items.length ? items.map((it) => `<tr>
+      <td><strong>${esc(it.label || it.folder)}</strong><div class="muted">${esc(it.folder)}</div></td>
+      <td>${esc(fmt(it.scheduled_at))}</td>
+      <td>${sb(it.status)}${it.error ? ' <span class="hint">' + esc(it.error) + "</span>" : ""}</td>
+      <td class="u-actions">${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : (it.post_id ? '<span class="hint">post ' + esc(it.post_id) + "</span>" : "")}</td>
+    </tr>`).join("") : '<tr><td colspan="4" class="muted">Nenhum agendamento. Agende uma peça aprovada em “Publicar no Instagram”.</td></tr>';
+  setView(`<div class="section-head"><div><h2>Agendados</h2><p class="muted">Publicações agendadas para o Instagram. Enquanto estiver “Agendado”, você pode cancelar/suspender.</p></div></div>
+    <div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`);
+  $$("#sched-rows [data-cancel]").forEach((b) => { b.onclick = async () => {
+    if (!await uiConfirm("Cancelar este agendamento? A peça não será publicada no horário.", { confirmText: "Cancelar", confirmKind: "danger" })) return;
+    try { await API.cancelSchedule(b.dataset.cancel); toast("Agendamento cancelado.", "ok"); viewSchedule(); }
+    catch (e) { toast((e && e.message) || "Erro ao cancelar.", "error"); }
+  }; });
 }
 
 async function openFile(folder, rel) {

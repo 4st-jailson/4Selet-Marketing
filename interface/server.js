@@ -93,6 +93,9 @@ app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/publish", require("./routes/publish"));
 
+// Disparador de agendamentos: publica as peças agendadas no horário (passando pelo gate).
+require("./lib/schedule").startWorker(require("./lib/publish").publishTask);
+
 // Servir assets de marca (logos) read-only. Filtro de extensao (B6): so mídia/fontes/css
 // — nunca serve .env/.json/.md/etc. que por acaso caiam em assets/. Publico (fora do gate).
 app.use("/brand-assets", (req, res, next) => {

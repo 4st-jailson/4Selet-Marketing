@@ -71,6 +71,9 @@ const API = (() => {
     savePublishConfig: (cfg) => req("POST", "/api/publish/config", cfg),
     testPublish: () => req("POST", "/api/publish/test"),
     publishPiece: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder), payload || {}),
+    schedulePost: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/schedule", payload || {}),
+    listSchedule: () => req("GET", "/api/publish/schedule"),
+    cancelSchedule: (id) => req("DELETE", "/api/publish/schedule/" + encodeURIComponent(id)),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),

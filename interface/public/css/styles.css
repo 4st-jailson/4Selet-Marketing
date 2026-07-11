@@ -418,6 +418,35 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .ig-connected strong { color: var(--text); }
 .ig-connected .hint { flex-basis: 100%; margin: 2px 0 0; }
 
+/* ---- Publicar/Agendar no Instagram: modal + prévia (mockup do feed) ---- */
+.pub-modal { max-width: 840px; width: 94vw; }
+.pub-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pub-body { display: flex; gap: 22px; margin-top: 14px; flex-wrap: wrap; }
+.pub-preview { flex: 0 0 auto; }
+.pub-form { flex: 1 1 300px; min-width: 260px; display: flex; flex-direction: column; }
+.pub-form textarea { width: 100%; resize: vertical; }
+.pub-status { margin-bottom: 10px; }
+.pub-actions { display: flex; flex-direction: column; gap: 12px; }
+.pub-sched { display: flex; flex-direction: column; gap: 5px; }
+.pub-sched input[type="datetime-local"] { height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 8px; flex: 1; }
+.ig-post { width: 320px; max-width: 100%; background: #fff; color: #262626; border: 1px solid #dbdbdb; border-radius: 10px; overflow: hidden; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+.ig-post-head { display: flex; align-items: center; gap: 9px; padding: 9px 12px; }
+.ig-post-av { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #5499B5, #006494); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; flex: none; }
+.ig-post-name { font-weight: 600; flex: 1; }
+.ig-post-more { color: #262626; letter-spacing: 1px; }
+.ig-post-media { position: relative; background: #000; aspect-ratio: 4 / 5; display: flex; align-items: center; justify-content: center; }
+.ig-post-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ig-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(255,255,255,.85); color: #262626; display: grid; place-items: center; cursor: pointer; }
+.ig-prev { left: 8px; } .ig-next { right: 8px; }
+.ig-count { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.ig-dots { display: flex; gap: 4px; justify-content: center; padding: 8px 0 2px; }
+.ig-dot { width: 6px; height: 6px; border-radius: 50%; background: #c7c7c7; }
+.ig-dot.on { background: #1e90ff; }
+.ig-post-actions { display: flex; align-items: center; gap: 14px; padding: 9px 12px 4px; color: #262626; }
+.ig-post-actions .ig-save { margin-left: auto; }
+.ig-post-caption { padding: 2px 12px 13px; line-height: 1.4; word-break: break-word; }
+.ig-post-caption strong { font-weight: 600; }
+
 /* pesquisa de mercado ao vivo (Tavily) na geração */
 .research-toggle { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); cursor: pointer; font-size: 13.5px; line-height: 1.45; }
 .research-toggle input[type="checkbox"] {
