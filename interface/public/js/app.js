@@ -1207,8 +1207,9 @@ async function openHtmlEditor(folder, task, rel) {
   if (!curRel) { toast("Não há arte para editar aqui.", "error"); return; }
   toast("Abrindo editor…", "info");
   const multiSlide = targets.length > 1;
-  let assetMaps = [], dirty = false, current = null, curScale = 1; // [prefixo file://, token /url/]
+  let assetMaps = [], dirty = false, changed = false, current = null, curScale = 1; // [prefixo file://, token /url/]
   let hist = [], hi = -1; // desfazer/refazer: pilha de innerHTML do .card
+  let artW = 1080, artH = 1080, fitScale = 1, nudgeT = null; // dimensões da arte + zoom "ajustar" + debounce do nudge
   const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;}";
   const FONTS = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap">';
 
@@ -1235,7 +1236,13 @@ async function openHtmlEditor(folder, task, rel) {
     +     '<button data-mark="4selet">"4SELET"</button>'
     +   "</div></details>"
     +   '<button class="btn btn-sm" id="he-add-img">+ Imagem</button>'
+    +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm">+ Bloco</summary><div class="ed-pop">'
+    +     '<button data-block="cta">CTA WhatsApp</button>'
+    +     '<button data-block="footer">Rodapé @4selet</button>'
+    +     '<button data-block="selo">Selo Taxa Zero</button>'
+    +   "</div></details>"
     +   '<input type="file" id="he-file" accept="image/*" hidden>'
+    +   '<input type="file" id="he-replace-file" accept="image/*" hidden>'
     +   '<span class="ed-sep"></span>'
     +   '<select id="he-font" title="Fonte">'
     +     "<option value=\"'Inter',sans-serif\">Inter</option>"
@@ -1248,21 +1255,72 @@ async function openHtmlEditor(folder, task, rel) {
     +   '<input type="number" id="he-size" value="40" min="6" max="600" title="Tamanho do texto">'
     +   '<button class="btn btn-sm ed-ico" id="he-bold" title="Negrito"><b>N</b></button>'
     +   '<button class="btn btn-sm ed-ico" id="he-italic" title="Itálico"><i>I</i></button>'
-    +   '<select id="he-align" title="Alinhamento"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select>'
+    +   '<select id="he-align" title="Alinhamento do texto"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select>'
     +   '<input type="number" id="he-lh" step="0.05" min="0.8" max="3" title="Entrelinha" placeholder="1.2">'
     +   '<input type="color" id="he-color" value="#ffffff" title="Cor do texto">'
+    +   '<button class="btn btn-sm ed-ico" id="he-eyedrop" title="Conta-gotas: pegar cor da arte"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>'
+    +   '<details class="ed-menu" id="he-fx-menu"><summary class="btn btn-sm">Efeitos</summary><div class="ed-pop">'
+    +     '<button data-fx="none">Nenhum</button>'
+    +     '<button data-fx="shadow">Sombra suave</button>'
+    +     '<button data-fx="outline">Contorno</button>'
+    +     '<button data-fx="box">Caixa de fundo</button>'
+    +   "</div></details>"
+    +   '<button class="btn btn-sm" id="he-replace">Trocar imagem</button>'
+    +   '<details class="ed-menu" id="he-filter-menu"><summary class="btn btn-sm">Filtros</summary><div class="ed-pop ed-pop-wide">'
+    +     '<label class="ed-range">Brilho<input type="range" id="he-f-bri" min="0" max="200" value="100"></label>'
+    +     '<label class="ed-range">Contraste<input type="range" id="he-f-con" min="0" max="200" value="100"></label>'
+    +     '<label class="ed-range">Saturação<input type="range" id="he-f-sat" min="0" max="200" value="100"></label>'
+    +     '<button data-filt="gray">Preto e branco</button>'
+    +     '<button data-filt="none">Limpar filtros</button>'
+    +   "</div></details>"
+    +   '<span class="ed-sep"></span>'
+    +   '<label class="he-op" title="Opacidade"><span>Opac.</span><input type="range" id="he-opacity" min="0" max="100" value="100"></label>'
+    +   '<input type="number" id="he-rot" min="-180" max="180" step="1" value="0" title="Rotação (graus)">'
+    +   '<button class="btn btn-sm ed-ico" id="he-flip" title="Espelhar na horizontal"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2M12 14v2M12 8v2M12 2v2"/></svg></button>'
+    +   '<details class="ed-menu" id="he-align2-menu"><summary class="btn btn-sm">Alinhar</summary><div class="ed-pop">'
+    +     '<button data-al="cx">Centralizar na horizontal</button>'
+    +     '<button data-al="cy">Centralizar na vertical</button>'
+    +     '<button data-al="left">Encostar à esquerda</button>'
+    +     '<button data-al="right">Encostar à direita</button>'
+    +     '<button data-al="top">Encostar no topo</button>'
+    +     '<button data-al="bottom">Encostar na base</button>'
+    +   "</div></details>"
+    +   '<details class="ed-menu" id="he-layer-menu"><summary class="btn btn-sm">Camada</summary><div class="ed-pop">'
+    +     '<button data-lay="front">Trazer para frente</button>'
+    +     '<button data-lay="back">Enviar para trás</button>'
+    +   "</div></details>"
+    +   '<button class="btn btn-sm" id="he-dup" title="Duplicar (Ctrl+D)">Duplicar</button>'
     +   '<span class="ed-sep"></span>'
     +   '<button class="btn btn-sm ed-ico" id="he-undo" title="Desfazer (Ctrl+Z)">↶</button>'
     +   '<button class="btn btn-sm ed-ico" id="he-redo" title="Refazer (Ctrl+Y)">↷</button>'
     +   '<button class="btn btn-sm btn-danger" id="he-del" title="Remover (Del)">Remover</button>'
     + "</div>"
-    + '<div class="editor-stage"><div class="he-wrap" id="he-wrap"><iframe id="he-frame" title="Editor visual" sandbox="allow-same-origin"></iframe><div class="he-handle" id="he-handle" style="display:none"></div></div></div>';
+    + '<div class="editor-stage"><div class="he-wrap" id="he-wrap"><iframe id="he-frame" title="Editor visual" sandbox="allow-same-origin"></iframe><div class="he-overlay" id="he-overlay"></div><div class="he-safe" id="he-safe" hidden><span class="he-safe-tag">Área segura</span></div><div class="he-guideline he-guideline-v" id="he-gl-v" hidden></div><div class="he-guideline he-guideline-h" id="he-gl-h" hidden></div><div class="he-handle" id="he-handle" style="display:none"></div></div></div>'
+    + '<div class="he-tools" id="he-tools">'
+    +   '<button class="he-tool" id="he-zoom-out" title="Diminuir (Ctrl -)" aria-label="Diminuir zoom">&#8722;</button>'
+    +   '<button class="he-tool he-zoom-val" id="he-zoom-val" title="Ajustar à tela (Ctrl 0)">100%</button>'
+    +   '<button class="he-tool" id="he-zoom-in" title="Aumentar (Ctrl +)" aria-label="Aumentar zoom">+</button>'
+    +   '<span class="he-tool-sep"></span>'
+    +   '<button class="he-tool he-tool-txt" id="he-grid-btn" title="Grade de alinhamento" aria-pressed="false">Grade</button>'
+    +   '<button class="he-tool he-tool-txt" id="he-guides-btn" title="Guias de centro" aria-pressed="false">Guias</button>'
+    +   '<button class="he-tool he-tool-txt" id="he-safe-btn" title="Zonas seguras do Instagram" aria-pressed="false">Zonas IG</button>'
+    + "</div>";
   document.body.appendChild(ov);
   document.body.classList.add("no-scroll");
   const frame = $("#he-frame"), wrap = $("#he-wrap"), handle = $("#he-handle");
   const gcs = (el) => frame.contentDocument.defaultView.getComputedStyle(el);
-  const getTf = (el) => { const t = el.style.transform || ""; const tr = t.match(/translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px/); const s = t.match(/scale\(\s*([\d.]+)/); return { x: tr ? parseFloat(tr[1]) : 0, y: tr ? parseFloat(tr[2]) : 0, s: s ? parseFloat(s[1]) : 1 }; };
-  const setTf = (el, x, y, s) => { el.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")"; };
+  // Transform completo: translate + rotate + scale(sx,sy). O sinal de sx/sy guarda o espelho
+  // (flip). 's' é sempre a magnitude positiva; fx/fy ∈ {1,-1}. Ordem fixa translate→rotate→scale
+  // (compõe estável e o Playwright re-renderiza idêntico).
+  const getTf = (el) => {
+    const t = el.style.transform || "";
+    const tr = t.match(/translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px/);
+    const ro = t.match(/rotate\(\s*(-?[\d.]+)deg/);
+    const sc = t.match(/scale\(\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+))?/);
+    const sx = sc ? parseFloat(sc[1]) : 1, sy = sc && sc[2] != null ? parseFloat(sc[2]) : sx;
+    return { x: tr ? parseFloat(tr[1]) : 0, y: tr ? parseFloat(tr[2]) : 0, s: Math.abs(sx) || 1, rot: ro ? parseFloat(ro[1]) : 0, fx: sx < 0 ? -1 : 1, fy: sy < 0 ? -1 : 1 };
+  };
+  const setTf = (el, t) => { el.style.transform = "translate(" + t.x + "px," + t.y + "px) rotate(" + (t.rot || 0) + "deg) scale(" + (t.s * (t.fx || 1)) + "," + (t.s * (t.fy || 1)) + ")"; };
 
   function loadInto(r2) {
     curRel = r2; dirty = false; current = null; hist = []; hi = -1;
@@ -1283,12 +1341,12 @@ async function openHtmlEditor(folder, task, rel) {
   }
   function wireDoc(doc) {
     const card = doc.querySelector(".card") || doc.body;
-    const artW = card.offsetWidth || 1080, artH = card.offsetHeight || 1080;
+    artW = card.offsetWidth || 1080; artH = card.offsetHeight || 1080;
     frame.style.width = artW + "px"; frame.style.height = artH + "px";
     const stage = ov.querySelector(".editor-stage");
-    curScale = Math.min((stage.clientWidth - 48) / artW, (stage.clientHeight - 48) / artH, 1);
-    frame.style.transform = "scale(" + curScale + ")";
-    wrap.style.width = Math.round(artW * curScale) + "px"; wrap.style.height = Math.round(artH * curScale) + "px";
+    fitScale = Math.min((stage.clientWidth - 48) / artW, (stage.clientHeight - 48) / artH, 1);
+    applyZoom(fitScale); // aplica escala "ajustar à tela" + atualiza wrap/handle/leitura de %
+    setSafeZone(); // dimensiona a marcação de zona segura conforme o formato da arte
     const INLINE = ["SPAN", "B", "I", "EM", "STRONG", "BR", "A", "SUP", "SUB", "SMALL", "MARK", "U"];
     const inlineOnly = (el) => Array.from(el.children).every((c) => INLINE.indexOf(c.tagName) >= 0);
     // NÃO converte pra absoluto (quebrava o layout flex). Mantém o layout EXATO da arte
@@ -1308,6 +1366,7 @@ async function openHtmlEditor(folder, task, rel) {
       interactive(doc, el);
     });
     card.addEventListener("mousedown", (e) => { if (e.target === card) select(null); });
+    doc.addEventListener("wheel", onWheelZoom, { passive: false }); // Ctrl+roda sobre a arte também dá zoom
     select(null); snapshot(); // baseline p/ desfazer
   }
   function interactive(doc, el) {
@@ -1315,9 +1374,21 @@ async function openHtmlEditor(folder, task, rel) {
       if (el.isContentEditable) return;
       e.preventDefault(); e.stopPropagation(); select(el);
       const sx = e.clientX, sy = e.clientY, tf = getTf(el);
-      const mv = (ev) => { setTf(el, tf.x + (ev.clientX - sx), tf.y + (ev.clientY - sy), tf.s); positionHandle(); dirty = true; };
-      const up = () => { doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up); snapshot(); };
+      const mv = (ev) => {
+        // Se o botão já não está pressionado (ex.: soltou o mouse FORA do iframe e o mouseup
+        // não chegou aqui), encerra em vez de "grudar" o elemento no cursor ao passar por perto.
+        if (ev.buttons === 0) { up(); return; }
+        let nx = tf.x + (ev.clientX - sx), ny = tf.y + (ev.clientY - sy);
+        if (!(ev.ctrlKey || ev.metaKey)) { const sn = snapMove(el, nx, ny); nx = sn.x; ny = sn.y; } // Ctrl segura = sem encaixe
+        else clearGuides();
+        setTf(el, Object.assign({}, tf, { x: nx, y: ny })); positionHandle(); dirty = true;
+      };
+      const up = () => {
+        doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up);
+        document.removeEventListener("mouseup", up); clearGuides(); snapshot();
+      };
       doc.addEventListener("mousemove", mv); doc.addEventListener("mouseup", up);
+      document.addEventListener("mouseup", up); // pega o soltar quando o cursor sai do iframe
     });
     el.addEventListener("dblclick", () => {
       if (el.tagName === "IMG") return;
@@ -1334,6 +1405,20 @@ async function openHtmlEditor(folder, task, rel) {
     handle.style.top = ((r.bottom - cr.top) * curScale - 7) + "px";
     handle.style.display = "block";
   }
+  // Zoom do palco: reescala o iframe e ajusta o wrap; a matemática de arrastar/redimensionar
+  // já usa curScale, então mover/redimensionar continua 1:1 em qualquer zoom.
+  function applyZoom(s) {
+    curScale = Math.max(0.1, Math.min(4, s));
+    frame.style.transform = "scale(" + curScale + ")";
+    wrap.style.width = Math.round(artW * curScale) + "px";
+    wrap.style.height = Math.round(artH * curScale) + "px";
+    const lbl = $("#he-zoom-val"); if (lbl) lbl.textContent = Math.round(curScale * 100) + "%";
+    positionHandle();
+  }
+  const zoomBy = (f) => applyZoom(curScale * f);
+  // Ctrl/Cmd + roda = zoom. Precisa estar tanto no palco quanto DENTRO do iframe (a roda
+  // sobre a arte dispara no documento do iframe e não sobe pro pai).
+  function onWheelZoom(e) { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1); }
   handle.addEventListener("mousedown", (e) => {
     e.preventDefault(); e.stopPropagation(); if (!current) return;
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
@@ -1342,19 +1427,42 @@ async function openHtmlEditor(folder, task, rel) {
     const wr = wrap.getBoundingClientRect();
     const toIf = (mx, my) => [(mx - wr.left) / curScale, (my - wr.top) / curScale];
     const p0 = toIf(e.clientX, e.clientY), d0 = Math.hypot(p0[0] - cx, p0[1] - cy) || 1;
-    const mv = (ev) => { const p = toIf(ev.clientX, ev.clientY); const s = Math.max(0.1, Math.min(8, tf.s * Math.hypot(p[0] - cx, p[1] - cy) / d0)); setTf(current, tf.x, tf.y, s); positionHandle(); dirty = true; };
-    const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); snapshot(); };
+    // Camada de captura: um véu transparente sobre TODO o editor durante o arraste. Sem ele,
+    // ao passar o cursor sobre o iframe os eventos iam pro documento do iframe (não pro de topo)
+    // e o redimensionamento travava / "pulava". Com o véu, todo mousemove/mouseup chega aqui.
+    const cap = document.createElement("div");
+    cap.style.cssText = "position:fixed;inset:0;z-index:9999;cursor:nwse-resize";
+    ov.appendChild(cap);
+    const mv = (ev) => {
+      const p = toIf(ev.clientX, ev.clientY); const s = Math.max(0.1, Math.min(8, tf.s * Math.hypot(p[0] - cx, p[1] - cy) / d0)); setTf(current, Object.assign({}, tf, { s: s })); positionHandle(); dirty = true;
+    };
+    const up = () => {
+      cap.remove();
+      document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); snapshot();
+    };
     document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
   });
+  // Liga/desliga um controle (input/select/button via .disabled; menu <details> via classe).
+  function setCtl(id, off) {
+    const n = $("#" + id); if (!n) return;
+    if (n.tagName === "DETAILS") { n.classList.toggle("ctl-off", off); if (off) n.removeAttribute("open"); }
+    else n.disabled = off;
+  }
   function select(el) {
     if (current) current.removeAttribute("data-he-sel");
     current = el;
+    const isImg = !!el && el.tagName === "IMG";
+    ["he-font", "he-size", "he-bold", "he-italic", "he-align", "he-lh", "he-color", "he-eyedrop", "he-fx-menu"].forEach((id) => setCtl(id, !el || isImg)); // só texto
+    ["he-replace", "he-filter-menu"].forEach((id) => setCtl(id, !isImg)); // só imagem
+    ["he-opacity", "he-rot", "he-flip", "he-align2-menu", "he-layer-menu", "he-dup"].forEach((id) => setCtl(id, !el)); // qualquer elemento
     if (!el) { handle.style.display = "none"; return; }
     el.setAttribute("data-he-sel", "1");
-    const isImg = el.tagName === "IMG";
-    ["he-font", "he-size", "he-bold", "he-italic", "he-align", "he-lh", "he-color"].forEach((id) => { const n = $("#" + id); if (n) n.disabled = isImg; });
-    if (!isImg) {
-      const cs = gcs(el);
+    const cs = gcs(el), tf = getTf(el);
+    const op = parseFloat(cs.opacity); if ($("#he-opacity")) $("#he-opacity").value = Math.round((isFinite(op) ? op : 1) * 100);
+    if ($("#he-rot")) $("#he-rot").value = Math.round(tf.rot || 0);
+    if (isImg) {
+      readFilter(el);
+    } else {
       $("#he-size").value = Math.round(parseFloat(cs.fontSize)) || 40;
       const c = rgbToHex(cs.color); if (c) $("#he-color").value = c;
       const fam = (cs.fontFamily || "").split(",")[0].replace(/['"]/g, "").trim().toLowerCase();
@@ -1417,7 +1525,7 @@ async function openHtmlEditor(folder, task, rel) {
   $("#he-size").oninput = () => applyStyle((el) => { el.style.fontSize = (parseInt($("#he-size").value, 10) || 40) + "px"; positionHandle(); });
   $("#he-size").onchange = () => { if (current) snapshot(); };
   $("#he-font").onchange = () => { applyStyle((el) => { el.style.fontFamily = $("#he-font").value; }); positionHandle(); if (current) snapshot(); };
-  $("#he-align").onchange = () => { applyStyle((el) => { el.style.textAlign = $("#he-align").value; }); if (current) snapshot(); };
+  $("#he-align").onchange = () => { applyStyle((el) => { el.style.textAlign = $("#he-align").value; }); positionHandle(); if (current) snapshot(); };
   $("#he-lh").oninput = () => applyStyle((el) => { el.style.lineHeight = $("#he-lh").value || ""; positionHandle(); });
   $("#he-lh").onchange = () => { if (current) snapshot(); };
   $("#he-bold").onclick = () => { applyStyle((el) => { const w = parseInt(gcs(el).fontWeight, 10) || 400; el.style.fontWeight = w >= 700 ? "400" : "700"; $("#he-bold").classList.toggle("on", w < 700); }); if (current) snapshot(); };
@@ -1426,6 +1534,151 @@ async function openHtmlEditor(folder, task, rel) {
   $("#he-color").onchange = () => { if (current) snapshot(); };
   $("#he-del").onclick = () => { if (current) { current.remove(); select(null); dirty = true; snapshot(); } };
   $("#he-undo").onclick = undo; $("#he-redo").onclick = redo;
+
+  // ===== Recursos "editor completo" (lote pedido pelo Hugo) =====
+  const applyAny = (fn) => { if (current) { fn(current); dirty = true; } }; // vale p/ texto E imagem
+  // Opacidade (texto e imagem)
+  $("#he-opacity").oninput = () => applyAny((el) => { el.style.opacity = (+$("#he-opacity").value / 100); });
+  $("#he-opacity").onchange = () => { if (current) snapshot(); };
+  // Rotação (graus)
+  $("#he-rot").oninput = () => applyAny((el) => { setTf(el, Object.assign({}, getTf(el), { rot: parseFloat($("#he-rot").value) || 0 })); positionHandle(); });
+  $("#he-rot").onchange = () => { if (current) snapshot(); };
+  // Espelhar na horizontal
+  $("#he-flip").onclick = () => { applyAny((el) => { const t = getTf(el); setTf(el, Object.assign({}, t, { fx: -t.fx })); }); if (current) snapshot(); };
+  // Duplicar (Ctrl+D)
+  function duplicateCurrent() {
+    if (!current) return;
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const clone = current.cloneNode(true); clone.removeAttribute("data-he-sel");
+    if (gcs(current).position === "static") { clone.style.position = "absolute"; clone.style.left = current.offsetLeft + "px"; clone.style.top = current.offsetTop + "px"; }
+    const t = getTf(current); setTf(clone, Object.assign({}, t, { x: t.x + 24, y: t.y + 24 }));
+    card.appendChild(clone); interactive(doc, clone); select(clone); dirty = true; snapshot();
+  }
+  $("#he-dup").onclick = duplicateCurrent;
+  // Alinhar em relação ao quadro (a bbox reflete o transform, então a conta fecha com rotação/escala)
+  $("#he-align2-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => {
+    if (!current) return;
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const cr = card.getBoundingClientRect(), r = current.getBoundingClientRect(), t = getTf(current);
+    const elCx = (r.left + r.right) / 2 - cr.left, elCy = (r.top + r.bottom) / 2 - cr.top;
+    let nx = t.x, ny = t.y, m = b.dataset.al;
+    if (m === "cx") nx = t.x + (cr.width / 2 - elCx);
+    else if (m === "cy") ny = t.y + (cr.height / 2 - elCy);
+    else if (m === "left") nx = t.x - (r.left - cr.left);
+    else if (m === "right") nx = t.x + (cr.width - (r.right - cr.left));
+    else if (m === "top") ny = t.y - (r.top - cr.top);
+    else if (m === "bottom") ny = t.y + (cr.height - (r.bottom - cr.top));
+    setTf(current, Object.assign({}, t, { x: nx, y: ny })); positionHandle(); dirty = true; snapshot();
+    $("#he-align2-menu").removeAttribute("open");
+  }; });
+  // Ordem das camadas (z-index; position:relative sem offsets não move o elemento)
+  let zTop = 5, zBottom = 0;
+  $("#he-layer-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => {
+    if (current) { if (gcs(current).position === "static") current.style.position = "relative"; current.style.zIndex = b.dataset.lay === "front" ? (++zTop) : (--zBottom); dirty = true; snapshot(); }
+    $("#he-layer-menu").removeAttribute("open");
+  }; });
+  // Trocar a imagem selecionada (mantém posição/tamanho)
+  $("#he-replace").onclick = () => { if (current && current.tagName === "IMG") $("#he-replace-file").click(); };
+  $("#he-replace-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f || !current || current.tagName !== "IMG") return; const rd = new FileReader(); rd.onload = () => { current.src = rd.result; dirty = true; snapshot(); positionHandle(); }; rd.readAsDataURL(f); e.target.value = ""; };
+  // Filtros de imagem (brilho/contraste/saturação/p&b) — CSS filter, 100% fiel no re-render
+  function writeFilter(el, o) {
+    const p = [];
+    if (o.bri !== 100) p.push("brightness(" + (o.bri / 100) + ")");
+    if (o.con !== 100) p.push("contrast(" + (o.con / 100) + ")");
+    if (o.sat !== 100) p.push("saturate(" + (o.sat / 100) + ")");
+    if (o.gray) p.push("grayscale(1)");
+    el.style.filter = p.join(" ");
+  }
+  function readFilter(el) {
+    const f = el.style.filter || "", g = (re) => { const m = f.match(re); return m ? Math.round(parseFloat(m[1]) * 100) : 100; };
+    if ($("#he-f-bri")) $("#he-f-bri").value = g(/brightness\(([\d.]+)/);
+    if ($("#he-f-con")) $("#he-f-con").value = g(/contrast\(([\d.]+)/);
+    if ($("#he-f-sat")) $("#he-f-sat").value = g(/saturate\(([\d.]+)/);
+  }
+  function filtSliders() {
+    if (!current || current.tagName !== "IMG") return;
+    writeFilter(current, { bri: +$("#he-f-bri").value, con: +$("#he-f-con").value, sat: +$("#he-f-sat").value, gray: /grayscale/.test(current.style.filter || "") });
+    dirty = true;
+  }
+  ["he-f-bri", "he-f-con", "he-f-sat"].forEach((id) => { const n = $("#" + id); if (n) { n.oninput = filtSliders; n.onchange = () => { if (current) snapshot(); }; } });
+  $("#he-filter-menu").querySelectorAll("button[data-filt]").forEach((b) => { b.onclick = () => {
+    if (!current || current.tagName !== "IMG") return;
+    if (b.dataset.filt === "gray") writeFilter(current, { bri: +$("#he-f-bri").value, con: +$("#he-f-con").value, sat: +$("#he-f-sat").value, gray: !/grayscale/.test(current.style.filter || "") });
+    else { current.style.filter = ""; $("#he-f-bri").value = 100; $("#he-f-con").value = 100; $("#he-f-sat").value = 100; }
+    dirty = true; snapshot();
+  }; });
+  // Efeitos de texto (sombra / contorno / caixa) — CSS inline, fiel no re-render
+  $("#he-fx-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => {
+    if (current && current.tagName !== "IMG") {
+      const el = current, k = b.dataset.fx;
+      el.style.textShadow = ""; el.style.webkitTextStroke = "";
+      if (k === "none") { el.style.background = ""; el.style.display = ""; el.style.padding = ""; el.style.borderRadius = ""; } // limpa TUDO da caixa (senão display:inline-block vazava no PNG)
+      if (k === "shadow") el.style.textShadow = "0 2px 10px rgba(0,0,0,.55)";
+      else if (k === "outline") el.style.webkitTextStroke = "1.5px rgba(0,0,0,.85)";
+      else if (k === "box") { el.style.background = "rgba(7,33,43,.72)"; el.style.display = "inline-block"; el.style.padding = el.style.padding || "0.14em 0.5em"; el.style.borderRadius = el.style.borderRadius || "10px"; }
+      dirty = true; snapshot();
+    }
+    $("#he-fx-menu").removeAttribute("open");
+  }; });
+  // Conta-gotas (EyeDropper nativa do Chromium) — pega cor de qualquer pixel p/ o texto
+  if (!window.EyeDropper) { const ed = $("#he-eyedrop"); if (ed) ed.style.display = "none"; }
+  $("#he-eyedrop").onclick = async () => {
+    if (!current || current.tagName === "IMG" || !window.EyeDropper) return;
+    try { const res = await new window.EyeDropper().open(); if (res && res.sRGBHex) { current.style.color = res.sRGBHex; $("#he-color").value = res.sRGBHex; dirty = true; snapshot(); } } catch (_) { /* cancelou */ }
+  };
+  // Blocos de marca (CTA / rodapé / selo) — inserção com 1 clique, paleta 4Selet
+  function addBlock(kind) {
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body, W = card.offsetWidth, H = card.offsetHeight;
+    let el = doc.createElement("div");
+    if (kind === "cta") { el.textContent = "Fale no WhatsApp"; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.27) + "px;top:" + Math.round(H * 0.8) + "px;font-family:'Inter',sans-serif;font-weight:700;font-size:" + Math.round(W * 0.034) + "px;color:#07212B;background:#5499B5;padding:" + Math.round(W * 0.016) + "px " + Math.round(W * 0.032) + "px;border-radius:999px;white-space:nowrap;"; }
+    else if (kind === "footer") { el.textContent = "@4selet  ·  Para quem sabe que é Selet."; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.08) + "px;top:" + Math.round(H * 0.92) + "px;font-family:'Inter',sans-serif;font-weight:600;font-size:" + Math.round(W * 0.022) + "px;color:#AFBCC9;letter-spacing:.4px;white-space:nowrap;"; }
+    else { el.textContent = "TAXA ZERO"; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.62) + "px;top:" + Math.round(H * 0.08) + "px;font-family:'Inter',sans-serif;font-weight:800;font-size:" + Math.round(W * 0.03) + "px;color:#07212B;background:#5499B5;padding:" + Math.round(W * 0.012) + "px " + Math.round(W * 0.024) + "px;border-radius:8px;letter-spacing:1px;white-space:nowrap;"; }
+    el.setAttribute("data-he", "1"); card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot();
+  }
+  $("#he-block-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addBlock(b.dataset.block); $("#he-block-menu").removeAttribute("open"); }; });
+  // --- Encaixe inteligente (snap) ao arrastar: bordas/centros de outros elementos e do quadro ---
+  const SNAP = 6; // limiar em art px
+  function snapMove(el, nx, ny) {
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const cr = card.getBoundingClientRect(), cur = getTf(el), r = el.getBoundingClientRect();
+    const dx = nx - cur.x, dy = ny - cur.y;
+    const L = r.left - cr.left + dx, R = r.right - cr.left + dx, Cx = (r.left + r.right) / 2 - cr.left + dx;
+    const T = r.top - cr.top + dy, B = r.bottom - cr.top + dy, Cy = (r.top + r.bottom) / 2 - cr.top + dy;
+    const vx = [0, cr.width / 2, cr.width], hy = [0, cr.height / 2, cr.height];
+    card.querySelectorAll("[data-he]").forEach((o) => { if (o === el) return; const q = o.getBoundingClientRect(); vx.push(q.left - cr.left, (q.left + q.right) / 2 - cr.left, q.right - cr.left); hy.push(q.top - cr.top, (q.top + q.bottom) / 2 - cr.top, q.bottom - cr.top); });
+    let bx = SNAP + 1, ox = nx, gx = null; [L, Cx, R].forEach((v) => vx.forEach((t) => { const d = Math.abs(v - t); if (d < bx) { bx = d; ox = nx + (t - v); gx = t; } }));
+    let by = SNAP + 1, oy = ny, gy = null; [T, Cy, B].forEach((v) => hy.forEach((t) => { const d = Math.abs(v - t); if (d < by) { by = d; oy = ny + (t - v); gy = t; } }));
+    drawGuides(bx <= SNAP ? gx : null, by <= SNAP ? gy : null);
+    return { x: bx <= SNAP ? ox : nx, y: by <= SNAP ? oy : ny };
+  }
+  function drawGuides(gx, gy) {
+    const glv = $("#he-gl-v"), glh = $("#he-gl-h");
+    if (glv) { if (gx == null) glv.hidden = true; else { glv.hidden = false; glv.style.left = (gx * curScale) + "px"; } }
+    if (glh) { if (gy == null) glh.hidden = true; else { glh.hidden = false; glh.style.top = (gy * curScale) + "px"; } }
+  }
+  function clearGuides() { const glv = $("#he-gl-v"), glh = $("#he-gl-h"); if (glv) glv.hidden = true; if (glh) glh.hidden = true; }
+  // --- Zonas seguras do Instagram (feed / 4:5 / story-reels) ---
+  function setSafeZone() {
+    const safe = $("#he-safe"); if (!safe) return;
+    const ratio = artW / artH; let ins;
+    if (ratio > 1.15) ins = { t: 6, r: 5, b: 6, l: 5 };
+    else if (ratio > 0.95) ins = { t: 4, r: 4, b: 4, l: 4 };   // 1:1 feed (~40px)
+    else if (ratio > 0.7) ins = { t: 4, r: 4, b: 5, l: 4 };    // 4:5 feed
+    else ins = { t: 14, r: 6, b: 20, l: 6 };                   // 9:16 story/reels (faixas da UI)
+    safe.style.top = ins.t + "%"; safe.style.right = ins.r + "%"; safe.style.bottom = ins.b + "%"; safe.style.left = ins.l + "%";
+  }
+  $("#he-safe-btn").onclick = () => { const safe = $("#he-safe"), on = safe.hidden; safe.hidden = !on; const b = $("#he-safe-btn"); b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); };
+
+  // --- Zoom + grade/guias (deixa o editor mais completo, estilo Canva/Figma) ---
+  $("#he-zoom-in").onclick = () => zoomBy(1.2);
+  $("#he-zoom-out").onclick = () => zoomBy(1 / 1.2);
+  $("#he-zoom-val").onclick = () => applyZoom(fitScale); // clicar no % volta pro "ajustar à tela"
+  const overlay = $("#he-overlay");
+  const toggleOverlay = (cls, btnId) => { const on = overlay.classList.toggle(cls); const b = $("#" + btnId); if (b) { b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
+  $("#he-grid-btn").onclick = () => toggleOverlay("grid", "he-grid-btn");
+  $("#he-guides-btn").onclick = () => toggleOverlay("guides", "he-guides-btn");
+  // Ctrl/Cmd + roda do mouse = zoom (padrão dos editores). Sem Ctrl, rola o palco normalmente.
+  ov.querySelector(".editor-stage").addEventListener("wheel", onWheelZoom, { passive: false });
   // fecha menus abertos ao clicar fora
   ov.addEventListener("click", (e) => { if (!e.target.closest("details.ed-menu")) ov.querySelectorAll("details.ed-menu[open]").forEach((d) => d.removeAttribute("open")); });
   // atalhos de teclado
@@ -1437,6 +1690,19 @@ async function openHtmlEditor(folder, task, rel) {
     if ((e.key === "Delete" || e.key === "Backspace") && current) { e.preventDefault(); current.remove(); select(null); dirty = true; snapshot(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) { e.preventDefault(); zoomBy(1.2); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) { e.preventDefault(); zoomBy(1 / 1.2); }
+    else if ((e.ctrlKey || e.metaKey) && e.key === "0") { e.preventDefault(); applyZoom(fitScale); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); duplicateCurrent(); }
+    // Setas: empurra o elemento selecionado (1px; Shift = 10px). Snapshot com debounce.
+    else if (current && /^Arrow(Up|Down|Left|Right)$/.test(e.key)) {
+      e.preventDefault();
+      const tf = getTf(current), step = e.shiftKey ? 10 : 1;
+      const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+      const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+      setTf(current, Object.assign({}, tf, { x: tf.x + dx, y: tf.y + dy })); positionHandle(); dirty = true;
+      clearTimeout(nudgeT); nudgeT = setTimeout(snapshot, 350);
+    }
   }
   document.addEventListener("keydown", onKey);
   function updateNav() {
@@ -1452,26 +1718,36 @@ async function openHtmlEditor(folder, task, rel) {
     loadInto(targets[ni].rel);
   }
   if (multiSlide) { $("#he-prev").onclick = () => goSlide(-1); $("#he-next").onclick = () => goSlide(1); }
-  const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); if (dirty) router(); };
+  const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); if (dirty || changed) router(); };
   $("#he-close").onclick = close;
+  let savedT = null;
   $("#he-save").onclick = async () => {
-    const btn = $("#he-save"); btn.disabled = true; const o = btn.textContent; btn.textContent = "Salvando…";
+    const btn = $("#he-save"); btn.disabled = true; const o = btn.dataset.label || btn.textContent; btn.dataset.label = o;
+    btn.classList.remove("is-saved"); btn.textContent = "Salvando…";
     try {
       const doc = frame.contentDocument;
-      const st = doc.getElementById("he-editstyle"); if (st) st.remove(); // mantém #he-fonts (re-render precisa)
-      doc.querySelectorAll("[data-he]").forEach((el) => { el.removeAttribute("data-he"); el.removeAttribute("data-he-sel"); el.contentEditable = "false"; });
-      // reverte assets (/brand-assets//uploads/ -> file://) SÓ nos atributos src/href do DOM,
+      // Trabalha num CLONE — nunca no DOM vivo do editor. Se mexêssemos no vivo, as imagens
+      // voltariam para file:// (quebram na tela) e os elementos perderiam data-he (paravam de editar).
+      const root = doc.documentElement.cloneNode(true);
+      const st = root.querySelector("#he-editstyle"); if (st) st.remove(); // mantém #he-fonts (re-render precisa)
+      root.querySelectorAll("[data-he]").forEach((el) => { el.removeAttribute("data-he"); el.removeAttribute("data-he-sel"); el.removeAttribute("contenteditable"); });
+      // reverte assets (/brand-assets//uploads/ -> file://) SÓ nos atributos src/href,
       // não na string inteira (evita corromper texto que contenha o token).
-      doc.querySelectorAll("[src],[href]").forEach((el) => {
+      root.querySelectorAll("[src],[href]").forEach((el) => {
         ["src", "href"].forEach((attr) => {
           const v = el.getAttribute(attr); if (!v) return;
           for (const mp of assetMaps) { if (v.indexOf(mp[1]) === 0) { el.setAttribute(attr, mp[0] + v.slice(mp[1].length)); break; } }
         });
       });
-      const html = "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+      const html = "<!DOCTYPE html>" + root.outerHTML;
       const r = await API.saveEditedHtml(folder, curRel, html);
-      dirty = false; toast("Arte salva.", "success");
-      if (!r || !r.ok) toast("Aviso: verifique a arte.", "warn");
+      if (!r || !r.ok) { toast("Aviso: verifique a arte.", "warn"); }
+      dirty = false; changed = true; // 'changed' garante o refresh da peça ao fechar (sem F5)
+      toast("Arte salva. A peça foi atualizada.", "success");
+      // Confirmação visível no próprio botão: fica verde "Salvo ✓" por alguns segundos.
+      btn.disabled = false; btn.classList.add("is-saved"); btn.textContent = "Salvo ✓";
+      clearTimeout(savedT); savedT = setTimeout(() => { btn.classList.remove("is-saved"); btn.textContent = o; }, 2600);
+      return;
     } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); }
     btn.disabled = false; btn.textContent = o;
   };
@@ -1671,14 +1947,14 @@ function workflowActions(task) {
   const s = task.status.status;
   if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Enviar para revisão</button>`;
   if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Gerar prévia de novo</button>`;
-  if (s === "approved") return `<span class="badge approved">aprovada e salva</span><button class="btn btn-primary" data-wf="publish">Publicar no Instagram</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
+  if (s === "approved") return `<span class="badge approved">aprovada e salva</span><button class="btn btn-primary" data-wf="publish">Publicar ou agendar</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
   if (s === "rejected") return `<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
   return "";
 }
 function workflowHint(s) {
   if (s === "draft") return "Envia a peça para revisão antes da aprovação.";
   if (s === "in_review") return "Aprovar salva uma versão final protegida da peça. Rejeitar arquiva a peça.";
-  if (s === "approved") return "Aprovada: não altere os arquivos diretamente. Use “Reabrir para edição” para mudar e aprovar de novo.";
+  if (s === "approved") return "Aprovada e travada. Para colocar no ar, use “Publicar ou agendar” — a peça já está aprovada, aqui você só escolhe QUANDO (não é uma nova aprovação). Para mudar a arte, use “Reabrir para edição”.";
   if (s === "rejected") return "Rejeitada e arquivada. Reabra para editar de novo.";
   return "";
 }
@@ -1693,7 +1969,7 @@ function bindWorkflow(task) {
         if (wf === "preview") {
           busy(); const r = await API.preview(task.folder); if (!r.ok) throw new Error(r.stderr || "falha ao gerar a prévia"); toast("Peça enviada para revisão", "success");
         } else if (wf === "approve") {
-          const res = await uiModal({ title: "Aprovar peça", message: "Salva uma versão final protegida da peça.", fields: [{ name: "by", label: "Aprovado por (seu nome)", placeholder: "ex.: Hugo Belo" }], confirmText: "Aprovar peça" });
+          const res = await uiModal({ title: "Aprovar peça", message: "Salva uma versão final protegida da peça. Depois é só publicar ou agendar — sem aprovar de novo.", fields: [{ name: "by", label: "Aprovado por (seu nome)", value: (State.user && (State.user.name || State.user.username)) || "", placeholder: "ex.: Hugo Belo" }], confirmText: "Aprovar peça" });
           if (!res || !res.by) return;
           busy(); const r = await API.promote(task.folder, { to: "approved", by: res.by }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Aprovada e salva", "success");
         } else if (wf === "reject") {
@@ -1755,11 +2031,12 @@ async function openPublishModal(task) {
 
   const ov = document.createElement("div"); ov.className = "modal-ov pub-ov";
   ov.innerHTML = `<div class="modal pub-modal" role="dialog" aria-modal="true">
-    <div class="pub-head"><h3>Publicar no Instagram</h3><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>
+    <div class="pub-head"><h3>Publicar ou agendar</h3><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>
     <div class="pub-body">
       <div class="pub-preview">${instagramPreview(imgs, caption, uname)}</div>
       <div class="pub-form">
         <div class="pub-status">${connected ? '<span class="badge ok">Conectado</span> @' + esc(uname) + ' — <span class="hint">publica de verdade</span>' : '<span class="badge paused">Não conectado</span> <span class="hint">— modo simulado (não posta)</span>'}</div>
+        <p class="hint">Esta peça já está <strong>aprovada</strong>. Aqui você só decide <strong>quando</strong> ela vai ao ar — publicar agora ou agendar.</p>
         <label class="layer-lab">Legenda</label>
         <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
         <p class="hint">Edite a legenda e veja a prévia atualizar ao lado.</p>
@@ -1767,7 +2044,7 @@ async function openPublishModal(task) {
         <div class="pub-actions">
           <button class="btn btn-primary" id="pub-now">${connected ? "Publicar agora" : "Simular agora"}</button>
           <div class="pub-sched">
-            <label class="layer-lab">Ou agendar para</label>
+            <label class="layer-lab">Agendar para depois</label>
             <div class="flex"><input type="datetime-local" id="pub-when"><button class="btn" id="pub-schedule">Agendar</button></div>
           </div>
         </div>
@@ -1815,7 +2092,7 @@ async function viewSchedule() {
       <td><strong>${esc(it.label || it.folder)}</strong><div class="muted">${esc(it.folder)}</div></td>
       <td>${esc(fmt(it.scheduled_at))}</td>
       <td>${sb(it.status)}${it.error ? ' <span class="hint">' + esc(it.error) + "</span>" : ""}</td>
-      <td class="u-actions">${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : (it.post_id ? '<span class="hint">post ' + esc(it.post_id) + "</span>" : "")}</td>
+      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(it.folder)}">Ver peça</a>${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : (it.post_id ? ' <span class="hint">post ' + esc(it.post_id) + "</span>" : "")}</td>
     </tr>`).join("") : '<tr><td colspan="4" class="muted">Nenhum agendamento. Agende uma peça aprovada em “Publicar no Instagram”.</td></tr>';
   setView(`<div class="section-head"><div><h2>Agendados</h2><p class="muted">Publicações agendadas para o Instagram. Enquanto estiver “Agendado”, você pode cancelar/suspender.</p></div></div>
     <div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`);
@@ -1881,9 +2158,11 @@ function hideLbNav() {
 function renderLbItem() {
   const it = _lbItems[_lbIdx]; const stage = $("#lightbox-stage");
   if (!it || !stage) return;
+  // Arte editável dá pra abrir o editor com um duplo-clique na própria imagem (atalho do botão "Editar").
+  const canEdit = it.type === "image" && it.editable && it.folder && it.rel && State.task;
   stage.innerHTML = it.type === "video"
     ? `<video src="${it.url}" controls autoplay playsinline></video>`
-    : `<img src="${it.url}" alt="" />`;
+    : `<img src="${it.url}" alt="" class="${canEdit ? "lb-editable" : ""}"${canEdit ? ' title="Duplo-clique para editar"' : ""} />`;
   setLightboxNewTab(null);
   const dl = $("#lightbox-dl"), res = $("#lightbox-res");
   if (it.type === "image" && it.dlUrl) {
@@ -2000,7 +2279,21 @@ function setupLightbox() {
   if (closeBtn) closeBtn.onclick = closeLightbox;
   const prevBtn = $("#lightbox-prev"); if (prevBtn) prevBtn.onclick = (e) => { e.stopPropagation(); lbNav(-1); };
   const nextBtn = $("#lightbox-next"); if (nextBtn) nextBtn.onclick = (e) => { e.stopPropagation(); lbNav(1); };
-  lb.addEventListener("click", (e) => { if (e.target === lb || e.target.id === "lightbox-stage") closeLightbox(); });
+  // Fechar ao clicar FORA só vale para o fundo escuro puro (o próprio .lightbox) e apenas
+  // quando o clique inteiro — pressionar E soltar — acontece nele. Assim, clicar na imagem,
+  // na moldura em volta dela, ou arrastar de dentro pra fora NUNCA fecha por engano.
+  // (Fechar de propósito: botão ✕ ou tecla Esc.)
+  let downOnBackdrop = false;
+  lb.addEventListener("mousedown", (e) => { downOnBackdrop = (e.target === lb); });
+  lb.addEventListener("click", (e) => { if (e.target === lb && downOnBackdrop) closeLightbox(); });
+  // Duplo-clique na arte editável abre o editor direto (atalho do botão "Editar").
+  lb.addEventListener("dblclick", (e) => {
+    if (!e.target || e.target.tagName !== "IMG") return;
+    const it = _lbItems[_lbIdx];
+    if (it && it.type === "image" && it.editable && it.folder && it.rel && State.task) {
+      closeLightbox(); openHtmlEditor(it.folder, State.task, it.rel);
+    }
+  });
   document.addEventListener("keydown", (e) => {
     if (!lb.classList.contains("open")) return;
     if (e.key === "Escape") closeLightbox();

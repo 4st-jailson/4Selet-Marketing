@@ -874,7 +874,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .ed-sw:hover { transform: scale(1.18); box-shadow: 0 0 0 2px var(--ring); }
 .ed-op { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); padding: 0 4px; }
 .ed-op input[type="range"] { width: 72px; }
-.editor-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 24px;
+.editor-stage { flex: 1; min-height: 0; display: flex; align-items: safe center; justify-content: safe center; overflow: auto; padding: 24px;
   background: radial-gradient(circle at 50% 32%, #13272f, #0a1a22 72%); }
 .ed-toolstoggle.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .editor-stage .canvas-container { box-shadow: 0 24px 70px rgba(0,0,0,.55); border-radius: 4px; }
@@ -892,8 +892,42 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .he-wrap { position: relative; box-shadow: 0 24px 70px rgba(0,0,0,.55); border-radius: 4px; }
 #he-frame { border: 0; transform-origin: top left; background: #fff; display: block; }
 .he-handle { position: absolute; width: 14px; height: 14px; background: var(--accent); border: 2px solid #fff; border-radius: 50%; cursor: nwse-resize; z-index: 40; box-shadow: 0 1px 5px rgba(0,0,0,.45); }
+/* Sobreposição de grade/guias sobre a arte — auxílio visual, não intercepta cliques e
+   NÃO entra no HTML salvo (fica no wrap, fora do iframe). Escala junto com o zoom (usa %). */
+.he-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.he-overlay.grid {
+  background-image:
+    linear-gradient(to right, rgba(84,153,181,.30) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(84,153,181,.30) 1px, transparent 1px);
+  background-size: calc(100% / 12) calc(100% / 12);
+}
+.he-overlay.guides::before, .he-overlay.guides::after { content: ""; position: absolute; background: rgba(84,153,181,.85); }
+.he-overlay.guides::before { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-.5px); }
+.he-overlay.guides::after { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-.5px); }
+/* Barra flutuante de zoom + grade/guias, no rodapé do palco do editor. */
+.he-tools { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60;
+  display: inline-flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 22px rgba(0,0,0,.42); }
+.he-tool { border: none; background: transparent; color: var(--text-2); height: 30px; min-width: 30px; padding: 0 9px;
+  border-radius: 999px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; transition: background .12s, color .12s; }
+.he-tool:hover { background: var(--surface-2); color: var(--text); }
+.he-tool.on { background: var(--accent); color: #fff; }
+.he-zoom-val { min-width: 54px; font-variant-numeric: tabular-nums; }
+.he-tool-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
 .he-bar > * { flex: 0 0 auto; }
-.he-bar select { height: 30px; width: auto; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); padding: 0 6px; font-size: 12px; cursor: pointer; }
+/* Chevron completo e explícito (todas as longhands) para NUNCA ladrilhar. Antes usava o
+   atalho `background: var(--surface)`, que zerava background-repeat p/ `repeat`; aí o
+   `select:hover/:focus` global re-injetava só o background-image e o chevron virava um
+   tapete de setinhas dentro do select. */
+.he-bar select {
+  height: 30px; width: auto; border: 1px solid var(--border); border-radius: 7px;
+  background-color: var(--surface); color: var(--text);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2385a2af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+  padding: 0 24px 0 8px; font-size: 12px; cursor: pointer;
+}
+.he-bar #he-lh { height: 30px; }
 .he-bar #he-font { width: 128px; }
 .he-bar #he-align { width: 84px; }
 .he-bar #he-size { width: 58px; }
@@ -903,6 +937,27 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .he-bar .ed-menu > summary { list-style: none; cursor: pointer; }
 .he-bar .ed-menu > summary::-webkit-details-marker { display: none; }
 .he-bar :disabled { opacity: .45; cursor: not-allowed; }
+/* Confirmação de salvamento no próprio botão "Salvar arte": vira verde "Salvo ✓". */
+#he-save.is-saved { background: var(--ok); border-color: var(--ok); color: #fff; opacity: 1; transition: background var(--tr), border-color var(--tr); }
+
+/* ---- Editor HTML: controles avançados (opacidade, rotação, espelhar, filtros, efeitos, snap, zonas IG) ---- */
+.he-bar input[type="number"] { height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); }
+.he-bar #he-rot { width: 54px; }
+.he-op { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-2); font-size: 11px; }
+.he-op input[type="range"] { width: 64px; }
+.he-bar .ed-ico svg { display: block; }
+.he-bar .ed-menu.ctl-off { opacity: .45; pointer-events: none; }
+/* popup de filtros de imagem (sliders) */
+.ed-pop-wide { min-width: 226px; }
+.ed-range { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--text-2); padding: 6px 8px; }
+.ed-range input[type="range"] { width: 118px; }
+/* linhas de encaixe inteligente (snap) — cor de destaque distinta do azul das guias de centro */
+.he-guideline { position: absolute; z-index: 34; pointer-events: none; background: #ff4d6d; }
+.he-guideline-v { top: 0; bottom: 0; width: 1px; }
+.he-guideline-h { left: 0; right: 0; height: 1px; }
+/* zona segura do Instagram (marcação de margem conforme o formato) */
+.he-safe { position: absolute; z-index: 32; pointer-events: none; border: 1.5px dashed rgba(84,153,181,.9); border-radius: 3px; }
+.he-safe-tag { position: absolute; top: 4px; left: 6px; font-size: 10px; font-weight: 600; letter-spacing: .3px; color: #cfe3ec; background: rgba(7,33,43,.6); padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
 
 /* ---- Usuários: nome de exibição + ações pequenas ---- */
 .btn-xs { padding: 1px 7px; font-size: 11px; line-height: 1.5; }
@@ -946,7 +1001,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .refimg-x:hover { background: var(--err); }
 
 /* ---- toasts ---- */
-.toasts { position: fixed; right: var(--s6); bottom: var(--s6); z-index: 1200; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+/* z-index alto de propósito: precisa aparecer ACIMA do editor de arte (.editor-ov = 1400)
+   e do lightbox — senão o "Arte salva." fica escondido atrás deles. */
+.toasts { position: fixed; right: var(--s6); bottom: var(--s6); z-index: 1700; display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
 .toast { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-sm); padding: 12px 16px; font-size: 13.5px; box-shadow: var(--shadow); animation: toastIn var(--tr-slow); }
 .toast.success { border-left-color: var(--ok); }
 .toast.error   { border-left-color: var(--err); }
@@ -959,6 +1016,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* B3 — margin:auto centra quando cabe e permite scroll vertical quando o conteúdo excede a viewport (evita o clipping do topo no flex centralizado) */
 .lightbox-stage { margin: auto; max-width: 92vw; display: flex; }
 .lightbox-stage img, .lightbox-stage video { max-width: 92vw; max-height: 88vh; border-radius: var(--r-sm); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+/* Arte editável: cursor indica que dá pra abrir o editor com duplo-clique. */
+.lightbox-stage img.lb-editable { cursor: pointer; }
 .lightbox-close { position: absolute; top: 20px; right: 24px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; cursor: pointer; }
 .lightbox-close:hover { background: rgba(255,255,255,.22); }
 .lightbox-dl { position: absolute; top: 24px; left: 24px; }
