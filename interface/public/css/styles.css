@@ -459,6 +459,10 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .phone-side { display: flex; flex-direction: column; gap: 20px; width: 216px; }
 .phone-side-head { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
 .phone-title { color: #fff; font-weight: 650; font-size: 17px; }
+/* Fechar do modal fica sobre o fundo ESCURO — o btn-ghost padrão usa cor de tema (texto
+   escuro) e some. Força texto/borda claros e um leve realce. */
+.phone-side .btn-ghost { color: rgba(255,255,255,.92); background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.26); }
+.phone-side .btn-ghost:hover { color: #fff; background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.44); }
 .phone-seg { display: flex; flex-direction: column; gap: 3px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); border-radius: 15px; padding: 5px; }
 .phone-tab { text-align: left; border: none; background: transparent; color: rgba(255,255,255,.82); font: inherit; font-size: 14px; font-weight: 600; padding: 11px 16px; border-radius: 11px; cursor: pointer; transition: background .15s, color .15s; }
 .phone-tab:hover { color: #fff; }
