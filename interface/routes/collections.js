@@ -82,9 +82,30 @@ router.delete("/:id", (req, res) => {
 router.post("/:id/items", (req, res) => {
   const folder = req.body && req.body.folder;
   if (!folder || typeof folder !== "string") return res.status(400).json({ error: "folder e obrigatorio" });
-  if (!content.findTask(folder)) return res.status(404).json({ error: "peca nao encontrada: " + folder });
+  const loc = content.findTask(folder);
+  if (!loc) return res.status(404).json({ error: "peca nao encontrada: " + folder });
+  // So peças APROVADAS entram em coleções (o front ja filtra; aqui o backend garante — evita
+  // criar referencia que vira orfa se a peça em rascunho/revisao for editada/descartada).
+  if (loc.zone !== "approved") return res.status(400).json({ error: "so peças aprovadas podem entrar em coleções", code: "E_NOT_APPROVED" });
   try {
     res.json({ collection: collections.addItem(req.params.id, folder) });
+  } catch (e) {
+    res.status(e.code === "E_COLLECTION_NOT_FOUND" ? 404 : 500).json({ error: e.message, code: e.code });
+  }
+});
+
+// Limpeza MANUAL de referencias orfas (peças descartadas/inexistentes em qualquer zona).
+// Manual de proposito: por padrao a orfa é preservada — se a peça descartada for restaurada,
+// ela reaparece na coleção. Este endpoint remove as orfas quando o usuario decide limpar.
+router.post("/:id/prune", (req, res) => {
+  const c = collections.get(req.params.id);
+  if (!c) return res.status(404).json({ error: "colecao nao encontrada" });
+  const idx = taskIndex();
+  const orphans = c.item_ids.filter((f) => !idx[f]);
+  try {
+    let col = c;
+    for (const f of orphans) col = collections.removeItem(req.params.id, f);
+    res.json({ collection: col, removed: orphans.length });
   } catch (e) {
     res.status(e.code === "E_COLLECTION_NOT_FOUND" ? 404 : 500).json({ error: e.message, code: e.code });
   }

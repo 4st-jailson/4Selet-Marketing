@@ -50,6 +50,7 @@ const API = (() => {
     deleteCollection: (id) => req("DELETE", "/api/collections/" + encodeURIComponent(id)),
     addToCollection: (id, folder) => req("POST", "/api/collections/" + encodeURIComponent(id) + "/items", { folder }),
     removeFromCollection: (id, folder) => req("DELETE", "/api/collections/" + encodeURIComponent(id) + "/items/" + encodeURIComponent(folder)),
+    pruneCollection: (id) => req("POST", "/api/collections/" + encodeURIComponent(id) + "/prune", {}),
     reorderCollection: (id, order) => req("PUT", "/api/collections/" + encodeURIComponent(id) + "/order", { order }),
     // content
     content: () => req("GET", "/api/content"),

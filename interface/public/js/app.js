@@ -795,12 +795,18 @@ async function openCollection(id) {
         <button class="btn btn-sm btn-danger" id="coll-del">Excluir coleção</button>
       </div>
     </div>
-    ${data.orphans ? '<p class="muted">Algumas peças desta coleção foram descartadas e não aparecem aqui. Se forem restauradas, voltam automaticamente.</p>' : ""}
+    ${data.orphans ? '<p class="muted">Algumas peças desta coleção foram descartadas e não aparecem aqui. Se forem restauradas, voltam automaticamente. <button class="btn btn-xs" id="coll-prune">Limpar ' + plural(data.orphans, "referência órfã", "referências órfãs") + "</button></p>" : ""}
     <div id="coll-items-wrap">${itemsHtml}</div>`);
   $$("[data-lay]").forEach((b) => { b.onclick = () => { State.collLayout = b.dataset.lay; openCollection(id); }; });
   $("#coll-add").onclick = () => addPiecesFlow(c);
   $("#coll-edit").onclick = () => editCollectionFlow(c);
   $("#coll-del").onclick = () => deleteCollectionFlow(c);
+  if ($("#coll-prune")) $("#coll-prune").onclick = async () => {
+    const ok = await uiConfirm("Remover " + plural(data.orphans, "referência órfã", "referências órfãs") + " desta coleção? Apaga só os apontamentos para peças descartadas — se restaurar a peça depois, terá que re-adicionar.", { title: "Limpar órfãs", confirmText: "Limpar", confirmKind: "danger" });
+    if (!ok) return;
+    try { const r = await API.pruneCollection(c.id); toast("Removidas " + (r.removed || 0) + " referências órfãs.", "success"); openCollection(id); }
+    catch (e) { toast(e.message, "error"); }
+  };
   bindCollItemControls(c.id, items.map((t) => t.folder));
 }
 
@@ -1860,9 +1866,9 @@ async function viewTaskDetail(folder) {
           <p class="muted mt">Rótulos livres para organizar e filtrar na biblioteca.</p>
         </div>
         <div class="card mt">
-          <div class="flex-between"><h3>Coleções</h3><button class="btn btn-sm" id="btn-add-coll">Adicionar a uma coleção</button></div>
+          <div class="flex-between"><h3>Coleções</h3>${task.zone === "approved" ? '<button class="btn btn-sm" id="btn-add-coll">Adicionar a uma coleção</button>' : ""}</div>
           <div class="chips mt" id="task-colls"><span class="muted">Carregando…</span></div>
-          <p class="muted mt">Coleções são agrupamentos curados (opcionais) com ordem própria. Não substituem tags nem campanhas.</p>
+          <p class="muted mt">Coleções são agrupamentos curados (opcionais) com ordem própria. Não substituem tags nem campanhas.${task.zone !== "approved" ? " <strong>Só peças aprovadas</strong> podem entrar em coleções." : ""}</p>
         </div>
         <div class="card mt">
           <h3>Aprovação da peça</h3>
