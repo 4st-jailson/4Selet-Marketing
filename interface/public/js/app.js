@@ -2035,8 +2035,7 @@ async function openPublishModal(task) {
   const uname = st.username || "4selet";
   const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
   if (!imgs.length) { toast("Esta peça não tem imagem publicável.", "error"); return; }
-  let caption = "";
-  try { caption = (await API.taskFile(task.folder, "copy/instagram_caption.txt")) || ""; } catch (e) { /* sem legenda */ }
+  const caption = await loadCaption(task.folder);
 
   const ov = document.createElement("div"); ov.className = "modal-ov pub-ov";
   ov.innerHTML = `<div class="modal pub-modal" role="dialog" aria-modal="true">
@@ -2090,6 +2089,16 @@ async function openPublishModal(task) {
   };
 }
 
+// Carrega a legenda do Instagram da peça. instagram_caption.txt (feed/imagem) OU, se não
+// existir (carrossel), tenta o JSON. Blinda contra o corpo de erro 404 (que vinha vazando
+// como se fosse a legenda: {"error":"arquivo nao encontrado"}).
+async function loadCaption(folder) {
+  const bad = (s) => !s || /^\s*\{\s*"error"/.test(s);
+  try { const c = await API.taskFile(folder, "copy/instagram_caption.txt"); if (!bad(c)) return c; } catch (e) { /* segue */ }
+  try { const j = await API.taskFile(folder, "copy/instagram_carousel.json"); if (!bad(j)) { const o = JSON.parse(j); return o.caption || o.instagram_caption || o.legenda || (Array.isArray(o.hashtags) ? o.hashtags.join(" ") : "") || ""; } } catch (e) { /* segue */ }
+  return "";
+}
+
 // Prévia no celular: mockup de smartphone moderno mostrando a peça como o público veria no
 // Instagram — alterna entre Feed, Story e Reels, com interação (arrastar carrossel, tocar p/
 // avançar o story, vídeo tocando). É só visualização; não altera a peça.
@@ -2098,8 +2107,7 @@ async function openPhonePreview(task) {
   const vidFile = (task.files || []).find((f) => f.isVideo);
   const videoUrl = vidFile ? API.rawUrl(task.folder, vidFile.rel) : "";
   if (!imgs.length && !videoUrl) { toast("Esta peça não tem mídia para prever no celular.", "error"); return; }
-  let caption = "";
-  try { caption = (await API.taskFile(task.folder, "copy/instagram_caption.txt")) || ""; } catch (e) { /* sem legenda */ }
+  const caption = await loadCaption(task.folder);
   const uname = "4selet";
   const fs = imgs.length ? imgs : [];
   const cover = imgs[0] || "";
