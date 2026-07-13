@@ -4,7 +4,15 @@
 // e a geracao segue normalmente (apenas sem o bloco de inteligencia de mercado).
 "use strict";
 const fs = require("fs");
+const path = require("path");
 const { PATHS } = require("./config");
+
+// A chave fica em interface/data/ (volume GRAVÁVEL) — o .env em prod é montado read-only,
+// então não dá pra gravar lá. data/ é o mesmo lugar de users.json/publish.json.
+const TAVILY_FILE = path.join(PATHS.DATA_DIR, "tavily.json");
+function dataFileKey() {
+  try { return (JSON.parse(fs.readFileSync(TAVILY_FILE, "utf8")).key || "").trim(); } catch (e) { return ""; }
+}
 
 let _tavily; // cache do require (undefined = nao tentou; null = indisponivel)
 function loadTavily() {
@@ -31,7 +39,7 @@ function envFileVar(name) {
 }
 
 function getKey() {
-  return process.env.TAVILY_API_KEY || envFileVar("TAVILY_API_KEY") || "";
+  return process.env.TAVILY_API_KEY || dataFileKey() || envFileVar("TAVILY_API_KEY") || "";
 }
 
 function isConfigured() {
@@ -87,12 +95,8 @@ async function marketIntel(topic, opts = {}) {
 function saveKey(key) {
   const clean = String(key || "").trim();
   if (clean.length < 8) throw new Error("chave Tavily inválida (muito curta)");
-  let lines = [];
-  try { lines = fs.readFileSync(PATHS.ENV_FILE, "utf8").split(/\r?\n/); } catch (e) { lines = []; }
-  let found = false;
-  lines = lines.map((l) => { if (/^\s*TAVILY_API_KEY\s*=/.test(l)) { found = true; return "TAVILY_API_KEY=" + clean; } return l; });
-  if (!found) lines.push("TAVILY_API_KEY=" + clean);
-  fs.writeFileSync(PATHS.ENV_FILE, lines.filter((l, i) => !(l === "" && i === lines.length - 1)).join("\n") + "\n", "utf8");
+  try { fs.mkdirSync(PATHS.DATA_DIR, { recursive: true }); } catch (e) { /* já existe */ }
+  fs.writeFileSync(TAVILY_FILE, JSON.stringify({ key: clean }) + "\n", { encoding: "utf8", mode: 0o600 });
   process.env.TAVILY_API_KEY = clean;
   return true;
 }
