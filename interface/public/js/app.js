@@ -3098,6 +3098,7 @@ async function viewSettings() {
   try { const ri = await API.integrations(); integ = (ri && ri.integrations) || []; } catch (e) { integ = []; }
   let ig = {};
   try { ig = (await API.publishStatus()).instagram || {}; } catch (e) { ig = {}; }
+  const tav = integ.find((x) => x.id === "tavily") || {};
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
@@ -3194,6 +3195,15 @@ async function viewSettings() {
       <p class="hint mt">Só administradores configuram. O token e o ID você gera na Meta (te passo o passo a passo).</p>
     </div>
     <div class="card mt" style="max-width:660px">
+      <h3>Pesquisa de mercado (Tavily)</h3>
+      <p class="muted mt">Adicione a chave da Tavily para que a IA possa fazer <strong>pesquisa de mercado ao vivo</strong> ao gerar conteúdo (opt-in pelo toggle na hora de gerar). A chave fica só no servidor (em <span class="codeblock">interface/.env</span>, fora do git) e nunca vai para o navegador.</p>
+      <div class="kv mt"><div class="k">Status</div><div>${tav.configured ? '<span class="badge ok">Conectada</span> <span class="hint">— marque “Pesquisar mercado” ao gerar</span>' : '<span class="badge paused">Não configurada</span>'}</div></div>
+      <hr class="sep" />
+      <div class="field"><label>Chave Tavily <span class="hint">(tvly-…)</span></label><input id="tav-key" type="password" placeholder="${tav.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui (tvly-…)"}" /></div>
+      <div class="flex"><button class="btn btn-primary" id="tav-save">Salvar chave</button><button class="btn" id="tav-test">Testar</button><span id="tav-out" class="muted"></span></div>
+      <p class="hint mt">A chave você pega em tavily.com (painel da conta). Só administradores configuram.</p>
+    </div>
+    <div class="card mt" style="max-width:660px">
       <h3>Aparência</h3>
       <p class="muted mt">Cor de destaque da interface (preferência local, só do seu navegador). Não altera as cores das peças geradas — a marca permanece travada.</p>
       <div class="field mt"><label>Cor de destaque</label>
@@ -3238,6 +3248,19 @@ async function viewSettings() {
       if (r.ok) { toast("Conectado como @" + (r.username || "conta") + ".", "ok"); viewSettings(); } // re-render: Status vira verde
       else out.textContent = "Falhou: " + (r.error || "erro");
     } catch (e) { out.textContent = "Falhou: " + ((e && e.message) || "erro"); }
+  };
+  // Tavily: salvar chave (grava no .env do servidor) + testar
+  if ($("#tav-save")) $("#tav-save").onclick = async () => {
+    const out = $("#tav-out"), key = ($("#tav-key").value || "").trim();
+    if (key.length < 8) { out.textContent = "Cole uma chave válida."; return; }
+    out.textContent = "Salvando…";
+    try { await API.saveTavilyKey(key); toast("Chave Tavily salva.", "success"); viewSettings(); }
+    catch (e) { out.textContent = "Falhou: " + ((e && e.message) || "erro"); }
+  };
+  if ($("#tav-test")) $("#tav-test").onclick = async () => {
+    const out = $("#tav-out"); out.textContent = "Testando…";
+    try { const r = await API.testTavily(); out.textContent = "Funcionando (" + (r.results || 0) + " resultado(s))."; toast("Tavily respondeu.", "ok"); }
+    catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
   };
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");

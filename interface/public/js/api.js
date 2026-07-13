@@ -27,6 +27,9 @@ const API = (() => {
     saveKey: (key) => req("POST", "/api/settings/key", { key }),
     saveModel: (model) => req("POST", "/api/settings/model", { model }),
     testKey: () => req("POST", "/api/settings/test"),
+    // Tavily (pesquisa de mercado)
+    saveTavilyKey: (key) => req("POST", "/api/settings/tavily-key", { key }),
+    testTavily: () => req("POST", "/api/settings/tavily-test"),
     // provedores de IA (multi-IA: Claude / ChatGPT / ...)
     providers: () => req("GET", "/api/settings/providers"),
     saveProviderKey: (provider, key) => req("POST", "/api/settings/provider/key", { provider, key }),

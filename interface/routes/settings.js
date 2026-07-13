@@ -102,6 +102,16 @@ router.post("/test", async (req, res) => {
   res.status(r.ok ? 200 : 400).json(r);
 });
 
+// --- Tavily (pesquisa de mercado): salvar a chave (grava no .env) + testar ---
+router.post("/tavily-key", (req, res) => {
+  try { research.saveKey(req.body && req.body.key); res.json({ ok: true, configured: research.isConfigured() }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post("/tavily-test", async (req, res) => {
+  const r = await research.testKey();
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
 // --- Multi-provedor de IA: listar/configurar Claude, ChatGPT (e futuros) ---
 // A chave e o MODELO de cada provedor sao controlados aqui (Configuracoes); a
 // ESCOLHA de qual usar acontece na hora de gerar. NUNCA retorna a chave em claro.
