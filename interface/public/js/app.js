@@ -2024,7 +2024,7 @@ function wireIgPreview(root, imgUrls) {
   let i = 0;
   const img = root.querySelector(".ig-post-img"), idx = root.querySelector(".igp-idx");
   const dots = root.querySelectorAll(".ig-dot");
-  const show = () => { img.src = imgUrls[i]; if (idx) idx.textContent = i + 1; dots.forEach((d, k) => d.classList.toggle("on", k === i)); };
+  const show = () => { img.classList.add("swapping"); img.src = imgUrls[i]; if (idx) idx.textContent = i + 1; dots.forEach((d, k) => d.classList.toggle("on", k === i)); requestAnimationFrame(() => img.classList.remove("swapping")); };
   root.querySelectorAll(".ig-nav").forEach((b) => { b.onclick = () => { i = (i + parseInt(b.dataset.d, 10) + imgUrls.length) % imgUrls.length; show(); }; });
 }
 
@@ -2148,15 +2148,20 @@ async function openPhonePreview(task) {
       + '<div class="ph-rrail"><span class="ph-ric">' + I.heart + '<b>1,2 mil</b></span><span class="ph-ric">' + I.comment + '<b>48</b></span><span class="ph-ric">' + I.share + '</span><span class="ph-ric">' + I.more + '</span></div>'
       + '<div class="ph-rfoot"><div class="ph-rname"><span class="ph-av">4</span> ' + esc(uname) + '</div>' + (capFirst ? '<div class="ph-rcap">' + capFirst + "</div>" : "") + "</div></div>";
   }
-  const initV = (!fs.length && videoUrl) ? "reel" : "feed";
-  const seg = ["feed", "story", "reel"].map((v) => '<button class="phone-tab' + (v === initV ? " on" : "") + '" data-v="' + v + '">' + (v === "feed" ? "Feed" : v === "story" ? "Story" : "Reels") + "</button>").join("");
+  // Só mostra abas COM conteúdo: sem imagens (peça só de vídeo) → apenas Reels (senão Feed/Story
+  // renderizariam imagem vazia/quebrada). Reels sempre tem conteúdo (vídeo, ou a imagem de capa).
+  const avail = (fs.length ? ["feed", "story"] : []).concat("reel");
+  const initV = avail[0];
+  const seg = avail.map((v) => '<button class="phone-tab' + (v === initV ? " on" : "") + '" data-v="' + v + '">' + (v === "feed" ? "Feed" : v === "story" ? "Story" : "Reels") + "</button>").join("");
   const status = '<div class="ph-status"><span>9:41</span><span class="ph-status-icons"><svg viewBox="0 0 18 12" width="17" height="11" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4" width="3" height="8" rx="1"/><rect x="10" y="1" width="3" height="11" rx="1"/></svg><svg viewBox="0 0 26 13" width="24" height="12" fill="none"><rect x="1" y="1" width="21" height="11" rx="3" stroke="currentColor"/><rect x="3" y="3" width="15" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="2" height="5" rx="1" fill="currentColor"/></svg></span></div>';
   const ov = document.createElement("div"); ov.className = "modal-ov phone-ov";
   ov.innerHTML = '<div class="phone-wrap" role="dialog" aria-modal="true">'
-    + '<div class="phone-head"><span class="phone-title">Prévia no celular</span><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>'
-    + '<div class="phone-seg">' + seg + "</div>"
     + '<div class="phone-shell"><div class="phone-island"></div><div class="phone-screen' + (initV !== "feed" ? " dark" : "") + '">' + status + '<div class="phone-view" id="phone-view"></div></div></div>'
-    + '<p class="phone-note">Representação de como a peça aparece no Instagram — é só visualização.</p></div>';
+    + '<div class="phone-side">'
+    +   '<div class="phone-side-head"><span class="phone-title">Prévia no celular</span><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>'
+    +   '<div class="phone-seg">' + seg + "</div>"
+    +   '<p class="phone-note">Como a sua peça aparece no Instagram. Arraste o carrossel ou toque para avançar o story. É só visualização — curtidas e tempo são ilustrativos.</p>'
+    + "</div></div>";
   document.body.appendChild(ov); document.body.classList.add("no-scroll");
   requestAnimationFrame(() => ov.classList.add("open"));
   const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
@@ -2166,18 +2171,25 @@ async function openPhonePreview(task) {
   function wireStory(root) {
     const src = fs.length ? fs : [cover]; let i = 0;
     const img = root.querySelector(".ph-simg"), bg = root.querySelector(".ph-9bg"), bars = root.querySelectorAll(".ph-sbar");
-    const show = () => { if (img) img.src = src[i]; if (bg) bg.src = src[i]; bars.forEach((b, k) => b.classList.toggle("on", k <= i)); };
+    const show = () => {
+      [img, bg].forEach((el) => { if (el) { el.classList.add("swapping"); el.src = src[i]; } });
+      bars.forEach((b, k) => b.classList.toggle("on", k <= i));
+      requestAnimationFrame(() => [img, bg].forEach((el) => el && el.classList.remove("swapping")));
+    };
     const r = root.querySelector(".ph-tap-r"), l = root.querySelector(".ph-tap-l");
     if (r) r.onclick = () => { if (i < src.length - 1) { i++; show(); } };
     if (l) l.onclick = () => { if (i > 0) { i--; show(); } };
   }
   function render(v) {
     screen.classList.toggle("dark", v !== "feed");
+    host.style.transition = "none"; host.style.opacity = "0"; // fade suave ao trocar Feed/Story/Reels
     host.innerHTML = v === "feed" ? feedView() : v === "story" ? storyView() : reelView();
     if (v === "feed") wireIgPreview(host, fs.length ? fs : [cover]);
     else if (v === "story") wireStory(host);
+    void host.offsetWidth; // força reflow p/ a transição valer
+    host.style.transition = "opacity .22s ease"; host.style.opacity = "1";
   }
-  ov.querySelectorAll(".phone-tab").forEach((b) => { b.onclick = () => { ov.querySelectorAll(".phone-tab").forEach((x) => x.classList.toggle("on", x === b)); render(b.dataset.v); }; });
+  ov.querySelectorAll(".phone-tab").forEach((b) => { b.onclick = () => { if (b.classList.contains("on")) return; ov.querySelectorAll(".phone-tab").forEach((x) => x.classList.toggle("on", x === b)); render(b.dataset.v); }; });
   render(initV);
 }
 
