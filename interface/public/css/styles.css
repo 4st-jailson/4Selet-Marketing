@@ -430,22 +430,26 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .pub-sched { display: flex; flex-direction: column; gap: 5px; }
 .pub-sched input[type="datetime-local"] { height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 8px; flex: 1; }
 .ig-post { width: 320px; max-width: 100%; background: #fff; color: #262626; border: 1px solid #dbdbdb; border-radius: 10px; overflow: hidden; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
-.ig-post-head { display: flex; align-items: center; gap: 9px; padding: 9px 12px; }
-.ig-post-av { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #5499B5, #006494); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; flex: none; }
-.ig-post-name { font-weight: 600; flex: 1; }
-.ig-post-more { color: #262626; letter-spacing: 1px; }
+.ig-post-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; }
+.ig-post-av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #5499B5, #006494); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
+.ig-post-name { font-weight: 600; flex: 1; font-size: 13px; }
+.ig-post-more { color: #262626; letter-spacing: 1px; font-size: 15px; }
 .ig-post-media { position: relative; background: #000; aspect-ratio: 4 / 5; display: flex; align-items: center; justify-content: center; }
 .ig-post-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ig-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(255,255,255,.85); color: #262626; display: grid; place-items: center; cursor: pointer; }
 .ig-prev { left: 8px; } .ig-next { right: 8px; }
 .ig-count { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
-.ig-dots { display: flex; gap: 4px; justify-content: center; padding: 8px 0 2px; }
+.ig-dots { display: flex; gap: 5px; justify-content: center; padding: 9px 0 3px; }
 .ig-dot { width: 6px; height: 6px; border-radius: 50%; background: #c7c7c7; }
 .ig-dot.on { background: #1e90ff; }
-.ig-post-actions { display: flex; align-items: center; gap: 14px; padding: 9px 12px 4px; color: #262626; }
+.ig-post-actions { display: flex; align-items: center; gap: 16px; padding: 11px 14px 6px; color: #262626; }
+.ig-post-actions .ig-ic svg { display: block; }
 .ig-post-actions .ig-save { margin-left: auto; }
-.ig-post-caption { padding: 2px 12px 13px; line-height: 1.4; word-break: break-word; }
+.ig-post-likes { padding: 1px 14px 5px; font-weight: 600; font-size: 13px; }
+.ig-post-caption { padding: 0 14px 5px; line-height: 1.45; word-break: break-word; }
 .ig-post-caption strong { font-weight: 600; }
+.ig-post-caption:has(.igp-cap:empty) { display: none; } /* sem legenda -> não mostra a linha "solta" */
+.ig-post-time { padding: 4px 14px 14px; font-size: 10.5px; color: #8e8e8e; text-transform: uppercase; letter-spacing: .3px; }
 
 /* ---- Prévia no celular (mockup de smartphone: Feed / Story / Reels) ---- */
 .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 13px; }
@@ -454,43 +458,49 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .phone-seg { display: inline-flex; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: 3px; gap: 2px; }
 .phone-tab { border: none; background: transparent; color: rgba(255,255,255,.82); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 18px; border-radius: 999px; cursor: pointer; transition: background .12s, color .12s; }
 .phone-tab.on { background: #fff; color: #07212B; }
-.phone-shell { height: min(618px, 82vh); aspect-ratio: 9 / 19.3; background: #0a0a0c; border-radius: 44px; padding: 11px; box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 0 0 2px #24242b; position: relative; flex: none; }
-.phone-island { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 82px; height: 23px; background: #000; border-radius: 14px; z-index: 6; }
-.phone-screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: #fff; position: relative; display: flex; flex-direction: column; }
+.phone-shell { height: min(640px, 84vh); aspect-ratio: 9 / 19.5; background: #0a0a0c; border-radius: 54px; padding: 13px; box-shadow: 0 34px 90px rgba(0,0,0,.6), inset 0 0 0 2.5px #2b2b33; position: relative; flex: none; }
+.phone-island { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 92px; height: 27px; background: #000; border-radius: 16px; z-index: 6; }
+.phone-screen { width: 100%; height: 100%; border-radius: 42px; overflow: hidden; background: #fff; position: relative; display: flex; flex-direction: column; }
 .phone-screen.dark { background: #000; }
-.ph-status { display: flex; align-items: center; justify-content: space-between; padding: 13px 22px 5px; font-size: 13px; font-weight: 700; color: #000; flex: none; z-index: 4; }
+.ph-status { display: flex; align-items: center; justify-content: space-between; padding: 17px 26px 7px; font-size: 14px; font-weight: 600; color: #000; flex: none; z-index: 4; letter-spacing: .3px; }
 .phone-screen.dark .ph-status { color: #fff; position: absolute; top: 0; left: 0; right: 0; }
-.ph-status-icons { display: inline-flex; align-items: center; gap: 5px; }
+.ph-status-icons { display: inline-flex; align-items: center; gap: 6px; }
 .phone-view { flex: 1; min-height: 0; position: relative; }
 .phone-note { color: rgba(255,255,255,.72); font-size: 12px; text-align: center; max-width: 300px; margin: 0; }
 .ph-app { width: 100%; height: 100%; display: flex; flex-direction: column; }
 /* Feed */
 .ph-feed { background: #fff; }
-.ph-ig-top { padding: 5px 14px 7px; border-bottom: 1px solid #efefef; flex: none; }
-.ph-ig-logo { font-family: "Segoe Script", "Brush Script MT", cursive; font-size: 19px; color: #262626; }
+.ph-ig-top { padding: 9px 15px 11px; border-bottom: 1px solid #efefef; flex: none; }
+.ph-ig-logo { font-family: "Segoe Script", "Brush Script MT", cursive; font-size: 23px; color: #262626; }
 .ph-feed-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .ph-feed .ig-post { width: 100%; border: none; border-radius: 0; box-shadow: none; }
-.ph-tabs { display: flex; align-items: center; justify-content: space-around; padding: 9px 12px 12px; border-top: 1px solid #efefef; color: #262626; flex: none; }
-.ph-tab-av { width: 23px; height: 23px; border-radius: 50%; background: linear-gradient(135deg,#5499B5,#006494); color:#fff; display:grid; place-items:center; font-weight:800; font-size:11px; }
+.ph-feed .ig-post-media { aspect-ratio: 4 / 5; }
+.ph-tabs { display: flex; align-items: center; justify-content: space-around; padding: 12px 18px 15px; border-top: 1px solid #efefef; color: #262626; flex: none; }
+.ph-tabs svg { display: block; }
+.ph-tab-av { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg,#5499B5,#006494); color:#fff; display:grid; place-items:center; font-weight:800; font-size:11px; }
 /* Story */
 .ph-story, .ph-reel { position: relative; background: #000; }
-.ph-simg, .ph-rmedia { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.ph-sbars { position: absolute; top: 42px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 3; }
+/* fundo borrado (cobre) + arte inteira por cima (contém) — como o IG mostra mídia fora do 9:16 */
+.ph-9bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(26px) brightness(.5); transform: scale(1.2); z-index: 0; }
+.ph-9fg, .ph-simg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1; }
+.ph-rmedia { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.ph-sbars { position: absolute; top: 54px; left: 11px; right: 11px; display: flex; gap: 4px; z-index: 3; }
 .ph-sbar { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.38); }
 .ph-sbar.on { background: #fff; }
-.ph-shead { position: absolute; top: 52px; left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; z-index: 3; color: #fff; }
+.ph-shead { position: absolute; top: 66px; left: 13px; right: 13px; display: flex; align-items: center; gap: 9px; z-index: 3; color: #fff; }
 .ph-av { width: 27px; height: 27px; border-radius: 50%; background: linear-gradient(135deg,#5499B5,#006494); color:#fff; display:grid; place-items:center; font-weight:800; font-size:12px; flex:none; border: 1.5px solid #fff; }
 .ph-sname { font-weight: 600; font-size: 13px; }
 .ph-sago { font-size: 12px; opacity: .82; }
-.ph-tap { position: absolute; top: 72px; bottom: 72px; width: 42%; z-index: 2; cursor: pointer; }
+.ph-tap { position: absolute; top: 90px; bottom: 80px; width: 42%; z-index: 2; cursor: pointer; }
 .ph-tap-l { left: 0; } .ph-tap-r { right: 0; }
-.ph-sfoot { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; align-items: center; gap: 12px; z-index: 3; color: #fff; }
-.ph-sreply { flex: 1; border: 1px solid rgba(255,255,255,.6); border-radius: 999px; padding: 9px 15px; font-size: 12px; color: rgba(255,255,255,.9); }
-.ph-sic svg { width: 22px; height: 22px; }
+.ph-sfoot { position: absolute; left: 13px; right: 13px; bottom: 20px; display: flex; align-items: center; gap: 13px; z-index: 3; color: #fff; }
+.ph-sreply { flex: 1; border: 1px solid rgba(255,255,255,.6); border-radius: 999px; padding: 10px 17px; font-size: 12.5px; color: rgba(255,255,255,.9); }
+.ph-sic svg { width: 23px; height: 23px; display: block; }
 /* Reels */
-.ph-rrail { position: absolute; right: 9px; bottom: 42px; display: flex; flex-direction: column; align-items: center; gap: 17px; z-index: 3; color: #fff; }
-.ph-ric { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; }
-.ph-rfoot { position: absolute; left: 14px; right: 58px; bottom: 24px; z-index: 3; color: #fff; }
+.ph-rrail { position: absolute; right: 11px; bottom: 44px; display: flex; flex-direction: column; align-items: center; gap: 19px; z-index: 3; color: #fff; }
+.ph-ric { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; }
+.ph-ric svg { display: block; }
+.ph-rfoot { position: absolute; left: 15px; right: 60px; bottom: 28px; z-index: 3; color: #fff; }
 .ph-rname { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
 .ph-rcap { margin-top: 8px; font-size: 12.5px; line-height: 1.35; text-shadow: 0 1px 4px rgba(0,0,0,.55); }
 

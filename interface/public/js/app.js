@@ -2014,7 +2014,9 @@ function instagramPreview(imgUrls, caption, username) {
     </div>
     ${multi ? '<div class="ig-dots">' + imgUrls.map((_, i) => '<span class="ig-dot' + (i === 0 ? " on" : "") + '"></span>').join("") + "</div>" : ""}
     <div class="ig-post-actions"><span class="ig-ic">${ic.heart}</span><span class="ig-ic">${ic.comment}</span><span class="ig-ic">${ic.share}</span><span class="ig-ic ig-save">${ic.save}</span></div>
+    <div class="ig-post-likes">1.247 curtidas</div>
     <div class="ig-post-caption"><strong>${esc(username)}</strong> <span class="igp-cap">${cap}</span></div>
+    <div class="ig-post-time">Há 2 horas</div>
   </div>`;
 }
 function wireIgPreview(root, imgUrls) {
@@ -2132,7 +2134,8 @@ async function openPhonePreview(task) {
     const src = fs.length ? fs : [cover];
     const bars = src.map((_, i) => '<span class="ph-sbar' + (i === 0 ? " on" : "") + '"><i></i></span>').join("");
     return '<div class="ph-app ph-story">'
-      + '<img class="ph-simg" src="' + esc(src[0]) + '" alt="">'
+      + '<img class="ph-9bg" src="' + esc(src[0]) + '" alt="">'
+      + '<img class="ph-simg ph-9fg" src="' + esc(src[0]) + '" alt="">'
       + '<div class="ph-sbars">' + bars + '</div>'
       + '<div class="ph-shead"><span class="ph-av">4</span><span class="ph-sname">' + esc(uname) + '</span><span class="ph-sago">agora</span></div>'
       + '<div class="ph-tap ph-tap-l"></div><div class="ph-tap ph-tap-r"></div>'
@@ -2140,7 +2143,7 @@ async function openPhonePreview(task) {
   }
   function reelView() {
     const media = videoUrl ? '<video class="ph-rmedia" src="' + esc(videoUrl) + '" autoplay loop muted playsinline></video>'
-      : '<img class="ph-rmedia" src="' + esc(cover) + '" alt="">';
+      : '<img class="ph-9bg" src="' + esc(cover) + '" alt=""><img class="ph-9fg" src="' + esc(cover) + '" alt="">';
     return '<div class="ph-app ph-reel">' + media
       + '<div class="ph-rrail"><span class="ph-ric">' + I.heart + '<b>1,2 mil</b></span><span class="ph-ric">' + I.comment + '<b>48</b></span><span class="ph-ric">' + I.share + '</span><span class="ph-ric">' + I.more + '</span></div>'
       + '<div class="ph-rfoot"><div class="ph-rname"><span class="ph-av">4</span> ' + esc(uname) + '</div>' + (capFirst ? '<div class="ph-rcap">' + capFirst + "</div>" : "") + "</div></div>";
@@ -2162,8 +2165,8 @@ async function openPhonePreview(task) {
   const host = ov.querySelector("#phone-view"), screen = ov.querySelector(".phone-screen");
   function wireStory(root) {
     const src = fs.length ? fs : [cover]; let i = 0;
-    const img = root.querySelector(".ph-simg"), bars = root.querySelectorAll(".ph-sbar");
-    const show = () => { if (img) img.src = src[i]; bars.forEach((b, k) => b.classList.toggle("on", k <= i)); };
+    const img = root.querySelector(".ph-simg"), bg = root.querySelector(".ph-9bg"), bars = root.querySelectorAll(".ph-sbar");
+    const show = () => { if (img) img.src = src[i]; if (bg) bg.src = src[i]; bars.forEach((b, k) => b.classList.toggle("on", k <= i)); };
     const r = root.querySelector(".ph-tap-r"), l = root.querySelector(".ph-tap-l");
     if (r) r.onclick = () => { if (i < src.length - 1) { i++; show(); } };
     if (l) l.onclick = () => { if (i > 0) { i--; show(); } };
