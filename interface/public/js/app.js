@@ -1401,8 +1401,16 @@ async function openHtmlEditor(folder, task, rel) {
     if (!current) { handle.style.display = "none"; return; }
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
     const cr = card.getBoundingClientRect(), r = current.getBoundingClientRect();
-    handle.style.left = ((r.right - cr.left) * curScale - 7) + "px";
-    handle.style.top = ((r.bottom - cr.top) * curScale - 7) + "px";
+    // Centro VISUAL (a bbox axis-aligned tem o mesmo centro do elemento, mesmo girado, pois
+    // o transform-origin é 50% 50%). O canto inferior-direito VISUAL = centro + (metade da
+    // caixa escalada) girado pelo ângulo — assim a alça acompanha a inclinação do elemento.
+    const cx = (r.left + r.right) / 2 - cr.left, cy = (r.top + r.bottom) / 2 - cr.top;
+    const tf = getTf(current);
+    const hw = current.offsetWidth * tf.s / 2, hh = current.offsetHeight * tf.s / 2;
+    const rad = (tf.rot || 0) * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
+    const dx = hw * cos - hh * sin, dy = hw * sin + hh * cos;
+    handle.style.left = ((cx + dx) * curScale - 7) + "px";
+    handle.style.top = ((cy + dy) * curScale - 7) + "px";
     handle.style.display = "block";
   }
   // Zoom do palco: reescala o iframe e ajusta o wrap; a matemática de arrastar/redimensionar
@@ -1835,7 +1843,7 @@ async function viewTaskDetail(folder) {
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   State.task = task; // o "Editar" do lightbox usa a peça atual
   setView(`
-    <div class="flex flex-wrap mb">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}</div>
+    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
@@ -1875,6 +1883,7 @@ async function viewTaskDetail(folder) {
   bindWorkflow(task);
   if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
   loadTaskCollections(folder);
+  if ($("#btn-phone")) $("#btn-phone").onclick = () => openPhonePreview(task);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
   wireUndo(folder, task);
@@ -2079,6 +2088,86 @@ async function openPublishModal(task) {
       toast("Agendado. Veja em Agendados.", "ok"); close();
     } catch (e) { toast((e && e.message) || "Falha ao agendar.", "error"); }
   };
+}
+
+// Prévia no celular: mockup de smartphone moderno mostrando a peça como o público veria no
+// Instagram — alterna entre Feed, Story e Reels, com interação (arrastar carrossel, tocar p/
+// avançar o story, vídeo tocando). É só visualização; não altera a peça.
+async function openPhonePreview(task) {
+  const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
+  const vidFile = (task.files || []).find((f) => f.isVideo);
+  const videoUrl = vidFile ? API.rawUrl(task.folder, vidFile.rel) : "";
+  if (!imgs.length && !videoUrl) { toast("Esta peça não tem mídia para prever no celular.", "error"); return; }
+  let caption = "";
+  try { caption = (await API.taskFile(task.folder, "copy/instagram_caption.txt")) || ""; } catch (e) { /* sem legenda */ }
+  const uname = "4selet";
+  const fs = imgs.length ? imgs : [];
+  const cover = imgs[0] || "";
+  const capFirst = esc(((caption || "").split("\n").filter(Boolean)[0] || "")).slice(0, 110);
+  const I = {
+    heart: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>',
+    comment: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>',
+    share: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+    more: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>',
+  };
+  const tabBar = '<div class="ph-tabs">'
+    + '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 9.5 12 3l9 6.5V21h-6v-6H9v6H3z"/></svg>'
+    + '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'
+    + '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>'
+    + '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m2 7 10 6 10-6"/></svg>'
+    + '<span class="ph-tab-av">4</span></div>';
+  function feedView() {
+    return '<div class="ph-app ph-feed"><div class="ph-ig-top"><span class="ph-ig-logo">Instagram</span></div>'
+      + '<div class="ph-feed-scroll">' + instagramPreview(fs.length ? fs : [cover], caption, uname) + '</div>' + tabBar + '</div>';
+  }
+  function storyView() {
+    const src = fs.length ? fs : [cover];
+    const bars = src.map((_, i) => '<span class="ph-sbar' + (i === 0 ? " on" : "") + '"><i></i></span>').join("");
+    return '<div class="ph-app ph-story">'
+      + '<img class="ph-simg" src="' + esc(src[0]) + '" alt="">'
+      + '<div class="ph-sbars">' + bars + '</div>'
+      + '<div class="ph-shead"><span class="ph-av">4</span><span class="ph-sname">' + esc(uname) + '</span><span class="ph-sago">agora</span></div>'
+      + '<div class="ph-tap ph-tap-l"></div><div class="ph-tap ph-tap-r"></div>'
+      + '<div class="ph-sfoot"><div class="ph-sreply">Enviar mensagem…</div><span class="ph-sic">' + I.heart + '</span><span class="ph-sic">' + I.share + '</span></div></div>';
+  }
+  function reelView() {
+    const media = videoUrl ? '<video class="ph-rmedia" src="' + esc(videoUrl) + '" autoplay loop muted playsinline></video>'
+      : '<img class="ph-rmedia" src="' + esc(cover) + '" alt="">';
+    return '<div class="ph-app ph-reel">' + media
+      + '<div class="ph-rrail"><span class="ph-ric">' + I.heart + '<b>1,2 mil</b></span><span class="ph-ric">' + I.comment + '<b>48</b></span><span class="ph-ric">' + I.share + '</span><span class="ph-ric">' + I.more + '</span></div>'
+      + '<div class="ph-rfoot"><div class="ph-rname"><span class="ph-av">4</span> ' + esc(uname) + '</div>' + (capFirst ? '<div class="ph-rcap">' + capFirst + "</div>" : "") + "</div></div>";
+  }
+  const initV = (!fs.length && videoUrl) ? "reel" : "feed";
+  const seg = ["feed", "story", "reel"].map((v) => '<button class="phone-tab' + (v === initV ? " on" : "") + '" data-v="' + v + '">' + (v === "feed" ? "Feed" : v === "story" ? "Story" : "Reels") + "</button>").join("");
+  const status = '<div class="ph-status"><span>9:41</span><span class="ph-status-icons"><svg viewBox="0 0 18 12" width="17" height="11" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4" width="3" height="8" rx="1"/><rect x="10" y="1" width="3" height="11" rx="1"/></svg><svg viewBox="0 0 26 13" width="24" height="12" fill="none"><rect x="1" y="1" width="21" height="11" rx="3" stroke="currentColor"/><rect x="3" y="3" width="15" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="2" height="5" rx="1" fill="currentColor"/></svg></span></div>';
+  const ov = document.createElement("div"); ov.className = "modal-ov phone-ov";
+  ov.innerHTML = '<div class="phone-wrap" role="dialog" aria-modal="true">'
+    + '<div class="phone-head"><span class="phone-title">Prévia no celular</span><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>'
+    + '<div class="phone-seg">' + seg + "</div>"
+    + '<div class="phone-shell"><div class="phone-island"></div><div class="phone-screen' + (initV !== "feed" ? " dark" : "") + '">' + status + '<div class="phone-view" id="phone-view"></div></div></div>'
+    + '<p class="phone-note">Representação de como a peça aparece no Instagram — é só visualização.</p></div>';
+  document.body.appendChild(ov); document.body.classList.add("no-scroll");
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  ov.querySelector("[data-x='close']").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  const host = ov.querySelector("#phone-view"), screen = ov.querySelector(".phone-screen");
+  function wireStory(root) {
+    const src = fs.length ? fs : [cover]; let i = 0;
+    const img = root.querySelector(".ph-simg"), bars = root.querySelectorAll(".ph-sbar");
+    const show = () => { if (img) img.src = src[i]; bars.forEach((b, k) => b.classList.toggle("on", k <= i)); };
+    const r = root.querySelector(".ph-tap-r"), l = root.querySelector(".ph-tap-l");
+    if (r) r.onclick = () => { if (i < src.length - 1) { i++; show(); } };
+    if (l) l.onclick = () => { if (i > 0) { i--; show(); } };
+  }
+  function render(v) {
+    screen.classList.toggle("dark", v !== "feed");
+    host.innerHTML = v === "feed" ? feedView() : v === "story" ? storyView() : reelView();
+    if (v === "feed") wireIgPreview(host, fs.length ? fs : [cover]);
+    else if (v === "story") wireStory(host);
+  }
+  ov.querySelectorAll(".phone-tab").forEach((b) => { b.onclick = () => { ov.querySelectorAll(".phone-tab").forEach((x) => x.classList.toggle("on", x === b)); render(b.dataset.v); }; });
+  render(initV);
 }
 
 // View "Agendados": fila de publicações agendadas (revisar / cancelar).
