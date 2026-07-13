@@ -1295,6 +1295,7 @@ async function openHtmlEditor(folder, task, rel) {
     +     '<button data-lay="front">Trazer para frente</button>'
     +     '<button data-lay="back">Enviar para trás</button>'
     +   "</div></details>"
+    +   '<button class="btn btn-sm" id="he-parent" title="Selecionar o grupo/bloco em volta do item (pra mover vários juntos)">Grupo ↑</button>'
     +   '<button class="btn btn-sm" id="he-dup" title="Duplicar (Ctrl+D)">Duplicar</button>'
     +   '<span class="ed-sep"></span>'
     +   '<button class="btn btn-sm ed-ico" id="he-undo" title="Desfazer (Ctrl+Z)">↶</button>'
@@ -1355,19 +1356,34 @@ async function openHtmlEditor(folder, task, rel) {
     setSafeZone(); // dimensiona a marcação de zona segura conforme o formato da arte
     const INLINE = ["SPAN", "B", "I", "EM", "STRONG", "BR", "A", "SUP", "SUB", "SMALL", "MARK", "U"];
     const inlineOnly = (el) => Array.from(el.children).every((c) => INLINE.indexOf(c.tagName) >= 0);
+    const isSvg = (el) => /^svg$/i.test(el.tagName);
+    const isImg = (el) => el.tagName === "IMG";
+    // "Caixa de ícone/imagem": sem texto próprio e com filhos só <img>/<svg> (ex.: os .fr-ic
+    // do fluxo). Tratada como folha VISUAL — arrastável inteira. É o que destrava os ícones.
+    const isIconWrap = (el) => {
+      if ((el.textContent || "").trim()) return false;
+      const k = Array.from(el.children);
+      return k.length > 0 && k.every((c) => isImg(c) || isSvg(c));
+    };
     // NÃO converte pra absoluto (quebrava o layout flex). Mantém o layout EXATO da arte
     // e move/redimensiona via transform (translate + scale) — pixel-perfect no re-render.
     Array.from(doc.querySelectorAll("body *")).forEach((el) => {
       if (el === card) return;
+      // Já dentro de algo editável (ex.: o <svg> de uma caixa de ícone já marcada)? ignora,
+      // pra não empilhar seleção. (querySelectorAll dá ordem de documento: pai antes do filho.)
+      if (el.parentElement && el.parentElement.closest("[data-he]")) return;
       const cs = doc.defaultView.getComputedStyle(el);
       if (cs.display === "none" || cs.visibility === "hidden") return;
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4) return;
-      if (el.tagName !== "IMG") {
+      let editable;
+      if (isImg(el) || isSvg(el) || isIconWrap(el)) editable = true;          // imagem, ícone ou caixa de ícone
+      else {
         const txt = (el.textContent || "").trim();
         const parentInline = el.parentElement && inlineOnly(el.parentElement) && (el.parentElement.textContent || "").trim();
-        if (!txt || !inlineOnly(el) || parentInline) return;
+        editable = !!txt && inlineOnly(el) && !parentInline;                   // folha de texto
       }
+      if (!editable) return;
       el.setAttribute("data-he", "1");
       interactive(doc, el);
     });
@@ -1397,7 +1413,13 @@ async function openHtmlEditor(folder, task, rel) {
       document.addEventListener("mouseup", up); // pega o soltar quando o cursor sai do iframe
     });
     el.addEventListener("dblclick", () => {
-      if (el.tagName === "IMG") return;
+      // Só folhas de TEXTO viram editáveis. Imagens, ícones (svg) e grupos NÃO — senão o
+      // duplo-clique num bloco criaria um contentEditable que bagunça o layout da arte.
+      if (el.tagName === "IMG" || /^svg$/i.test(el.tagName)) return;
+      const INL = ["SPAN", "B", "I", "EM", "STRONG", "BR", "A", "SUP", "SUB", "SMALL", "MARK", "U"];
+      const txt = (el.textContent || "").trim();
+      const inlineKids = Array.from(el.children).every((c) => INL.indexOf(c.tagName) >= 0);
+      if (!txt || !inlineKids) return;
       el.contentEditable = "true"; el.focus();
       const done = () => { el.contentEditable = "false"; el.removeEventListener("blur", done); dirty = true; snapshot(); };
       el.addEventListener("blur", done);
@@ -1569,6 +1591,16 @@ async function openHtmlEditor(folder, task, rel) {
     card.appendChild(clone); interactive(doc, clone); select(clone); dirty = true; snapshot();
   }
   $("#he-dup").onclick = duplicateCurrent;
+  // "Grupo ↑": sobe a seleção pro elemento-pai (o bloco em volta) e o torna arrastável na
+  // hora. Assim dá pra mover uma coluna/caixa inteira de uma vez, não só a folha clicada.
+  $("#he-parent").onclick = () => {
+    if (!current) return;
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const p = current.parentElement;
+    if (!p || p === card || p === doc.body) { toast("Já está no bloco mais externo.", "warn"); return; }
+    if (!p.hasAttribute("data-he")) { p.setAttribute("data-he", "1"); interactive(doc, p); }
+    select(p);
+  };
   // Alinhar em relação ao quadro (a bbox reflete o transform, então a conta fecha com rotação/escala)
   $("#he-align2-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => {
     if (!current) return;
@@ -3179,26 +3211,6 @@ async function viewSettings() {
       <div class="field mt"><select id="def-provider" style="max-width:320px">${provs.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === defProv ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("")}</select></div>
     </div>
     <div class="card mt" style="max-width:660px">
-      <h3>Integrações</h3>
-      <p class="muted mt">Situação de cada serviço externo conectado ao painel. As chaves ficam guardadas no servidor (no arquivo <span class="codeblock">interface/.env</span>, fora do controle de versão) — esta tela mostra apenas se estão configuradas, nunca os valores.</p>
-      <ul class="integ-list mt">
-        ${integ.map((it) => {
-          const ok = !!it.configured;
-          const badge = ok
-            ? '<span class="badge ok">conectado</span>'
-            : (it.required ? '<span class="badge warn">obrigatório</span>' : '<span class="badge paused">não configurado</span>');
-          return `<li class="integ-row">
-            <span class="integ-dot ${ok ? "on" : (it.required ? "req" : "off")}"></span>
-            <div class="integ-main">
-              <div class="integ-name">${esc(it.name)} ${badge}${it.required ? ' <span class="hint">essencial</span>' : ' <span class="hint">opcional</span>'}</div>
-              <div class="integ-purpose">${esc(it.purpose || "")}</div>
-              <div class="integ-detail">${esc(it.detail || "")}</div>
-            </div>
-          </li>`;
-        }).join("")}
-      </ul>
-    </div>
-    <div class="card mt" style="max-width:660px">
       <h3>Publicação no Instagram</h3>
       <p class="muted mt">Conecte a conta (Graph API da Meta) para publicar peças <strong>aprovadas</strong> direto do painel. O token e o ID ficam só no servidor (em <span class="codeblock">interface/data</span>, fora do git) e nunca vão para o navegador. Enquanto não conectar, a publicação roda em <strong>modo simulado</strong>.</p>
       ${ig.configured
@@ -3223,6 +3235,28 @@ async function viewSettings() {
       <div class="field"><label>Chave Tavily <span class="hint">(tvly-…)</span></label><input id="tav-key" type="password" placeholder="${tav.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui (tvly-…)"}" /></div>
       <div class="flex"><button class="btn btn-primary" id="tav-save">Salvar chave</button><button class="btn" id="tav-test">Testar</button><span id="tav-out" class="muted"></span></div>
       <p class="hint mt">A chave você pega em tavily.com (painel da conta). Só administradores configuram.</p>
+    </div>
+    <div class="card mt" style="max-width:660px">
+      <h3>Outras integrações</h3>
+      <p class="muted mt">Serviços configurados direto no servidor (no arquivo <span class="codeblock">interface/.env</span>) — aqui aparece só o status, nunca os valores. Claude, ChatGPT, Instagram e Tavily têm cartões próprios acima, com o token/chave de cada um.</p>
+      ${(() => {
+        const rest = integ.filter((it) => !["anthropic", "openai", "tavily", "instagram"].includes(it.id));
+        if (!rest.length) return '<p class="muted mt">Nenhuma outra integração no momento.</p>';
+        return '<ul class="integ-list mt">' + rest.map((it) => {
+          const ok = !!it.configured;
+          const badge = ok
+            ? '<span class="badge ok">conectado</span>'
+            : (it.required ? '<span class="badge warn">obrigatório</span>' : '<span class="badge paused">não configurado</span>');
+          return `<li class="integ-row">
+            <span class="integ-dot ${ok ? "on" : (it.required ? "req" : "off")}"></span>
+            <div class="integ-main">
+              <div class="integ-name">${esc(it.name)} ${badge} <span class="hint">opcional</span></div>
+              <div class="integ-purpose">${esc(it.purpose || "")}</div>
+              <div class="integ-detail">${esc(it.detail || "")}</div>
+            </div>
+          </li>`;
+        }).join("") + "</ul>";
+      })()}
     </div>
     <div class="card mt" style="max-width:660px">
       <h3>Aparência</h3>
