@@ -2969,11 +2969,11 @@ function renderGenResult(r) {
          <button class="btn btn-ghost btn-sm" id="g-json-apply" type="button">Aplicar JSON aos campos</button>
        </details>`;
   } else if (feedHtml) {
+    // O #g-edit (texto final salvo/publicado = corpo + hashtags) fica OCULTO: o feedToText o
+    // monta a partir de "Corpo da legenda" + "Hashtags". Antes ele era exposto como "Texto
+    // completo (avançado)", que duplicava o corpo visualmente e confundia — removido.
     editorBlock = `<div class="field mt"><label>Conteúdo (editável)</label>${feedHtml}</div>
-       <details class="json-adv mt"><summary>Texto completo (avançado)</summary>
-         <textarea id="g-edit" rows="8" style="font-family:var(--font)">${esc(editorVal)}</textarea>
-         <p class="muted" style="font-size:12px;margin-top:6px">Montado automaticamente pelos campos acima (corpo + hashtags).</p>
-       </details>`;
+       <textarea id="g-edit" hidden>${esc(editorVal)}</textarea>`;
   } else {
     editorBlock = `<div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>`;
   }
