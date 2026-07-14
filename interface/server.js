@@ -3,6 +3,8 @@
 // projeto como fonte unica de verdade do ciclo de vida das tasks.
 "use strict";
 const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
@@ -106,6 +108,32 @@ app.use("/brand-assets", (req, res, next) => {
   if (!/\.(png|jpe?g|webp|svg|gif|ico|woff2?|ttf|otf|css)$/i.test(req.path)) return res.status(404).end();
   next();
 }, express.static(PATHS.ASSETS_DIR));
+// Cache-busting dos assets do front. O Cloudflare cacheia /js/*.js e /css/*.css na BORDA e
+// reescreve o Cache-Control do navegador para max-age=14400 (4h), ignorando o "no-cache" da
+// origem — entao um deploy demorava ate 4h pra chegar no navegador do usuario (ex.: sumia a
+// secao "Criacao avancada" pra quem estava com o app.js velho). A raiz (index.html) NAO e
+// cacheada (Cf-Cache-Status DYNAMIC), entao aqui injetamos ?v=<hash> nas URLs dos assets: a
+// cada deploy o conteudo muda -> hash novo -> URL nova -> navegador e CF buscam o novo na hora,
+// sem hard-refresh. Hash calculado UMA vez no boot (os arquivos nao mudam durante o processo).
+const PUBLIC_DIR = path.join(__dirname, "public");
+function assetHash(rel) {
+  try { return crypto.createHash("sha1").update(fs.readFileSync(path.join(PUBLIC_DIR, rel))).digest("hex").slice(0, 10); }
+  catch (e) { return "0"; }
+}
+const ASSET_VERS = { css: assetHash("css/styles.css"), api: assetHash("js/api.js"), app: assetHash("js/app.js") };
+function serveIndex(req, res) {
+  let html;
+  try { html = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8"); }
+  catch (e) { return res.status(500).type("text").send("index.html indisponivel"); }
+  html = html
+    .replace("/css/styles.css", "/css/styles.css?v=" + ASSET_VERS.css)
+    .replace("/js/api.js", "/js/api.js?v=" + ASSET_VERS.api)
+    .replace("/js/app.js", "/js/app.js?v=" + ASSET_VERS.app);
+  res.setHeader("Cache-Control", "no-cache");
+  res.type("html").send(html);
+}
+app.get(["/", "/index.html"], serveIndex);
+
 // Front. HTML/JS/CSS com "no-cache" (revalida sempre): o navegador guarda, mas
 // confere antes de usar — 304 quando nada mudou (rapido), 200 com o novo quando
 // mudou. Evita o painel exibir JS/CSS antigos depois de uma atualizacao.
