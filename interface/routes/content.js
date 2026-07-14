@@ -7,9 +7,99 @@ const path = require("path");
 const router = express.Router();
 const content = require("../lib/content");
 const render = require("../lib/render");
+const campaigns = require("../lib/campaigns");
 
 router.get("/", (req, res) => {
   res.json({ tasks: content.listTasks() });
+});
+
+// Sniff por magic bytes -> extensão canônica. Aceita só PNG e JPEG (formatos seguros p/ o
+// feed do Instagram). Não confia no prefixo data:image.
+function sniffImage(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "png"; // PNG
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";                     // JPEG
+  return null;
+}
+function slugifyName(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+}
+
+// POST /import — cria uma peça de RASCUNHO a partir de imagens PRONTAS (feitas fora do
+// painel). kind "feed" (1 imagem) ou "carousel" (2-10). As imagens vão para ads/feed.<ext>
+// ou slides/slide_N.<ext>; a legenda para copy/instagram_caption.txt (mesmo caminho que a
+// publicação lê); status.imported=true. Depois segue o fluxo normal: revisar → aprovar →
+// agendar/publicar. Valida e decodifica TUDO antes de criar a task (falha atômica).
+router.post("/import", async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const kind = b.kind === "carousel" ? "carousel" : (b.kind === "feed" ? "feed" : null);
+    if (!kind) return res.status(400).json({ error: "tipo inválido (use feed ou carousel)" });
+    const title = String(b.title || "").trim();
+    if (title.length < 3) return res.status(400).json({ error: "dê um título à peça (mín. 3 caracteres)" });
+    const date = String(b.task_date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "data inválida (use AAAA-MM-DD)" });
+    const task = (String(b.task_name || "").trim() || slugifyName(title));
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(task)) return res.status(400).json({ error: "identificador inválido (use a-z, 0-9, _ ou -)" });
+
+    const imgs = Array.isArray(b.images) ? b.images : [];
+    if (kind === "feed" && imgs.length !== 1) return res.status(400).json({ error: "o feed precisa de exatamente 1 imagem" });
+    if (kind === "carousel" && (imgs.length < 2 || imgs.length > 10)) return res.status(400).json({ error: "o carrossel precisa de 2 a 10 imagens" });
+
+    // decodifica + valida ANTES de tocar no disco
+    const decoded = [];
+    for (let i = 0; i < imgs.length; i++) {
+      const m = /^data:image\/[a-z0-9.+-]+;base64,([\s\S]+)$/i.exec(String(imgs[i] || ""));
+      if (!m) return res.status(400).json({ error: "imagem " + (i + 1) + " inválida (esperado dataURL base64)" });
+      const buf = Buffer.from(m[1], "base64");
+      const ext = sniffImage(buf);
+      if (!ext) return res.status(400).json({ error: "imagem " + (i + 1) + " não é PNG nem JPEG" });
+      if (buf.length > 10 * 1024 * 1024) return res.status(413).json({ error: "imagem " + (i + 1) + " passa de 10MB" });
+      decoded.push({ buf, ext });
+    }
+
+    const folder = task + "_" + date;
+    if (content.findTask(folder)) return res.status(409).json({ error: "já existe uma peça com esse identificador e data", code: "E_EXISTS" });
+
+    // Resolve a campanha UMA vez: só liga/grava se ela existir de verdade (senão gravaríamos
+    // uma referência-fantasma no status.json que a campanha não lista de volta).
+    const camp = b.campaign_id ? campaigns.get(b.campaign_id) : null;
+    const angle = camp ? (camp.angle || null) : null;
+    const create = await content.createTask({ task_name: task, task_date: date, platforms: ["instagram"], angle });
+    if (!create.ok) return res.status(400).json({ error: "falha ao criar a peça", detail: create.stderr || create.stdout });
+
+    try {
+      if (kind === "feed") {
+        content.writeMediaFile(folder, "ads/feed." + decoded[0].ext, decoded[0].buf);
+      } else {
+        decoded.forEach((d, i) => content.writeMediaFile(folder, "slides/slide_" + (i + 1) + "." + d.ext, d.buf));
+      }
+      content.writeContentFile(folder, "copy/instagram_caption.txt", String(b.caption || "").trim() + "\n", "importação");
+    } catch (e) {
+      return res.status(500).json({ error: "falha ao gravar os arquivos da peça: " + e.message, code: e.code || null });
+    }
+
+    content.setTitle(folder, title);
+    content.setImported(folder);
+    if (b.pillar) content.setPillar(folder, b.pillar);
+    if (camp) { try { campaigns.linkContent(camp.id, folder); content.setCampaignId(folder, camp.id); } catch (e) { /* liga é best-effort */ } }
+
+    res.json({ ok: true, folder, kind, images: decoded.length, task: content.getTask(folder) });
+  } catch (e) { next(e); }
+});
+
+// POST /:folder/caption — grava/edita a legenda (copy/instagram_caption.txt). Usado para
+// corrigir a legenda de peças importadas. Só na zona active (writeContentFile já impõe).
+router.post("/:folder/caption", (req, res) => {
+  const caption = String((req.body && req.body.caption) || "");
+  try {
+    const rel = content.writeContentFile(req.params.folder, "copy/instagram_caption.txt", caption.trim() + "\n", "legenda");
+    res.json({ ok: true, file: rel });
+  } catch (e) {
+    const code = e.code === "E_NOT_EDITABLE" ? 409 : (e.code === "E_TASK_NOT_FOUND" ? 404 : 500);
+    res.status(code).json({ error: e.message, code: e.code || null });
+  }
 });
 
 router.get("/:folder", (req, res) => {

@@ -253,6 +253,7 @@ const Routes = {
   approved: viewApproved,
   task: viewTaskDetail,
   create: viewCreate,
+  import: viewImport,
   settings: viewSettings,
   usuarios: viewUsers,
   agendados: viewSchedule,
@@ -268,7 +269,7 @@ function skeletonFor(route) {
   if (route === "dashboard") return `<div class="stat-grid mb">${stat() + stat() + stat() + stat()}</div><div class="grid grid-2">${card(5)}${card(3)}</div>`;
   if (route === "campaigns" || route === "approved") return `${head()}<div class="grid grid-3">${card(3) + card(3) + card(3)}</div>`;
   if (route === "content") return `${head(150)}<div class="card">${Array.from({ length: 6 }).map(row).join("")}</div>`;
-  if (route === "create") return `<div class="grid grid-2">${card(6)}${card(2)}</div>`;
+  if (route === "create" || route === "import") return `<div class="grid grid-2">${card(6)}${card(2)}</div>`;
   return `<div class="grid grid-2">${card(4)}${card(4)}</div>`;
 }
 
@@ -606,7 +607,7 @@ async function viewContent(arg, query) {
   if (query && query.collection && collsActive.some((c) => c.id === query.collection)) q0.push("coleção:" + query.collection);
 
   setView(`
-    <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
+    <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-ghost" onclick="location.hash='#/import'" title="Subir uma peça pronta feita fora do painel">Importar conteúdo</button><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
     <div class="lib-toolbar">
       <input id="lib-search" class="lib-search" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Buscar por título, tema ou tag…  (ou filtre com os atalhos abaixo)" value="${esc(q0.join(" "))}" />
     </div>
@@ -1029,7 +1030,7 @@ function mediaGallery(folder, task) {
   const imgs = task.files.filter((f) => f.isImage && !/\.bg\.png$/i.test(f.rel));
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
-  const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed");
+  const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed") && !(task.status && task.status.imported);
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
     .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
@@ -1040,11 +1041,11 @@ function mediaGallery(folder, task) {
 // numerado, com ampliar e baixar. Substitui a "Arte gerada" p/ carrossel (evita duplicar).
 function carouselStrip(folder, task) {
   const slides = task.files
-    .filter((f) => /slide_0*\d+\.png$/i.test(f.rel))
-    .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+    .filter((f) => /slide_0*\d+\.(png|jpe?g)$/i.test(f.rel))
+    .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
     .sort((a, b) => a.n - b.n);
   if (slides.length < 2) return "";
-  const editable = task.zone === "active";
+  const editable = task.zone === "active" && !(task.status && task.status.imported);
   const items = slides.map((s) =>
     `<div class="media-item"><div class="media-frame">
       <span class="slide-num">${s.n}</span>
@@ -1059,6 +1060,10 @@ function carouselStrip(folder, task) {
 
 function renderPanel(folder, task) {
   if (!isMediaKind(task.kind)) return "";
+  // Peça importada: a arte foi trazida pronta, não há fonte (HTML/JSON) para re-render.
+  if (task.status && task.status.imported) {
+    return `<div class="card"><h3>Arte final</h3><p class="muted mt">Arte <strong>importada por você</strong> — já é a versão final. Para trocar a imagem, importe uma peça nova. Você ainda pode ajustar a <strong>legenda</strong> abaixo.</p></div>`;
+  }
   const hasMedia = task.files.some((f) => f.isImage || f.isVideo);
   if (task.zone !== "active") {
     return `<div class="card"><h3>Arte final</h3><p class="muted mt">A peça está em <strong>${esc(zoneLabel(task.zone))}</strong>. Para gerar a arte novamente, reabra a peça para edição.</p></div>`;
@@ -1167,6 +1172,8 @@ function wireRefineAttach() {
 
 function refineCard(task) {
   if (task.zone !== "active") return "";
+  // Importada não tem conteúdo estruturado para a IA ajustar/re-renderizar.
+  if (task.status && task.status.imported) return "";
   const ct = (State.meta.content_types || []).find((c) => c.kind === task.kind);
   if (!ct) return "";
   const note = autoRenders(task.kind)
@@ -1863,10 +1870,193 @@ async function refineTask(folder, task) {
   }
 }
 
+// ---- Legenda de peça importada (ler/gravar no detalhe) ----
+async function loadImportedCaption(folder) {
+  const ta = $("#task-caption"); if (!ta) return;
+  try {
+    // Checa r.ok (404 = sem legenda) em vez de farejar o conteúdo — assim uma legenda
+    // que comece com '{"error' não é confundida com "arquivo não encontrado".
+    const r = await fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent("copy/instagram_caption.txt"));
+    ta.value = r.ok ? (await r.text()).replace(/\n+$/, "") : "";
+  } catch (e) { ta.value = ""; }
+}
+async function saveImportedCaption(folder) {
+  const ta = $("#task-caption"); if (!ta) return;
+  const btn = $("#btn-save-caption"); const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando…'; }
+  try { await API.saveCaption(folder, ta.value); toast("Legenda salva", "success"); }
+  catch (e) { toast((e && e.message) || "Falha ao salvar a legenda", "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+}
+
+/* =====================================================================
+   IMPORTAR CONTEÚDO PRONTO (feito fora do painel)
+   ===================================================================== */
+let IMPORT_IMGS = []; // dataURLs das imagens escolhidas, na ordem
+
+// Lê um File de imagem e devolve um dataURL JPEG redimensionado (lado maior <= maxDim).
+// Reduz o tamanho do request (limite global de 16mb) e padroniza em formato IG-safe.
+// Fundo branco pra PNG com transparência não virar preto ao virar JPEG.
+function fileToScaledDataUrl(file, maxDim, quality) {
+  maxDim = maxDim || 1440; quality = quality || 0.92;
+  return new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpe?g)$/i.test(file.type || "")) { reject(new Error("use PNG ou JPEG")); return; }
+    if (file.size > 25 * 1024 * 1024) { reject(new Error("imagem muito grande (máx 25MB)")); return; }
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error("falha ao ler o arquivo"));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("arquivo não é uma imagem válida"));
+      img.onload = () => {
+        let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        const scale = Math.min(1, maxDim / Math.max(w, h || 1));
+        w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
+        const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+        const cx = cv.getContext("2d");
+        cx.fillStyle = "#ffffff"; cx.fillRect(0, 0, w, h);
+        cx.drawImage(img, 0, 0, w, h);
+        try { resolve(cv.toDataURL("image/jpeg", quality)); } catch (e) { reject(new Error("falha ao processar a imagem")); }
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function importKind() { return ((($("#imp-kind") && $("#imp-kind").querySelector(".seg.on")) || {}).dataset || {}).kind || "feed"; }
+function renderImportPreview() {
+  const box = $("#imp-preview"); if (!box) return;
+  if (!IMPORT_IMGS.length) { box.innerHTML = '<div class="empty">Escolha as imagens para ver a prévia aqui.</div>'; return; }
+  box.innerHTML = `<div class="imp-preview-grid">${IMPORT_IMGS.map((d, i) => `<div class="imp-prev-item"><img src="${d}" alt="prévia ${i + 1}" />${IMPORT_IMGS.length > 1 ? '<span class="imp-thumb-n">' + (i + 1) + "</span>" : ""}</div>`).join("")}</div>`;
+}
+function renderImportThumbs() {
+  const wrap = $("#imp-thumbs"); if (!wrap) return;
+  const kind = importKind();
+  const hint = $("#imp-files-hint");
+  if (hint) hint.textContent = kind === "feed" ? "1 imagem (PNG ou JPEG)." : (IMPORT_IMGS.length + "/10 imagens — arraste a ordem com as setas.");
+  wrap.innerHTML = IMPORT_IMGS.map((d, i) => `<div class="imp-thumb"><img src="${d}" alt="imagem ${i + 1}" /><span class="imp-thumb-n">${i + 1}</span>
+    <div class="imp-thumb-ctrls">${kind === "carousel" ? `<button type="button" data-mv="up" data-i="${i}"${i === 0 ? " disabled" : ""} title="Antes">↑</button><button type="button" data-mv="down" data-i="${i}"${i === IMPORT_IMGS.length - 1 ? " disabled" : ""} title="Depois">↓</button>` : ""}<button type="button" data-rm="${i}" title="Remover">✕</button></div>
+  </div>`).join("");
+  wrap.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => { IMPORT_IMGS.splice(+b.dataset.rm, 1); renderImportThumbs(); });
+  wrap.querySelectorAll("[data-mv]").forEach((b) => b.onclick = () => {
+    const i = +b.dataset.i, j = b.dataset.mv === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= IMPORT_IMGS.length) return;
+    const t = IMPORT_IMGS[i]; IMPORT_IMGS[i] = IMPORT_IMGS[j]; IMPORT_IMGS[j] = t; renderImportThumbs();
+  });
+  renderImportPreview();
+}
+async function runImport() {
+  const kind = importKind();
+  const title = ($("#imp-title") && $("#imp-title").value.trim()) || "";
+  const err = $("#imp-e-title"); if (err) err.textContent = "";
+  if (title.length < 3) { if (err) err.textContent = "Dê um título à peça (mín. 3 caracteres)."; if ($("#imp-title")) $("#imp-title").focus(); return; }
+  if (!IMPORT_IMGS.length) { toast("Escolha ao menos uma imagem.", "error"); return; }
+  if (kind === "feed" && IMPORT_IMGS.length !== 1) { toast("O feed usa exatamente 1 imagem.", "error"); return; }
+  if (kind === "carousel" && (IMPORT_IMGS.length < 2 || IMPORT_IMGS.length > 10)) { toast("O carrossel precisa de 2 a 10 imagens.", "error"); return; }
+  const payload = {
+    kind, title,
+    task_date: ($("#imp-date") && $("#imp-date").value) || todayISO(),
+    caption: ($("#imp-caption") && $("#imp-caption").value) || "",
+    campaign_id: ($("#imp-camp") && $("#imp-camp").value) || undefined,
+    pillar: ($("#imp-pillar") && $("#imp-pillar").value) || undefined,
+    images: IMPORT_IMGS,
+  };
+  // O corpo do request tem teto de 16MB no servidor. Avisa antes de enviar (com margem)
+  // em vez de deixar o envio falhar com erro genérico.
+  const totalMB = payload.images.reduce((a, d) => a + d.length, 0) / (1024 * 1024);
+  if (totalMB > 14) { toast("As imagens somam demais para enviar de uma vez (~" + totalMB.toFixed(0) + "MB). Use menos slides ou imagens menores.", "error"); return; }
+  const btn = $("#imp-run"); btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> importando…';
+  try {
+    const r = await API.importContent(payload);
+    toast("Conteúdo importado como rascunho", "success");
+    IMPORT_IMGS = [];
+    location.hash = "#/task/" + encodeURIComponent(r.folder);
+  } catch (e) {
+    toast((e && e.message) || "Falha ao importar", "error");
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+async function viewImport(arg, query) {
+  setTitle("Importar conteúdo");
+  const { campaigns } = await API.campaigns();
+  setCampMap(campaigns);
+  const preCamp = (query && query.campaign) || "";
+  const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}"${c.id === preCamp ? " selected" : ""}>${esc(c.name)}</option>`).join("");
+  const pillarOpts = '<option value="">— sem pilar —</option>' + (State.meta.content_pillars || []).map((p) => `<option value="${esc(p.id)}" title="${esc(p.description)}">${esc(p.label)}</option>`).join("");
+  IMPORT_IMGS = [];
+  setView(`
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Importar conteúdo pronto</h3>
+        <p class="muted create-lead">Fez a peça em outro serviço e quer usar o painel para revisar, agendar e publicar? Traga a imagem (ou os slides) e a legenda — vira um rascunho no fluxo normal.</p>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">1</span><h4>Tipo</h4></div>
+          <div class="field"><div class="seg-group" id="imp-kind">
+            <button type="button" class="seg on" data-kind="feed">Feed — 1 imagem</button>
+            <button type="button" class="seg" data-kind="carousel">Carrossel — várias imagens</button>
+          </div><div class="hint mt" id="imp-kind-hint">Uma imagem única para o feed.</div></div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">2</span><h4>Imagens</h4></div>
+          <div class="field">
+            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="imp-files" accept="image/png,image/jpeg" multiple hidden /> Escolher imagem</label><span class="hint" id="imp-files-hint">PNG ou JPEG.</span></div>
+            <div class="imp-thumbs" id="imp-thumbs"></div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">3</span><h4>Legenda e dados</h4></div>
+          <div class="field"><label>Título da peça</label><input id="imp-title" placeholder="ex.: Taxa Zero — carrossel de prova" aria-describedby="imp-e-title" /><div class="field-error" id="imp-e-title" role="alert"></div></div>
+          <div class="field"><label>Legenda <span class="hint">(hook, corpo, CTA e hashtags — o que vai na postagem)</span></label><textarea id="imp-caption" rows="5" placeholder="Escreva a legenda que acompanha a peça"></textarea></div>
+          <div class="row">
+            <div class="field"><label>Campanha <span class="hint">(opcional)</span></label><select id="imp-camp">${campOpts}</select></div>
+            <div class="field"><label>Data</label><input type="date" id="imp-date" value="${todayISO()}" style="max-width:220px" /></div>
+          </div>
+          <div class="field"><label>Pilar de conteúdo <span class="hint">(opcional)</span></label><select id="imp-pillar">${pillarOpts}</select></div>
+        </div>
+
+        <div class="form-foot">
+          <button class="btn btn-primary btn-block" id="imp-run">Importar como rascunho</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Prévia</h3>
+        <p class="muted mt">É assim que os arquivos entram na peça. Depois você revisa, ajusta a legenda, agenda e publica pelo fluxo normal.</p>
+        <div id="imp-preview" class="mt"><div class="empty">Escolha as imagens para ver a prévia aqui.</div></div>
+      </div>
+    </div>`);
+
+  const kindHints = { feed: "Uma imagem única para o feed.", carousel: "De 2 a 10 imagens, na ordem de publicação." };
+  $$("#imp-kind .seg").forEach((b) => b.onclick = () => {
+    $$("#imp-kind .seg").forEach((x) => x.classList.toggle("on", x === b));
+    if ($("#imp-kind-hint")) $("#imp-kind-hint").textContent = kindHints[b.dataset.kind] || "";
+    if (b.dataset.kind === "feed" && IMPORT_IMGS.length > 1) IMPORT_IMGS = IMPORT_IMGS.slice(0, 1);
+    renderImportThumbs();
+  });
+
+  $("#imp-files").onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (importKind() === "feed" && files.length > 1) toast("O feed usa 1 imagem — usei a primeira que você escolheu.", "warn");
+    for (const f of files) {
+      if (importKind() === "feed") IMPORT_IMGS = [];
+      try { IMPORT_IMGS.push(await fileToScaledDataUrl(f)); }
+      catch (err) { toast((err && err.message) || "Não consegui ler a imagem", "error"); }
+      if (importKind() === "feed") break;
+    }
+    e.target.value = "";
+    if (importKind() === "carousel" && IMPORT_IMGS.length > 10) { IMPORT_IMGS = IMPORT_IMGS.slice(0, 10); toast("Máximo de 10 imagens no carrossel.", "warn"); }
+    renderImportThumbs();
+  };
+  $("#imp-run").onclick = runImport;
+  renderImportThumbs();
+}
+
 async function viewTaskDetail(folder) {
   const { task } = await API.task(folder);
   await ensureCampMap();
   const s = task.status;
+  const isImported = !!(s && s.imported);
   setTitle(displayName(s));
   { const _bk = $("#btn-back"); if (_bk) _bk.dataset.fallback = task.zone === "approved" ? "#/approved" : "#/content"; }
   const actions = workflowActions(task);
@@ -1875,7 +2065,7 @@ async function viewTaskDetail(folder) {
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   State.task = task; // o "Editar" do lightbox usa a peça atual
   setView(`
-    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
+    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${isImported ? tag("Importada") : ""}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
@@ -1885,6 +2075,11 @@ async function viewTaskDetail(folder) {
       <div>
         ${renderPanel(folder, task)}
         ${refineCard(task)}
+        ${(isImported && task.zone === "active") ? `<div class="card mt">
+          <div class="flex-between"><h3>Legenda</h3><button class="btn btn-sm" id="btn-save-caption">Salvar legenda</button></div>
+          <textarea id="task-caption" rows="6" class="mt" placeholder="Legenda da postagem — hook, corpo e CTA. Hashtags no fim.">Carregando…</textarea>
+          <p class="muted mt">Legenda que vai junto da peça ao publicar. Corrija e salve — a arte importada não muda.</p>
+        </div>` : ""}
         <div class="card mt">
           <div class="flex-between"><h3>Tags</h3><button class="btn btn-sm" id="btn-tags">Editar</button></div>
           <div class="chips mt" id="task-tags">${(task.tags && task.tags.length) ? task.tags.map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") : '<span class="muted">Sem tags ainda.</span>'}</div>
@@ -1917,6 +2112,8 @@ async function viewTaskDetail(folder) {
   if ($("#btn-phone")) $("#btn-phone").onclick = () => openPhonePreview(task);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
+  if (isImported) loadImportedCaption(folder);
+  if ($("#btn-save-caption")) $("#btn-save-caption").onclick = () => saveImportedCaption(folder);
   wireUndo(folder, task);
   document.querySelectorAll('input[name="render-tpl"]').forEach((el) => {
     el.onchange = () => {

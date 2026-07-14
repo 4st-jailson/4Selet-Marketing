@@ -736,6 +736,21 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .photo-item:hover .photo-del, .photo-del:focus-visible { opacity: 1; }
 .photo-del:hover { background: var(--danger, #c0392b); }
 
+/* ---- Importar conteúdo (miniaturas + prévia) ---- */
+.imp-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--s3); }
+.imp-thumb { position: relative; width: 88px; height: 88px; border-radius: var(--r-xs); overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); line-height: 0; }
+.imp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.imp-thumb-n { position: absolute; top: 3px; left: 3px; min-width: 17px; height: 17px; padding: 0 4px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); }
+.imp-thumb-ctrls { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; gap: 3px; padding: 3px; background: linear-gradient(transparent, rgba(6,20,27,.72)); opacity: 0; transition: opacity var(--tr); }
+.imp-thumb:hover .imp-thumb-ctrls, .imp-thumb:focus-within .imp-thumb-ctrls { opacity: 1; }
+.imp-thumb-ctrls button { width: 20px; height: 20px; padding: 0; border: none; border-radius: 4px; background: rgba(255,255,255,.92); color: #06141b; font-size: 12px; line-height: 1; cursor: pointer; }
+.imp-thumb-ctrls button:disabled { opacity: .4; cursor: default; }
+.imp-thumb-ctrls button:hover:not(:disabled) { background: #fff; }
+.imp-preview-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.imp-prev-item { position: relative; flex: 0 0 auto; max-width: 100%; line-height: 0; border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--border-soft); }
+.imp-prev-item img { max-width: 220px; max-height: 300px; width: auto; height: auto; display: block; }
+.imp-prev-item .imp-thumb-n { top: 5px; left: 5px; }
+
 /* ---- seções do formulário Criar (agrupamento com hierarquia) ---- */
 .form-section { margin-top: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--border-soft); }
 .form-section:first-of-type { margin-top: var(--s4); padding-top: 0; border-top: none; }
@@ -1084,6 +1099,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .lightbox-newtab { position: absolute; top: 24px; left: 112px; }
 /* "Editar" no lightbox: entrada principal do editor visual (só p/ artes editáveis). */
 .lightbox-edit { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 6; box-shadow: 0 2px 12px rgba(0,0,0,.35); }
+/* Sem "empurre" ao clicar: o botão é centralizado por translateX(-50%), mas o .btn:active
+   (translateY(1px)) sobrescreveria o transform inteiro e jogaria o botão pro lado+baixo.
+   Aqui preservamos só a centralização — o botão "Editar" fica parado ao ser clicado. */
+.lightbox-edit:active { transform: translateX(-50%); }
 /* Ações do lightbox (Baixar / Abrir em nova aba / menu de resolução): fundo sólido frostado
    para ficarem legíveis sobre QUALQUER arte por trás (fundo claro ou escuro). */
 .lightbox-dl.btn, .lightbox-newtab.btn, .lightbox-res .dl-res > summary {

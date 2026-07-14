@@ -60,7 +60,7 @@ function classifyKind(files) {
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
   const has = (re) => rels.some((r) => re.test(r));
   if (rels.some(isVideo) || has(/video\/(scenes|concept)\.json$/)) return "video";
-  const slidePngs = rels.filter((r) => /slide_\d+\.png$/i.test(r));
+  const slidePngs = rels.filter((r) => /slide_\d+\.(png|jpe?g)$/i.test(r));
   if (slidePngs.length > 1 || has(/instagram_carousel\.json$/)) return "carousel";
   if (has(/linkedin_post\.txt$/)) return "linkedin";
   if (has(/threads_post\.txt$/)) return "threads";
@@ -75,7 +75,7 @@ function classifyKind(files) {
 // Primeiro arquivo de imagem (thumbnail) ou video, para preview na biblioteca.
 function pickThumb(files) {
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
-  const img = rels.find((r) => /slide_0*1\.png$/i.test(r)) || rels.find(isImage);
+  const img = rels.find((r) => /slide_0*1\.(png|jpe?g)$/i.test(r)) || rels.find(isImage);
   if (img) return { rel: img, type: "image" };
   const vid = rels.find(isVideo);
   if (vid) return { rel: vid, type: "video" };
@@ -121,6 +121,7 @@ function listTasks() {
         first_viewed_at: status.first_viewed_at || null,
         tags: Array.isArray(status.tags) ? status.tags : [],
         pillar: (typeof status.pillar === "string") ? status.pillar : null,
+        imported: !!status.imported,
         kind: classifyKind(files),
         thumb: pickThumb(files),
       });
@@ -135,6 +136,9 @@ function listTasks() {
 function findTask(folder) {
   for (const z of ZONES) {
     const full = path.join(z.dir, folder);
+    // Contenção de zona: 'folder' vem da URL; garante que o join não escapou da zona
+    // (ex.: '../..'). Centraliza o guard p/ todos os callers (write/read/media).
+    if (full !== z.dir && !full.startsWith(z.dir + path.sep)) continue;
     if (fs.existsSync(path.join(full, "status.json"))) {
       return { path: full, zone: z.zone };
     }
@@ -276,6 +280,20 @@ function writeContentFile(folder, rel, content, note) {
   return path.relative(loc.path, target).split(path.sep).join("/");
 }
 
+// Escreve um arquivo BINARIO (imagem importada) dentro da task, só na zona active.
+// Mesmo guard de caminho do writeContentFile; sem snapshot de historico (binario não
+// entra no "desfazer" de texto) e sem encoding utf8.
+function writeMediaFile(folder, rel, buffer) {
+  const loc = findTask(folder);
+  if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  if (loc.zone !== "active") { const e = new Error("task esta em '" + loc.zone + "' — só a zona active aceita mídia"); e.code = "E_NOT_EDITABLE"; throw e; }
+  const target = path.normalize(path.join(loc.path, rel));
+  if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, buffer);
+  return path.relative(loc.path, target).split(path.sep).join("/");
+}
+
 // Junta as ARTES (png/jpg/webp/mp4) de uma peca para baixar em .zip. Ignora HTML/JSON/logs.
 // Ordena os slides do carrossel numericamente (slide_1, slide_2, ...), depois o resto por nome.
 function collectMediaForZip(folder) {
@@ -353,6 +371,19 @@ function setPillar(folder, pillar) {
   const status = readJsonSafe(p);
   if (!status) return false;
   status.pillar = String(pillar);
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return true;
+}
+
+// Marca a peça como IMPORTADA (imagens prontas trazidas de fora). O front usa a flag
+// para NÃO oferecer re-render/editor de arte (não há HTML/JSON de origem), só legenda.
+function setImported(folder) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return false;
+  status.imported = true;
   fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
   return true;
 }
@@ -436,7 +467,7 @@ function discardTask(folder) {
 }
 
 module.exports = {
-  listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
+  listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setPillar, setImported, markViewed, setTags, generatePreview, promote, discardTask,
 };

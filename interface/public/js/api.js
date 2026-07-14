@@ -9,7 +9,10 @@ const API = (() => {
     if (ct.includes("application/json")) data = await r.json();
     else data = await r.text();
     if (!r.ok) {
-      const err = new Error((data && data.error) || ("HTTP " + r.status));
+      const msg = r.status === 413
+        ? "Arquivos grandes demais para enviar de uma vez — reduza o número ou o tamanho das imagens."
+        : ((data && data.error) || ("HTTP " + r.status));
+      const err = new Error(msg);
       err.status = r.status; err.data = data;
       // Sessao ausente/expirada: avisa o app para reabrir o login (menos nas rotas de auth).
       if (r.status === 401 && data && data.code === "E_AUTH" && !/\/api\/auth\//.test(url)) {
@@ -66,6 +69,10 @@ const API = (() => {
     discard: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/discard"),
     setTags: (folder, tags) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/tags", { tags }),
     promote: (folder, payload) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/promote", payload),
+    // importar conteúdo pronto (feito fora do painel) como peça de rascunho
+    importContent: (payload) => req("POST", "/api/content/import", payload),
+    // editar/gravar a legenda de uma peça (correção da importada)
+    saveCaption: (folder, caption) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/caption", { caption }),
     // historico de versoes (desfazer/restaurar)
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),

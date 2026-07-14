@@ -116,14 +116,14 @@ function pickImages(dir, kind) {
   const slidesDir = path.join(dir, "slides");
   if (fs.existsSync(slidesDir)) {
     const slides = fs.readdirSync(slidesDir)
-      .filter((f) => /^slide_0*\d+\.png$/i.test(f))
-      .map((f) => ({ f, n: parseInt((f.match(/slide_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+      .filter((f) => /^slide_0*\d+\.(png|jpe?g)$/i.test(f))
+      .map((f) => ({ f, n: parseInt((f.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
       .sort((a, b) => a.n - b.n)
       .map((s) => path.join(slidesDir, s.f));
     if (slides.length) return slides;
   }
   const ads = path.join(dir, "ads");
-  for (const name of ["feed.png", "ad.png"]) {
+  for (const name of ["feed.png", "feed.jpg", "feed.jpeg", "ad.png", "ad.jpg", "ad.jpeg"]) {
     const p = path.join(ads, name);
     if (fs.existsSync(p)) return [p];
   }
