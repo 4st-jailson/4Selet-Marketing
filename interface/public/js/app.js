@@ -2989,7 +2989,7 @@ function renderGenResult(r) {
   const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel";
   const artHtml = visualKind
     ? `<details class="art-preview-box mt" open><summary>Prévia da arte</summary>
-         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "(slide de capa) " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe a imagem se quiser (rascunho rápido).</p>
+         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "de TODOS os slides " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe se quiser (rascunho rápido).</p>
          <button class="btn btn-ghost btn-sm" id="g-art-btn" type="button">Ver prévia da arte</button>
          <div id="g-art" class="art-preview mt"></div>
        </details>`
@@ -3056,11 +3056,17 @@ async function renderArtPreview(contentType, kind) {
   try {
     const out = await API.renderPreview({ content_type: contentType, parsed, template });
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
-    box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" />
-      <div class="flex flex-between mt" style="align-items:center;gap:10px;flex-wrap:wrap">
-        <span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height}${kind === "carousel" ? " · slide de capa" : ""}</span>
-        <a class="btn btn-sm btn-ghost" href="${out.dataUrl}" download="${esc(fname)}">Baixar imagem</a>
-      </div>`;
+    if (out.slides && out.slides.length) {
+      // Carrossel: mostra TODOS os slides na ordem, cada um com número e baixar.
+      box.innerHTML = `<div class="art-slides-strip">${out.slides.map((s) => `<div class="art-slide"><span class="slide-num">${s.n}</span><img class="art-img art-slide-img" src="${s.dataUrl}" alt="Slide ${s.n}" /><a class="art-slide-dl" href="${s.dataUrl}" download="slide-${s.n}.png" title="Baixar slide ${s.n}">baixar</a></div>`).join("")}</div>
+        <div class="flex mt" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.slides.length} slides · ${out.width}×${out.height}</span></div>`;
+    } else {
+      box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" />
+        <div class="flex flex-between mt" style="align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height}</span>
+          <a class="btn btn-sm btn-ghost" href="${out.dataUrl}" download="${esc(fname)}">Baixar imagem</a>
+        </div>`;
+    }
   } catch (e) {
     box.innerHTML = `<div class="field-error" style="display:block">${esc((e && e.message) || "falha ao renderizar a prévia")}</div>`;
   } finally {

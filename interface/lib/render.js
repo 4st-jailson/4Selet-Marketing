@@ -765,30 +765,24 @@ async function renderFeed(folder, opts) {
   return Object.assign(r, { rel: "ads/feed.png", template: tpl.id });
 }
 
-async function renderCarousel(folder, opts) {
-  const loc = requireActive(folder);
-  const tpl = pickTemplate(loc, opts && opts.template);
-  const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
+// Monta o HTML de TODOS os slides do carrossel a partir do conceito (capa via template
+// escolhido, demais via arquetipos). PURA (sem I/O) — usada pelo renderCarousel (grava PNG)
+// e pelo renderPreview (mostra todos os slides sem salvar), garantindo que a previa bate com
+// o render final. buildCover = funcao de template da capa (tpl.build, ex.: tplEditorial).
+function carouselSlidesHtml(concept, buildCover) {
   const slides = Array.isArray(concept.slides) && concept.slides.length
     ? concept.slides
     : [{ title: "Para quem sabe que é Selet", body: "" }];
-  const dir = path.join(loc.path, "slides");
-  fs.mkdirSync(dir, { recursive: true });
-  const rels = [];
-  let lastErr = null;
   const total = slides.length;
-  // Sequencial (await em fila): renderiza um slide por vez, sem abrir N Chromium
-  // ao mesmo tempo. Nao bloqueia o event loop (cada htmlToPng e assincrono).
+  const out = [];
   for (let i = 0; i < slides.length; i++) {
     const s = slides[i];
     const n = i + 1;
     const arch = slideArchetype(s, i, total);
-    const htmlPath = path.join(dir, "slide_" + n + ".html");
-    const outPng = path.join(dir, "slide_" + n + ".png");
     let html;
     if (arch === "cover") {
-      // A capa usa o template de arte escolhido (editorial|bold|split).
-      html = tpl.build({
+      // A capa usa o template de arte escolhido (editorial|bold|split|photo).
+      html = buildCover({
         width: 1080, height: 1350,
         eyebrow: concept.eyebrow || "",
         headline: highlightHeadline(s.title || ""),
@@ -802,18 +796,37 @@ async function renderCarousel(folder, opts) {
         titleScale: s && s.titleScale,
       });
     } else {
-      const ctx = {
+      html = SLIDE_ARCHETYPES[arch](s, {
         width: 1080, height: 1350, n: n, total: total,
         cta: arch === "cta" ? (concept.cta || "") : "",
         footer: concept.footer,
         tagline: arch === "cta",
-      };
-      html = SLIDE_ARCHETYPES[arch](s, ctx);
+      });
     }
-    fs.writeFileSync(htmlPath, html, "utf8");
+    out.push({ n: n, html: html });
+  }
+  return out;
+}
+
+async function renderCarousel(folder, opts) {
+  const loc = requireActive(folder);
+  const tpl = pickTemplate(loc, opts && opts.template);
+  const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
+  const dir = path.join(loc.path, "slides");
+  fs.mkdirSync(dir, { recursive: true });
+  const built = carouselSlidesHtml(concept, tpl.build);
+  const total = built.length;
+  const rels = [];
+  let lastErr = null;
+  // Sequencial (await em fila): renderiza um slide por vez, sem abrir N Chromium
+  // ao mesmo tempo. Nao bloqueia o event loop (cada htmlToPng e assincrono).
+  for (const item of built) {
+    const htmlPath = path.join(dir, "slide_" + item.n + ".html");
+    const outPng = path.join(dir, "slide_" + item.n + ".png");
+    fs.writeFileSync(htmlPath, item.html, "utf8");
     const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
     if (!r.ok) lastErr = r.stderr || r.stdout;
-    else rels.push("slides/slide_" + n + ".png");
+    else rels.push("slides/slide_" + item.n + ".png");
   }
   return { ok: rels.length === total, rels, stderr: lastErr || "", count: rels.length, total: total, template: tpl.id };
 }
@@ -915,35 +928,47 @@ function previewFields(ct, parsed) {
   return null;
 }
 
-async function renderPreview({ content_type, parsed, template } = {}) {
-  const ct = contentTypeById(content_type);
-  if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
-  const fields = previewFields(ct, parsed);
-  if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
-  const tplId = (template && TEMPLATES[template]) ? template : "editorial";
-  const html = resolveTemplate(tplId)(fields);
-  // Sufixo aleatorio: agora que o render e assincrono, duas previas podem rodar
-  // "ao mesmo tempo" — nomes unicos evitam colisao no arquivo temporario.
+// Renderiza um HTML (string) para dataURL PNG via arquivo temporario. Resolucao base (1x):
+// e so visualizacao na tela. Sufixo aleatorio evita colisao entre previas concorrentes.
+async function htmlStringToPngDataUrl(html, w, h) {
   const uniq = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   const base = path.join(os.tmpdir(), "4selet-preview-" + process.pid + "-" + uniq);
   const htmlPath = base + ".html";
   const outPng = base + ".png";
   try {
     fs.writeFileSync(htmlPath, html, "utf8");
-    // Previa fica em resolucao base (1x) de proposito: e so visualizacao na tela —
-    // alta resolucao so vale p/ o render final salvo (download).
-    const r = await htmlToPng(htmlPath, outPng, fields.width, fields.height);
-    if (!r.ok || !fs.existsSync(outPng)) {
-      return { ok: false, error: (r.stderr || r.stdout || "falha ao renderizar a previa").slice(0, 400), template: tplId };
-    }
-    const b64 = fs.readFileSync(outPng).toString("base64");
-    return { ok: true, dataUrl: "data:image/png;base64," + b64, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };
+    const r = await htmlToPng(htmlPath, outPng, w, h);
+    if (!r.ok || !fs.existsSync(outPng)) return { ok: false, error: (r.stderr || r.stdout || "falha ao renderizar a previa").slice(0, 400) };
+    return { ok: true, dataUrl: "data:image/png;base64," + fs.readFileSync(outPng).toString("base64") };
   } catch (e) {
     return { ok: false, error: e.message };
   } finally {
     try { fs.unlinkSync(htmlPath); } catch (e) {}
     try { fs.unlinkSync(outPng); } catch (e) {}
   }
+}
+
+async function renderPreview({ content_type, parsed, template } = {}) {
+  const ct = contentTypeById(content_type);
+  if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
+  const tplId = (template && TEMPLATES[template]) ? template : "editorial";
+  // Carrossel: a previa mostra TODOS os slides (nao so a capa) — renderiza cada um in-memory,
+  // com a MESMA montagem do render final (carouselSlidesHtml).
+  if (ct.kind === "carousel") {
+    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId]);
+    const slidesOut = [];
+    for (const item of built) {
+      const png = await htmlStringToPngDataUrl(item.html, 1080, 1350);
+      if (!png.ok) return { ok: false, error: png.error, template: tplId };
+      slidesOut.push({ n: item.n, dataUrl: png.dataUrl });
+    }
+    return { ok: true, slides: slidesOut, template: tplId, kind: ct.kind, width: 1080, height: 1350 };
+  }
+  const fields = previewFields(ct, parsed);
+  if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
+  const png = await htmlStringToPngDataUrl(resolveTemplate(tplId)(fields), fields.width, fields.height);
+  if (!png.ok) return { ok: false, error: png.error, template: tplId };
+  return { ok: true, dataUrl: png.dataUrl, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };
 }
 
 // ---- Download em resolucao escolhida --------------------------------------
