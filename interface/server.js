@@ -17,7 +17,8 @@ app.use(express.json({ limit: "16mb" }));
 // --- Cabecalhos de seguranca (M3) + checagem de Origin anti-CSRF (B3) ---
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  // (X-Frame-Options removido: o CSP abaixo já traz frame-ancestors 'self', equivalente
+  //  moderno; os dois juntos eram redundantes.)
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader("Content-Security-Policy",
     "default-src 'self'; img-src 'self' data: blob:; " +

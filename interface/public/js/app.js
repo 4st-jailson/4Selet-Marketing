@@ -1960,9 +1960,16 @@ async function editTags(folder, current) {
   });
   if (!res) return;
   try {
-    await API.setTags(folder, res.tags);
+    const r = await API.setTags(folder, res.tags);
+    const norm = (r && r.tags) || [];
     toast("Tags atualizadas", "success");
-    router();
+    // Repinta SÓ o bloco de tags — em vez de router() re-renderizar a peça inteira (novo
+    // fetch + rebuild + recarregar coleções). Mais fluido e sem "piscar" a tela.
+    const box = $("#task-tags");
+    if (box) box.innerHTML = norm.length ? norm.map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") : '<span class="muted">Sem tags ainda.</span>';
+    if (State.task && State.task.folder === folder) State.task.tags = norm;
+    const btn = $("#btn-tags");
+    if (btn) btn.onclick = () => editTags(folder, norm); // reabrir já com as tags novas
   } catch (e) { toast(e.message, "error"); }
 }
 
@@ -2583,8 +2590,14 @@ async function viewCreate(arg, query) {
     let images = [];
     try { images = ((await fetch("/api/uploads").then((x) => x.json())) || {}).images || []; } catch (e) {}
     if (!images.length) { g.innerHTML = '<span class="hint">Nenhuma imagem no acervo ainda — envie a primeira.</span>'; return; }
-    g.innerHTML = images.map((im) => `<button type="button" class="photo-thumb${im.url === sel ? " on" : ""}" data-url="${esc(im.url)}" title="${esc(im.name)}"><img src="${esc(im.url)}" alt="" loading="lazy"/></button>`).join("");
+    g.innerHTML = images.map((im) => `<div class="photo-item"><button type="button" class="photo-thumb${im.url === sel ? " on" : ""}" data-url="${esc(im.url)}" title="${esc(im.name)}"><img src="${esc(im.url)}" alt="" loading="lazy"/></button><button type="button" class="photo-del" data-name="${esc(im.name)}" title="Remover do acervo" aria-label="Remover do acervo">×</button></div>`).join("");
     $$("#g-photo-gallery .photo-thumb").forEach((b) => { b.onclick = () => { $("#g-image").value = b.dataset.url; $$("#g-photo-gallery .photo-thumb").forEach((x) => x.classList.toggle("on", x === b)); }; });
+    $$("#g-photo-gallery .photo-del").forEach((b) => { b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!(await uiConfirm("Remover esta imagem do acervo? Peças já geradas com ela não mudam.", { confirmText: "Remover" }))) return;
+      try { await API.deleteUpload(b.dataset.name); toast("Imagem removida do acervo", "warn"); await loadPhotoGallery($("#g-image").value); }
+      catch (err) { toast((err && err.message) || "Falha ao remover a imagem", "error"); }
+    }; });
   }
   if ($("#g-style")) $("#g-style").addEventListener("change", updPhotoRow);
   if ($("#g-photo-file")) $("#g-photo-file").addEventListener("change", async (e) => {

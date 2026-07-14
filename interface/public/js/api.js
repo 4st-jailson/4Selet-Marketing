@@ -70,6 +70,8 @@ const API = (() => {
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
     saveEditedHtml: (folder, rel, html) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/edit-html", { rel, html }),
+    // acervo de imagens (fotos enviadas) — remover uma do acervo
+    deleteUpload: (name) => req("DELETE", "/api/uploads/" + encodeURIComponent(name)),
     // publicação (Instagram)
     publishStatus: () => req("GET", "/api/publish/status"),
     savePublishConfig: (cfg) => req("POST", "/api/publish/config", cfg),

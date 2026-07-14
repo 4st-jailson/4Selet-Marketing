@@ -185,5 +185,5 @@ async function publishTask(folder, opts) {
 }
 
 module.exports = {
-  isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved, pickImages, readCaption,
+  isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved,
 };

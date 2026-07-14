@@ -67,4 +67,4 @@ function startWorker(publishFn) {
   setTimeout(() => { tick().catch(() => {}); }, 4000).unref(); // roda logo após o boot (pega atrasados)
 }
 
-module.exports = { add, list, get, update, cancel, startWorker };
+module.exports = { add, list, update, cancel, startWorker };

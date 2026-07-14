@@ -90,4 +90,4 @@ function zipStore(files, when) {
   return Buffer.concat(parts.concat([centralBuf, eocd]));
 }
 
-module.exports = { zipStore, crc32 };
+module.exports = { zipStore };

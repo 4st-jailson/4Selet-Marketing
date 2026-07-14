@@ -367,4 +367,4 @@ function simulate(req) {
   }
 }
 
-module.exports = { systemPrompt, generationPrompt, refinementPrompt, assistantSystem, simulate, SCHEMAS };
+module.exports = { systemPrompt, generationPrompt, refinementPrompt, assistantSystem, simulate };

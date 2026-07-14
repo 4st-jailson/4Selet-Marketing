@@ -172,5 +172,5 @@ function collectionsForFolder(folder) {
 }
 
 module.exports = {
-  list, get, create, update, remove, addItem, removeItem, reorder, collectionsForFolder, slugify, nowIso,
+  list, get, create, update, remove, addItem, removeItem, reorder, slugify, nowIso,
 };

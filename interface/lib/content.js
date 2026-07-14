@@ -438,5 +438,5 @@ function discardTask(folder) {
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, normalizeTags, generatePreview, promote, discardTask, classifyKind, pickThumb, runScript,
+  setCampaignId, setTitle, setTemplate, setPillar, markViewed, setTags, generatePreview, promote, discardTask,
 };

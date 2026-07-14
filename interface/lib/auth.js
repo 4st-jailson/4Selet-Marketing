@@ -277,8 +277,7 @@ function userFromRequest(req) {
 }
 
 module.exports = {
-  ROLES, COOKIE, SESSION_TTL_S,
   bootstrap, authenticate, listUsers, createUser, deleteUser, setPassword, setRole, setName, setUsername, findUser,
   createInvite, acceptInvite,
-  signSession, verifySession, setSessionCookie, clearSessionCookie, userFromRequest,
+  signSession, setSessionCookie, clearSessionCookie, userFromRequest,
 };

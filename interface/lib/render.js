@@ -1050,7 +1050,6 @@ async function render(folder, kind, opts) {
 }
 
 module.exports = {
-  render, renderImage, renderFeed, renderCarousel, renderVideo, renderPreview,
-  renderForDownload, renderEditedHtml,
+  render, renderPreview, renderForDownload, renderEditedHtml,
   TEMPLATE_IDS,
 };
