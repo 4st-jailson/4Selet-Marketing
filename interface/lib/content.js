@@ -374,7 +374,9 @@ function markViewed(folder) {
   const status = readJsonSafe(p);
   if (!status || status.first_viewed_at) return false;
   status.first_viewed_at = new Date().toISOString();
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  // Fire-and-forget: é chamado dentro de um GET (abrir a peça). Escrita assíncrona pra
+  // não bloquear o event loop do painel no carimbo "Novo" da 1ª visualização.
+  fs.writeFile(p, JSON.stringify(status, null, 2) + "\n", "utf8", () => {});
   return true;
 }
 

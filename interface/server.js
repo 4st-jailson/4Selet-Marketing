@@ -7,7 +7,6 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_PILLARS, CONTENT_TYPES, KIND_LABELS } = require("./lib/config");
-const ai = require("./lib/anthropic");
 const auth = require("./lib/auth");
 
 const app = express();
@@ -50,6 +49,10 @@ app.get("/m/:token", (req, res) => {
   res.set("Cache-Control", "no-store");
   res.sendFile(abs);
 });
+
+// Credenciais de integracao inseridas pelo painel (data/credentials.json -> process.env).
+// Antes das rotas, pra que integracoes que leem env ja enxerguem os valores gravados.
+require("./lib/credentials").loadIntoEnv();
 
 // --- Autenticacao do painel: login por pessoa + perfis (admin/membro) ---
 auth.bootstrap(); // garante um admin inicial (ADMIN_USERNAME/ADMIN_PASSWORD do .env)
@@ -134,7 +137,8 @@ const PORT = process.env.PORT || 4500;
 // HOST controla a interface de rede:
 //   - vazio/ausente  => bind em todas as interfaces (comportamento atual; acessivel pela rede da VPS)
 //   - 127.0.0.1      => somente local (acesso apenas de dentro da VPS, via RDP)
-// Defina em interface/.env. Sem autenticacao no painel, "127.0.0.1" e a opcao mais segura.
+// Defina em interface/.env. O painel tem login proprio (usuario/senha, perfis admin/membro);
+// o bind em "127.0.0.1" continua sendo defesa em profundidade, nao a unica protecao.
 const HOST = process.env.HOST || undefined;
 const server = app.listen(PORT, HOST, () => {
   const where = HOST ? HOST : "0.0.0.0 (todas as interfaces)";

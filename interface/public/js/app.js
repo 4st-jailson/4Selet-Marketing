@@ -59,7 +59,12 @@ function toastAiError(e) {
   }
 }
 
-function setView(html) { $("#view").innerHTML = html; }
+function setView(html) {
+  // Remove menus flutuantes ancorados no body que não somem sozinhos ao navegar (ex.: o
+  // dropdown de qualificadores da biblioteca), evitando nó órfão preso ao document.
+  document.querySelectorAll(".qual-menu").forEach((n) => n.remove());
+  $("#view").innerHTML = html;
+}
 function setTitle(t) { $("#page-title").textContent = t; document.title = t + " · Painel 4Selet"; }
 function metaType(id) { return (State.meta.content_types || []).find((c) => c.id === id); }
 function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels[k]) || k || "Outros"; }
@@ -230,8 +235,6 @@ function uiModal(opts) {
 function uiConfirm(message, opts) {
   return uiModal(Object.assign({ title: "Confirmar", message: message, confirmText: "Confirmar" }, opts || {})).then((v) => !!v);
 }
-window.uiModal = uiModal; window.uiConfirm = uiConfirm;
-
 /* ============================ router ============================ */
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "") || "dashboard";
@@ -276,7 +279,6 @@ function goBack(fallback) {
   if (NAV_COUNT > 1) history.back();
   else location.hash = fallback || "#/content";
 }
-window.goBack = goBack;
 async function router() {
   NAV_COUNT++;
   const { route, arg, query } = parseHash();
@@ -1333,7 +1335,7 @@ async function openHtmlEditor(folder, task, rel) {
     curRel = r2; dirty = false; current = null; hist = []; hi = -1;
     $("#he-piece").textContent = (targets.find((t) => t.rel === curRel) || {}).label || "Arte";
     updateNav();
-    API.taskHtml(folder, curRel.replace(/\.png$/i, ".html")).then((raw) => {
+    API.taskFile(folder, curRel.replace(/\.png$/i, ".html")).then((raw) => {
       if (!/<html/i.test(raw)) { toast("Esta peça não tem HTML editável (gere a arte de novo).", "error"); return; }
       // Reescreve assets file:// p/ URLs servidas (brand-assets = assets/ da marca;
       // uploads = fotos em interface/public/uploads/). Guarda p/ reverter ao salvar.
@@ -1879,7 +1881,6 @@ async function viewTaskDetail(folder) {
       <div class="card">
         <h3>Arquivos</h3>
         ${visibleFiles(task).length ? '<div class="list mt">' + visibleFiles(task).map((f) => fileRow(folder, f)).join("") + "</div>" : '<div class="empty">Sem arquivos de conteúdo.</div>'}
-        <div id="file-view" class="mt"></div>
       </div>
       <div>
         ${renderPanel(folder, task)}
@@ -2244,24 +2245,6 @@ async function viewSchedule() {
     catch (e) { toast((e && e.message) || "Erro ao cancelar.", "error"); }
   }; });
 }
-
-async function openFile(folder, rel) {
-  try {
-    const text = await API.taskFile(folder, rel);
-    const host = $("#file-view");
-    if (rel.endsWith(".html")) {
-      const url = URL.createObjectURL(new Blob([text], { type: "text/html" }));
-      host.innerHTML = '<div class="gen-out"><div class="flex-between mb"><strong>' + esc(rel) + '</strong>'
-        + '<a class="btn btn-sm btn-ghost" href="' + url + '" target="_blank" rel="noopener">abrir em nova aba ↗</a></div>'
-        + '<iframe class="file-frame" src="' + url + '" title="' + esc(rel) + '" sandbox="allow-scripts"></iframe></div>';
-      host.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      return;
-    }
-    host.innerHTML = '<div class="gen-out"><div class="flex-between mb"><strong>' + esc(rel) + '</strong></div><pre class="codeblock">' + esc(text) + "</pre></div>";
-    host.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  } catch (e) { toast(e.message, "error"); }
-}
-window.openFile = openFile;
 
 /* ---- Lightbox ---- */
 let _lbBlobUrl = null;
@@ -3131,18 +3114,74 @@ async function saveGenerated() {
 /* =====================================================================
    CONFIGURAÇÕES
    ===================================================================== */
+// Modal "Inserir credenciais": conecta um serviço server-side (Redis/Supabase/YouTube) ou
+// uma variável avançada, colando a credencial. Grava no servidor (data/credentials.json),
+// NUNCA volta o valor. Só admin (o backend também barra). Alguns serviços só valem após reiniciar.
+function openCredentialsModal() {
+  const SERVICES = {
+    redis: { label: "Redis / BullMQ (fila)", note: "A fila BullMQ só passa a valer depois de reiniciar o painel.", fields: [{ name: "REDIS_URL", label: "REDIS_URL", ph: "redis://default:senha@host:6379 (ex.: Upstash)" }] },
+    supabase: { label: "Supabase (hospedagem de mídia)", note: "Exige o SDK @supabase/supabase-js instalado no servidor.", fields: [{ name: "SUPABASE_URL", label: "SUPABASE_URL", ph: "https://xxxx.supabase.co" }, { name: "SUPABASE_KEY", label: "SUPABASE_KEY (service role)", ph: "eyJhbGci…" }] },
+    youtube: { label: "YouTube (Data API)", note: "Publicar no YouTube exige o fluxo OAuth completo.", fields: [{ name: "YOUTUBE_REFRESH_TOKEN", label: "YOUTUBE_REFRESH_TOKEN", ph: "1//0g… (gerado no OAuth)" }] },
+    custom: { label: "Outro (variável avançada)", note: "Só use se souber o nome exato da variável de ambiente.", fields: [{ name: "__NAME__", label: "Nome da variável (MAIÚSCULAS)", ph: "EX_API_KEY", isName: true }, { name: "__VALUE__", label: "Valor", ph: "cole o valor" }] },
+  };
+  const renderFields = (key) => SERVICES[key].fields.map((f, i) =>
+    `<div class="field"><label>${esc(f.label)}</label><input id="cred-f-${i}" type="${f.isName ? "text" : "password"}" placeholder="${esc(f.ph)}" autocomplete="off" /></div>`).join("");
+  const optList = Object.keys(SERVICES).map((k) => `<option value="${k}">${esc(SERVICES[k].label)}</option>`).join("");
+  const ov = document.createElement("div"); ov.className = "modal-ov cred-ov";
+  ov.innerHTML = `<div class="modal cred-modal" role="dialog" aria-modal="true" style="max-width:520px">
+    <div class="pub-head"><h3>Inserir credenciais</h3><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>
+    <div class="pub-body" style="display:block;padding:20px 22px">
+      <p class="muted" style="margin-top:0">Conecte um serviço colando a credencial dele. Fica <strong>só no servidor</strong> (em <span class="codeblock">interface/data</span>, fora do git) e <strong>nunca volta</strong> para o navegador.</p>
+      <div class="field"><label>Serviço</label><select id="cred-service">${optList}</select></div>
+      <div id="cred-fields">${renderFields("redis")}</div>
+      <p class="hint" id="cred-note">${esc(SERVICES.redis.note)}</p>
+      <div class="flex mt"><button class="btn btn-primary" id="cred-save">Salvar credencial</button><span id="cred-out" class="muted"></span></div>
+      <p class="hint mt">Só administradores. Vale já para novas operações; integrações que conectam no boot só após reiniciar o painel.</p>
+    </div>
+  </div>`;
+  document.body.appendChild(ov); document.body.classList.add("no-scroll");
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  ov.querySelector("[data-x='close']").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  const sel = ov.querySelector("#cred-service");
+  sel.onchange = () => { ov.querySelector("#cred-fields").innerHTML = renderFields(sel.value); ov.querySelector("#cred-note").textContent = SERVICES[sel.value].note; };
+  ov.querySelector("#cred-save").onclick = async () => {
+    const out = ov.querySelector("#cred-out"), svc = SERVICES[sel.value];
+    let pairs;
+    if (sel.value === "custom") {
+      const name = (ov.querySelector("#cred-f-0").value || "").trim(), value = (ov.querySelector("#cred-f-1").value || "").trim();
+      if (!name || !value) { out.textContent = "Preencha nome e valor."; return; }
+      pairs = [{ name, value }];
+    } else {
+      pairs = svc.fields.map((f, i) => ({ name: f.name, value: (ov.querySelector("#cred-f-" + i).value || "").trim() }));
+      if (pairs.some((p) => !p.value)) { out.textContent = "Preencha todos os campos."; return; }
+    }
+    out.textContent = "Salvando…";
+    try {
+      for (const p of pairs) await API.saveCredential(p.name, p.value);
+      toast("Credencial salva.", "success"); close(); viewSettings();
+    } catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
+  };
+}
+
 async function viewSettings() {
   setTitle("Configurações");
-  const s = await API.settings();
+  // As 5 chamadas são independentes — dispara em PARALELO (a 1ª pintura espera 1 round-trip,
+  // não a soma de 5). Cada uma degrada sozinha; só API.settings() propaga p/ o catch do router.
+  const [s, provsRes, integRes, igRes, contentRes] = await Promise.all([
+    API.settings(),
+    API.providers().catch(() => ({ providers: [] })),
+    API.integrations().catch(() => ({ integrations: [] })),
+    API.publishStatus().catch(() => ({ instagram: {} })),
+    API.content().catch(() => ({ tasks: [] })),
+  ]);
   State.settings = s;
-  let provs = [];
-  try { provs = (await API.providers()).providers || []; } catch (e) { /* mostra so o card Claude */ }
+  const provs = (provsRes && provsRes.providers) || [];
   const oai = provs.find((p) => p.id === "openai") || {};
   const defProv = (provs.find((p) => p.is_default) || {}).id || "anthropic";
-  let integ = [];
-  try { const ri = await API.integrations(); integ = (ri && ri.integrations) || []; } catch (e) { integ = []; }
-  let ig = {};
-  try { ig = (await API.publishStatus()).instagram || {}; } catch (e) { ig = {}; }
+  const integ = (integRes && integRes.integrations) || [];
+  const ig = (igRes && igRes.instagram) || {};
   const tav = integ.find((x) => x.id === "tavily") || {};
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
@@ -3150,7 +3189,7 @@ async function viewSettings() {
     { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido/econômico)" },
   ];
   const tagCounts = {};
-  try { (((await API.content().catch(() => ({}))).tasks) || []).forEach((t) => (t.tags || []).forEach((tg) => { tagCounts[tg] = (tagCounts[tg] || 0) + 1; })); } catch (e) {}
+  ((contentRes && contentRes.tasks) || []).forEach((t) => (t.tags || []).forEach((tg) => { tagCounts[tg] = (tagCounts[tg] || 0) + 1; }));
   const tagNames = Object.keys(tagCounts).sort((a, b) => a.localeCompare(b));
   const tagRows = tagNames.length
     ? tagNames.map((tg) => `<div class="tagman-row"><span class="cc-tag">${esc(tg)}</span><span class="hint">${plural(tagCounts[tg], "peça", "peças")}</span><button class="btn btn-sm btn-danger" data-deltag="${esc(tg)}">Excluir</button></div>`).join("")
@@ -3229,8 +3268,8 @@ async function viewSettings() {
       <p class="hint mt">A chave você pega em tavily.com (painel da conta). Só administradores configuram.</p>
     </div>
     <div class="card mt" style="max-width:660px">
-      <h3>Outras integrações</h3>
-      <p class="muted mt">Serviços configurados direto no servidor (no arquivo <span class="codeblock">interface/.env</span>) — aqui aparece só o status, nunca os valores. Claude, ChatGPT, Instagram e Tavily têm cartões próprios acima, com o token/chave de cada um.</p>
+      <div class="flex-between"><h3>Outras integrações</h3><button class="btn btn-sm" id="cred-add">Inserir credenciais</button></div>
+      <p class="muted mt">Serviços que ainda se configuram no servidor. Se quiser <strong>conectar um deles pelo painel</strong>, clique em “Inserir credenciais”. Claude, ChatGPT, Instagram e Tavily têm cartões próprios acima, com o token/chave de cada um. Aqui aparece só o status, nunca os valores.</p>
       ${(() => {
         const rest = integ.filter((it) => !["anthropic", "openai", "tavily", "instagram"].includes(it.id));
         if (!rest.length) return '<p class="muted mt">Nenhuma outra integração no momento.</p>';
@@ -3309,6 +3348,7 @@ async function viewSettings() {
     try { const r = await API.testTavily(); out.textContent = "Funcionando (" + (r.results || 0) + " resultado(s))."; toast("Tavily respondeu.", "ok"); }
     catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
   };
+  if ($("#cred-add")) $("#cred-add").onclick = openCredentialsModal;
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");
   const saveKeyBtn = $("#s-save-key");
@@ -3991,10 +4031,16 @@ async function boot() {
   setupScheme();
   setupMenu();
   setupBack();
-  try { State.meta = await API.meta(); } catch (e) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   setupAssistant();
   setupLightbox();
-  await refreshKeyStatus();
+  // meta e settings (via refreshKeyStatus) são independentes — busca em PARALELO antes do
+  // 1º render. settings continua resolvido pré-router (o dashboard usa State.settings p/ o aviso de chave).
+  let metaFail = false;
+  await Promise.all([
+    API.meta().then((m) => { State.meta = m; }).catch(() => { metaFail = true; }),
+    refreshKeyStatus(),
+  ]);
+  if (metaFail) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   window.addEventListener("hashchange", router);
   window.addEventListener("auth:expired", onAuthExpired);
   router();

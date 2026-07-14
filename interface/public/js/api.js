@@ -30,6 +30,8 @@ const API = (() => {
     // Tavily (pesquisa de mercado)
     saveTavilyKey: (key) => req("POST", "/api/settings/tavily-key", { key }),
     testTavily: () => req("POST", "/api/settings/tavily-test"),
+    // credenciais de integração inseridas pelo painel (admin) — grava em data/, nunca volta o valor
+    saveCredential: (name, value) => req("POST", "/api/settings/credential", { name, value }),
     // provedores de IA (multi-IA: Claude / ChatGPT / ...)
     providers: () => req("GET", "/api/settings/providers"),
     saveProviderKey: (provider, key) => req("POST", "/api/settings/provider/key", { provider, key }),
@@ -67,9 +69,7 @@ const API = (() => {
     // historico de versoes (desfazer/restaurar)
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
-    saveContent: (folder, rel, content) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/content", { rel, content }),
     saveEditedHtml: (folder, rel, html) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/edit-html", { rel, html }),
-    taskHtml: (folder, rel) => fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent(rel)).then((r) => r.text()),
     // publicação (Instagram)
     publishStatus: () => req("GET", "/api/publish/status"),
     savePublishConfig: (cfg) => req("POST", "/api/publish/config", cfg),

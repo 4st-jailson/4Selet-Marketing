@@ -1,8 +1,8 @@
 # Status do Projeto — Sistema de Marketing com IA (4Selet)
 
-*Atualizado em 2026-06-12 · Marca: 4Selet · Painel web (interface principal) + Pipeline executável + 7 skills + Workflow de Aprovação Níveis 1/2*
+*Atualizado em 2026-07-13 · Marca: 4Selet · Painel web (interface principal, em produção) + Pipeline executável + 7 skills + Workflow de Aprovação Níveis 1/2*
 
-> **Resumo:** O **Painel web** (`interface/`, `http://localhost:4500`) é a **interface principal** de operação — campanhas, geração de conteúdo com IA, refino e workflow de aprovação visual; a extensão Claude Code no VSCode é o caminho **secundário/avançado**. O sistema de skills está **funcionalmente completo** (7 skills); o **pipeline executável** (`pipeline/`, sequencial + BullMQ) foi **entregue** (commit e787dc7); e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.1)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). A geração do painel exige a **chave Anthropic** configurada; pesquisa, hosting de mídia e publicação rodam em **modo simulado** porque as chaves externas (Tavily, Supabase, Redis, OAuth) ainda não foram configuradas. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados.
+> **Resumo:** O **Painel web** (`interface/`, `http://localhost:4500` local · **`https://mkt.4st.co` em produção**) é a **interface principal** de operação — campanhas, geração de conteúdo com IA (Claude e ChatGPT), refino, editor visual de arte, prévia no celular, coleções e workflow de aprovação visual; a extensão Claude Code no VSCode é o caminho **secundário/avançado**. O sistema de skills está **funcionalmente completo** (7 skills); o **pipeline executável** (`pipeline/`, sequencial + BullMQ) foi **entregue** (commit e787dc7); e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.1)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). A geração usa **chave Anthropic e/ou OpenAI** configuradas no painel (multi-provedor). A **pesquisa ao vivo via Tavily** está integrada ao painel (chave inserida em *Configurações*), e a **publicação no Instagram feed** é real (Graph API, atrás do gate de aprovação, com agendamento). Hosting de mídia em Supabase e publicação no YouTube seguem pendentes. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados. **Deploy em produção ATIVO** — `https://mkt.4st.co` (Docker Compose: painel + Caddy, HTTPS, login único).
 
 ---
 
@@ -17,11 +17,13 @@
 | Playwright + Chromium | ✅ Instalado (HTML→PNG funcional) |
 | `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore` | ✅ Presentes |
 | **`pipeline/` (orchestrator + worker + agents)** | ✅ **Entregue** (sequencial + BullMQ, commit e787dc7) |
-| **Chave Anthropic (painel)** | ⚠️ Configurar em *Configurações* (`interface/.env`) — sem ela, geração simulada |
-| Tavily (`@tavily/core`) | ⏳ Não instalado / sem `TAVILY_API_KEY` |
+| **Deploy em produção** | ✅ **Ativo** — `https://mkt.4st.co` (Docker Compose: painel + Caddy, HTTPS, login único) |
+| **Chave de IA no painel (multi-provedor)** | ⚠️ Configurar em *Configurações* (Claude/Anthropic e/ou ChatGPT/OpenAI) — sem ela, geração simulada |
+| **Tavily (pesquisa ao vivo no painel)** | ✅ **Integrado** — chave inserida em *Configurações* (grava em `interface/data/tavily.json`); opt-in por geração |
+| **Publicação no Instagram feed** | ✅ **Real** (Graph API, atrás do gate + agendamento); token/ID configurados em *Configurações* (admin) |
 | Supabase (`@supabase/supabase-js`) | ⏳ Não instalado / sem `SUPABASE_URL`+`KEY` |
 | BullMQ + Redis | ✅ `pipeline/` pronto · ⏳ falta `REDIS_URL` (roda sequencial sem ele) |
-| OAuth YouTube / token Instagram | ⏳ Não configurado |
+| OAuth YouTube | ⏳ Não configurado (publicação no YouTube não existe no painel) |
 
 ---
 
@@ -94,17 +96,44 @@ Aplicação web local (Express + SPA vanilla, tema 4Selet) que é o **caminho pr
 
 Entregue (commit e787dc7): `orchestrator.js` (enqueue/plano), `worker.js` (processamento) e `agents.js`. Roda **sequencial por padrão**; com `REDIS_URL` ativa a **fila BullMQ** assíncrona.
 
+### 2.8 Autenticação multi-usuário do painel (`interface/lib/auth.js`)
+
+Login por pessoa substituindo a "portaria" externa. **Contas individuais** (arquivo `interface/data/users.json`), senha com hash **scrypt** (nativo do Node), sessão por **cookie httpOnly assinado (HMAC)** com validade de 12h. **Papéis:** `admin` (usa o painel e gerencia usuários) e `membro` (só usa o painel). **Convite por magic-link** (`createInvite`/`acceptInvite`, token de uso único guardado como hash SHA-256, expira em 7 dias). **Senha obrigatória no 1º acesso** (`must_change_password`) — enforçada no back (`server.js` bloqueia tudo, exceto `/api/auth/*`, até a pessoa definir a própria senha). Troca/reset de senha derruba sessões antigas (`session_epoch`).
+
+### 2.9 Multi-provedor de IA (`interface/lib/ai.js`)
+
+Dispatcher que escolhe o adaptador **por chamada** (vindo da tela de geração) ou pelo **padrão** (`AI_PROVIDER`, controlado em *Configurações*). Dois provedores registrados: **Claude (Anthropic)** (`interface/lib/anthropic.js`) e **ChatGPT (OpenAI)** (`interface/lib/openai.js`). O painel exibe qual provedor respondeu e mostra o status de cada chave. Extensível — somar outro provedor é criar o adaptador e registrar em `ADAPTERS`.
+
+### 2.10 Pesquisa de mercado ao vivo — Tavily (`interface/lib/research.js`)
+
+Pesquisa **ao vivo** via Tavily integrada à geração do painel. **Opt-in** (só roda quando a geração pede, `research === true`), consulta 3 focos (tendências, mercado, hooks de anúncio) e injeta a inteligência no prompt. A **chave é inserida no próprio painel** (*Configurações*) e gravada em `interface/data/tavily.json` (volume gravável, fora do git); `saveKey`/`testKey` disponíveis. **Degrada com elegância:** sem chave ou sem o SDK `@tavily/core`, retorna `{ available:false }` e a geração segue sem o bloco de inteligência de mercado.
+
+### 2.11 Publicação no Instagram feed — real, atrás do gate (`interface/lib/publish.js` + `interface/routes/publish.js`)
+
+Publicação **real** no Instagram feed via **Graph API v21.0** — **imagem única** e **carrossel**. Integrada ao **gate de aprovação (R5)**: só publica peça na zona `approved` **e** com os `content_hashes` batendo em runtime (`assertApproved`); qualquer edição pós-aprovação bloqueia. Token e ID da conta ficam em `interface/data/publish.json` (0600, fora do git) e **nunca** vão ao front nem ao log; a imagem é servida à Meta por um **link público temporário** que expira (`interface/lib/media_tokens.js`). Configuração (token/ID) é **só admin**; `testConnection` valida o token e descobre a conta IG Business pela Página ligada. **Agendamento** (`interface/lib/schedule.js`): a peça aprovada pode ser agendada e um worker em segundo plano publica no horário, passando pelo mesmo gate. **DRY-RUN por padrão** enquanto o Instagram não estiver conectado (prepara tudo e publica nada).
+
+### 2.12 Editor visual de arte, prévia no celular e coleções (painel)
+
+- **Editor visual de arte** — o painel permite ajustar a arte diretamente (edição do HTML real da peça no iframe do editor, com área segura e guias); há também **"Ajustar com IA"**, que aceita descrição do que mudar e imagens de referência (a IA "vê" via visão). Sidecars do editor (`*.canvas.json` / `*.editable.json`) não são entregáveis.
+- **Prévia no celular** — mockup de smartphone que mostra a peça (imagem ou vídeo) como o público veria no feed.
+- **Coleções** — agrupamento de peças (`interface/routes/collections.js` + `interface/lib/collections.js`): a coleção guarda só identificadores de peças em ordem, resolvidos contra o estado real das tasks; referências órfãs são ignoradas na leitura, com capa configurável.
+
+### 2.13 Deploy em produção (`https://mkt.4st.co`)
+
+Painel **em produção e ATIVO** em `https://mkt.4st.co` — **Docker Compose** (serviços: painel + **Caddy** como proxy reverso, HTTPS). **Login único** pelo próprio painel (a portaria externa `basic_auth` do Caddy foi removida; a autenticação é a do §2.8). O painel expõe `/api/health` para monitoramento/auto-restart e trata encerramento limpo (SIGTERM/SIGINT) para rodar sob supervisor.
+
 ---
 
 ## 3. Pendente / Level-up
 
 | # | Pendência | Impacto | Como resolver |
 |---|---|---|---|
-| 0 | ~~**Chave Anthropic no painel**~~ | ✅ **Configurada** (verificado 2026-06-15: `/api/settings` `has_key:true`, `/api/health` `ai_key:true`) — painel em **modo real** | — concluído |
+| 0 | ~~**Chave de IA no painel (multi-provedor)**~~ | ✅ **Configurável** — painel roda em **modo real** com Claude (Anthropic) e/ou ChatGPT (OpenAI); dispatcher em `interface/lib/ai.js` | — concluído |
 | 1 | **`REDIS_URL` para a fila BullMQ** | A `pipeline/` **já existe** (entregue) mas roda **sequencial** sem Redis | Provisionar Redis (Upstash) + setar `REDIS_URL` + `npm run pipeline:run` — **passo a passo no §7.2** |
-| 2 | **`TAVILY_API_KEY` ausente** | Research é simulado | `npm i @tavily/core` + setar a chave — **passo a passo no §7.1** |
+| 2 | ~~**Pesquisa ao vivo (Tavily)**~~ | ✅ **Entregue no painel** (`interface/lib/research.js`) — chave inserida em *Configurações* (`interface/data/tavily.json`), opt-in por geração, degrada para simulado sem a chave | — concluído |
 | 3 | **Supabase não configurado** | Mídia não é hospedada (URLs placeholder) | `npm i @supabase/supabase-js` + `SUPABASE_URL`/`KEY` — *adiado por decisão do Hugo (2026-06-15)* |
-| 4 | **OAuth YouTube / token Instagram** | Publicação real impossível | Configurar `YOUTUBE_REFRESH_TOKEN` + IG Graph token — *adiado: sem publicação automática por ora (Hugo, 2026-06-15)* |
+| 4a | ~~**Publicação no Instagram feed**~~ | ✅ **Real** (Graph API v21.0, imagem + carrossel) atrás do gate de aprovação (R5), com agendamento — `interface/lib/publish.js` + `interface/routes/publish.js` | — concluído |
+| 4b | **OAuth YouTube** | Publicação no YouTube impossível | Publicação no YouTube **ainda não existe** no painel (só há aba de diagnóstico em *Configurações*); implementar rota/lib + `YOUTUBE_REFRESH_TOKEN` |
 | 5 | **Estado `published` no enum** | Não há transição terminal "campanha foi ao ar" | Adicionar `published` ao enum + transição manual em `promote_task.js` |
 | 6 | **Lock multi-usuário concorrente em `status.json`** | Race em execuções simultâneas de `promote_task.js` na mesma task | `proper-lockfile` por task_dir |
 | 7 | **Skills não empacotadas p/ distribuição** | Arquivos no repo, não `.zip` instaláveis | Zipar cada pasta de skill se for distribuir |
@@ -177,10 +206,10 @@ node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
 
 ## 6. Próximos passos recomendados
 
-1. **Configurar a chave Anthropic no painel** (*Configurações*) — liga a geração real; é o passo mais imediato para o uso diário.
-2. **Ativar a fila BullMQ** — `pipeline/` já está pronto; basta provisionar `REDIS_URL` para sair do modo sequencial.
-3. **Configurar demais chaves externas** para sair do modo simulado: Tavily → Supabase → OAuth YouTube + IG.
-4. **Validar caminhos reais** (busca Tavily, upload Supabase) com tasks de teste rotuladas.
+1. **Configurar a chave de IA no painel** (*Configurações* — Claude/Anthropic e/ou ChatGPT/OpenAI) — liga a geração real; é o passo mais imediato para o uso diário.
+2. **Fazer o 1º post de teste real no Instagram** — a publicação já é real e o feed está conectado; validar uma peça aprovada de ponta a ponta (imagem e carrossel).
+3. **Ativar a fila BullMQ** — `pipeline/` já está pronto; basta provisionar `REDIS_URL` para sair do modo sequencial.
+4. **Configurar chaves externas restantes** para sair do modo simulado: Supabase (hosting de mídia) → OAuth YouTube (quando houver publicação no YouTube). *(Tavily e Instagram feed já entregues.)*
 5. **Lock multi-usuário** em `status.json` se evoluir para multi-operador.
 6. **Estado `published`** para registrar publicação efetiva (Nível 3 — já há webapp/painel).
 
@@ -188,20 +217,13 @@ node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
 
 ## 7. Passo a passo das integrações pendentes (escopo atual)
 
-*Decisão do Hugo (2026-06-15): por ora **não** haverá publicação automática (item 4) nem hospedagem em Supabase (item 3). Os dois itens abaixo — Tavily e Redis — são os únicos no escopo.*
+*Atualização 2026-07-13: **Tavily** (pesquisa ao vivo) e **Instagram feed** (publicação real) foram **entregues** e saíram desta lista de pendências — a chave da Tavily agora é inserida **no próprio painel** (*Configurações*), não mais por variável de ambiente. Permanecem no escopo pendente apenas **Redis** (opcional, abaixo), **Supabase** (item 3) e **OAuth YouTube** (item 4b).*
 
-> **Onde as variáveis moram.** O `interface/.env` é lido **só pelo painel** e só para `ANTHROPIC_API_KEY` e `MODEL`. Os scripts de pipeline/skills leem `process.env` **diretamente** (não há `dotenv` no projeto). Logo, `TAVILY_API_KEY`, `REDIS_URL` e afins precisam existir no **ambiente real do processo**: no **PM2** (recomendado — `pm2 set painel-4selet:VAR "valor"` ou via `ecosystem.config.js`) ou exportados no shell antes de rodar o comando.
->
-> **Status das libs (2026-06-15):** nenhuma instalada ainda — `bullmq`, `ioredis`, `@tavily/core` ausentes do `package.json`.
+> **Onde as variáveis moram.** O `interface/.env` é lido **só pelo painel** (chaves de IA e afins). A chave da **Tavily** e as credenciais do **Instagram** são gravadas pelo painel em `interface/data/` (`tavily.json`, `publish.json`), fora do git. Os scripts de pipeline/skills leem `process.env` **diretamente**. Logo, `REDIS_URL` e afins precisam existir no **ambiente real do processo**: no **PM2** (`pm2 set painel-4selet:VAR "valor"` ou via `ecosystem.config.js`) ou exportados no shell antes de rodar o comando.
 
-### 7.1 Tavily — pesquisa de mercado real (`TAVILY_API_KEY`) — *recomendado*
+### 7.1 Tavily — pesquisa de mercado ao vivo — ✅ *entregue*
 
-**Finalidade:** dá **pesquisa de mercado real** ao Marketing Research Agent (tendências, concorrentes, hooks, tópicos virais). Sem a chave, o research roda **simulado** (dados rotulados `_simulated: true`). É o item de maior ganho no dia a dia.
-
-1. Criar conta em **tavily.com** → *API Keys* → gerar chave (`tvly-…`).
-2. Instalar a lib: `npm i @tavily/core`
-3. Definir a variável: `pm2 set painel-4selet:TAVILY_API_KEY "tvly-…"` (ou `export` no shell antes de rodar).
-4. **Testar:** `node skills/marketing-research-agent/scripts/research.js --task teste --date 2026-06-15 --topic "taxa zero pagamentos" --out outputs/teste_tavily_2026-06-15` — **não** deve aparecer `TAVILY_API_KEY ausente -> modo SIMULADO`.
+**Finalidade:** dá **pesquisa de mercado ao vivo** à geração do painel (tendências, mercado, hooks de anúncio). **Já integrada** (`interface/lib/research.js`): a chave é inserida em *Configurações* e gravada em `interface/data/tavily.json`; a pesquisa é **opt-in** por geração e **degrada para simulado** sem a chave ou sem o SDK `@tavily/core`. (Passo antigo por `TAVILY_API_KEY` no ambiente permanece válido como fallback, mas o caminho recomendado é o painel.)
 
 ### 7.2 Redis — fila BullMQ assíncrona (`REDIS_URL`) — *opcional*
 
@@ -214,4 +236,4 @@ node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
 5. Subir o worker num processo separado: `node pipeline/worker.js`
 6. **Testar:** ao rodar `npm run pipeline:run`, o log deve dizer `queued (BullMQ+Redis)` em vez de `sequential (sem Redis)`.
 
-> **Itens fora do escopo atual (adiados):** Supabase (§3 item 3) e OAuth YouTube/IG (§3 item 4) permanecem documentados na tabela, mas **não** serão configurados neste momento. A trava de segurança permanece válida: o pipeline **nunca publica sozinho** — exige referência explícita ao Publish MD, `dry_run:false`, tokens presentes e gate de aprovação (R5).
+> **Itens fora do escopo atual (adiados):** Supabase (§3 item 3) e OAuth YouTube (§3 item 4b) permanecem documentados na tabela, mas **não** serão configurados neste momento. **Instagram feed já foi entregue** (§2.11 / §3 item 4a). A trava de segurança permanece válida: a publicação **nunca ocorre sozinha fora do gate** — a peça precisa estar `approved` com `content_hashes` íntegros em runtime (gate R5), e o Publish MD do pipeline continua exigindo referência explícita, `dry_run:false` e tokens presentes.

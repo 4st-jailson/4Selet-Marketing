@@ -798,11 +798,6 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .create-result { position: sticky; top: 92px; align-self: start; }
 .create-lead { font-size: 13px; line-height: 1.5; margin: 3px 0 2px; }
 
-/* ---- saída de geração ---- */
-.gen-out { margin-top: var(--s4); }
-.slide-card { background: var(--surface-2); border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); border-radius: var(--r-sm); padding: 11px 14px; margin-bottom: 8px; }
-.sc-title { font-weight: 700; font-size: 13.5px; margin-bottom: 3px; }
-.sc-body { font-size: 13px; color: var(--text-2); white-space: pre-wrap; }
 .gov-head { font-size: 12.5px; font-weight: 600; color: var(--text-2); margin-top: var(--s5); }
 .gov-head .hint { font-weight: 400; }
 .gov { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
@@ -827,8 +822,6 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .media-frame { position: relative; width: 100%; border-radius: var(--r-sm); overflow: hidden; background: var(--thumb-bg); border: 1px solid var(--border-soft); }
 .media-frame img, .media-frame video { width: 100%; display: block; cursor: zoom-in; }
 .media-zoom { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border: none; border-radius: var(--r-sm); cursor: pointer; font-size: 14px; background: rgba(6,20,27,.6); color: #fff; backdrop-filter: blur(4px); }
-.file-frame { width: 100%; height: 480px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: #fff; }
-
 /* ---- empty / loading ---- */
 .empty { text-align: center; color: var(--text-dim); font-size: 14px; padding: var(--s8) var(--s5); border: 1px dashed var(--border); border-radius: var(--r); background: var(--surface-2); }
 .empty a { font-weight: 600; }

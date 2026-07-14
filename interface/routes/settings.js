@@ -7,6 +7,7 @@ const router = express.Router();
 const ai = require("../lib/anthropic");
 const aihub = require("../lib/ai"); // multi-provedor (Claude / OpenAI / ...)
 const research = require("../lib/research");
+const credentials = require("../lib/credentials");
 const { PATHS } = require("../lib/config");
 
 router.get("/", (req, res) => {
@@ -110,6 +111,18 @@ router.post("/tavily-key", (req, res) => {
 router.post("/tavily-test", async (req, res) => {
   const r = await research.testKey();
   res.status(r.ok ? 200 : 400).json(r);
+});
+
+// --- Inserir credencial de integração (SOMENTE admin) — grava em data/credentials.json
+// (o .env é read-only em prod). Vale já pra quem lê process.env; algumas integrações
+// (ex.: fila Redis) só conectam no próximo restart. NUNCA retorna o valor. ---
+router.post("/credential", (req, res) => {
+  if (!req.user || req.user.role !== "admin") return res.status(403).json({ error: "Apenas administradores podem inserir credenciais." });
+  try {
+    const { name, value } = req.body || {};
+    credentials.saveCred(name, value);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // --- Multi-provedor de IA: listar/configurar Claude, ChatGPT (e futuros) ---

@@ -14,6 +14,14 @@ npm start          # → http://localhost:4500
 
 Configure a **chave Anthropic** em *Configurações* no painel (gravada em `interface/.env`). Sem ela, a geração roda em **modo simulado**. Em produção local o painel roda como serviço via **PM2** (`pm2 restart painel-4selet`).
 
+O painel também oferece:
+
+- **Login por usuário** — cada pessoa entra com conta própria. Novos usuários são criados pelo admin, que envia um **link de convite** (uso único) para a pessoa definir a própria senha. Há dois **perfis**: `admin` (usa o painel e gerencia usuários) e `membro` (só usa o painel).
+- **Mais de um provedor de IA** — além do Claude (Anthropic), o painel também fala com o **ChatGPT (OpenAI)**. Você escolhe o provedor padrão em *Configurações* e pode trocar por geração; cada provedor tem sua própria chave.
+- **Pesquisa de mercado ao vivo (opcional)** — com uma chave **Tavily** configurada, dá para ligar a pesquisa de mercado **por peça** na hora de gerar, enriquecendo o conteúdo com dados atuais. Sem a chave (ou desligada), a geração segue normalmente.
+- **Editor visual da arte + prévia no celular** — edite a arte gerada direto no painel e veja um **mockup de smartphone** mostrando como a peça apareceria para o público.
+- **Publicação e agendamento no Instagram (feed)** — publique ou agende peças **aprovadas** no Instagram, sempre atrás do **gate de aprovação** (só publica peça na zona `approved` com os hashes de conteúdo batendo). Enquanto o Instagram não está conectado, roda em **modo simulado**.
+
 ## Caminho secundário — Extensão Claude Code (VSCode)
 
 Chat direto com os agentes, pipeline executável e scripts. As **7 skills** ficam em `skills/` (5 agentes + orchestrator + task-promoter).

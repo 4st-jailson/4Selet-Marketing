@@ -133,7 +133,7 @@ O painel roda numa **VPS Windows**. Para operá-lo, primeiro você entra na VPS 
 > O **endereço, o usuário e a senha** da VPS são fornecidos por quem a provisionou. Guarde com segurança — **nunca** os coloque em commits, prints ou mensagens. Se suspeitar de vazamento, troque a senha no painel do provedor.
 
 > [!TIP]
-> O painel também responde pela rede no IP da VPS (`http://<IP-da-VPS>:4500`) — útil para abrir do seu próprio navegador sem entrar via RDP. Isso exige a porta `4500` liberada no firewall; como o painel não tem login próprio, o caminho mais seguro continua sendo **RDP + `localhost`**.
+> O painel também responde pela rede no IP da VPS (`http://<IP-da-VPS>:4500`) — útil para abrir do seu próprio navegador sem entrar via RDP. Isso exige a porta `4500` liberada no firewall. O painel **tem login próprio** (usuário e senha por pessoa — ver Seção 4.5), então o acesso pela rede já é protegido; ainda assim, restringir o bind a `localhost` (variável `HOST=127.0.0.1` no `interface/.env`) é uma camada extra de defesa quando você só opera via RDP.
 
 > [!NOTE]
 > Se o painel não abrir, ele pode ter caído após um reboot da VPS. Confira e suba de novo com `pm2 list` e `pm2 resurrect` (ver Seção 14 — Resolução de problemas).
@@ -168,20 +168,45 @@ Abra `http://localhost:4500` no navegador.
 
 ### 4.3 Configurar a chave da IA
 
-Sem chave, a geração funciona em **modo simulado** (conteúdo rotulado, sem custo). Para gerar com IA real:
+Sem chave, a geração funciona em **modo simulado** (conteúdo rotulado, sem custo). O painel suporta **dois provedores de IA** — **Claude (Anthropic)** e **ChatGPT (OpenAI)** — e cada um tem seu próprio cartão em **Configurações**. Para gerar com IA real:
 
 1. No painel, abra **Configurações**.
-2. Cole a chave da Anthropic (`sk-ant-...`) e salve.
-3. Use **Testar chave** para confirmar a conexão.
+2. No cartão do provedor desejado (Claude ou ChatGPT), cole a **chave** e salve.
+3. Escolha o **modelo** e use **Testar** para confirmar a conexão.
+4. Marque um dos provedores como **padrão** — é ele que será usado quando você não escolher outro na hora de gerar.
 
-A chave fica gravada em `interface/.env` (arquivo local, fora do controle de versão). O modelo padrão é `claude-sonnet-4-6` e pode ser trocado em Configurações.
+Cada chave fica gravada em `interface/.env` (arquivo local, fora do controle de versão). Você pode configurar **os dois** provedores e, na tela de gerar, escolher qual usar **por peça** (ver Seção 6.3). Se só um estiver configurado, ele é usado sempre.
+
+> [!NOTE]
+> Não é obrigatório configurar os dois. Comece com um provedor; o outro pode ser ativado depois. Sem nenhuma chave, a geração roda simulada.
 
 > [!CAUTION]
-> A chave dá acesso de cobrança à API. Nunca a compartilhe nem a inclua em commits. Se suspeitar de exposição, revogue-a no console da Anthropic e gere uma nova.
+> A chave dá acesso de cobrança à API do provedor. Nunca a compartilhe nem a inclua em commits. Se suspeitar de exposição, revogue-a no console do provedor (Anthropic ou OpenAI) e gere uma nova.
 
 ### 4.4 Extensão Claude Code (avançado)
 
 Para o caminho secundário, abra o projeto no VSCode com a extensão Claude Code. Você conversa direto com os agentes e roda os scripts e o pipeline descritos na Seção 11.
+
+### 4.5 Contas e acesso
+
+O painel **tem login próprio**: cada pessoa entra com **usuário e senha próprios**, e a sessão é validada em todas as rotas do painel. Há dois papéis:
+
+| Papel | O que pode fazer |
+| --- | --- |
+| **Admin** | Tudo do membro **mais**: configurar as chaves de IA, **conectar o Instagram**, inserir credenciais de integração e **gerenciar usuários** (criar, convidar, trocar papel, remover). |
+| **Membro** | Operar o painel no dia a dia: criar, revisar, aprovar peças e publicar/agendar as aprovadas. Não vê a área de Usuários nem configura integrações. |
+
+**Como as contas nascem**
+
+- **Primeiro admin:** criado automaticamente no primeiro start, a partir de `ADMIN_USERNAME` e `ADMIN_PASSWORD` do `interface/.env`. Se a senha não estiver definida, o sistema gera uma aleatória e a mostra **uma vez** no log do servidor (troque-a após o primeiro login).
+- **Novas pessoas:** um admin cria a conta e gera um **convite por link (magic-link)**. O link vale **7 dias** e é de **uso único** — ao abri-lo, a pessoa define a **própria senha** e já entra.
+- **Troca de senha no 1º acesso:** contas novas (e senhas resetadas por um admin) exigem definir uma nova senha antes de usar qualquer função do painel.
+
+> [!NOTE]
+> A área **Usuários** (Seção 6.9) aparece **só para admins**. Membros não a enxergam.
+
+> [!TIP]
+> Trocar a senha (ou o papel) de alguém derruba as sessões antigas daquela conta — a pessoa precisa entrar de novo. É o esperado.
 
 ---
 
@@ -189,7 +214,7 @@ Para o caminho secundário, abra o projeto no VSCode com a extensão Claude Code
 
 Sua primeira peça em poucos minutos:
 
-1. **Configurações** — confirme que a chave está conectada (Seção 4.2). Sem ela, a peça sai simulada.
+1. **Configurações** — confirme que a chave de IA está conectada (Claude ou ChatGPT — Seção 4.3). Sem nenhuma, a peça sai simulada.
 2. **Campanhas** — crie uma campanha (ou pule e gere uma peça avulsa).
 3. **Criar Conteúdo** — escolha o tipo (ex.: *Feed Instagram*), escreva um briefing curto e claro do tema, e opcionalmente preencha **Referência visual / mood**.
 4. **Gerar com IA** — revise o resultado no editor; ajuste o texto ou use **Aplicar ajuste** para refinar com IA.
@@ -219,7 +244,9 @@ Crie uma campanha para agrupar peças sob um mesmo tema/ângulo. As peças gerad
 2. Escreva o **briefing** (mínimo de alguns caracteres; quanto mais específico, melhor).
 3. Escolha o **pilar de conteúdo** — o eixo temático da peça (o feed não é só Taxa Zero): *Campanha Taxa Zero*, *Educacional*, *Curiosidade de mercado*, *Prova da plataforma*, *Novidade* ou *Motivacional / estratégico*. Deixe em *"a IA decide pelo tema da peça"* para a IA escolher sozinha pelo tema.
 4. Opcional: **Referência visual / mood** — descreve o clima e o estilo a evocar (sempre dentro da marca). Direciona o conceito visual da peça.
-5. **Gerar com IA**. O resultado aparece em um editor.
+5. Opcional: **Provedor de IA** — escolha entre **Claude** e **ChatGPT** (aparecem os que estiverem configurados em Configurações). Se não escolher, é usado o provedor **padrão**.
+6. Opcional: **Pesquisar o mercado na internet antes de gerar** — um toggle que, quando ligado, roda uma pesquisa de mercado ao vivo (via Tavily) sobre o tema e injeta esse contexto na geração. O resultado da peça mostra as **fontes** consultadas. Depende da chave Tavily configurada em Configurações (Seção 6.9); sem ela, a geração segue normalmente, só sem o bloco de pesquisa.
+7. **Gerar com IA**. O resultado aparece em um editor.
 
 > [!NOTE]
 > O conteúdo textual (Feed, LinkedIn, Threads) é editável diretamente como texto. Carrossel e Vídeo têm um **editor estruturado**: cada slide ou cena é um cartão com campos próprios, e você pode adicionar, remover e reordenar os itens.
@@ -235,6 +262,18 @@ Crie uma campanha para agrupar peças sob um mesmo tema/ângulo. As peças gerad
 > [!TIP]
 > A prévia usa o mesmo motor de renderização da mídia final (Seção 12), então o que você vê é fiel ao PNG que será gravado ao salvar.
 
+**Editor visual da arte (peças visuais).** Além de editar o texto, você pode abrir um **editor visual** que trabalha sobre o **HTML real da peça** — o que você move na tela é exatamente o que vai para o PNG. Recursos:
+
+- **Arrastar e redimensionar** textos, imagens, ícones e logos direto no palco; **duplicar**, ajustar **opacidade**, **girar** e **espelhar**.
+- **Mover blocos inteiros** (botão **Grupo**) para reposicionar um conjunto de elementos de uma vez, em vez de item a item.
+- **Zoom** no palco e **encaixe inteligente (snap)** às bordas e centros dos outros elementos e do quadro (segure `Ctrl` ao arrastar para desligar o encaixe).
+- **Grade, guias de centro e zonas seguras** do Instagram, para não deixar nada importante perto das bordas.
+- **Camadas** (trazer para frente / enviar para trás), **alinhar/centralizar**, **efeitos** (sombra, contorno, caixa de fundo) e **filtros** de imagem (brilho, contraste, saturação, preto e branco).
+- **Conta-gotas** para pegar uma cor da própria arte e **blocos de marca** prontos (logo claro/escuro, símbolo "4", marca d'água, CTA de WhatsApp, rodapé @4selet, selo da campanha).
+- **Desfazer/refazer** e, ao concluir, **Salvar arte** — o painel re-renderiza a peça em PNG de forma fiel ao que você montou.
+
+**Prévia no celular.** O botão de **prévia no celular** abre um **mockup de smartphone** mostrando a peça como o público veria no Instagram. Ele alterna entre **Feed**, **Story** e **Reels** — as abas só aparecem quando existe mídia daquele formato (uma peça só de vídeo, por exemplo, mostra apenas Reels). É interativo: dá para **folhear o carrossel** e **tocar para avançar o story**. É apenas visualização — não altera a peça (curtidas e horário são ilustrativos).
+
 ### 6.5 Salvar e gerar a mídia
 
 Ao **Salvar na campanha**, a peça vira uma task. Para os tipos visuais, a mídia final é renderizada (Seção 12): imagem, feed e carrossel viram PNG; vídeo vira MP4.
@@ -244,6 +283,14 @@ Ao **Salvar na campanha**, a peça vira uma task. Para os tipos visuais, a mídi
 - **Preview** gera uma página de revisão e move a peça para *em revisão*.
 - **Aprovar** promove a peça (registra quem aprovou e quando, e calcula hashes de integridade).
 - **Descartar** arquiva a peça de forma reversível (vai para `outputs/_archived/`, nunca é apagada de imediato).
+
+**Publicar ou agendar (peça aprovada).** Uma vez **aprovada**, a peça ganha o botão **Publicar ou agendar** (para peças de imagem/carrossel). Aqui você só decide **quando** — não é uma nova aprovação. Duas opções:
+
+- **Publicar agora** — com o Instagram **conectado** (configuração feita por um admin em Configurações — ver Seção 6.9), a peça é publicada **de verdade** em `@4selet` (feed: imagem única ou carrossel) via Instagram Graph API. Sem a conta conectada, o botão vira **Simular agora**: o painel prepara tudo e não publica nada (dry-run).
+- **Agendar para depois** — escolha data e hora; a peça entra numa **fila** e um processo em segundo plano a publica no horário marcado (também simula, se o Instagram não estiver conectado). Agendamentos pendentes podem ser cancelados.
+
+> [!IMPORTANT]
+> Tanto **publicar** quanto **agendar** passam pelo **gate de aprovação** (Seções 10.4 e 13): a peça precisa estar aprovada e com os hashes de integridade batendo **no momento da publicação**. Se o conteúdo tiver mudado depois de aprovado, aquela peça não vai ao ar — sem bloquear as demais.
 
 ### 6.7 Biblioteca de conteúdo
 
@@ -266,7 +313,20 @@ Em **Aprovados**, a aba **Coleções** agrupa peças aprovadas em conjuntos cura
 
 ### 6.9 Configurações
 
-Chave da IA, modelo e **Aparência** (tema e cor de destaque do painel).
+A tela de Configurações reúne, em cartões, tudo que liga o painel ao mundo externo e a aparência:
+
+| Bloco | O que faz | Quem acessa |
+| --- | --- | --- |
+| **Claude (Anthropic)** | Chave + modelo + **Testar** do provedor Claude; pode ser marcado como padrão. | Todos |
+| **ChatGPT (OpenAI)** | Chave + modelo + **Testar** do provedor ChatGPT; pode ser marcado como padrão. | Todos |
+| **Pesquisa de mercado (Tavily)** | Chave + **Testar** da pesquisa ao vivo, usada pelo toggle "Pesquisar o mercado na internet antes de gerar" (Seção 6.3). | Todos |
+| **Publicação no Instagram** | Token e ID da conta para publicar em `@4selet`; **Testar conexão** valida com a Meta e descobre a conta. | **Só admin** |
+| **Outras integrações** | Status (conectado / não configurado) de Redis (fila), Supabase (hospedagem de mídia) e YouTube; botão **Inserir credenciais** grava a chave pelo painel. | Todos veem o status; inserir credencial é **só admin** |
+| **Aparência** | **Tema** (claro/escuro), **cor de destaque** e **esquema de cores** da interface — preferência local do seu navegador; não altera as cores das peças (a marca fica travada). | Todos |
+| **Usuários** | Criar contas, gerar convite (magic-link), trocar papel/senha e remover pessoas (Seção 4.5). | **Só admin** |
+
+> [!NOTE]
+> As chaves e tokens **nunca** voltam para a tela em texto claro — o painel mostra só um trecho mascarado e o status (configurado ou não).
 
 ---
 
@@ -276,7 +336,7 @@ O painel gera seis tipos, cada um com formato e mídia final próprios:
 
 | Tipo | Plataforma | Saída | Mídia final |
 | --- | --- | --- | --- |
-| Feed Instagram | Instagram | Texto (legenda + hashtags) | Texto |
+| Feed Instagram | Instagram | Imagem + legenda (hashtags) | PNG 1080×1350 + texto |
 | Carrossel Instagram | Instagram | Estruturado (slides) | PNG por slide |
 | Imagem / Anúncio | Instagram | Estruturado (layout) | PNG 2160×2160 (alta resolução) |
 | Vídeo (short-form) | Instagram | Estruturado (cenas) | MP4 |
@@ -409,6 +469,8 @@ Peças aprovadas não podem ser editadas no lugar. Para alterar, rode o rework (
 
 Antes de qualquer publicação real, o sistema exige um conjunto de condições (estado aprovado, hashes íntegros em tempo de execução, tokens presentes e confirmação explícita). Se qualquer condição falhar, aquela peça não é publicada — sem bloquear as demais.
 
+No painel, esse gate vale tanto ao **Publicar agora** quanto ao **Agendar** uma peça (Seção 6.6): o painel confere o estado aprovado e os hashes **no momento em que a peça vai ao ar**. Se o conteúdo tiver mudado depois de aprovado, o painel recusa aquela publicação e pede para reabrir e re-aprovar. Sem o Instagram conectado, a ação roda em modo **simulado** (dry-run) — o gate continua sendo verificado.
+
 ---
 
 ## 11. Caminho avançado
@@ -484,18 +546,22 @@ Todos seguem a paleta e a tipografia oficiais (logo claro sobre fundo escuro, es
 
 ## 13. Integrações externas
 
-Estas integrações são **opcionais**. Sem elas, os módulos correspondentes rodam em modo simulado e o painel continua funcionando normalmente.
+Estas integrações são **opcionais** (exceto ter ao menos um provedor de IA para gerar com IA real). Todas se configuram nos cartões de **Configurações** (Seção 6.9). Sem elas, os módulos correspondentes rodam em modo simulado e o painel continua funcionando normalmente.
 
 | Integração | Habilita | Status sem a chave |
 | --- | --- | --- |
-| Chave da Anthropic | Geração de conteúdo com IA real | Pendente — geração simulada |
-| Pesquisa (Tavily) | Pesquisa de mercado real | Pendente — pesquisa simulada |
-| Armazenamento (Supabase) | Hosting de mídia e URLs públicas | Pendente — hosting simulado |
-| Fila (Redis) | Pipeline assíncrono (fila) | Pendente — roda sequencial |
-| Publicação (Instagram / YouTube) | Publicação automática | Pendente — publicação assistida |
+| IA — Claude (Anthropic) e/ou ChatGPT (OpenAI) | Geração e refino de conteúdo com IA real | Geração simulada |
+| Pesquisa (Tavily) | Pesquisa de mercado ao vivo, ligada peça a peça pelo toggle "Pesquisar o mercado na internet antes de gerar" (Seção 6.3); mostra as fontes | Pesquisa simulada / geração sem o bloco de mercado |
+| Publicação (Instagram) | **Publicação real** no feed de `@4selet` (imagem única + carrossel) e agendamento, atrás do gate de aprovação | Roda em modo **simular** (dry-run) |
+| Armazenamento (Supabase) | Hosting de mídia e URLs públicas | Hosting simulado |
+| Fila (Redis) | Pipeline assíncrono (fila) | Roda sequencial |
+| Publicação (YouTube) | Publicação no YouTube via OAuth | Não disponível no painel |
 
 > [!TIP]
-> Comece só com a chave da Anthropic. As demais integrações podem ser ativadas depois, conforme a necessidade.
+> Comece só com um provedor de IA (Claude ou ChatGPT). As demais integrações — Tavily, Instagram, Supabase, Redis — podem ser ativadas depois, conforme a necessidade, cada uma no seu cartão em Configurações.
+
+> [!NOTE]
+> A publicação no Instagram é **real** quando a conta está conectada (configuração feita por um admin em Configurações): a peça aprovada vai ao ar no feed via Graph API, e o gate de aprovação (Seção 10.4) é verificado ao publicar **e** ao agendar. Sem conexão, a mesma ação apenas **simula**. A configuração da conta é restrita a admins.
 
 ---
 
@@ -503,7 +569,7 @@ Estas integrações são **opcionais**. Sem elas, os módulos correspondentes ro
 
 | Sintoma | Causa provável | O que fazer |
 | --- | --- | --- |
-| Conteúdo sai rotulado como "simulado" | Chave da IA não configurada | Configure a chave em Configurações (Seção 4.2). |
+| Conteúdo sai rotulado como "simulado" | Nenhuma chave de IA configurada | Configure a chave de um provedor (Claude ou ChatGPT) em Configurações (Seção 4.3). |
 | Geração mais lenta que o normal | Limite de requisições da API atingido (muitas chamadas em sequência) | O painel enfileira as chamadas e re-tenta sozinho com espera crescente — a geração fica **mais lenta**, mas conclui sem erro. Não clique de novo; aguarde. |
 | "Chave inválida" ao gerar | Chave incorreta ou revogada | Revise a chave em Configurações; gere uma nova se necessário. |
 | Ajuste bloqueado por regra de marca | A IA produziu algo fora das regras | Reescreva a orientação do ajuste e tente de novo. |
