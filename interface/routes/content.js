@@ -105,20 +105,20 @@ router.post("/:folder/discard", (req, res) => {
 });
 
 // Gera o preview.html oficial e promove draft -> in_review
-router.post("/:folder/preview", (req, res) => {
+router.post("/:folder/preview", async (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
-  const r = content.generatePreview(t.status.task_name, t.status.task_date);
+  const r = await content.generatePreview(t.status.task_name, t.status.task_date);
   res.status(r.ok ? 200 : 400).json(r);
 });
 
 // Transicao de estado (in_review/approved/rejected) via promote_task.js
-router.post("/:folder/promote", (req, res) => {
+router.post("/:folder/promote", async (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
   const { to, by, reason } = req.body || {};
   if (!to) return res.status(400).json({ error: "campo 'to' obrigatorio" });
-  const r = content.promote(t.status.task_name, t.status.task_date, to, by, reason);
+  const r = await content.promote(t.status.task_name, t.status.task_date, to, by, reason);
   res.status(r.ok ? 200 : 400).json(r);
 });
 

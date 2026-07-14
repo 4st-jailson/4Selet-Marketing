@@ -246,7 +246,7 @@ async function runPipeline(payload, opts) {
   // 1) garante a task (idempotente) — cria pasta + status.json (draft).
   log(`== pipeline ${folder} == (${contentTypes.length} peças)`);
   log("[setup] garantindo task (orchestrator.js)…");
-  const create = content.createTask({
+  const create = await content.createTask({
     task_name: taskName, task_date: taskDate, platforms, angle: payload.angle || null,
   });
   if (!create.ok) throw new Error("falha ao criar task: " + (create.stderr || create.stdout));
@@ -287,7 +287,7 @@ async function runPipeline(payload, opts) {
 
   // 5) preview_generator: gera preview.html + promove draft -> in_review
   log("[preview_generator] gerando preview + promovendo para in_review…");
-  const prev = content.generatePreview(taskName, taskDate);
+  const prev = await content.generatePreview(taskName, taskDate);
   if (prev.ok) log("  preview/in_review: ok");
   else log("  preview FALHOU: " + (prev.stderr || prev.stdout || "").slice(0, 200));
 

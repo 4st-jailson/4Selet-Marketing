@@ -210,7 +210,7 @@ router.post("/save", async (req, res, next) => {
 
     // 1) garante a task (orchestrator.js — idempotente)
     const angle = body.campaign_id ? (campaigns.get(body.campaign_id) || {}).angle : (body.angle || null);
-    const create = content.createTask({
+    const create = await content.createTask({
       task_name: body.task_name,
       task_date: body.task_date,
       platforms: body.platforms || (ct.platform ? [ct.platform] : ["instagram"]),

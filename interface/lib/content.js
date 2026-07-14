@@ -3,7 +3,7 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn } = require("child_process");
 const { PATHS, contentTypeById, CONTENT_PILLARS } = require("./config");
 
 const ZONES = [
@@ -16,19 +16,33 @@ function readJsonSafe(p) {
   try { return JSON.parse(fs.readFileSync(p, "utf8").replace(/^﻿/, "")); } catch (e) { return null; }
 }
 
-// Roda um script de scripts/ com cwd = raiz do projeto.
+// Roda um script de scripts/ (transicao de workflow) com cwd = raiz do projeto.
+// ASSINCRONO: antes usava spawnSync, que BLOQUEIA o event loop — cada Aprovar/Rejeitar/
+// Reabrir/Previa subia um processo Node sincrono e CONGELAVA o painel inteiro (health,
+// biblioteca, geracao, outros usuarios) ate terminar. Agora roda via spawn e o painel segue
+// respondendo. Fila LEVE e PROPRIA (_scriptChain): serializa as transicoes entre si (evita
+// corrida no status.json da mesma peca) SEM ficar atras dos renders pesados do render.js.
+// Retorna Promise<{ code, stdout, stderr, ok }>. Nunca rejeita.
+let _scriptChain = Promise.resolve();
 function runScript(scriptFile, argv) {
   const script = path.join(PATHS.SCRIPTS_DIR, scriptFile);
-  const r = spawnSync(process.execPath, [script, ...argv], {
-    cwd: PATHS.PROJECT_ROOT,
-    encoding: "utf8",
-  });
-  return {
-    code: r.status === null ? -1 : r.status,
-    stdout: (r.stdout || "").trim(),
-    stderr: (r.stderr || "").trim(),
-    ok: r.status === 0,
-  };
+  const run = _scriptChain.then(() => new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(process.execPath, [script, ...argv], { cwd: PATHS.PROJECT_ROOT });
+    } catch (e) {
+      return resolve({ code: -1, stdout: "", stderr: (e && e.message) || String(e), ok: false });
+    }
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
+    let stdout = "", stderr = "";
+    const MAX = 1024 * 1024 * 8; // teto de captura
+    child.stdout.on("data", (d) => { if (stdout.length < MAX) stdout += d; });
+    child.stderr.on("data", (d) => { if (stderr.length < MAX) stderr += d; });
+    child.on("error", (err) => { stderr += (err && err.message) || String(err); });
+    child.on("close", (code) => { invalidateTasksCache(); resolve({ code: code === null ? -1 : code, stdout: stdout.trim(), stderr: stderr.trim(), ok: code === 0 }); });
+  }));
+  _scriptChain = run.then(() => undefined, () => undefined); // a cadeia nunca quebra
+  return run;
 }
 
 function isTaskDir(p) {
@@ -68,8 +82,17 @@ function pickThumb(files) {
   return null;
 }
 
+// Cache curto de listTasks (2s): a varredura recursiva do FS (readdir/stat por peça) roda em
+// várias telas; sem cache, cada navegação repete tudo. O TTL curto elimina as chamadas
+// repetidas sem servir dado velho de verdade — as transições (criar/aprovar/rejeitar via
+// runScript) invalidam na hora; ajustes de metadado aparecem em ≤2s.
+let _tasksCache = null, _tasksCacheAt = 0;
+const TASKS_CACHE_MS = 2000;
+function invalidateTasksCache() { _tasksCache = null; }
+
 // Lista todas as tasks nas 3 zonas.
 function listTasks() {
+  if (_tasksCache && (Date.now() - _tasksCacheAt) < TASKS_CACHE_MS) return _tasksCache;
   const out = [];
   for (const z of ZONES) {
     if (!fs.existsSync(z.dir)) continue;
@@ -105,6 +128,7 @@ function listTasks() {
   }
   // Mais recente no topo: pela atividade real (mtime dos arquivos), com last_updated_at de desempate.
   out.sort((a, b) => (b.recency || 0) - (a.recency || 0) || String(b.last_updated_at || "").localeCompare(String(a.last_updated_at || "")));
+  _tasksCache = out; _tasksCacheAt = Date.now();
   return out;
 }
 
