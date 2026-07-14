@@ -3409,11 +3409,26 @@ async function saveGenerated() {
   try {
     const r = await API.save(payload);
     $("#g-gov").innerHTML = govHtml(r.governance);
-    toast("Conteúdo salvo com sucesso", "success");
     saved = true;
+    const regen = $("#g-regen"); if (regen) regen.style.display = "none";
+    // Renderiza a arte automaticamente ao salvar (feed/imagem/carrossel): a peça já nasce
+    // com os slides/PNG, então a prévia (celular, publicar) funciona na hora — sem depender
+    // de clicar "Gerar arte final" depois. Se o render falhar, salva mesmo assim (dá pra gerar
+    // na peça). Tipos de texto (LinkedIn/Threads/vídeo) não entram aqui.
+    if (autoRenders(ct.kind)) {
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando a arte…';
+      try {
+        const tpl = (LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
+        await API.renderMedia(r.folder, ct.kind, tpl);
+        toast("Peça salva e arte gerada", "success");
+      } catch (e) {
+        toast('Peça salva. A arte não renderizou agora — gere em "Gerar arte final" na peça.', "warn");
+      }
+    } else {
+      toast("Conteúdo salvo com sucesso", "success");
+    }
     // #1 — trava o botão após sucesso (evita salvar/duplicar de novo) e mostra "✓ Salvo".
     btn.disabled = true; btn.textContent = "✓ Salvo";
-    const regen = $("#g-regen"); if (regen) regen.style.display = "none";
     showSaveBanner(r.folder);
   } catch (e) {
     if (e.status === 422 && e.data && e.data.governance) { $("#g-gov").innerHTML = govHtml(e.data.governance); toast("Bloqueado por regra de marca — corrija o conteúdo.", "error"); }
