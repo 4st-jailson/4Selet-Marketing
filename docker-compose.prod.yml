@@ -19,6 +19,7 @@ services:
       - ./interface/.env:/app/interface/.env:ro   # chave Anthropic (fora do git)
       - ./interface/data:/app/interface/data      # usuarios + .session_secret — PERSISTE (senao todo login some a cada rebuild)
       - panel_outputs:/app/outputs                # drafts / trabalho em andamento
+      - panel_uploads:/app/interface/public/uploads  # fotos enviadas (acervo "Foto") — PERSISTE (senao a foto some no rebuild)
       - ./outputs/approved:/app/outputs/approved  # conteudo APROVADO (fonte de verdade versionada em git)
       - ./outputs/archive:/app/outputs/archive    # conteudo arquivado (versionado em git)
     restart: unless-stopped
@@ -40,5 +41,6 @@ services:
 
 volumes:
   panel_outputs:
+  panel_uploads:
   caddy_data:
   caddy_config:
