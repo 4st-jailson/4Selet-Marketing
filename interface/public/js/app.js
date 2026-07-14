@@ -1215,7 +1215,7 @@ async function openHtmlEditor(folder, task, rel) {
   const multiSlide = targets.length > 1;
   let assetMaps = [], dirty = false, changed = false, current = null, curScale = 1; // [prefixo file://, token /url/]
   let hist = [], hi = -1; // desfazer/refazer: pilha de innerHTML do .card
-  let artW = 1080, artH = 1080, fitScale = 1, nudgeT = null; // dimensões da arte + zoom "ajustar" + debounce do nudge
+  let artW = 1080, artH = 1080, fitScale = 1; // dimensões da arte + zoom "ajustar à tela"
   const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;}";
   const FONTS = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap">';
 
@@ -1740,15 +1740,7 @@ async function openHtmlEditor(folder, task, rel) {
     else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) { e.preventDefault(); zoomBy(1 / 1.2); }
     else if ((e.ctrlKey || e.metaKey) && e.key === "0") { e.preventDefault(); applyZoom(fitScale); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); duplicateCurrent(); }
-    // Setas: empurra o elemento selecionado (1px; Shift = 10px). Snapshot com debounce.
-    else if (current && /^Arrow(Up|Down|Left|Right)$/.test(e.key)) {
-      e.preventDefault();
-      const tf = getTf(current), step = e.shiftKey ? 10 : 1;
-      const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
-      const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
-      setTf(current, Object.assign({}, tf, { x: tf.x + dx, y: tf.y + dy })); positionHandle(); dirty = true;
-      clearTimeout(nudgeT); nudgeT = setTimeout(snapshot, 350);
-    }
+    // (As setas NÃO empurram mais o elemento — Hugo pediu pra remover esse "empurra pro lado".)
   }
   document.addEventListener("keydown", onKey);
   function updateNav() {
