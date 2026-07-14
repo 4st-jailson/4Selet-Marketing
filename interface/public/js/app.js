@@ -2496,7 +2496,7 @@ async function viewCreate(arg, query) {
         <details class="adv-block">
           <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
           <p class="muted adv-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
-          <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; escreva uma ação só se quiser orientar)</span></label>
+          <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; oriente a IA aqui — o CTA final você ajusta no resultado)</span></label>
             <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer chamada" />
             <div class="sugg-row" id="g-cta-sugg">${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<button type="button" class="sugg-chip" data-cta="${esc(c)}">${esc(c)}</button>`).join("")}</div>
           </div>
@@ -2513,7 +2513,7 @@ async function viewCreate(arg, query) {
             <div class="photo-gallery" id="g-photo-gallery"></div>
             <input type="hidden" id="g-image" value="" />
           </div>
-          <div class="field art-only"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
+          <div class="field mood-field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — vale para arte e vídeo, sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
           <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         </details>
           <details class="adv-block">
@@ -2561,8 +2561,16 @@ async function viewCreate(arg, query) {
     applyCampPillar(c);
   });
   const updDesc = () => { const ct = metaType($("#g-type").value); $("#g-type-desc").textContent = ct ? ct.description : ""; };
-  // Esconde os ajustes de ARTE (estilo visual, referência visual) para tipos só-texto (LinkedIn/Threads).
-  const updArtFields = () => { const ct = metaType($("#g-type").value); const isImg = !!(ct && ct.media === "image"); $$(".art-only").forEach((el) => { el.style.display = isImg ? "" : "none"; }); };
+  // Gating dos ajustes de arte, por tipo de mídia:
+  //  - Estilo visual (#g-style, .art-only) é template de PNG -> só peças renderizadas em imagem.
+  //  - Referência/clima (#g-mood, .mood-field) também guia o roteiro de vídeo (hook/cenas/voiceover),
+  //    então vale para imagem E vídeo; só some nos tipos só-texto (LinkedIn/Threads).
+  const updArtFields = () => {
+    const ct = metaType($("#g-type").value);
+    const media = ct ? ct.media : "";
+    $$(".art-only").forEach((el) => { el.style.display = media === "image" ? "" : "none"; });
+    $$(".mood-field").forEach((el) => { el.style.display = (media === "image" || media === "video") ? "" : "none"; });
+  };
   $$("#g-type-grid .type-card").forEach((card) => {
     card.onclick = () => {
       $$("#g-type-grid .type-card").forEach((c) => c.classList.remove("on"));
@@ -2752,14 +2760,26 @@ function renderGenResult(r) {
   else editorVal = composeText(r.parsed, r.raw);
   const gov = r.governance || { errors: [], warnings: [] };
   const structHtml = ct.format === "json" ? structuredEditor(r.content_type, r.parsed) : null;
-  const editorBlock = structHtml
-    ? `<div class="field mt"><label>Conteúdo (editável por ${r.content_type === "video_idea" ? "cena" : (r.content_type === "instagram_carousel" ? "slide" : "campo")})</label>${structHtml}</div>
+  // Feed (instagram_caption) é format:text mas ganha editor de campos (corpo + hashtags),
+  // que só recompõe o texto no #g-edit. Só quando a IA devolveu parsed.body (fallback seguro).
+  const feedHtml = (r.content_type === "instagram_caption" && r.parsed && typeof r.parsed.body === "string") ? feedEditor(r.parsed) : null;
+  let editorBlock;
+  if (structHtml) {
+    editorBlock = `<div class="field mt"><label>Conteúdo (editável por ${r.content_type === "video_idea" ? "cena" : (r.content_type === "instagram_carousel" ? "slide" : "campo")})</label>${structHtml}</div>
        <details class="json-adv mt"><summary>JSON (avançado)</summary>
          <textarea id="g-edit" rows="12" style="font-family:var(--mono)">${esc(editorVal)}</textarea>
          <p class="muted" style="font-size:12px;margin-top:6px">Atualizado automaticamente pelos campos acima. Para editar à mão, altere o JSON e clique em “Aplicar JSON”.</p>
          <button class="btn btn-ghost btn-sm" id="g-json-apply" type="button">Aplicar JSON aos campos</button>
-       </details>`
-    : `<div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>`;
+       </details>`;
+  } else if (feedHtml) {
+    editorBlock = `<div class="field mt"><label>Conteúdo (editável)</label>${feedHtml}</div>
+       <details class="json-adv mt"><summary>Texto completo (avançado)</summary>
+         <textarea id="g-edit" rows="8" style="font-family:var(--font)">${esc(editorVal)}</textarea>
+         <p class="muted" style="font-size:12px;margin-top:6px">Montado automaticamente pelos campos acima (corpo + hashtags).</p>
+       </details>`;
+  } else {
+    editorBlock = `<div class="field mt"><label>Conteúdo (editável)</label><textarea id="g-edit" rows="${ct.format === "json" ? 16 : 8}" style="font-family:${ct.format === "json" ? "var(--mono)" : "var(--font)"}">${esc(editorVal)}</textarea></div>`;
+  }
   // #2 — pré-visualização ao vivo (mockup do card da rede) para LinkedIn e Threads/X.
   const mockKind = r.content_type === "linkedin_post" ? "linkedin" : (r.content_type === "threads_post" ? "threads" : null);
   const mockHtml = mockKind
@@ -2777,11 +2797,19 @@ function renderGenResult(r) {
          <div id="g-art" class="art-preview mt"></div>
        </details>`
     : "";
+  // #R5 — storyboard das cenas do vídeo (prévia honesta, sem render pesado).
+  const storyHtml = r.content_type === "video_idea"
+    ? `<details class="art-preview-box mt" open><summary>Prévia do roteiro (storyboard)</summary>
+         <div id="g-story" class="video-storyboard">${videoStoryboard(r.parsed)}</div>
+         <p class="muted" style="font-size:12px;margin-top:8px">Ilustrativo — atualiza conforme você edita as cenas. O vídeo final é renderizado ao aprovar a peça.</p>
+       </details>`
+    : "";
   $("#g-result").innerHTML = `
     ${researchHtml}
     ${editorBlock}
     ${mockHtml}
     ${artHtml}
+    ${storyHtml}
     <div class="gov-head">Conferência da marca <span class="hint">(checagem automática das regras da 4Selet)</span></div>
     <div class="gov" id="g-gov">${govHtml(gov)}</div>
     <div class="refine-box mt">
@@ -2797,6 +2825,9 @@ function renderGenResult(r) {
     bindStructuredEditor();
     if ($("#g-json-apply")) $("#g-json-apply").onclick = () => applyJsonToStructured(r.content_type);
   }
+  // #R4 — feed com editor de campos (corpo + hashtags) mantendo o #g-edit sincronizado.
+  if (feedHtml) bindFeedEditor();
+  // #R5 — o storyboard do vídeo é atualizado dentro de syncJsonMirror (cobre digitação e cliques).
   // #2 — liga o mockup ao vivo ao textarea de conteúdo.
   if (mockKind && $("#g-edit")) {
     $("#g-edit").addEventListener("input", () => { const m = $("#g-mock"); if (m) m.innerHTML = socialMock(mockKind, $("#g-edit").value); });
@@ -2861,6 +2892,24 @@ function socialMock(kind, text) {
   </div>`;
 }
 
+// #R5 — storyboard do vídeo: uma prévia honesta das cenas (o que aparece na tela), em
+// cards na paleta da marca. Não renderiza o vídeo (BrandStory/Remotion é pesado) — mostra
+// a sequência hook → cenas → CTA, atualizando conforme se edita as cenas.
+const VSB_LABEL = { hook: "Hook", product: "Produto", benefit: "Benefício", cta: "CTA" };
+function videoStoryboard(parsed) {
+  const scenes = (parsed && Array.isArray(parsed.scenes)) ? parsed.scenes : [];
+  if (!scenes.length && !(parsed && parsed.cta)) return '<p class="muted" style="font-size:12px;margin:0">Adicione cenas para ver o storyboard.</p>';
+  const cards = scenes.map((s, i) => {
+    const kind = String(s.type || "").toLowerCase();
+    const tag = Object.prototype.hasOwnProperty.call(VSB_LABEL, kind) ? VSB_LABEL[kind] : (s.type ? esc(s.type) : "Cena");
+    return `<div class="vsb-card"><div class="vsb-top"><span class="vsb-n">${i + 1}</span><span class="vsb-type">${tag}</span></div>
+      <div class="vsb-text">${esc(s.text || "—")}</div>${s.subtitle ? `<div class="vsb-sub">${esc(s.subtitle)}</div>` : ""}</div>`;
+  }).join("");
+  const cta = parsed && parsed.cta;
+  const ctaCard = cta ? `<div class="vsb-card vsb-cta"><div class="vsb-top"><span class="vsb-type">CTA final</span></div><div class="vsb-text">${esc(cta)}</div></div>` : "";
+  return `<div class="vsb-strip">${cards}${ctaCard}</div>`;
+}
+
 async function refineGenerated() {
   if (!LAST_GEN) return;
   const instruction = $("#g-refine").value.trim();
@@ -2896,6 +2945,34 @@ function composeText(parsed, raw) {
     return t;
   }
   return raw || "";
+}
+
+// ---- Editor estruturado do FEED (instagram_caption) ----
+// O tipo é format:text, então NÃO mexemos no contrato do arquivo: os campos abaixo só
+// recompõem o texto final no #g-edit (corpo + hashtags), do mesmo jeito que o composeText
+// montava. Assim o feed deixa de ser um textarão único — separa corpo e hashtags — sem
+// alterar como a peça é salva/renderizada. Só ativa quando a IA devolveu parsed.body
+// (senão cai no textarea cru, fallback seguro — ver renderGenResult).
+function feedEditor(parsed) {
+  const body = (parsed && typeof parsed.body === "string") ? parsed.body : "";
+  const tags = (Array.isArray(parsed && parsed.hashtags) ? parsed.hashtags : []).join(" ");
+  return `<div class="feed-ed" data-type="instagram_caption">
+    <div class="field"><label>Corpo da legenda <span class="hint">(o CTA do feed vive aqui, no texto)</span></label><textarea class="fe-body" rows="7" placeholder="Legenda da postagem — hook na 1ª linha, CTA no fim">${esc(body)}</textarea></div>
+    <div class="field mt"><label>Hashtags <span class="hint">(3–5, sempre com #4Selet — separe por espaço)</span></label><input class="fe-tags" placeholder="#4Selet #TaxaZero" value="${esc(tags)}" /></div>
+  </div>`;
+}
+// Recompõe corpo + hashtags no #g-edit (fonte da verdade do salvamento). Mesma forma do composeText.
+function feedToText() {
+  const ed = document.querySelector(".feed-ed"); if (!ed) return;
+  const body = (ed.querySelector(".fe-body") || {}).value || "";
+  const tags = splitTags((ed.querySelector(".fe-tags") || {}).value);
+  const t = tags.length ? (body + "\n\n" + tags.join(" ")) : body;
+  if ($("#g-edit")) $("#g-edit").value = t;
+}
+function bindFeedEditor() {
+  const ed = document.querySelector(".feed-ed"); if (!ed) return;
+  ed.addEventListener("input", feedToText);
+  feedToText();
 }
 // ---- Editor estruturado (slides do carrossel / cenas do vídeo / anúncio) ----
 // Substitui o JSON cru por campos editáveis. Mantém o textarea #g-edit (oculto
@@ -2935,12 +3012,23 @@ function slideItem(s, i, total) {
     <label class="se-layout">Layout do slide <select class="se-f" data-k="layout">${layoutOpts}</select>${richHint}</label>
   </div>`;
 }
+// Campo de hashtags compartilhado pelos editores estruturados. Pré-preenche com as tags
+// que a IA devolveu (parsed.hashtags). A marca pede 3-5 + #4Selet — o hint reforça, sem travar.
+function hashtagsField(p) {
+  const tags = (Array.isArray(p && p.hashtags) ? p.hashtags : []).join(" ");
+  return `<div class="field mt"><label>Hashtags <span class="hint">(3–5, sempre com #4Selet — separe por espaço)</span></label><input class="se-tags" placeholder="#4Selet #TaxaZero" value="${esc(tags)}" /></div>`;
+}
+// Normaliza a entrada de hashtags: separa por espaço/vírgula e garante o # inicial.
+function splitTags(v) {
+  return String(v || "").split(/[\s,]+/).filter(Boolean).map((t) => "#" + t.replace(/^#+/, ""));
+}
 function carouselEditor(p) {
   const slides = (Array.isArray(p.slides) && p.slides.length) ? p.slides : [{ title: "", body: "" }];
   return `<div class="struct-ed" data-type="instagram_carousel">
     <div class="se-list">${slides.map((s, i) => slideItem(s, i, slides.length)).join("")}</div>
     <button class="btn btn-ghost btn-sm mt" data-se-add="slide" type="button">+ Adicionar slide</button>
-    <div class="field mt"><label>CTA</label><input class="se-cta" placeholder="ex.: Solicitar convite" value="${esc(p.cta || "")}" /></div>
+    <div class="field mt"><label>CTA <span class="hint">(último slide)</span></label><input class="se-cta" placeholder="ex.: Solicitar convite" value="${esc(p.cta || "")}" /></div>
+    ${hashtagsField(p)}
   </div>`;
 }
 
@@ -2960,7 +3048,8 @@ function videoEditor(p) {
     <div class="field"><label>Conceito</label><input class="se-concept" placeholder="Ideia central do vídeo" value="${esc(p.concept || "")}" /></div>
     <div class="se-list">${scenes.map((s, i) => sceneItem(s, i, scenes.length)).join("")}</div>
     <button class="btn btn-ghost btn-sm mt" data-se-add="scene" type="button">+ Adicionar cena</button>
-    <div class="field mt"><label>CTA</label><input class="se-cta" placeholder="ex.: Conhecer a plataforma" value="${esc(p.cta || "")}" /></div>
+    <div class="field mt"><label>CTA <span class="hint">(fim do vídeo)</span></label><input class="se-cta" placeholder="ex.: Conhecer a plataforma" value="${esc(p.cta || "")}" /></div>
+    ${hashtagsField(p)}
   </div>`;
 }
 
@@ -2969,8 +3058,9 @@ function adEditor(p) {
   return `<div class="struct-ed" data-type="ad_creative">
     ${f("headline", "Headline", "máx. 4 palavras")}
     ${f("subtext", "Subtexto", "linha de apoio")}
-    ${f("cta", "CTA", "ex.: Ver as condições")}
+    ${f("cta", "CTA <span class=\"hint\">(botão do anúncio)</span>", "ex.: Ver as condições")}
     ${f("layout_type", "Layout", "Product Focus, Split, Lifestyle…")}
+    ${hashtagsField(p)}
   </div>`;
 }
 
@@ -3001,11 +3091,22 @@ function structToParsed() {
       const el = ed.querySelector('[data-k="' + k + '"]'); if (el) base[k] = el.value;
     });
   }
+  // Hashtags (campo compartilhado .se-tags). Só grava se o usuário digitou algo OU o tipo
+  // já trazia hashtags — assim não injetamos [] vazio em tipo que nunca teve.
+  const tagsEl = ed.querySelector(".se-tags");
+  if (tagsEl) {
+    const tv = splitTags(tagsEl.value);
+    if (tv.length || Array.isArray(base.hashtags)) base.hashtags = tv;
+  }
   return base;
 }
 function syncJsonMirror() {
   const parsed = structToParsed();
   if (parsed && $("#g-edit")) $("#g-edit").value = JSON.stringify(parsed, null, 2);
+  // #R5 — mantém o storyboard do vídeo em sincronia. Aqui (e não num listener à parte) porque
+  // syncJsonMirror roda tanto na digitação quanto nos cliques de add/remover/reordenar cena, e é
+  // re-ligado por bindStructuredEditor após "Aplicar JSON" (o listener avulso morria nesses casos).
+  const g = $("#g-story"); if (g && parsed) g.innerHTML = videoStoryboard(parsed);
 }
 function seRenumber(ed) {
   const scene = ed.dataset.type === "video_idea";
