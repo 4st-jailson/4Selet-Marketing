@@ -66,7 +66,10 @@ function spawnAsync(args, opts) {
 }
 
 const ASSETS = PATHS.ASSETS_DIR;
-function fileUrl(p) { return "file:///" + path.resolve(p).replace(/\\/g, "/"); }
+// file:// CORRETO em qualquer OS. Windows: caminho começa com "C:/" -> "file:///C:/..." (igual
+// ao antigo). Linux: caminho começa com "/app/..." -> "file:///app/..." (3 barras). O antigo
+// "file:///"+"/app" gerava "file:////app" (4 barras, malformado) e a foto/logo não carregavam no render.
+function fileUrl(p) { let s = path.resolve(p).replace(/\\/g, "/"); if (s[0] !== "/") s = "/" + s; return "file://" + s; }
 const LOGO_LIGHT = fileUrl(path.join(ASSETS, "logo-4selet-light.png"));
 const LOGO_DARK = fileUrl(path.join(ASSETS, "logo-4selet.png"));
 const SIMBOLO = fileUrl(path.join(ASSETS, "simbolo.svg"));
@@ -1040,20 +1043,14 @@ function sanitizeArtHtml(html) {
   return s;
 }
 
-// Constroi um file:// CORRETO p/ o ambiente atual (Linux: file:///app/x ; Windows: file:///C:/x).
-function toFileUrl(absPath) {
-  let p = path.resolve(absPath).replace(/\\/g, "/");
-  if (p[0] !== "/") p = "/" + p; // Windows "C:/x" -> "/C:/x"
-  return "file://" + p;
-}
 // Re-localiza os caminhos de asset (foto em /uploads/, logo em /assets|/brand-assets/) para o
 // file:// do AMBIENTE ATUAL. A arte editada pode carregar file:// ABSOLUTO de OUTRO ambiente
 // (peca feita no Windows local e editada em prod Linux) OU a URL servida (/uploads/, /brand-assets/).
 // O render roda no container, entao caminho de outra maquina nao existe -> foto/logo somem. Aqui
 // reescrevemos o prefixo ATE /<seg>/ (inclusive) pelo diretorio LOCAL correto, em src/href/xlink:href.
 function relocalizeAssets(html) {
-  const up = toFileUrl(path.join(__dirname, "..", "public", "uploads")) + "/";
-  const as = toFileUrl(PATHS.ASSETS_DIR) + "/";
+  const up = fileUrl(path.join(__dirname, "..", "public", "uploads")) + "/";
+  const as = fileUrl(PATHS.ASSETS_DIR) + "/";
   const rw = (h, seg, abs) => h.replace(new RegExp('((?:src|href|xlink:href)\\s*=\\s*["\'])[^"\']*?/' + seg + '/', "gi"), "$1" + abs);
   let h = html;
   h = rw(h, "uploads", up);
