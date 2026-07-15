@@ -67,6 +67,25 @@ function setView(html) {
 }
 function setTitle(t) { $("#page-title").textContent = t; document.title = t + " · Painel 4Selet"; }
 function metaType(id) { return (State.meta.content_types || []).find((c) => c.id === id); }
+// Nome amigável do modelo de IA — o id cru ("claude-sonnet-4-6") não é para leigo.
+function modelLabel(id) {
+  if (!id) return "";
+  const s = String(id);
+  const known = { "claude-opus-4-8": "Claude Opus 4.8", "claude-opus-4-7": "Claude Opus 4.7", "claude-sonnet-4-6": "Claude Sonnet 4.6", "claude-haiku-4-5-20251001": "Claude Haiku 4.5" };
+  if (known[s]) return known[s];
+  const m = s.match(/^claude-(opus|sonnet|haiku)-(\d+)-(\d+)/i);
+  if (m) return "Claude " + m[1].charAt(0).toUpperCase() + m[1].slice(1) + " " + m[2] + "." + m[3];
+  if (/^gpt/i.test(s)) return "ChatGPT (" + s + ")";
+  return s;
+}
+// "Novo": peça recém-criada (últimas 36h) OU ainda não aberta. Assim o marcador sobrevive a
+// abrir a peça pra revisar (antes sumia na 1ª abertura) e some sozinho depois de ~1,5 dia.
+function isNewPiece(t) {
+  if (!t) return false;
+  if (!t.first_viewed_at) return true;
+  if (t.created_at) { const age = Date.now() - Date.parse(t.created_at); if (age >= 0 && age < 36 * 3600 * 1000) return true; }
+  return false;
+}
 function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels[k]) || k || "Outros"; }
 function pillarLabel(id) { const p = (State.meta.content_pillars || []).find((x) => x.id === id); return p ? (p.short || p.label) : null; }
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
@@ -391,7 +410,7 @@ function taskRow(t) {
     : `<span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>`;
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
     ${ico}
-    <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${!t.first_viewed_at ? ' <span class="lr-new">Novo</span>' : ""}</div>
+    <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${isNewPiece(t) ? ' <span class="lr-new">Novo</span>' : ""}</div>
     <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}${(t.platforms || []).length ? " · " + esc(t.platforms.map(platformLabel).join(", ")) : ""}</div></div>
     ${statusBadge(t.status)}</a>`;
 }
@@ -564,7 +583,7 @@ function taskCard(t) {
   const zoomBtn = previewable
     ? `<button class="cc-zoom" title="Pré-visualizar" aria-label="Pré-visualizar" onclick="event.preventDefault();event.stopPropagation();openLightbox('${API.rawUrl(t.folder, t.thumb.rel)}','${t.thumb.type === "video" ? "video" : "image"}','${API.downloadUrl(t.folder, t.thumb.rel)}')">⤢</button>`
     : "";
-  const newBadge = !t.first_viewed_at ? '<span class="cc-new">Novo</span>' : "";
+  const newBadge = isNewPiece(t) ? '<span class="cc-new">Novo</span>' : "";
   const tagsHtml = (t.tags && t.tags.length)
     ? '<div class="cc-tags">' + t.tags.slice(0, 4).map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") + (t.tags.length > 4 ? '<span class="cc-tag more">+' + (t.tags.length - 4) + "</span>" : "") + "</div>"
     : "";
@@ -1055,7 +1074,99 @@ function carouselStrip(folder, task) {
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
     <div class="media-gallery mt">${items}</div>
-    <div class="strip-foot"><a class="btn btn-sm btn-primary" href="${API.zipUrl(folder)}" download title="Baixa os ${slides.length} slides num único arquivo .zip">Baixar todos (ZIP)</a></div></div>`;
+    <div class="strip-foot"><button class="btn btn-sm btn-ghost" id="bd-open" title="Monta os slides num quadro livre (lado a lado ou onde quiser)">Ver no quadro</button><a class="btn btn-sm btn-primary" href="${API.zipUrl(folder)}" download title="Baixa os ${slides.length} slides num único arquivo .zip">Baixar todos (ZIP)</a></div></div>`;
+}
+
+// Quadro estilo Figma para o CARROSSEL: tela livre onde cada slide vira uma imagem que se
+// posiciona à vontade (lado a lado p/ formar uma imagem contínua, empilhada ou sobreposta).
+// Só montagem/visualização — não altera os slides. Zoom (Ctrl+roda / botões), pan (arrasta o
+// fundo) e encaixe nas bordas p/ alinhar sem emenda.
+function openCarouselBoard(folder, task) {
+  const slides = (task.files || [])
+    .filter((f) => /slide_0*\d+\.(png|jpe?g)$/i.test(f.rel))
+    .map((f) => ({ rel: f.rel, n: parseInt((f.rel.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10), mtime: f.mtime }))
+    .sort((a, b) => a.n - b.n);
+  if (!slides.length) { toast("Sem slides para montar no quadro.", "warn"); return; }
+
+  const ov = document.createElement("div"); ov.className = "board-ov";
+  ov.innerHTML =
+      '<div class="board-top">'
+    +   '<span class="board-title">' + esc(displayName(task.status)) + '</span><span style="flex:1"></span>'
+    +   '<label class="board-snap"><input type="checkbox" id="bd-snap" checked> Encaixar nas bordas</label>'
+    +   '<button class="btn btn-sm btn-ghost" id="bd-arrange">Lado a lado</button>'
+    +   '<button class="btn btn-sm btn-primary" id="bd-close">Fechar</button>'
+    + '</div>'
+    + '<div class="board-stage" id="bd-stage"><div class="board-canvas" id="bd-canvas"></div></div>'
+    + '<div class="board-tools"><button class="he-tool" id="bd-zout" aria-label="Diminuir">&#8722;</button>'
+    +   '<button class="he-tool he-tool-txt" id="bd-zfit" title="Ajustar à tela">Ajustar</button>'
+    +   '<button class="he-tool" id="bd-zin" aria-label="Aumentar">+</button>'
+    +   '<span class="board-tip">Arraste cada slide · arraste o fundo p/ mover o quadro · Ctrl+roda dá zoom</span></div>';
+  document.body.appendChild(ov); document.body.classList.add("no-scroll");
+
+  const stage = $("#bd-stage"), canvas = $("#bd-canvas");
+  let zoom = 1, panX = 0, panY = 0, zc = 1;
+  const items = [];
+  const applyView = () => { canvas.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + zoom + ")"; };
+  const place = (it) => { it.el.style.left = it.x + "px"; it.el.style.top = it.y + "px"; };
+
+  slides.forEach((s) => {
+    const wrap = document.createElement("div"); wrap.className = "board-item";
+    const img = document.createElement("img"); img.className = "board-slide"; img.src = API.rawUrl(folder, s.rel) + "&v=" + (s.mtime || 0); img.draggable = false; img.alt = "Slide " + s.n;
+    const num = document.createElement("span"); num.className = "board-num"; num.textContent = s.n;
+    wrap.appendChild(img); wrap.appendChild(num);
+    const it = { el: wrap, x: 0, y: 0, w: 1080, h: 1350, n: s.n };
+    wrap.style.width = it.w + "px";
+    img.addEventListener("load", () => { if (img.naturalWidth) { it.w = img.naturalWidth; it.h = img.naturalHeight; wrap.style.width = it.w + "px"; wrap.style.height = it.h + "px"; } });
+    canvas.appendChild(wrap); items.push(it); dragItem(it);
+  });
+
+  const bounds = () => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; items.forEach((it) => { a = Math.min(a, it.x); b = Math.min(b, it.y); c = Math.max(c, it.x + it.w); d = Math.max(d, it.y + it.h); }); return { minX: a, minY: b, w: c - a, h: d - b }; };
+  const fit = () => { const bo = bounds(); if (!(bo.w > 0)) return; zoom = Math.max(0.05, Math.min((stage.clientWidth - 80) / bo.w, (stage.clientHeight - 80) / bo.h, 1)); panX = (stage.clientWidth - bo.w * zoom) / 2 - bo.minX * zoom; panY = (stage.clientHeight - bo.h * zoom) / 2 - bo.minY * zoom; applyView(); };
+  const arrangeRow = () => { let x = 0; items.forEach((it) => { it.x = x; it.y = 0; place(it); x += it.w; }); fit(); };
+
+  function snapEdges(it, nx, ny) {
+    const tol = 26 / zoom; let bx = nx, by = ny, dx = tol, dy = tol;
+    const L = nx, R = nx + it.w, T = ny, B = ny + it.h;
+    items.forEach((o) => { if (o === it) return; const oL = o.x, oR = o.x + o.w, oT = o.y, oB = o.y + o.h;
+      [[L, oR, oR], [L, oL, oL], [R, oR, oR - it.w], [R, oL, oL - it.w]].forEach((t) => { const g = Math.abs(t[0] - t[1]); if (g < dx) { dx = g; bx = t[2]; } });
+      [[T, oB, oB], [T, oT, oT], [B, oB, oB - it.h], [B, oT, oT - it.h]].forEach((t) => { const g = Math.abs(t[0] - t[1]); if (g < dy) { dy = g; by = t[2]; } });
+    });
+    return { x: bx, y: by };
+  }
+  function dragItem(it) {
+    it.el.addEventListener("mousedown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      zc += 1; it.el.style.zIndex = zc; // traz p/ frente
+      const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y;
+      const mv = (ev) => {
+        if (ev.buttons === 0) { up(); return; }
+        let nx = ox + (ev.clientX - sx) / zoom, ny = oy + (ev.clientY - sy) / zoom;
+        if (!(ev.ctrlKey || ev.metaKey) && $("#bd-snap") && $("#bd-snap").checked) { const sn = snapEdges(it, nx, ny); nx = sn.x; ny = sn.y; }
+        it.x = nx; it.y = ny; place(it);
+      };
+      const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
+      document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
+    });
+  }
+  stage.addEventListener("mousedown", (e) => {
+    if (e.target !== stage && e.target !== canvas) return; e.preventDefault();
+    const sx = e.clientX, sy = e.clientY, ox = panX, oy = panY;
+    const mv = (ev) => { if (ev.buttons === 0) { up(); return; } panX = ox + (ev.clientX - sx); panY = oy + (ev.clientY - sy); applyView(); };
+    const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
+    document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
+  });
+  const zoomAt = (factor, cx, cy) => { const nz = Math.max(0.05, Math.min(2, zoom * factor)); const r = stage.getBoundingClientRect(); const px = (cx - r.left - panX) / zoom, py = (cy - r.top - panY) / zoom; zoom = nz; panX = cx - r.left - px * zoom; panY = cy - r.top - py * zoom; applyView(); };
+  const centerZoom = (f) => { const r = stage.getBoundingClientRect(); zoomAt(f, r.left + stage.clientWidth / 2, r.top + stage.clientHeight / 2); };
+  stage.addEventListener("wheel", (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
+  $("#bd-zin").onclick = () => centerZoom(1.2);
+  $("#bd-zout").onclick = () => centerZoom(1 / 1.2);
+  $("#bd-zfit").onclick = fit;
+  $("#bd-arrange").onclick = arrangeRow;
+  const close = () => { document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); ov.remove(); };
+  $("#bd-close").onclick = close;
+  function onKey(e) { if (e.key === "Escape") { e.preventDefault(); close(); } }
+  document.addEventListener("keydown", onKey);
+  arrangeRow(); // começa lado a lado, ajustado à tela
 }
 
 function renderPanel(folder, task) {
@@ -1236,6 +1347,7 @@ async function openHtmlEditor(folder, task, rel) {
     +   '<span class="ed-piece" id="he-piece"></span>'
     +   (multiSlide ? '<div class="ed-slidenav"><button class="ed-navbtn" id="he-prev" title="Slide anterior">‹</button><span class="ed-slide-count" id="he-count"></span><button class="ed-navbtn" id="he-next" title="Próximo slide">›</button></div>' : "")
     +   '<span style="flex:1"></span>'
+    +   '<button class="btn btn-sm btn-ghost he-dock-toggle" id="he-dock" aria-pressed="false" title="Encostar a barra de ferramentas à esquerda para ver a arte maior"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg><span id="he-dock-lbl">Barra à esquerda</span></button>'
     +   '<button class="btn btn-sm btn-ghost" id="he-close">Fechar</button>'
     +   '<button class="btn btn-sm btn-primary" id="he-save">Salvar arte</button>'
     + "</div>"
@@ -1268,13 +1380,13 @@ async function openHtmlEditor(folder, task, rel) {
     +     "<option value=\"'JetBrains Mono',monospace\">JetBrains Mono</option>"
     +     '<option value="Georgia,serif">Georgia</option>'
     +   "</select>"
-    +   '<input type="number" id="he-size" value="40" min="6" max="600" title="Tamanho do texto">'
+    +   '<div class="he-grp"><input type="number" id="he-size" value="40" min="6" max="600" title="Tamanho do texto">'
     +   '<button class="btn btn-sm ed-ico" id="he-bold" title="Negrito"><b>N</b></button>'
-    +   '<button class="btn btn-sm ed-ico" id="he-italic" title="Itálico"><i>I</i></button>'
-    +   '<select id="he-align" title="Alinhamento do texto"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select>'
-    +   '<input type="number" id="he-lh" step="0.05" min="0.8" max="3" title="Entrelinha" placeholder="1.2">'
-    +   '<input type="color" id="he-color" value="#ffffff" title="Cor do texto">'
-    +   '<button class="btn btn-sm ed-ico" id="he-eyedrop" title="Conta-gotas: pegar cor da arte"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>'
+    +   '<button class="btn btn-sm ed-ico" id="he-italic" title="Itálico"><i>I</i></button></div>'
+    +   '<div class="he-grp"><select id="he-align" title="Alinhamento do texto"><option value="left">Esq.</option><option value="center">Centro</option><option value="right">Dir.</option></select>'
+    +   '<input type="number" id="he-lh" step="0.05" min="0.8" max="3" title="Entrelinha" placeholder="1.2"></div>'
+    +   '<div class="he-grp"><input type="color" id="he-color" value="#ffffff" title="Cor do texto">'
+    +   '<button class="btn btn-sm ed-ico" id="he-eyedrop" title="Conta-gotas: pegar cor da arte"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button></div>'
     +   '<details class="ed-menu" id="he-fx-menu"><summary class="btn btn-sm">Efeitos</summary><div class="ed-pop">'
     +     '<button data-fx="none">Nenhum</button>'
     +     '<button data-fx="shadow">Sombra suave</button>'
@@ -1291,8 +1403,8 @@ async function openHtmlEditor(folder, task, rel) {
     +   "</div></details>"
     +   '<span class="ed-sep"></span>'
     +   '<label class="he-op" title="Opacidade"><span>Opac.</span><input type="range" id="he-opacity" min="0" max="100" value="100"></label>'
-    +   '<input type="number" id="he-rot" min="-180" max="180" step="1" value="0" title="Rotação (graus)">'
-    +   '<button class="btn btn-sm ed-ico" id="he-flip" title="Espelhar na horizontal"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2M12 14v2M12 8v2M12 2v2"/></svg></button>'
+    +   '<div class="he-grp"><input type="number" id="he-rot" min="-180" max="180" step="1" value="0" title="Rotação (graus)">'
+    +   '<button class="btn btn-sm ed-ico" id="he-flip" title="Espelhar na horizontal"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2M12 14v2M12 8v2M12 2v2"/></svg></button></div>'
     +   '<details class="ed-menu" id="he-align2-menu"><summary class="btn btn-sm">Alinhar</summary><div class="ed-pop">'
     +     '<button data-al="cx">Centralizar na horizontal</button>'
     +     '<button data-al="cy">Centralizar na vertical</button>'
@@ -1308,8 +1420,8 @@ async function openHtmlEditor(folder, task, rel) {
     +   '<button class="btn btn-sm" id="he-parent" title="Selecionar o grupo/bloco em volta do item (pra mover vários juntos)">Grupo ↑</button>'
     +   '<button class="btn btn-sm" id="he-dup" title="Duplicar (Ctrl+D)">Duplicar</button>'
     +   '<span class="ed-sep"></span>'
-    +   '<button class="btn btn-sm ed-ico" id="he-undo" title="Desfazer (Ctrl+Z)">↶</button>'
-    +   '<button class="btn btn-sm ed-ico" id="he-redo" title="Refazer (Ctrl+Y)">↷</button>'
+    +   '<div class="he-grp"><button class="btn btn-sm ed-ico" id="he-undo" title="Desfazer (Ctrl+Z)">↶</button>'
+    +   '<button class="btn btn-sm ed-ico" id="he-redo" title="Refazer (Ctrl+Y)">↷</button></div>'
     +   '<button class="btn btn-sm btn-danger" id="he-del" title="Remover (Del)">Remover</button>'
     + "</div>"
     + '<div class="editor-stage"><div class="he-wrap" id="he-wrap"><iframe id="he-frame" title="Editor visual" sandbox="allow-same-origin"></iframe><div class="he-overlay" id="he-overlay"></div><div class="he-safe" id="he-safe" hidden><span class="he-safe-tag">Área segura</span></div><div class="he-guideline he-guideline-v" id="he-gl-v" hidden></div><div class="he-guideline he-guideline-h" id="he-gl-h" hidden></div><div class="he-handle" id="he-handle" style="display:none"></div></div></div>'
@@ -1776,6 +1888,39 @@ async function openHtmlEditor(folder, task, rel) {
   const toggleOverlay = (cls, btnId) => { const on = overlay.classList.toggle(cls); const b = $("#" + btnId); if (b) { b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); } };
   $("#he-grid-btn").onclick = () => toggleOverlay("grid", "he-grid-btn");
   $("#he-guides-btn").onclick = () => toggleOverlay("guides", "he-guides-btn");
+
+  // --- Barra à esquerda (dock): libera altura pro Hugo ver a arte retrato maior ---
+  const HE_DOCK_KEY = "he_dock_left";
+  const refit = () => { const stage = ov.querySelector(".editor-stage"); if (stage && artW && artH) { fitScale = Math.min((stage.clientWidth - 48) / artW, (stage.clientHeight - 48) / artH, 1); applyZoom(fitScale); } };
+  // Popovers dos menus (Logo/Bloco/Efeitos/…): na coluna com scroll, um popover absoluto seria
+  // cortado. Quando encostada à esquerda, abre como flyout FIXO ao lado do botão (nunca clipado).
+  ov.querySelectorAll("details.ed-menu").forEach((d) => {
+    d.addEventListener("toggle", () => {
+      const pop = d.querySelector(".ed-pop"); if (!pop) return;
+      if (d.open && ov.classList.contains("he-dock-left")) {
+        const s = d.querySelector("summary").getBoundingClientRect();
+        const barR = (d.closest(".he-bar") || d).getBoundingClientRect().right; // borda externa da coluna
+        pop.style.position = "fixed"; pop.style.zIndex = "1500";
+        let left = barR + 6; if (left + pop.offsetWidth > window.innerWidth - 8) left = Math.max(8, s.left - pop.offsetWidth - 6);
+        pop.style.left = Math.round(left) + "px";
+        pop.style.top = Math.round(Math.max(8, Math.min(s.top, window.innerHeight - pop.offsetHeight - 8))) + "px";
+      } else { pop.style.position = ""; pop.style.zIndex = ""; pop.style.left = ""; pop.style.top = ""; }
+    });
+  });
+  // Rolar a coluna fecha qualquer menu aberto: o flyout é fixo (não acompanharia o scroll e
+  // ficaria descolado do botão). Fechar é o mesmo comportamento do "clicar fora".
+  if ($("#he-bar")) $("#he-bar").addEventListener("scroll", () => { ov.querySelectorAll("details.ed-menu[open]").forEach((d) => d.removeAttribute("open")); });
+  function setDock(on) {
+    ov.querySelectorAll("details.ed-menu[open]").forEach((d) => d.removeAttribute("open")); // fecha popovers p/ reposicionar
+    ov.classList.toggle("he-dock-left", on);
+    const b = $("#he-dock"); if (b) { b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    const l = $("#he-dock-lbl"); if (l) l.textContent = on ? "Barra no topo" : "Barra à esquerda";
+    try { localStorage.setItem(HE_DOCK_KEY, on ? "1" : "0"); } catch (e) {}
+    requestAnimationFrame(refit); // recomputa "ajustar à tela" pro novo espaço
+  }
+  $("#he-dock").onclick = () => setDock(!ov.classList.contains("he-dock-left"));
+  try { if (localStorage.getItem(HE_DOCK_KEY) === "1") setDock(true); } catch (e) {}
+
   // Ctrl/Cmd + roda do mouse = zoom (padrão dos editores). Sem Ctrl, rola o palco normalmente.
   ov.querySelector(".editor-stage").addEventListener("wheel", onWheelZoom, { passive: false });
   // fecha menus abertos ao clicar fora
@@ -2164,6 +2309,7 @@ async function viewTaskDetail(folder) {
   if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
   loadTaskCollections(folder);
   if ($("#btn-phone")) $("#btn-phone").onclick = () => openPhonePreview(task);
+  if ($("#bd-open")) $("#bd-open").onclick = () => openCarouselBoard(folder, task);
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
   if (isImported) loadImportedCaption(folder);
@@ -2993,7 +3139,7 @@ async function runGenerate() {
 }
 
 function renderGenResult(r) {
-  $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain">' + esc(r.model) + "</span>";
+  $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain" title="Modelo de IA que gerou esta peça">' + esc(modelLabel(r.model)) + "</span>";
   if (r.research_requested) {
     $("#g-flag").innerHTML += r.research_used
       ? ' <span class="badge ok" title="Pesquisa de mercado ao vivo usada como apoio na geração">▸ Tavily: ' + ((r.research_sources || []).length) + " fontes</span>"

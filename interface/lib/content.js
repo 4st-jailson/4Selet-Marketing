@@ -117,6 +117,7 @@ function listTasks() {
         campaign_angle: status.campaign_angle || null,
         platforms: status.platforms || [],
         last_updated_at: status.last_updated_at,
+        created_at: status.created_at || null, // p/ o marcador "Novo" (recem-criado) na biblioteca
         recency: files.reduce((m, f) => Math.max(m, f.mtime || 0), 0), // mtime mais novo = criado/ajustado por ultimo
         first_viewed_at: status.first_viewed_at || null,
         tags: Array.isArray(status.tags) ? status.tags : [],

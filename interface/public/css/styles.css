@@ -1012,6 +1012,45 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .ed-pop-wide { min-width: 226px; }
 .ed-range { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--text-2); padding: 6px 8px; }
 .ed-range input[type="range"] { width: 118px; }
+
+/* ---- Barra de ferramentas encostada à esquerda (libera altura pra ver a arte retrato maior) ---- */
+.he-dock-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.he-dock-toggle svg { display: block; }
+.he-dock-toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.editor-ov.he-dock-left { --he-dock-w: 238px; display: grid; grid-template-columns: var(--he-dock-w) 1fr; grid-template-rows: auto 1fr; grid-template-areas: "top top" "bar stage"; }
+.editor-ov.he-dock-left .editor-top { grid-area: top; }
+.editor-ov.he-dock-left .editor-stage { grid-area: stage; }
+.editor-ov.he-dock-left .he-bar {
+  grid-area: bar; flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+  gap: 5px; padding: 10px; overflow-y: auto; overflow-x: hidden;
+  border-bottom: none; border-right: 1px solid var(--border);
+}
+.editor-ov.he-dock-left .he-bar > * { width: 100%; flex: 0 0 auto; }
+.editor-ov.he-dock-left .he-bar .btn { justify-content: flex-start; text-align: left; }
+.editor-ov.he-dock-left .he-bar .ed-ico { justify-content: center; text-align: center; }
+.editor-ov.he-dock-left .he-bar .ed-menu { display: block; }
+.editor-ov.he-dock-left .he-bar .ed-menu > summary { width: 100%; justify-content: flex-start; text-align: left; }
+.editor-ov.he-dock-left .he-bar select,
+.editor-ov.he-dock-left .he-bar input[type="number"],
+.editor-ov.he-dock-left .he-bar input[type="color"] { width: 100%; }
+.editor-ov.he-dock-left .he-bar .he-op { justify-content: space-between; }
+.editor-ov.he-dock-left .he-bar .he-op input[type="range"] { width: 100px; }
+.editor-ov.he-dock-left .he-bar .ed-sep { width: 100%; height: 1px; margin: 4px 0; }
+.editor-ov.he-dock-left .he-tools { left: calc(50% + var(--he-dock-w) / 2); } /* centra sobre o palco (metade da coluna) */
+/* Agrupa controles pequenos em linhas — evita a coluna monótona de botões full-width (o "N"
+   deixa de virar uma barra gigante). No topo o grupo é transparente (display:contents), então
+   a barra horizontal fica idêntica; só na coluna à esquerda ele vira uma linha de itens. */
+.he-grp { display: contents; }
+.he-bar .he-grp > * { flex: 0 0 auto; }
+.editor-ov.he-dock-left .he-bar .he-grp { display: flex; gap: 6px; width: 100%; }
+.editor-ov.he-dock-left .he-bar .he-grp > * { flex: 1 1 0; width: auto; min-width: 0; }
+.editor-ov.he-dock-left .he-bar .he-grp input[type="color"] { padding: 3px; }
+/* leve respiro e divisórias mais sutis na coluna */
+.editor-ov.he-dock-left .he-bar { gap: 6px; padding: 12px 12px 16px; }
+.editor-ov.he-dock-left .he-bar > .ed-sep { margin: 6px 2px; opacity: .7; }
+/* Popover fechado não deve ocupar largura na coluna estreita (min-width dele estouraria o
+   scrollWidth). Ao abrir, o handler o transforma em flyout fixo, fora da coluna. */
+.editor-ov.he-dock-left .he-bar .ed-menu:not([open]) .ed-pop { display: none; }
 /* linhas de encaixe inteligente (snap) — cor de destaque distinta do azul das guias de centro */
 .he-guideline { position: absolute; z-index: 34; pointer-events: none; background: #ff4d6d; }
 .he-guideline-v { top: 0; bottom: 0; width: 1px; }
@@ -1158,6 +1197,20 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .art-slide-img { width: 150px; max-width: none; }
 .art-slide-dl { display: block; text-align: center; margin-top: 6px; font-size: 12px; color: var(--accent-strong); line-height: 1.2; }
 .art-slide-dl:hover { text-decoration: underline; }
+
+/* ---- Quadro do carrossel (estilo Figma: slides livres numa tela) ---- */
+.board-ov { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; flex-direction: column; }
+.board-top { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--border-soft); background: var(--surface); flex: 0 0 auto; }
+.board-title { font-weight: 700; font-size: 15px; color: var(--text); }
+.board-snap { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
+.board-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; background: var(--surface-2); cursor: grab; background-image: radial-gradient(var(--border-soft) 1px, transparent 1px); background-size: 26px 26px; }
+.board-stage:active { cursor: grabbing; }
+.board-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.board-item { position: absolute; cursor: move; line-height: 0; box-shadow: 0 8px 34px rgba(0,0,0,.45); }
+.board-slide { display: block; width: 100%; height: 100%; }
+.board-num { position: absolute; top: 12px; left: 12px; min-width: 40px; height: 40px; padding: 0 10px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-pill); font-size: 20px; font-weight: 800; background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 10px rgba(0,0,0,.45); pointer-events: none; }
+.board-tools { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 6px 12px; box-shadow: var(--shadow); }
+.board-tip { font-size: 12px; color: var(--text-mut); margin-left: 8px; }
 .social-mock { display: flex; justify-content: center; }
 .sm-card { width: 100%; max-width: 420px; background: #fff; color: #0d1f29; border: 1px solid #e2e6ea; border-radius: 12px; padding: 16px; box-shadow: 0 4px 18px rgba(0,0,0,.12); }
 .sm-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
