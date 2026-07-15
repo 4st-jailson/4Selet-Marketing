@@ -446,6 +446,26 @@ function promote(task_name, task_date, to, by, reason) {
   return runScript("promote_task.js", argv);
 }
 
+// Move uma pasta de forma robusta entre ZONAS. Em produção (Docker), outputs/ é um volume
+// nomeado mas outputs/approved e outputs/archive são bind-mounts (dispositivos DIFERENTES),
+// então fs.renameSync cruza filesystem e falha com EXDEV. Fallback: copia + apaga. (Mesmo
+// padrão de scripts/promote_task.js:moveDirRobust.)
+function moveDirRobust(src, dst) {
+  const tryRename = () => { fs.renameSync(src, dst); };
+  try { tryRename(); return; } catch (e) {
+    if (e.code === "EBUSY" || e.code === "EPERM") { // lock de FS (Windows) → retry curto
+      const wait = Date.now() + 200; while (Date.now() < wait) { /* busy-wait curto */ }
+      tryRename(); return;
+    }
+    if (e.code === "EXDEV") { // cross-device (bind-mount vs volume) → copia + apaga
+      fs.cpSync(src, dst, { recursive: true });
+      fs.rmSync(src, { recursive: true, force: true });
+      return;
+    }
+    throw e;
+  }
+}
+
 // Descarta uma task movendo-a (reversivel) para outputs/_archived/.
 // Nunca remove fisicamente. Recusa tasks ja aprovadas (zona approved).
 function discardTask(folder) {
@@ -462,7 +482,7 @@ function discardTask(folder) {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     dest = path.join(archivedRoot, folder + "__" + stamp);
   }
-  fs.renameSync(loc.path, dest);
+  moveDirRobust(loc.path, dest);
   return { from: loc.path, to: dest };
 }
 
