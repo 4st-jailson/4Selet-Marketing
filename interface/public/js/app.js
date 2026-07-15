@@ -1223,6 +1223,7 @@ async function openHtmlEditor(folder, task, rel) {
   toast("Abrindo editor…", "info");
   const multiSlide = targets.length > 1;
   let assetMaps = [], dirty = false, changed = false, current = null, curScale = 1; // [prefixo file://, token /url/]
+  let selection = new Set(); // multi-seleção (Shift): conjunto de selecionados; 'current' = âncora (dita toolbar/alça)
   let hist = [], hi = -1; // desfazer/refazer: pilha de innerHTML do .card
   let artW = 1080, artH = 1080, fitScale = 1; // dimensões da arte + zoom "ajustar à tela"
   const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;}";
@@ -1403,16 +1404,22 @@ async function openHtmlEditor(folder, task, rel) {
   function interactive(doc, el) {
     el.addEventListener("mousedown", (e) => {
       if (el.isContentEditable) return;
-      e.preventDefault(); e.stopPropagation(); select(el);
-      const sx = e.clientX, sy = e.clientY, tf = getTf(el);
+      e.preventDefault(); e.stopPropagation();
+      if (e.shiftKey) { select(el, true); return; } // Shift = alterna 'el' na seleção, sem arrastar
+      if (!selection.has(el)) select(el); // clicou fora da seleção → seleciona só ele; se já está, mantém p/ mover o grupo
+      const movers = selection.size ? [...selection] : [el];
+      const sx = e.clientX, sy = e.clientY;
+      const tfs = new Map(movers.map((m) => [m, getTf(m)])); // transform inicial de cada um
+      const at = tfs.get(el) || getTf(el); // âncora (o clicado) — base do snap
+      const single = movers.length <= 1;
       const mv = (ev) => {
-        // Se o botão já não está pressionado (ex.: soltou o mouse FORA do iframe e o mouseup
-        // não chegou aqui), encerra em vez de "grudar" o elemento no cursor ao passar por perto.
+        // Se o botão já não está pressionado (soltou fora do iframe), encerra.
         if (ev.buttons === 0) { up(); return; }
-        let nx = tf.x + (ev.clientX - sx), ny = tf.y + (ev.clientY - sy);
-        if (!(ev.ctrlKey || ev.metaKey)) { const sn = snapMove(el, nx, ny); nx = sn.x; ny = sn.y; } // Ctrl segura = sem encaixe
+        let dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if (single && !(ev.ctrlKey || ev.metaKey)) { const sn = snapMove(el, at.x + dx, at.y + dy); dx = sn.x - at.x; dy = sn.y - at.y; } // snap só ao mover 1 (Ctrl segura desliga)
         else clearGuides();
-        setTf(el, Object.assign({}, tf, { x: nx, y: ny })); positionHandle(); dirty = true;
+        movers.forEach((m) => { const t = tfs.get(m); setTf(m, Object.assign({}, t, { x: t.x + dx, y: t.y + dy })); }); // mesmo delta p/ todos
+        positionHandle(); dirty = true;
       };
       const up = () => {
         doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up);
@@ -1503,15 +1510,19 @@ async function openHtmlEditor(folder, task, rel) {
     if (n.tagName === "DETAILS") { n.classList.toggle("ctl-off", off); if (off) n.removeAttribute("open"); }
     else n.disabled = off;
   }
-  function select(el) {
-    if (current) current.removeAttribute("data-he-sel");
-    current = el;
+  // Marca (data-he-sel) exatamente os elementos do conjunto 'selection'.
+  function selMark() {
+    const doc = frame.contentDocument; if (!doc) return;
+    doc.querySelectorAll("[data-he-sel]").forEach((x) => x.removeAttribute("data-he-sel"));
+    selection.forEach((x) => x.setAttribute("data-he-sel", "1"));
+  }
+  // Reflete a barra de ferramentas a partir da ÂNCORA (el). Sem el = tudo desabilitado.
+  function syncToolbar(el) {
     const isImg = !!el && el.tagName === "IMG";
     ["he-font", "he-size", "he-bold", "he-italic", "he-align", "he-lh", "he-color", "he-eyedrop", "he-fx-menu"].forEach((id) => setCtl(id, !el || isImg)); // só texto
     ["he-replace", "he-filter-menu"].forEach((id) => setCtl(id, !isImg)); // só imagem
     ["he-opacity", "he-rot", "he-flip", "he-align2-menu", "he-layer-menu", "he-dup"].forEach((id) => setCtl(id, !el)); // qualquer elemento
-    if (!el) { handle.style.display = "none"; return; }
-    el.setAttribute("data-he-sel", "1");
+    if (!el) return;
     const cs = gcs(el), tf = getTf(el);
     const op = parseFloat(cs.opacity); if ($("#he-opacity")) $("#he-opacity").value = Math.round((isFinite(op) ? op : 1) * 100);
     if ($("#he-rot")) $("#he-rot").value = Math.round(tf.rot || 0);
@@ -1527,7 +1538,23 @@ async function openHtmlEditor(folder, task, rel) {
       $("#he-bold").classList.toggle("on", (parseInt(cs.fontWeight, 10) || 400) >= 700);
       $("#he-italic").classList.toggle("on", cs.fontStyle === "italic");
     }
-    positionHandle();
+  }
+  // select(el) = seleção única (limpa o resto). select(el, true) = Shift: alterna 'el' no conjunto.
+  // select(null) = desseleciona tudo. A alça de resize só aparece com EXATAMENTE 1 selecionado.
+  function select(el, additive) {
+    if (!el) { selection.clear(); current = null; selMark(); syncToolbar(null); handle.style.display = "none"; return; }
+    if (additive) {
+      if (selection.has(el)) { selection.delete(el); if (current === el) current = selection.size ? [...selection][selection.size - 1] : null; }
+      else { selection.add(el); current = el; }
+    } else { selection.clear(); selection.add(el); current = el; }
+    selMark(); syncToolbar(current);
+    if (selection.size === 1 && current) positionHandle(); else handle.style.display = "none";
+  }
+  function selectAll() {
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const all = [...card.querySelectorAll("[data-he]")]; if (!all.length) return;
+    selection.clear(); all.forEach((x) => selection.add(x)); current = all[all.length - 1];
+    selMark(); syncToolbar(current); handle.style.display = "none";
   }
   // --- Desfazer/refazer: snapshot do innerHTML do card (sem marcações de seleção) ---
   function snapshot() {
@@ -1543,10 +1570,10 @@ async function openHtmlEditor(folder, task, rel) {
   function updateUndo() { const u = $("#he-undo"), r = $("#he-redo"); if (u) u.disabled = hi <= 0; if (r) r.disabled = hi >= hist.length - 1; }
   function applyHist() {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
-    current = null; handle.style.display = "none";
+    current = null; selection.clear(); handle.style.display = "none"; // innerHTML novo → refs antigas morrem
     card.innerHTML = hist[hi];
     card.querySelectorAll("[data-he]").forEach((el) => { el.removeAttribute("data-he-sel"); interactive(doc, el); });
-    dirty = true;
+    syncToolbar(null); dirty = true;
   }
   function undo() { if (hi > 0) { hi--; applyHist(); updateUndo(); } }
   function redo() { if (hi < hist.length - 1) { hi++; applyHist(); updateUndo(); } }
@@ -1588,11 +1615,11 @@ async function openHtmlEditor(folder, task, rel) {
   $("#he-italic").onclick = () => { applyStyle((el) => { const it = gcs(el).fontStyle === "italic"; el.style.fontStyle = it ? "normal" : "italic"; $("#he-italic").classList.toggle("on", !it); }); if (current) snapshot(); };
   $("#he-color").oninput = () => applyStyle((el) => { el.style.color = $("#he-color").value; });
   $("#he-color").onchange = () => { if (current) snapshot(); };
-  $("#he-del").onclick = () => { if (current) { current.remove(); select(null); dirty = true; snapshot(); } };
+  $("#he-del").onclick = () => { if (selection.size) { selection.forEach((x) => x.remove()); select(null); dirty = true; snapshot(); } };
   $("#he-undo").onclick = undo; $("#he-redo").onclick = redo;
 
   // ===== Recursos "editor completo" (lote pedido pelo Hugo) =====
-  const applyAny = (fn) => { if (current) { fn(current); dirty = true; } }; // vale p/ texto E imagem
+  const applyAny = (fn) => { if (selection.size) { selection.forEach(fn); dirty = true; } }; // vale p/ texto E imagem, em LOTE
   // Opacidade (texto e imagem)
   $("#he-opacity").oninput = () => applyAny((el) => { el.style.opacity = (+$("#he-opacity").value / 100); });
   $("#he-opacity").onchange = () => { if (current) snapshot(); };
@@ -1603,12 +1630,18 @@ async function openHtmlEditor(folder, task, rel) {
   $("#he-flip").onclick = () => { applyAny((el) => { const t = getTf(el); setTf(el, Object.assign({}, t, { fx: -t.fx })); }); if (current) snapshot(); };
   // Duplicar (Ctrl+D)
   function duplicateCurrent() {
-    if (!current) return;
+    if (!selection.size) return;
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
-    const clone = current.cloneNode(true); clone.removeAttribute("data-he-sel");
-    if (gcs(current).position === "static") { clone.style.position = "absolute"; clone.style.left = current.offsetLeft + "px"; clone.style.top = current.offsetTop + "px"; }
-    const t = getTf(current); setTf(clone, Object.assign({}, t, { x: t.x + 24, y: t.y + 24 }));
-    card.appendChild(clone); interactive(doc, clone); select(clone); dirty = true; snapshot();
+    const clones = [];
+    selection.forEach((src) => {
+      const clone = src.cloneNode(true); clone.removeAttribute("data-he-sel");
+      if (gcs(src).position === "static") { clone.style.position = "absolute"; clone.style.left = src.offsetLeft + "px"; clone.style.top = src.offsetTop + "px"; }
+      const t = getTf(src); setTf(clone, Object.assign({}, t, { x: t.x + 24, y: t.y + 24 }));
+      card.appendChild(clone); interactive(doc, clone); clones.push(clone);
+    });
+    selection.clear(); clones.forEach((c) => selection.add(c)); current = clones[clones.length - 1];
+    selMark(); syncToolbar(current); if (selection.size === 1 && current) positionHandle(); else handle.style.display = "none";
+    dirty = true; snapshot();
   }
   $("#he-dup").onclick = duplicateCurrent;
   // "Grupo ↑": sobe a seleção pro elemento-pai (o bloco em volta) e o torna arrastável na
@@ -1753,7 +1786,9 @@ async function openHtmlEditor(folder, task, rel) {
     if (ae && ae.isContentEditable) return;
     const t = (document.activeElement || {}).tagName;
     if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
-    if ((e.key === "Delete" || e.key === "Backspace") && current) { e.preventDefault(); current.remove(); select(null); dirty = true; snapshot(); }
+    if ((e.key === "Delete" || e.key === "Backspace") && selection.size) { e.preventDefault(); selection.forEach((x) => x.remove()); select(null); dirty = true; snapshot(); }
+    else if (e.key === "Escape" && selection.size) { e.preventDefault(); select(null); } // Esc = desseleciona tudo
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) { e.preventDefault(); selectAll(); } // Ctrl+A = selecionar tudo
     else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) { e.preventDefault(); zoomBy(1.2); }
