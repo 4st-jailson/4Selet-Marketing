@@ -1430,7 +1430,17 @@ async function openHtmlEditor(folder, task, rel) {
       const inlineKids = Array.from(el.children).every((c) => INL.indexOf(c.tagName) >= 0);
       if (!txt || !inlineKids) return;
       el.contentEditable = "true"; el.focus();
-      const done = () => { el.contentEditable = "false"; el.removeEventListener("blur", done); dirty = true; snapshot(); };
+      // TAB/Esc dentro do texto apenas CONFIRMAM a edição (blur) — NÃO vazam foco nem fragmentam.
+      // (O TAB nativo do Chromium quebrava o texto em pedaços sem data-he e travava o clique.)
+      const onEditKey = (ev) => { if (ev.key === "Tab" || ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); el.blur(); } };
+      el.addEventListener("keydown", onEditKey);
+      const done = () => {
+        el.contentEditable = "false";
+        el.removeEventListener("blur", done);
+        el.removeEventListener("keydown", onEditKey);
+        el.normalize(); // junta text nodes fragmentados antes do snapshot/serialização
+        dirty = true; snapshot();
+      };
       el.addEventListener("blur", done);
     });
   }
@@ -1523,6 +1533,7 @@ async function openHtmlEditor(folder, task, rel) {
   function snapshot() {
     const doc = frame.contentDocument; if (!doc) return; const card = doc.querySelector(".card") || doc.body;
     const sel = card.querySelector("[data-he-sel]"); if (sel) sel.removeAttribute("data-he-sel");
+    const ce = card.querySelector('[contenteditable="true"]'); if (ce) ce.removeAttribute("contenteditable"); // não congela texto como editável no histórico
     const html = card.innerHTML;
     if (sel) sel.setAttribute("data-he-sel", "1");
     hist = hist.slice(0, hi + 1); hist.push(html); hi = hist.length - 1;
@@ -1787,8 +1798,16 @@ async function openHtmlEditor(folder, task, rel) {
         });
       });
       const html = "<!DOCTYPE html>" + root.outerHTML;
+      // Guarda de dimensões: se a serialização perdeu a regra html,body{width;height}, o backend
+      // falharia com E_NO_DIMS e restauraria o backup EM SILÊNCIO (a imagem não mudaria). Aborta
+      // com erro claro em vez de fingir que salvou.
+      if (!/html\s*,\s*body\s*\{[^}]*?width:\s*\d+px[^}]*?height:\s*\d+px/i.test(html)) {
+        toast("Não consegui preservar o tamanho da arte. Recarregue a peça e tente de novo.", "error");
+        btn.disabled = false; btn.textContent = o; return;
+      }
       const r = await API.saveEditedHtml(folder, curRel, html);
-      if (!r || !r.ok) { toast("Aviso: verifique a arte.", "warn"); }
+      // NÃO mascarar falha: só marca "salvo" e agenda o refresh da peça se o backend confirmou.
+      if (!r || !r.ok) { toast((r && r.error) || "A arte não foi salva. Verifique e tente de novo.", "error"); btn.disabled = false; btn.textContent = o; return; }
       dirty = false; changed = true; // 'changed' garante o refresh da peça ao fechar (sem F5)
       toast("Arte salva. A peça foi atualizada.", "success");
       // Confirmação visível no próprio botão: fica verde "Salvo ✓" por alguns segundos.
