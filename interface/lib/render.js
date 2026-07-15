@@ -1001,7 +1001,8 @@ async function renderForDownload(folder, rel, scale) {
   }
   const htmlPath = absPng.replace(/\.png$/i, ".html");
   if (!fs.existsSync(htmlPath)) { const e = new Error("origem (HTML) da peca nao encontrada para re-render"); e.code = "E_NO_SOURCE_HTML"; throw e; }
-  const base = _pngBaseDims(fs.readFileSync(htmlPath, "utf8"));
+  const rawHtml = fs.readFileSync(htmlPath, "utf8");
+  const base = _pngBaseDims(rawHtml);
   if (!base) { const e = new Error("nao foi possivel ler as dimensoes da peca"); e.code = "E_NO_SOURCE_HTML"; throw e; }
   const s = Math.max(1, Math.min(4, Math.round(Number(scale) || 1)));
   const reqW = base.w * s, reqH = base.h * s;
@@ -1010,7 +1011,12 @@ async function renderForDownload(folder, rel, scale) {
   if (stored && stored.w === reqW && stored.h === reqH) return { path: absPng, width: reqW, height: reqH, temp: false };
   const uniq = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   const outPng = path.join(os.tmpdir(), "4selet-dl-" + process.pid + "-" + uniq + ".png");
-  const r = await htmlToPng(htmlPath, outPng, base.w, base.h, s);
+  // Re-localiza assets p/ o ambiente atual (a peça pode ter file:// de outro ambiente) e renderiza
+  // a partir de um HTML temporário — senão a foto/logo somem no download em resolução.
+  const tmpHtml = path.join(os.tmpdir(), "4selet-dl-" + process.pid + "-" + uniq + ".html");
+  fs.writeFileSync(tmpHtml, relocalizeAssets(rawHtml), "utf8");
+  const r = await htmlToPng(tmpHtml, outPng, base.w, base.h, s);
+  try { fs.unlinkSync(tmpHtml); } catch (e) {}
   if (!r.ok || !fs.existsSync(outPng)) { const e = new Error((r.stderr || "falha ao renderizar em resolucao").slice(0, 300)); e.code = "E_RENDER_FAIL"; throw e; }
   return { path: outPng, width: reqW, height: reqH, temp: true };
 }
@@ -1034,6 +1040,28 @@ function sanitizeArtHtml(html) {
   return s;
 }
 
+// Constroi um file:// CORRETO p/ o ambiente atual (Linux: file:///app/x ; Windows: file:///C:/x).
+function toFileUrl(absPath) {
+  let p = path.resolve(absPath).replace(/\\/g, "/");
+  if (p[0] !== "/") p = "/" + p; // Windows "C:/x" -> "/C:/x"
+  return "file://" + p;
+}
+// Re-localiza os caminhos de asset (foto em /uploads/, logo em /assets|/brand-assets/) para o
+// file:// do AMBIENTE ATUAL. A arte editada pode carregar file:// ABSOLUTO de OUTRO ambiente
+// (peca feita no Windows local e editada em prod Linux) OU a URL servida (/uploads/, /brand-assets/).
+// O render roda no container, entao caminho de outra maquina nao existe -> foto/logo somem. Aqui
+// reescrevemos o prefixo ATE /<seg>/ (inclusive) pelo diretorio LOCAL correto, em src/href/xlink:href.
+function relocalizeAssets(html) {
+  const up = toFileUrl(path.join(__dirname, "..", "public", "uploads")) + "/";
+  const as = toFileUrl(PATHS.ASSETS_DIR) + "/";
+  const rw = (h, seg, abs) => h.replace(new RegExp('((?:src|href|xlink:href)\\s*=\\s*["\'])[^"\']*?/' + seg + '/', "gi"), "$1" + abs);
+  let h = html;
+  h = rw(h, "uploads", up);
+  h = rw(h, "brand-assets", as); // servido como /brand-assets/ mapeia para o dir assets/
+  h = rw(h, "assets", as);
+  return h;
+}
+
 // Editor HTML (item A): grava o HTML EDITADO da peca no proprio .html da arte e
 // re-renderiza o PNG via Playwright — pixel-perfect (a arte JA e HTML). So zona active.
 // Seguranca: SANITIZA o HTML (nao confiavel), so EDITA arte que ja existe, renderiza com
@@ -1049,7 +1077,7 @@ async function renderEditedHtml(folder, rel, html) {
   const htmlPath = absPng.replace(/\.png$/i, ".html");
   // M5: so EDITA uma arte que JA existe — nao cria par .html/.png arbitrario.
   if (!fs.existsSync(htmlPath)) { const e = new Error("origem (HTML) da peca nao encontrada para editar"); e.code = "E_NO_SOURCE_HTML"; throw e; }
-  const clean = sanitizeArtHtml(String(html));
+  const clean = relocalizeAssets(sanitizeArtHtml(String(html)));
   const base = _pngBaseDims(clean);
   if (!base) { const e = new Error("nao foi possivel ler as dimensoes do HTML editado"); e.code = "E_NO_DIMS"; throw e; }
   const backup = fs.readFileSync(htmlPath, "utf8"); // p/ restaurar se o render falhar
