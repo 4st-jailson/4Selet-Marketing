@@ -196,7 +196,10 @@ async function publishTask(folder, opts) {
   const res = images.length > 1
     ? await publishCarousel(c.ig_user_id, c.access_token, urls, caption)
     : await publishImage(c.ig_user_id, c.access_token, urls[0], caption);
-  return { ok: true, dry_run: false, type: images.length > 1 ? "carrossel" : "imagem", post_id: res.post_id };
+  // Busca o link público do post (pra "ver no Instagram" no histórico). Best-effort.
+  let permalink = "";
+  try { const pl = await graphGet("/" + res.post_id, { fields: "permalink", access_token: c.access_token }); if (pl.ok && pl.body && pl.body.permalink) permalink = pl.body.permalink; } catch (e) { /* segue sem link */ }
+  return { ok: true, dry_run: false, type: images.length > 1 ? "carrossel" : "imagem", post_id: res.post_id, permalink };
 }
 
 module.exports = {

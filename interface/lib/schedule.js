@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { PATHS } = require("./config");
+const publications = require("./publications");
 
 const FILE = path.join(PATHS.DATA_DIR, "schedule.json");
 
@@ -58,6 +59,8 @@ function startWorker(publishFn) {
       try {
         const r = await publishFn(it.folder, { kind: it.kind, caption: it.caption });
         update(it.id, { status: r && r.dry_run ? "simulado" : "published", post_id: (r && r.post_id) || null, published_at: new Date().toISOString() });
+        // registra no histórico de publicações (aba "Publicados") quando saiu de verdade
+        if (r && r.ok && !r.dry_run) { try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); } catch (e) { /* best-effort */ } }
       } catch (e) {
         update(it.id, { status: "failed", error: (e && e.message ? e.message : String(e)).slice(0, 300), failed_at: new Date().toISOString() });
       }

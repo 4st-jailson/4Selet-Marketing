@@ -291,6 +291,7 @@ const Routes = {
   import: viewImport,
   settings: viewSettings,
   usuarios: viewUsers,
+  publicacoes: viewPublications,
   agendados: viewSchedule,
 };
 
@@ -2924,27 +2925,47 @@ async function openPhonePreview(task) {
   render(initV);
 }
 
-// View "Agendados": fila de publicações agendadas (revisar / cancelar).
-async function viewSchedule() {
-  setTitle("Agendados");
-  let items = [];
-  try { items = (await API.listSchedule()).items || []; } catch (e) { setView('<div class="empty">Erro ao carregar os agendamentos.</div>'); return; }
+// View "Publicações": abas [Publicados | Agendados]. Publicados = histórico do que foi ao ar
+// (agendado OU direto); Agendados = fila pendente (ainda vai sair).
+async function viewPublications(arg, query) {
+  setTitle("Publicações");
+  const tab = ((query && query.tab) === "agendados") ? "agendados" : "publicados";
+  let pubs = [], pend = [];
+  try {
+    const [pr, sr] = await Promise.all([API.publications(), API.listSchedule().catch(() => ({ items: [] }))]);
+    pubs = pr.items || [];
+    pend = (sr.items || []).filter((it) => it.status === "pending" || it.status === "publishing");
+  } catch (e) { setView('<div class="empty">Erro ao carregar as publicações.</div>'); return; }
   const fmt = (iso) => { try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso; } };
-  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], published: ["approved", "Publicado"], simulado: ["plain", "Simulado"], failed: ["rejected", "Falhou"], cancelled: ["plain", "Cancelado"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
-  const rows = items.length ? items.map((it) => `<tr>
+  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], failed: ["rejected", "Falhou"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
+  const segs = `<div class="seg-group mb"><a class="seg ${tab === "publicados" ? "on" : ""}" href="#/publicacoes?tab=publicados">Publicados${pubs.length ? " (" + pubs.length + ")" : ""}</a><a class="seg ${tab === "agendados" ? "on" : ""}" href="#/publicacoes?tab=agendados">Agendados${pend.length ? " (" + pend.length + ")" : ""}</a></div>`;
+  let body;
+  if (tab === "agendados") {
+    const rows = pend.length ? pend.map((it) => `<tr>
       <td><strong>${esc(it.label || it.folder)}</strong><div class="muted">${esc(it.folder)}</div></td>
       <td>${esc(fmt(it.scheduled_at))}</td>
-      <td>${sb(it.status)}${it.error ? ' <span class="hint">' + esc(it.error) + "</span>" : ""}</td>
-      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(it.folder)}">Ver peça</a>${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : (it.post_id ? ' <span class="hint">post ' + esc(it.post_id) + "</span>" : "")}</td>
-    </tr>`).join("") : '<tr><td colspan="4" class="muted">Nenhum agendamento. Agende uma peça aprovada em “Publicar no Instagram”.</td></tr>';
-  setView(`<div class="section-head"><div><h2>Agendados</h2><p class="muted">Publicações agendadas para o Instagram. Enquanto estiver “Agendado”, você pode cancelar/suspender.</p></div></div>
-    <div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`);
+      <td>${sb(it.status)}</td>
+      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(it.folder)}">Ver peça</a>${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : ""}</td>
+    </tr>`).join("") : '<tr><td colspan="4" class="muted">Nenhum agendamento pendente. Agende uma peça aprovada em “Publicar ou agendar”.</td></tr>';
+    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`;
+  } else {
+    const rows = pubs.length ? pubs.map((p) => `<tr>
+      <td><strong>${esc(p.label || p.folder)}</strong><div class="muted">${esc(p.folder)}</div></td>
+      <td>${esc(fmt(p.published_at))}</td>
+      <td>${esc(p.kind || "—")}${p.scheduled_at ? ' <span class="hint">· agendada</span>' : ""}</td>
+      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}</td>
+    </tr>`).join("") : '<tr><td colspan="4" class="muted">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
+    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Tipo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  setView(`<div class="section-head"><div><h2>Publicações</h2><p class="muted">O que já foi ao ar no Instagram e o que está agendado.</p></div></div>${segs}${body}`);
   $$("#sched-rows [data-cancel]").forEach((b) => { b.onclick = async () => {
     if (!await uiConfirm("Cancelar este agendamento? A peça não será publicada no horário.", { confirmText: "Cancelar", confirmKind: "danger" })) return;
-    try { await API.cancelSchedule(b.dataset.cancel); toast("Agendamento cancelado.", "ok"); viewSchedule(); }
+    try { await API.cancelSchedule(b.dataset.cancel); toast("Agendamento cancelado.", "ok"); viewPublications(arg, query); }
     catch (e) { toast((e && e.message) || "Erro ao cancelar.", "error"); }
   }; });
 }
+// Compat: rota antiga #/agendados abre a aba Agendados.
+function viewSchedule(arg, query) { return viewPublications(arg, Object.assign({ tab: "agendados" }, query || {})); }
 
 /* ---- Lightbox ---- */
 let _lbBlobUrl = null;

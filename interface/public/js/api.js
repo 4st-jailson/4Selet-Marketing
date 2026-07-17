@@ -86,6 +86,7 @@ const API = (() => {
     publishPiece: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder), payload || {}),
     schedulePost: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/schedule", payload || {}),
     listSchedule: () => req("GET", "/api/publish/schedule"),
+    publications: () => req("GET", "/api/publish/publications"),
     cancelSchedule: (id) => req("DELETE", "/api/publish/schedule/" + encodeURIComponent(id)),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),

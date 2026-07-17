@@ -5,6 +5,7 @@ const express = require("express");
 const router = express.Router();
 const publish = require("../lib/publish");
 const schedule = require("../lib/schedule");
+const publications = require("../lib/publications");
 const content = require("../lib/content");
 
 function adminOnly(req, res, next) {
@@ -31,6 +32,9 @@ router.post("/test", adminOnly, async (req, res) => {
   try { res.json(await publish.testConnection()); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
+
+// histórico de publicações que foram ao ar (agendadas OU diretas) — aba "Publicados"
+router.get("/publications", (req, res) => res.json({ items: publications.list() }));
 
 // --- agendamento ---
 // lista os agendamentos (fila)
@@ -62,9 +66,12 @@ router.post("/:folder", async (req, res) => {
   try {
     const b = req.body || {};
     const r = await publish.publishTask(req.params.folder, { kind: b.kind, caption: b.caption, dryRun: b.dryRun });
-    // Registra "publicado" na peça (metadado) só quando saiu DE VERDADE (não dry-run/simulado).
+    // Só quando saiu DE VERDADE (não dry-run): marca a peça como publicada + registra no histórico.
     if (r && r.ok && !r.dry_run) {
-      try { content.setPublished(req.params.folder, { by: req.user && (req.user.name || req.user.username), post_id: r.post_id }); } catch (e) { /* metadado best-effort */ }
+      const who = req.user && (req.user.name || req.user.username);
+      const t = content.getTask(req.params.folder);
+      try { content.setPublished(req.params.folder, { by: who, post_id: r.post_id }); } catch (e) { /* best-effort */ }
+      try { publications.add({ folder: req.params.folder, label: (t && t.status && t.status.title) || req.params.folder, kind: r.type, caption: b.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: null, by: who }); } catch (e) { /* best-effort */ }
     }
     res.json(Object.assign({ ok: true, task: content.getTask(req.params.folder) }, r));
   } catch (e) {
