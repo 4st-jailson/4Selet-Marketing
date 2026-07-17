@@ -176,7 +176,11 @@ router.post("/:folder/render", async (req, res) => {
   try {
     const r = await render.render(req.params.folder, kind, { template });
     const task = content.getTask(req.params.folder);
-    return res.status(r.ok ? 200 : 400).json(Object.assign({ kind, task }, r));
+    const payload = Object.assign({ kind, task }, r);
+    // Sem isto, uma falha de render (r.ok=false) chegava ao front como "HTTP 400" cru
+    // (o api.js só lê `error`). Agora mostra o motivo real (ex.: stderr do Playwright).
+    if (!r.ok && !payload.error) payload.error = (r.stderr && String(r.stderr).slice(0, 300)) || "Não foi possível gerar a arte. Tente novamente.";
+    return res.status(r.ok ? 200 : 400).json(payload);
   } catch (e) {
     const code = e.code === "E_NOT_EDITABLE" ? 409 : (e.code === "E_NO_RENDER" ? 422 : 500);
     return res.status(code).json({ error: e.message, code: e.code });
@@ -199,6 +203,7 @@ router.post("/:folder/preview", async (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
   const r = await content.generatePreview(t.status.task_name, t.status.task_date);
+  if (!r.ok && !r.error) r.error = (r.stderr && String(r.stderr).slice(0, 300)) || "Não foi possível gerar a prévia da peça.";
   res.status(r.ok ? 200 : 400).json(r);
 });
 
@@ -209,6 +214,7 @@ router.post("/:folder/promote", async (req, res) => {
   const { to, by, reason } = req.body || {};
   if (!to) return res.status(400).json({ error: "campo 'to' obrigatorio" });
   const r = await content.promote(t.status.task_name, t.status.task_date, to, by, reason);
+  if (!r.ok && !r.error) r.error = (r.stderr && String(r.stderr).slice(0, 300)) || "Não foi possível concluir a transição da peça.";
   res.status(r.ok ? 200 : 400).json(r);
 });
 

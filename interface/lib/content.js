@@ -376,6 +376,25 @@ function setPillar(folder, pillar) {
   return true;
 }
 
+// Metadados da peça "4Selet na Mídia": print da matéria + veículo + link + modelo do device.
+// Gravados em status.media; o renderMedia (render.js) lê daqui pra montar a arte (4:5 + 16:9).
+function setMediaMeta(folder, meta) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return false;
+  const models = ["tablet", "celular", "notebook", "janela"];
+  status.media = {
+    print: String((meta && meta.print) || "").slice(0, 400),
+    url: String((meta && meta.url) || "").slice(0, 400),
+    vehicle: String((meta && meta.vehicle) || "").slice(0, 120),
+    model: models.indexOf(String(meta && meta.model)) !== -1 ? String(meta.model) : "tablet",
+  };
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return true;
+}
+
 // Marca a peça como IMPORTADA (imagens prontas trazidas de fora). O front usa a flag
 // para NÃO oferecer re-render/editor de arte (não há HTML/JSON de origem), só legenda.
 function setImported(folder) {
@@ -490,5 +509,5 @@ function discardTask(folder) {
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setPillar, setImported, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setPillar, setMediaMeta, setImported, markViewed, setTags, generatePreview, promote, discardTask,
 };

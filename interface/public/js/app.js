@@ -89,7 +89,14 @@ function isNewPiece(t) {
 function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels[k]) || k || "Outros"; }
 function pillarLabel(id) { const p = (State.meta.content_pillars || []).find((x) => x.id === id); return p ? (p.short || p.label) : null; }
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
-function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video"; }
+function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video" || k === "media"; }
+// Modelos de dispositivo da peça "4Selet na Mídia" (miniatura schematic + nome).
+const MEDIA_MODELS = [
+  { id: "tablet", name: "Tablet", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
+  { id: "celular", name: "Celular", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
+  { id: "notebook", name: "Notebook", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="24" height="16" rx="1.5"/><path d="M4 30h32l-2-4H6z"/></svg>' },
+  { id: "janela", name: "Janela", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/></svg>' },
+];
 function tag(text) { return '<span class="badge plain">' + esc(text) + "</span>"; }
 function plural(n, sing, plur) { return n + " " + (n === 1 ? sing : plur); }
 function platformLabel(p) { const m = { x: "Threads/X", threads: "Threads/X", instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok", youtube: "YouTube", whatsapp: "WhatsApp", email: "E-mail" }; return m[String(p || "").toLowerCase()] || p; }
@@ -1337,7 +1344,7 @@ function autoVariant(folder) {
 }
 
 function templatePicker(task) {
-  if (task.kind === "video") return ""; // video usa a composition BrandStory
+  if (task.kind === "video" || task.kind === "media") return ""; // video: BrandStory; Mídia: device escolhido na criação
   const current = task.template || autoVariant(task.folder);
   const opts = VISUAL_TEMPLATES.map((t) => `
     <label class="tpl-opt${t.id === current ? " is-active" : ""}" data-tpl="${t.id}">
@@ -1356,7 +1363,7 @@ function selectedTemplate() {
   return el ? el.value : undefined;
 }
 
-function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel"; }
+function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel" || kind === "media"; }
 
 // Imagens de referencia anexadas ao "Ajustar com IA" (a IA as "ve" via visao).
 let REFINE_IMAGES = [];
@@ -3107,6 +3114,23 @@ async function viewCreate(arg, query) {
           <div class="field"><label>IA que vai gerar <span class="hint">(escolha o provedor; o modelo de cada um fica em Configurações)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
         </div>
 
+        <div class="form-section media-only" id="g-media-section" style="display:none">
+          <div class="form-section-head"><h4>A matéria na mídia</h4></div>
+          <div class="field"><label>Print da matéria <span class="hint">(screenshot do artigo — no modelo Celular, use um print de celular pra não cortar)</span></label>
+            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-media-file" accept="image/*" hidden /> Enviar print</label><span class="hint" id="g-media-hint"></span></div>
+            <div class="media-print-prev" id="g-media-prev"></div>
+            <input type="hidden" id="g-media-image" value="" />
+          </div>
+          <div class="row">
+            <div class="field"><label>Veículo</label><input id="g-media-vehicle" placeholder="ex.: Valor Econômico" /></div>
+            <div class="field"><label>Link da matéria <span class="hint">(opcional)</span></label><input id="g-media-url" type="url" placeholder="https://valor.globo.com/..." /></div>
+          </div>
+          <div class="field"><label>Modelo do dispositivo <span class="hint">(como o print aparece na arte)</span></label>
+            <div class="model-pick" id="g-media-model-pick">${MEDIA_MODELS.map((m, i) => `<button type="button" class="model-card${i === 0 ? " on" : ""}" data-model="${esc(m.id)}">${m.svg}<span>${esc(m.name)}</span></button>`).join("")}</div>
+            <input type="hidden" id="g-media-model" value="tablet" />
+          </div>
+        </div>
+
         <div class="form-section">
           <div class="form-section-head"><span class="fs-num">2</span><h4>Sobre a peça</h4></div>
           <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
@@ -3227,8 +3251,11 @@ async function viewCreate(arg, query) {
   const updArtFields = () => {
     const ct = metaType($("#g-type").value);
     const media = ct ? ct.media : "";
-    $$(".art-only").forEach((el) => { el.style.display = media === "image" ? "" : "none"; });
-    $$(".mood-field").forEach((el) => { el.style.display = (media === "image" || media === "video") ? "" : "none"; });
+    const isMedia = !!(ct && ct.id === "media_mention");
+    // .art-only (estilo Editorial/Destaque/Split/Foto) vale p/ imagem — MENOS Mídia, que tem device próprio.
+    $$(".art-only").forEach((el) => { el.style.display = (media === "image" && !isMedia) ? "" : "none"; });
+    $$(".mood-field").forEach((el) => { el.style.display = ((media === "image" || media === "video") && !isMedia) ? "" : "none"; });
+    $$(".media-only").forEach((el) => { el.style.display = isMedia ? "" : "none"; });
   };
   $$("#g-type-grid .type-card").forEach((card) => {
     card.onclick = () => {
@@ -3280,6 +3307,22 @@ async function viewCreate(arg, query) {
   });
   loadPhotoGallery("");
   updPhotoRow();
+  // ---- 4Selet na Mídia: upload do print + seletor de modelo do device ----
+  if ($("#g-media-file")) $("#g-media-file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const hint = $("#g-media-hint"); if (hint) hint.textContent = "enviando…";
+    try {
+      const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(f); });
+      const r = await fetch("/api/uploads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, dataUrl }) }).then((x) => x.json());
+      if (r && r.url) { $("#g-media-image").value = r.url; const pv = $("#g-media-prev"); if (pv) pv.innerHTML = '<img src="' + esc(r.url) + '" alt="print da matéria"/>'; if (hint) hint.textContent = "print enviado"; }
+      else { if (hint) hint.textContent = "falha no envio"; toast((r && r.error) || "falha no envio", "error"); }
+    } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
+    e.target.value = "";
+  });
+  $$("#g-media-model-pick .model-card").forEach((b) => { b.onclick = () => {
+    $$("#g-media-model-pick .model-card").forEach((x) => x.classList.toggle("on", x === b));
+    if ($("#g-media-model")) $("#g-media-model").value = b.dataset.model;
+  }; });
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
   const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
   // Sugere o pilar de conteúdo a partir da campanha (ex.: campanha "Taxa Zero" -> pilar "Campanha Taxa Zero").
@@ -3384,6 +3427,11 @@ async function runGenerate() {
     pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
     cta: ctaDirective(),
     image: ((($("#g-style") && $("#g-style").value) === "photo") && $("#g-image") && $("#g-image").value) ? $("#g-image").value : undefined,
+    // 4Selet na Mídia: print da matéria + veículo + link + modelo do device
+    media_print: ($("#g-media-image") && $("#g-media-image").value) || undefined,
+    media_vehicle: ($("#g-media-vehicle") && $("#g-media-vehicle").value.trim()) || undefined,
+    media_url: ($("#g-media-url") && $("#g-media-url").value.trim()) || undefined,
+    media_model: ($("#g-media-model") && $("#g-media-model").value) || undefined,
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   const prog = startGenProgress($("#g-result"), !!payload.research);

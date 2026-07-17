@@ -367,6 +367,46 @@ function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, foote
 </div></body></html>`;
 }
 
+// ---- 4Selet na Mídia: mockup do print da matéria num DISPOSITIVO, na identidade da marca.
+// Modelos: tablet | celular | notebook | janela. O print (imagem enviada) entra na "tela".
+// Foco na postagem. Layout adapta: 4:5 empilhado (título topo, device centro) e 16:9 lado a lado.
+const MED_BEZEL = "0 55px 130px rgba(0,0,0,.6), 0 0 0 2px rgba(84,153,181,.22)";
+function mediaDevice(model, imgSrc, url) {
+  const shot = imgSrc ? `<img src="${escAttr(imgSrc)}" alt=""/>` : `<div class="scr-empty">print da matéria</div>`;
+  if (model === "celular" || model === "phone") {
+    return `<div class="dev" style="width:406px;height:846px;background:#0a1015;border-radius:56px;padding:14px;box-shadow:${MED_BEZEL};position:relative;transform:rotate(.5deg)"><div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);width:116px;height:32px;background:#05090d;border-radius:18px;z-index:2"></div><div class="scr" style="width:100%;height:100%;border-radius:44px">${shot}</div></div>`;
+  }
+  if (model === "notebook") {
+    return `<div class="dev" style="display:flex;flex-direction:column;align-items:center"><div style="width:812px;height:512px;background:#0a1015;border-radius:18px 18px 5px 5px;padding:16px 16px 15px;box-shadow:${MED_BEZEL};position:relative"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:6px">${shot}</div></div><div style="width:928px;height:30px;background:linear-gradient(180deg,#cfd7dc,#9aa8b0);clip-path:polygon(2.5% 0,97.5% 0,100% 100%,0 100%);border-radius:0 0 12px 12px;box-shadow:0 24px 50px rgba(0,0,0,.45)"></div></div>`;
+  }
+  if (model === "janela" || model === "browser") {
+    return `<div class="dev" style="width:812px;border-radius:16px;overflow:hidden;box-shadow:${MED_BEZEL};border:1px solid ${PALETTE.sky}59"><div style="height:52px;background:#e7ecef;display:flex;align-items:center;gap:10px;padding:0 20px"><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span>${url ? `<span style="margin-left:14px;background:#f2f5f7;color:#6c7c84;font-family:'JetBrains Mono',monospace;font-size:20px;padding:7px 20px;border-radius:999px">${esc(url)}</span>` : ""}</div><div class="scr" style="height:620px">${shot}</div></div>`;
+  }
+  return `<div class="dev" style="perspective:2600px"><div style="width:566px;height:820px;background:#0a1015;border-radius:40px;padding:18px;box-shadow:${MED_BEZEL};transform:rotateX(4deg) rotateY(-6deg) rotate(1deg);position:relative"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:24px">${shot}</div></div></div>`;
+}
+function tplMedia({ width, height, image, url, eyebrow, headline, model }) {
+  const land = width > height;
+  const dev = mediaDevice(model || "tablet", resolveImage(image), url);
+  const veic = eyebrow ? `<div class="veic">${esc(eyebrow)}</div>` : "";
+  const title = `<div class="ttl">4Selet <span class="a">na mídia</span></div>`;
+  const logo = `<img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>`;
+  const common = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
+    .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(130% 130% at 82% 6%, ${PALETTE.blue} 0%, ${PALETTE.navy} 44%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
+    .dots{position:absolute;inset:0;background-image:radial-gradient(${PALETTE.sky}1f 2px,transparent 2px);background-size:48px 48px;opacity:.5}
+    .ttl{font-size:${land ? 56 : 62}px;font-weight:800;letter-spacing:-1px}.ttl .a{color:${PALETTE.sky}}
+    .veic{font-family:'JetBrains Mono',monospace;color:${PALETTE.mist};font-size:${land ? 22 : 23}px;letter-spacing:3px;text-transform:uppercase;margin-top:8px}
+    .logo{height:44px;opacity:.95}
+    .scr{background:#fff;overflow:hidden}.scr img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+    .scr-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9fb0b8;font-size:30px;background:repeating-linear-gradient(45deg,#eef2f4,#eef2f4 20px,#e6ebee 20px,#e6ebee 40px)}`;
+  const body = land
+    ? `<div class="dots"></div><div style="position:relative;height:100%;display:flex;align-items:center;gap:80px;padding:80px 92px">
+        <div style="flex:0 0 auto;display:flex;justify-content:center;flex:1">${dev}</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:22px">${title}${veic}${logo}</div></div>`
+    : `<div class="dots"></div><div style="position:relative;height:100%;display:flex;flex-direction:column;align-items:center;padding:74px 60px 58px">
+        ${title}${veic}<div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%">${dev}</div><div style="margin-top:8px">${logo}</div></div>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${common}</style></head><body><div class="card">${body}</div></body></html>`;
+}
+
 const TEMPLATES = { editorial: tplEditorial, bold: tplBold, split: tplSplit, photo: tplPhoto };
 const TEMPLATE_IDS = Object.keys(TEMPLATES);
 function resolveTemplate(id) { return TEMPLATES[id] || tplEditorial; }
@@ -1087,12 +1127,38 @@ async function renderEditedHtml(folder, rel, html) {
   return { ok: true, w: base.w, h: base.h, rel };
 }
 
+// 4Selet na Mídia: renderiza o print num dispositivo (modelo escolhido em status.media.model),
+// em 2 formatos: 4:5 (ads/feed.png — publicável no IG) e 16:9 (ads/media_16x9.png — site).
+// A legenda vai em copy/instagram_caption.txt (fluxo de feed). Metadados em status.media.
+async function renderMedia(folder, opts) {
+  const loc = requireActive(folder);
+  const status = readJson(path.join(loc.path, "status.json")) || {};
+  const meta = status.media || {};
+  const model = (opts && opts.template) || meta.model || "tablet";
+  const props = { image: meta.print || (opts && opts.image) || "", url: meta.url || "", eyebrow: meta.vehicle || "", model };
+  const dir = path.join(loc.path, "ads");
+  fs.mkdirSync(dir, { recursive: true });
+  const rels = []; let err = "";
+  const jobs = [
+    { w: 1080, h: 1350, html: "feed.html", png: "feed.png", rel: "ads/feed.png" },
+    { w: 1920, h: 1080, html: "media_16x9.html", png: "media_16x9.png", rel: "ads/media_16x9.png" },
+  ];
+  for (const j of jobs) {
+    const hp = path.join(dir, j.html), pp = path.join(dir, j.png);
+    fs.writeFileSync(hp, tplMedia(Object.assign({ width: j.w, height: j.h }, props)), "utf8");
+    const r = await htmlToPng(hp, pp, j.w, j.h, RENDER_SCALE);
+    if (r.ok) rels.push(j.rel); else err = r.stderr || err;
+  }
+  return { ok: rels.indexOf("ads/feed.png") !== -1, rels, stderr: err, template: model };
+}
+
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
 // Assincrono: o chamador (rota) deve usar `await render.render(...)`.
 async function render(folder, kind, opts) {
   switch (kind) {
     case "image": return renderImage(folder, opts);
     case "feed": return renderFeed(folder, opts);
+    case "media": return renderMedia(folder, opts);
     case "carousel": return renderCarousel(folder, opts);
     case "video": return renderVideo(folder);
     default: { const e = new Error("kind sem render de midia: " + kind); e.code = "E_NO_RENDER"; throw e; }

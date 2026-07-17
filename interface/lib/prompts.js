@@ -50,6 +50,12 @@ const SCHEMAS = {
   "visual_direction": "direcao visual concreta (fundo, cor da paleta, uso de Selet Dots, hierarquia)",
   "notes": "1-2 frases de racional de marca"
 }`,
+  media_mention: `{
+  "body": "legenda de PROVA SOCIAL: a 4Selet foi destaque em [veiculo]; o que esse reconhecimento externo valida (autoridade, seriedade da operacao). Tom sobrio de quem foi reconhecido, sem hype nem autopromocao. NAO invente trechos da materia.",
+  "hashtags": ["#4Selet", "#NaMidia", "..."],  // ${HASHTAG_RULES.min}-${HASHTAG_RULES.max} hashtags, incluir #4Selet
+  "cta": "CTA aprovado suave (ex.: Conhecer a plataforma) ou vazio",
+  "notes": "1-2 frases: qual angulo de credibilidade voce ancorou"
+}`,
   video_idea: `{
   "concept": "1 frase resumindo o conceito do video",
   "hook": "fala/visual dos primeiros 3 segundos",
@@ -113,6 +119,11 @@ function generationPrompt(req) {
   if (req.cta) lines.push("- Chamada para acao (CTA): use EXATAMENTE \"" + req.cta + "\" como CTA — coloque no campo cta do JSON e, quando fizer sentido, como fechamento natural do texto.");
   else lines.push("- SEM CTA forcado: NAO use chamadas de conversao (ex.: 'Solicitar convite', 'Ver as condicoes'). Deixe o campo cta do JSON vazio (\"\") e encerre o texto de forma natural, no maximo um fechamento suave de relacionamento.");
   lines.push("");
+  if (req.media_vehicle) {
+    lines.push("APARICAO NA MIDIA (prova social): a 4Selet foi mencionada/entrevistada em **" + req.media_vehicle + "**" + (req.media_url ? " (" + req.media_url + ")" : "") + ".");
+    lines.push("Escreva a legenda destacando o RECONHECIMENTO externo (autoridade de terceiros), sobrio e factual. NAO invente conteudo da materia; ancore no que o veiculo representa.");
+    lines.push("");
+  }
   if (req.research && Array.isArray(req.research.findings) && req.research.findings.length) {
     lines.push("INTELIGENCIA DE MERCADO (pesquisa AO VIVO via Tavily — use como apoio factual e de atualidade; NAO copie literalmente: sintetize, valide contra os knowledge files e mantenha a voz/regras da marca 4Selet):");
     req.research.findings.slice(0, 12).forEach((f) => lines.push("- " + f));
@@ -333,6 +344,13 @@ function simulate(req) {
         layout_type: "Split",
         visual_direction: "Fundo Selet Navy com gradiente radial sutil; headline em Inter Black branco; Selet Dots no canto; numero 0% em destaque Selet Blue.",
         notes: "Headline <=4 palavras, paleta azul, CTA aprovado." + tag,
+      }, null, 2);
+    case "media_mention":
+      return JSON.stringify({
+        body: "A 4Selet foi destaque em " + (req.media_vehicle || "um veiculo de referencia") + ".\n\nReconhecimento de fora reforca o que a gente ja opera por dentro: pagamento tratado como operacao seria, nao so taxa.\n\nPara quem opera no digital com seriedade. ▸",
+        hashtags: ["#4Selet", "#NaMidia", "#ProdutorDigital"],
+        cta: "",
+        notes: "Prova social sobria, autoridade de terceiros." + tag,
       }, null, 2);
     case "video_idea":
       if (p) return JSON.stringify({
