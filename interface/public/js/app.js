@@ -4006,6 +4006,10 @@ async function saveGenerated() {
     } else {
       toast("Conteúdo salvo com sucesso", "success");
     }
+    // Fluxo enxuto: envia AUTOMÁTICO para revisão ao salvar (gera a prévia + promove
+    // rascunho -> em revisão), pra a peça já nascer pronta pra Aprovar — elimina o clique
+    // manual "Enviar para revisão". Se falhar, a peça fica em rascunho e o botão manual segue.
+    try { await API.preview(r.folder); } catch (e) { /* melhor esforço — não bloqueia o salvar */ }
     // #1 — trava o botão após sucesso (evita salvar/duplicar de novo) e mostra "✓ Salvo".
     btn.disabled = true; btn.textContent = "✓ Salvo";
     showSaveBanner(r.folder);
