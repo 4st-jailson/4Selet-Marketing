@@ -109,10 +109,12 @@ function plural(n, sing, plur) { return n + " " + (n === 1 ? sing : plur); }
 function platformLabel(p) { const m = { x: "Threads/X", threads: "Threads/X", instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok", youtube: "YouTube", whatsapp: "WhatsApp", email: "E-mail" }; return m[String(p || "").toLowerCase()] || p; }
 
 /* ---- rótulos PT (status, zona) ---- */
-const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", rejected: "Rejeitado", active: "Ativa", paused: "Pausada", done: "Concluída" };
+const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", published: "Publicado", rejected: "Rejeitado", active: "Ativa", paused: "Pausada", done: "Concluída" };
 const ZONE_LABELS = { active: "Em produção", approved: "Aprovado", archive: "Arquivado", archived: "Arquivado", rejected: "Rejeitado" };
 function statusLabel(s) { return STATUS_LABELS[s] || s || "—"; }
 function statusBadge(s) { return '<span class="badge ' + esc(s) + '">' + esc(statusLabel(s)) + "</span>"; }
+// Estado efetivo p/ o selo: aprovada JÁ publicada mostra "Publicado" em vez de "Aprovado".
+function effStatus(status, publishedAt) { return (publishedAt && status === "approved") ? "published" : status; }
 function zoneLabel(z) { return ZONE_LABELS[z] || z || ""; }
 
 /* ---- nome de exibição humanizado (esconde o slug técnico) ---- */
@@ -607,7 +609,7 @@ function taskCard(t) {
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}</div>
       ${tagsHtml}
-      <div class="cc-foot">${statusBadge(t.status)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
+      <div class="cc-foot">${statusBadge(effStatus(t.status, t.published_at))}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
     </div></a>`;
 }
 
@@ -2530,7 +2532,7 @@ async function viewTaskDetail(folder) {
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   State.task = task; // o "Editar" do lightbox usa a peça atual
   setView(`
-    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(s.status)}${tag(kindLabel(task.kind))}${isImported ? tag("Importada") : ""}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
+    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(effStatus(s.status, s.published_at))}${tag(kindLabel(task.kind))}${isImported ? tag("Importada") : ""}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
@@ -2779,7 +2781,15 @@ async function openPublishModal(task) {
   const capEl = ov.querySelector("#pub-caption");
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
   const publishing = ov.querySelector(".pub-publishing");
-  ov.querySelector("#pub-now").onclick = async () => {
+  const pubBtn = ov.querySelector("#pub-now");
+  const alreadyPub = task.status && task.status.published_at;
+  if (alreadyPub) {
+    // Peça já publicada: botão apagado + informa a data ao clicar (evita post duplicado).
+    pubBtn.classList.add("is-published"); pubBtn.textContent = "Já publicado";
+    const stEl = ov.querySelector(".pub-status");
+    if (stEl) stEl.insertAdjacentHTML("beforeend", ' <span class="hint">· já publicado em @' + esc(uname) + " em " + esc(fmtDateTime(alreadyPub)) + "</span>");
+    pubBtn.onclick = () => toast("Esta peça já foi publicada em @" + esc(uname) + " em " + fmtDateTime(alreadyPub) + ". Publicar de novo criaria um post duplicado.", "info");
+  } else pubBtn.onclick = async () => {
     const cap = capEl.value.trim();
     if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora" }))) return;
     const btn = ov.querySelector("#pub-now"), sBtn = ov.querySelector("#pub-schedule"), xBtn = ov.querySelector("[data-x='close']");

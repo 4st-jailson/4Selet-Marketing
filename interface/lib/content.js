@@ -113,6 +113,7 @@ function listTasks() {
         title: status.title || null,
         task_date: status.task_date,
         status: status.status,
+        published_at: status.published_at || null, // p/ o selo "Publicado" (vs só "Aprovado")
         campaign_id: status.campaign_id || null,
         campaign_angle: status.campaign_angle || null,
         platforms: status.platforms || [],
@@ -399,6 +400,21 @@ function setMediaMeta(folder, meta) {
   return true;
 }
 
+// Marca a peça como PUBLICADA de verdade no Instagram (metadado; NÃO entra nos content_hashes,
+// então não fere o gate R5). Grava published_at/published_by/last_post_id no status.json.
+function setPublished(folder, meta) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return false;
+  status.published_at = new Date().toISOString();
+  if (meta && meta.by) status.published_by = String(meta.by).slice(0, 120);
+  if (meta && meta.post_id) status.last_post_id = String(meta.post_id).slice(0, 120);
+  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  return true;
+}
+
 // Marca a peça como IMPORTADA (imagens prontas trazidas de fora). O front usa a flag
 // para NÃO oferecer re-render/editor de arte (não há HTML/JSON de origem), só legenda.
 function setImported(folder) {
@@ -513,5 +529,5 @@ function discardTask(folder) {
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setPillar, setMediaMeta, setImported, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setPillar, setMediaMeta, setPublished, setImported, markViewed, setTags, generatePreview, promote, discardTask,
 };

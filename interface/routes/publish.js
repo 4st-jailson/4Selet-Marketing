@@ -62,6 +62,10 @@ router.post("/:folder", async (req, res) => {
   try {
     const b = req.body || {};
     const r = await publish.publishTask(req.params.folder, { kind: b.kind, caption: b.caption, dryRun: b.dryRun });
+    // Registra "publicado" na peça (metadado) só quando saiu DE VERDADE (não dry-run/simulado).
+    if (r && r.ok && !r.dry_run) {
+      try { content.setPublished(req.params.folder, { by: req.user && (req.user.name || req.user.username), post_id: r.post_id }); } catch (e) { /* metadado best-effort */ }
+    }
     res.json(Object.assign({ ok: true, task: content.getTask(req.params.folder) }, r));
   } catch (e) {
     const gate = ["E_NOT_APPROVED", "E_INVALID_STATE", "E_GATE_NO_HASHES", "E_HASH_MISMATCH"].indexOf(e.code) >= 0;

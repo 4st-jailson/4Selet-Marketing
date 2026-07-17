@@ -408,6 +408,7 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .badge.draft     { color: var(--text-dim); }
 .badge.in_review { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 .badge.approved, .badge.active { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.badge.published { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: transparent; } /* publicado = azul da marca (vivo), distinto do verde "aprovado" */
 .badge.rejected  { color: var(--err); background: var(--err-soft); border-color: transparent; }
 .badge.paused    { color: var(--text-dim); }
 .badge.done      { color: var(--accent-strong); background: var(--accent-soft); border-color: transparent; }
@@ -433,10 +434,12 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .pub-sched input[type="datetime-local"] { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 10px; max-width: 300px; }
 .pub-btns { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .pub-btns #pub-now { min-width: 170px; padding: 11px 20px; }
+.pub-btns #pub-now.is-published { opacity: .5; box-shadow: none; } /* peça já publicada: botão apagado (informa a data ao clicar) */
 /* Telas menores: empilha prévia em cima / legenda embaixo, e a prévia ocupa a largura toda */
 @media (max-width: 720px) { .pub-body { flex-direction: column; align-items: stretch; } .pub-preview .ig-post { width: 100%; } .pub-foot { margin-top: 16px; } }
 /* Overlay de publicação: spinner grande + mensagem — feedback claro durante os segundos do post */
 .pub-publishing { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 30px; border-radius: inherit; background: color-mix(in srgb, var(--surface) 92%, transparent); }
+.pub-publishing[hidden] { display: none; } /* o `hidden` do HTML precisa vencer o display:flex acima — senão o overlay aparece já ao abrir o modal */
 .pub-publishing p { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
 .pub-publishing .hint { max-width: 360px; font-size: 13px; font-weight: 400; }
 .spinner-lg { width: 34px; height: 34px; border-width: 3px; vertical-align: middle; }
