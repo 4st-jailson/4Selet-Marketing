@@ -1901,6 +1901,39 @@ async function openHtmlEditor(folder, task, rel, opts) {
     dirty = true; snapshot();
   }
   $("#he-dup").onclick = duplicateCurrent;
+  // Copiar/Colar (Ctrl+C / Ctrl+V) — clipboard INTERNO (array de outerHTML), não o navigator.clipboard:
+  // é síncrono, confiável e atravessa slides dentro da mesma sessão do editor. Espelha o duplicateCurrent
+  // (mesmo offset +24,+24, mesmo tratamento de position:static), mas o "colar" pode cair em OUTRO slide.
+  let heClip = [];
+  function copySelection() {
+    if (!selection.size) return;
+    heClip = [...selection].map((el) => {
+      const c = el.cloneNode(true); c.removeAttribute("data-he-sel");
+      // Baka a posição no clone: se o original é static (fluxo do layout), fixa em absolute com o
+      // offset atual — senão o outerHTML perderia a posição e o colar cairia em 0,0.
+      if (gcs(el).position === "static") { c.style.position = "absolute"; c.style.left = el.offsetLeft + "px"; c.style.top = el.offsetTop + "px"; }
+      return c.outerHTML;
+    });
+    toast(heClip.length > 1 ? (heClip.length + " itens copiados") : "Item copiado", "info");
+  }
+  function pasteClip() {
+    if (!heClip.length) return;
+    const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
+    const clones = [];
+    heClip.forEach((html) => {
+      const tmp = doc.createElement("div"); tmp.innerHTML = html;
+      const clone = tmp.firstElementChild; if (!clone) return;
+      clone.setAttribute("data-he", "1"); clone.removeAttribute("data-he-sel");
+      card.appendChild(clone); // no DOM antes de medir/transformar
+      clone.style.zIndex = nextTopZ();
+      const t = getTf(clone); setTf(clone, Object.assign({}, t, { x: t.x + 24, y: t.y + 24 }));
+      interactive(doc, clone); clones.push(clone);
+    });
+    if (!clones.length) return;
+    selection.clear(); clones.forEach((c) => selection.add(c)); current = clones[clones.length - 1];
+    selMark(); syncToolbar(current); if (selection.size === 1 && current) positionHandle(); else handle.style.display = "none";
+    dirty = true; snapshot();
+  }
   // "Grupo ↑": sobe a seleção pro elemento-pai (o bloco em volta) e o torna arrastável na
   // hora. Assim dá pra mover uma coluna/caixa inteira de uma vez, não só a folha clicada.
   $("#he-parent").onclick = () => {
@@ -2029,7 +2062,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body, W = card.offsetWidth, H = card.offsetHeight;
     let el = doc.createElement("div");
     if (kind === "cta") { el.textContent = "Fale no WhatsApp"; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.27) + "px;top:" + Math.round(H * 0.8) + "px;font-family:'Inter',sans-serif;font-weight:700;font-size:" + Math.round(W * 0.034) + "px;color:#07212B;background:#5499B5;padding:" + Math.round(W * 0.016) + "px " + Math.round(W * 0.032) + "px;border-radius:999px;white-space:nowrap;"; }
-    else if (kind === "footer") { el.textContent = "@4selet  ·  Para quem sabe que é Selet."; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.08) + "px;top:" + Math.round(H * 0.92) + "px;font-family:'Inter',sans-serif;font-weight:600;font-size:" + Math.round(W * 0.022) + "px;color:#AFBCC9;letter-spacing:.4px;white-space:nowrap;"; }
+    else if (kind === "footer") { el.textContent = "@4selet"; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.08) + "px;top:" + Math.round(H * 0.92) + "px;font-family:'Inter',sans-serif;font-weight:600;font-size:" + Math.round(W * 0.022) + "px;color:#AFBCC9;letter-spacing:.4px;white-space:nowrap;"; }
     else { el.textContent = "TAXA ZERO"; el.style.cssText = "position:absolute;left:" + Math.round(W * 0.62) + "px;top:" + Math.round(H * 0.08) + "px;font-family:'Inter',sans-serif;font-weight:800;font-size:" + Math.round(W * 0.03) + "px;color:#07212B;background:#5499B5;padding:" + Math.round(W * 0.012) + "px " + Math.round(W * 0.024) + "px;border-radius:8px;letter-spacing:1px;white-space:nowrap;"; }
     el.setAttribute("data-he", "1"); card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot();
   }
@@ -2129,6 +2162,8 @@ async function openHtmlEditor(folder, task, rel, opts) {
     else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) { e.preventDefault(); zoomBy(1 / 1.2); }
     else if ((e.ctrlKey || e.metaKey) && e.key === "0") { e.preventDefault(); applyZoom(fitScale); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); duplicateCurrent(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) { e.preventDefault(); copySelection(); } // Ctrl+C = copiar seleção
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "v" || e.key === "V")) { e.preventDefault(); pasteClip(); }        // Ctrl+V = colar (vale entre slides)
     // (As setas NÃO empurram mais o elemento — Hugo pediu pra remover esse "empurra pro lado".)
   }
   document.addEventListener("keydown", onKey);
@@ -2681,14 +2716,13 @@ async function openPublishModal(task) {
         <label class="layer-lab">Legenda</label>
         <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
         <p class="hint">Edite a legenda e veja a prévia atualizar ao lado.</p>
-        <hr class="sep">
-        <div class="pub-actions">
-          <button class="btn btn-primary" id="pub-now">${connected ? "Publicar agora" : "Simular agora"}</button>
-          <div class="pub-sched">
-            <label class="layer-lab">Agendar para depois</label>
-            <div class="flex"><input type="datetime-local" id="pub-when"><button class="btn" id="pub-schedule">Agendar</button></div>
-          </div>
-        </div>
+      </div>
+    </div>
+    <div class="pub-foot">
+      <button class="btn btn-primary" id="pub-now">${connected ? "Publicar agora" : "Simular agora"}</button>
+      <div class="pub-sched">
+        <label class="layer-lab">Agendar para depois</label>
+        <div class="flex"><input type="datetime-local" id="pub-when"><button class="btn" id="pub-schedule">Agendar</button></div>
       </div>
     </div>
   </div>`;
@@ -2702,7 +2736,7 @@ async function openPublishModal(task) {
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
   ov.querySelector("#pub-now").onclick = async () => {
     const cap = capEl.value.trim();
-    if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora", confirmKind: "danger" }))) return;
+    if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora" }))) return;
     const btn = ov.querySelector("#pub-now"); btn.disabled = true; btn.textContent = "Publicando…";
     try {
       const r = await API.publishPiece(task.folder, { caption: cap || undefined, dryRun: !connected });
@@ -3069,7 +3103,7 @@ async function viewCreate(arg, query) {
             <div class="hint" id="g-type-desc"></div>
           </div>
           <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
-          <div class="field"><label>Campanha <span class="hint">(opcional — liga a peça à campanha e já sugere o tema)</span></label><select id="g-camp">${campOpts}</select></div>
+          <div class="field"><label>Campanha <span class="hint">(opcional — liga a peça à campanha e já sugere o tema)</span></label><div class="camp-pick"><select id="g-camp">${campOpts}</select><button type="button" class="btn btn-sm btn-ghost" id="g-camp-new" title="Criar uma campanha sem sair desta tela">＋ Nova campanha</button></div></div>
           <div class="field"><label>IA que vai gerar <span class="hint">(escolha o provedor; o modelo de cada um fica em Configurações)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
         </div>
 
@@ -3153,6 +3187,38 @@ async function viewCreate(arg, query) {
     ensureTypePlatform();
     applyCampPillar(c);
   });
+  // Atalho: criar uma campanha sem sair do Criar Conteúdo. Reusa o helper uiModal e o
+  // POST /api/campaigns que já existem; ao criar, injeta a opção no select e já a seleciona.
+  async function createCampaignInline() {
+    const pillarOpts = [{ value: "", label: "—" }].concat((State.meta.pillars || []).map((p) => ({ value: p, label: p })));
+    const statusOpts = ["active", "paused", "done"].map((s) => ({ value: s, label: statusLabel(s) }));
+    const r = await uiModal({
+      title: "Nova campanha",
+      message: "Cria a campanha aqui mesmo. Os demais detalhes (período, plataformas, mensagens-chave) você completa depois em Campanhas.",
+      confirmText: "Criar campanha",
+      fields: [
+        { name: "name", label: "Nome (mín. 3 caracteres)", placeholder: "ex.: Taxa Zero — 2º semestre" },
+        { name: "angle", label: "Ângulo (opcional)", placeholder: "ex.: 0% por 3 meses" },
+        { name: "pillar", label: "Pilar estratégico (opcional)", type: "select", options: pillarOpts, value: "" },
+        { name: "status", label: "Status", type: "select", options: statusOpts, value: "active" },
+      ],
+    });
+    if (!r) return;
+    if (!r.name || r.name.length < 3) { toast("Dê um nome com ao menos 3 caracteres.", "error"); return; }
+    try {
+      const { campaign } = await API.createCampaign(r);
+      const sel = $("#g-camp");
+      const opt = document.createElement("option");
+      opt.value = campaign.id; opt.textContent = campaign.name;
+      sel.appendChild(opt); sel.value = campaign.id;
+      campMap[campaign.id] = campaign; setCampMap(Object.values(campMap));
+      sel.dispatchEvent(new Event("change")); // aplica plataformas/pilar herdados, como ao escolher pelo dropdown
+      toast("Campanha criada", "success");
+    } catch (e) {
+      if (e.data && e.data.errors) e.data.errors.forEach((x) => toast(x, "error")); else toast((e && e.message) || "Erro ao criar campanha.", "error");
+    }
+  }
+  if ($("#g-camp-new")) $("#g-camp-new").onclick = createCampaignInline;
   const updDesc = () => { const ct = metaType($("#g-type").value); $("#g-type-desc").textContent = ct ? ct.description : ""; };
   // Gating dos ajustes de arte, por tipo de mídia:
   //  - Estilo visual (#g-style, .art-only) é template de PNG -> só peças renderizadas em imagem.
@@ -4050,7 +4116,7 @@ async function viewSettings() {
     const out = $("#ig-out"); out.textContent = "Salvando…";
     try {
       const payload = { ig_user_id: $("#ig-id").value.trim(), public_base_url: $("#ig-base").value.trim() };
-      const tok = $("#ig-token").value.trim(); if (tok) payload.access_token = tok;
+      const tok = $("#ig-token").value.replace(/\s+/g, ""); if (tok) payload.access_token = tok; // remove espaços/quebras coladas junto do token
       await API.savePublishConfig(payload);
       toast("Conexão salva.", "ok"); viewSettings();
     } catch (e) { out.textContent = ""; toast((e && e.message) || "Erro ao salvar.", "error"); }

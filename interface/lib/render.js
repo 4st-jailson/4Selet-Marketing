@@ -134,7 +134,7 @@ const RENDER_SCALE = Number(process.env.RENDER_SCALE || 2) || 2;
 // Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
 // `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
 const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
-const DEFAULT_FOOTER = "Para quem sabe que é Selet.";
+const DEFAULT_FOOTER = ""; // sem rodapé automático (Hugo: tirar "Para quem sabe que é Selet" de toda postagem)
 
 // Comprimento VISÍVEL do headline (ignora as tags <span> do realce). Usado para
 // dimensionar a fonte: sem isso, o markup do destaque (ex.: "0%" vira

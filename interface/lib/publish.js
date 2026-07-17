@@ -29,7 +29,14 @@ function saveConfig(cfg) {
   fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, CONFIG_FILE);
 }
-function ig() { return (loadConfig().instagram) || {}; }
+function ig() {
+  const c = (loadConfig().instagram) || {};
+  // Sanea o token na LEITURA: tokens da Meta não têm espaços/quebras. Remover whitespace
+  // interno auto-corrige um token colado quebrado (uma das causas de "Cannot parse access
+  // token") sem exigir re-salvar. No SAVE também saneamos.
+  if (c.access_token != null) c.access_token = String(c.access_token).replace(/\s+/g, "");
+  return c;
+}
 function isConfigured() { const c = ig(); return !!(c.access_token && c.ig_user_id); }
 function publicBase() {
   const c = loadConfig();
@@ -51,7 +58,7 @@ function publicConfig() {
 function setInstagram({ access_token, ig_user_id, public_base_url }) {
   const cfg = loadConfig();
   cfg.instagram = cfg.instagram || {};
-  if (access_token != null) cfg.instagram.access_token = String(access_token).trim();
+  if (access_token != null) cfg.instagram.access_token = String(access_token).replace(/\s+/g, "");
   if (ig_user_id != null) cfg.instagram.ig_user_id = String(ig_user_id).trim();
   if (public_base_url != null) cfg.public_base_url = String(public_base_url).trim();
   cfg.instagram.connected_at = new Date().toISOString();
@@ -67,6 +74,8 @@ async function graphGet(p, params) {
   return { ok: r.ok, status: r.status, body: j };
 }
 async function graphPost(p, params, token) {
+  token = String(token == null ? "" : token).replace(/\s+/g, "");
+  if (!token) { const e = new Error("Instagram não conectado — cole o token em Configurações › Publicação Instagram."); e.code = "E_NO_TOKEN"; throw e; }
   const body = new URLSearchParams(Object.assign({}, params, { access_token: token }));
   const r = await fetch(GRAPH + p, { method: "POST", body });
   const j = await r.json().catch(() => ({}));
@@ -155,7 +164,13 @@ async function publishCarousel(igUserId, token, imageUrls, caption) {
   return { post_id: p.body.id, creation_id: car.body.id };
 }
 function gerr(step, r) {
-  const msg = (r.body && r.body.error && r.body.error.message) || ("HTTP " + r.status);
+  const err = r.body && r.body.error;
+  let msg = (err && err.message) || ("HTTP " + r.status);
+  // Erro 190 / OAuthException = token expirado, revogado ou malformado. Troca o texto cru da
+  // Meta ("Invalid OAuth access token - Cannot parse access token") por orientação clara.
+  if (err && (err.code === 190 || err.type === "OAuthException")) {
+    msg = "a conexão com o Instagram expirou ou o token está inválido. Reconecte em Configurações › Publicação Instagram (cole um token novo e clique em Testar).";
+  }
   const e = new Error("Falha ao " + step + ": " + msg); e.code = "E_GRAPH"; return e;
 }
 
