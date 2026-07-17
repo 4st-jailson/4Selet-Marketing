@@ -1079,8 +1079,9 @@ function carouselStrip(folder, task) {
 
 // Quadro estilo Figma para o CARROSSEL: tela livre onde cada slide vira uma imagem que se
 // posiciona à vontade (lado a lado p/ formar uma imagem contínua, empilhada ou sobreposta).
-// Só montagem/visualização — não altera os slides. Zoom (Ctrl+roda / botões), pan (arrasta o
-// fundo) e encaixe nas bordas p/ alinhar sem emenda.
+// Só montagem/visualização — não altera os slides. Navegação estilo Figma (rolar move, Ctrl+roda
+// zoom, Espaço+arrasta pan), seleção múltipla (Shift+clique / laço no vazio), alinhar/distribuir
+// e guias inteligentes ao arrastar.
 function openCarouselBoard(folder, task) {
   const slides = (task.files || [])
     .filter((f) => /slide_0*\d+\.(png|jpe?g)$/i.test(f.rel))
@@ -1092,81 +1093,207 @@ function openCarouselBoard(folder, task) {
   ov.innerHTML =
       '<div class="board-top">'
     +   '<span class="board-title">' + esc(displayName(task.status)) + '</span><span style="flex:1"></span>'
+    +   '<details class="ed-menu board-align" id="bd-align"><summary class="btn btn-sm">Alinhar</summary><div class="ed-pop">'
+    +     '<button data-al="left">Alinhar à esquerda</button><button data-al="hcenter">Centralizar na horizontal</button><button data-al="right">Alinhar à direita</button>'
+    +     '<div class="ed-pop-sep"></div>'
+    +     '<button data-al="top">Alinhar ao topo</button><button data-al="vmiddle">Centralizar na vertical</button><button data-al="bottom">Alinhar à base</button>'
+    +     '<div class="ed-pop-sep"></div>'
+    +     '<button data-al="disth">Distribuir na horizontal</button><button data-al="distv">Distribuir na vertical</button>'
+    +   '</div></details>'
     +   '<label class="board-snap"><input type="checkbox" id="bd-snap" checked> Encaixar nas bordas</label>'
     +   '<button class="btn btn-sm btn-ghost" id="bd-arrange">Lado a lado</button>'
     +   '<button class="btn btn-sm btn-primary" id="bd-close">Fechar</button>'
     + '</div>'
-    + '<div class="board-stage" id="bd-stage"><div class="board-canvas" id="bd-canvas"></div></div>'
+    + '<div class="board-stage" id="bd-stage"><div class="board-canvas" id="bd-canvas"></div><div class="board-marquee" id="bd-marquee" hidden></div></div>'
     + '<div class="board-tools"><button class="he-tool" id="bd-zout" aria-label="Diminuir">&#8722;</button>'
-    +   '<button class="he-tool he-tool-txt" id="bd-zfit" title="Ajustar à tela">Ajustar</button>'
+    +   '<button class="he-tool he-tool-txt" id="bd-zfit" title="Ajustar à tela (tecla 1)">Ajustar</button>'
     +   '<button class="he-tool" id="bd-zin" aria-label="Aumentar">+</button>'
-    +   '<span class="board-tip">Arraste cada slide · arraste o fundo p/ mover o quadro · Ctrl+roda dá zoom</span></div>';
+    +   '<span class="board-tip">Role p/ mover · Ctrl+roda dá zoom · arraste um slide (duplo-clique abre no editor) · Shift+clique ou laço seleciona vários · Espaço+arrasta move o quadro</span></div>';
   document.body.appendChild(ov); document.body.classList.add("no-scroll");
 
-  const stage = $("#bd-stage"), canvas = $("#bd-canvas");
-  let zoom = 1, panX = 0, panY = 0, zc = 1;
-  const items = [];
+  const stage = $("#bd-stage"), canvas = $("#bd-canvas"), marquee = $("#bd-marquee");
+  let zoom = 1, panX = 0, panY = 0, zc = 1, space = false;
+  const items = [], sel = new Set();
+  const editable = task.zone === "active" && !(task.status && task.status.imported); // duplo-clique edita
+  const snapOn = () => $("#bd-snap") && $("#bd-snap").checked;
   const applyView = () => { canvas.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + zoom + ")"; };
   const place = (it) => { it.el.style.left = it.x + "px"; it.el.style.top = it.y + "px"; };
+  const markSel = () => items.forEach((it) => it.el.classList.toggle("sel", sel.has(it)));
+  const setSel = (arr) => { sel.clear(); (arr || []).forEach((it) => sel.add(it)); markSel(); };
 
   slides.forEach((s) => {
     const wrap = document.createElement("div"); wrap.className = "board-item";
     const img = document.createElement("img"); img.className = "board-slide"; img.src = API.rawUrl(folder, s.rel) + "&v=" + (s.mtime || 0); img.draggable = false; img.alt = "Slide " + s.n;
     const num = document.createElement("span"); num.className = "board-num"; num.textContent = s.n;
     wrap.appendChild(img); wrap.appendChild(num);
-    const it = { el: wrap, x: 0, y: 0, w: 1080, h: 1350, n: s.n };
+    const it = { el: wrap, x: 0, y: 0, w: 1080, h: 1350, n: s.n, rel: s.rel };
     wrap.style.width = it.w + "px";
     img.addEventListener("load", () => { if (img.naturalWidth) { it.w = img.naturalWidth; it.h = img.naturalHeight; wrap.style.width = it.w + "px"; wrap.style.height = it.h + "px"; } });
+    // Duplo-clique abre ESTE slide direto no editor de arte (gesto separado — não conflita com
+    // arrastar/selecionar). Só p/ peça editável (ativa e não importada); senão, avisa.
+    wrap.addEventListener("dblclick", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!editable) { toast((task.status && task.status.imported) ? "Peça importada — os slides não são editáveis aqui." : "Só dá para editar peças em rascunho ou em revisão.", "info"); return; }
+      close(); openHtmlEditor(folder, task, it.rel, { backToBoard: true }); // close() salva a montagem
+    });
     canvas.appendChild(wrap); items.push(it); dragItem(it);
   });
 
-  const bounds = () => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; items.forEach((it) => { a = Math.min(a, it.x); b = Math.min(b, it.y); c = Math.max(c, it.x + it.w); d = Math.max(d, it.y + it.h); }); return { minX: a, minY: b, w: c - a, h: d - b }; };
+  const bounds = (list) => { const arr = list || items; let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; arr.forEach((it) => { a = Math.min(a, it.x); b = Math.min(b, it.y); c = Math.max(c, it.x + it.w); d = Math.max(d, it.y + it.h); }); return { minX: a, minY: b, maxX: c, maxY: d, w: c - a, h: d - b }; };
   const fit = () => { const bo = bounds(); if (!(bo.w > 0)) return; zoom = Math.max(0.05, Math.min((stage.clientWidth - 80) / bo.w, (stage.clientHeight - 80) / bo.h, 1)); panX = (stage.clientWidth - bo.w * zoom) / 2 - bo.minX * zoom; panY = (stage.clientHeight - bo.h * zoom) / 2 - bo.minY * zoom; applyView(); };
-  const arrangeRow = () => { let x = 0; items.forEach((it) => { it.x = x; it.y = 0; place(it); x += it.w; }); fit(); };
+  const arrangeRow = () => { let x = 0; items.forEach((it) => { it.x = x; it.y = 0; place(it); x += it.w; }); setSel([]); fit(); saveLayout(); };
+  // Persistência da montagem (posições + zoom/pan) por peça, pra "Voltar ao quadro" fazer sentido.
+  // Guarda em localStorage; expira em 7 dias. "Lado a lado" reseta.
+  const LKEY = "board_layout:" + folder;
+  const saveLayout = () => { try { const pos = {}; items.forEach((it) => { pos[it.n] = { x: Math.round(it.x), y: Math.round(it.y) }; }); localStorage.setItem(LKEY, JSON.stringify({ at: Date.now(), zoom: zoom, panX: Math.round(panX), panY: Math.round(panY), pos: pos })); } catch (e) {} };
+  const loadLayout = () => { try { const d = JSON.parse(localStorage.getItem(LKEY) || "null"); if (d && d.pos && Date.now() - (d.at || 0) < 7 * 864e5) return d; } catch (e) {} return null; };
+  const restoreOrArrange = () => {
+    const s = loadLayout();
+    if (!s) { arrangeRow(); return; }
+    let cx = 0;
+    items.forEach((it) => { const p = s.pos[it.n]; if (p) { it.x = p.x; it.y = p.y; } else { it.x = cx; it.y = 0; } cx = Math.max(cx, it.x + it.w); place(it); });
+    if (typeof s.zoom === "number" && s.zoom > 0) { zoom = s.zoom; panX = s.panX || 0; panY = s.panY || 0; applyView(); } else fit();
+  };
 
-  function snapEdges(it, nx, ny) {
-    const tol = 26 / zoom; let bx = nx, by = ny, dx = tol, dy = tol;
-    const L = nx, R = nx + it.w, T = ny, B = ny + it.h;
-    items.forEach((o) => { if (o === it) return; const oL = o.x, oR = o.x + o.w, oT = o.y, oB = o.y + o.h;
-      [[L, oR, oR], [L, oL, oL], [R, oR, oR - it.w], [R, oL, oL - it.w]].forEach((t) => { const g = Math.abs(t[0] - t[1]); if (g < dx) { dx = g; bx = t[2]; } });
-      [[T, oB, oB], [T, oT, oT], [B, oB, oB - it.h], [B, oT, oT - it.h]].forEach((t) => { const g = Math.abs(t[0] - t[1]); if (g < dy) { dy = g; by = t[2]; } });
+  // Guias inteligentes: linha que aparece quando a borda/centro do slide arrastado alinha com
+  // outro slide. Desenhadas em coords do quadro (~1px na tela em qualquer zoom).
+  const guides = [];
+  const clearGuides = () => { while (guides.length) { const g = guides.pop(); if (g.parentNode) g.parentNode.removeChild(g); } };
+  const drawGuide = (axis, pos, from, to) => {
+    const g = document.createElement("div"); g.className = "board-guide"; const t = 1 / zoom;
+    if (axis === "v") { g.style.left = (pos - t / 2) + "px"; g.style.top = from + "px"; g.style.width = t + "px"; g.style.height = (to - from) + "px"; }
+    else { g.style.top = (pos - t / 2) + "px"; g.style.left = from + "px"; g.style.height = t + "px"; g.style.width = (to - from) + "px"; }
+    canvas.appendChild(g); guides.push(g);
+  };
+  const showGuides = (anchor) => {
+    clearGuides(); const eps = 0.7 / zoom, bo = bounds();
+    const aX = [anchor.x, anchor.x + anchor.w, anchor.x + anchor.w / 2], aY = [anchor.y, anchor.y + anchor.h, anchor.y + anchor.h / 2];
+    const vs = new Set(), hs = new Set();
+    items.forEach((o) => { if (sel.has(o)) return;
+      const oX = [o.x, o.x + o.w, o.x + o.w / 2], oY = [o.y, o.y + o.h, o.y + o.h / 2];
+      aX.forEach((a) => oX.forEach((v) => { if (Math.abs(a - v) <= eps) vs.add(Math.round(v)); }));
+      aY.forEach((a) => oY.forEach((v) => { if (Math.abs(a - v) <= eps) hs.add(Math.round(v)); }));
+    });
+    vs.forEach((x) => drawGuide("v", x, bo.minY - 40, bo.maxY + 40));
+    hs.forEach((y) => drawGuide("h", y, bo.minX - 40, bo.maxX + 40));
+  };
+  // Encaixe do 'anchor' (arestas + centros) contra os NÃO-selecionados.
+  function computeSnap(anchor, nx, ny) {
+    const tol = 9 / zoom; let bx = nx, by = ny, dxB = tol, dyB = tol;
+    const L = nx, R = nx + anchor.w, CX = nx + anchor.w / 2, T = ny, B = ny + anchor.h, CY = ny + anchor.h / 2;
+    items.forEach((o) => { if (sel.has(o)) return;
+      const oL = o.x, oR = o.x + o.w, oCX = o.x + o.w / 2, oT = o.y, oB = o.y + o.h, oCY = o.y + o.h / 2;
+      [[L, oL], [L, oR], [R, oL], [R, oR], [CX, oCX]].forEach((p) => { const g = Math.abs(p[0] - p[1]); if (g <= dxB) { dxB = g; bx = nx + (p[1] - p[0]); } });
+      [[T, oT], [T, oB], [B, oT], [B, oB], [CY, oCY]].forEach((p) => { const g = Math.abs(p[0] - p[1]); if (g <= dyB) { dyB = g; by = ny + (p[1] - p[0]); } });
     });
     return { x: bx, y: by };
   }
+
   function dragItem(it) {
     it.el.addEventListener("mousedown", (e) => {
+      if (space || e.button === 1) return; // Espaço/botão-do-meio = mover o quadro; deixa o palco tratar
       e.preventDefault(); e.stopPropagation();
-      zc += 1; it.el.style.zIndex = zc; // traz p/ frente
+      const shift = e.shiftKey;
+      // Shift+clique só ALTERNA a seleção; se desmarcou o item, não inicia arraste (senão o grupo
+      // se moveria sem ele e ele viraria alvo de encaixe fantasma).
+      if (shift) { if (sel.has(it)) { sel.delete(it); markSel(); return; } sel.add(it); markSel(); }
+      else if (!sel.has(it)) setSel([it]);
+      zc += 1; it.el.style.zIndex = zc;
+      const movers = sel.size ? [...sel] : [it];
       const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y;
+      movers.forEach((m) => { m._ox = m.x; m._oy = m.y; });
+      let moved = false;
       const mv = (ev) => {
         if (ev.buttons === 0) { up(); return; }
-        let nx = ox + (ev.clientX - sx) / zoom, ny = oy + (ev.clientY - sy) / zoom;
-        if (!(ev.ctrlKey || ev.metaKey) && $("#bd-snap") && $("#bd-snap").checked) { const sn = snapEdges(it, nx, ny); nx = sn.x; ny = sn.y; }
-        it.x = nx; it.y = ny; place(it);
+        if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 3) moved = true;
+        let ax = ox + (ev.clientX - sx) / zoom, ay = oy + (ev.clientY - sy) / zoom;
+        const snap = !(ev.ctrlKey || ev.metaKey) && snapOn();
+        if (snap) { const sn = computeSnap(it, ax, ay); ax = sn.x; ay = sn.y; }
+        const cdx = ax - ox, cdy = ay - oy;
+        movers.forEach((m) => { m.x = m._ox + cdx; m.y = m._oy + cdy; place(m); });
+        if (snap) showGuides(it); else clearGuides();
       };
-      const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
+      const up = () => { clearGuides(); if (!moved && !shift) setSel([it]); document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
       document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
     });
   }
+
+  // Palco: Espaço/arraste (ou botão do meio) = mover o quadro; arraste no vazio = laço de seleção.
   stage.addEventListener("mousedown", (e) => {
+    const sx = e.clientX, sy = e.clientY, r = stage.getBoundingClientRect();
+    if (space || e.button === 1) {
+      e.preventDefault(); const ox = panX, oy = panY;
+      const mv = (ev) => { if (ev.buttons === 0) { up(); return; } panX = ox + (ev.clientX - sx); panY = oy + (ev.clientY - sy); applyView(); };
+      const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
+      document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up); return;
+    }
     if (e.target !== stage && e.target !== canvas) return; e.preventDefault();
-    const sx = e.clientX, sy = e.clientY, ox = panX, oy = panY;
-    const mv = (ev) => { if (ev.buttons === 0) { up(); return; } panX = ox + (ev.clientX - sx); panY = oy + (ev.clientY - sy); applyView(); };
-    const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
+    const add = e.shiftKey, base = new Set(sel), startX = (sx - r.left - panX) / zoom, startY = (sy - r.top - panY) / zoom;
+    let active = false;
+    const mv = (ev) => {
+      if (ev.buttons === 0) { up(); return; }
+      if (!active && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 3) return;
+      active = true; marquee.hidden = false;
+      marquee.style.left = (Math.min(sx, ev.clientX) - r.left) + "px"; marquee.style.top = (Math.min(sy, ev.clientY) - r.top) + "px";
+      marquee.style.width = Math.abs(ev.clientX - sx) + "px"; marquee.style.height = Math.abs(ev.clientY - sy) + "px";
+      const cx = (ev.clientX - r.left - panX) / zoom, cy = (ev.clientY - r.top - panY) / zoom;
+      const mx = Math.min(startX, cx), my = Math.min(startY, cy), mw = Math.abs(cx - startX), mh = Math.abs(cy - startY);
+      const next = new Set(add ? base : []);
+      items.forEach((it) => { if (it.x < mx + mw && it.x + it.w > mx && it.y < my + mh && it.y + it.h > my) next.add(it); });
+      sel.clear(); next.forEach((it) => sel.add(it)); markSel();
+    };
+    const up = () => { marquee.hidden = true; if (!active && !add) setSel([]); document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); };
     document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
   });
+
   const zoomAt = (factor, cx, cy) => { const nz = Math.max(0.05, Math.min(2, zoom * factor)); const r = stage.getBoundingClientRect(); const px = (cx - r.left - panX) / zoom, py = (cy - r.top - panY) / zoom; zoom = nz; panX = cx - r.left - px * zoom; panY = cy - r.top - py * zoom; applyView(); };
   const centerZoom = (f) => { const r = stage.getBoundingClientRect(); zoomAt(f, r.left + stage.clientWidth / 2, r.top + stage.clientHeight / 2); };
-  stage.addEventListener("wheel", (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
+  // Rolar = mover o quadro (Figma). Ctrl+roda = zoom no cursor. Shift+roda = mover na horizontal.
+  stage.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) { zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); return; }
+    if (e.shiftKey) panX -= (e.deltaY || e.deltaX); else { panX -= e.deltaX; panY -= e.deltaY; }
+    applyView();
+  }, { passive: false });
+
+  function alignSel(mode) {
+    const list = [...sel];
+    if (list.length < 2) { toast("Selecione 2 ou mais slides (Shift+clique ou laço no vazio).", "info"); return; }
+    const bo = bounds(list);
+    const fns = { left: (it) => it.x = bo.minX, right: (it) => it.x = bo.maxX - it.w, hcenter: (it) => it.x = (bo.minX + bo.maxX) / 2 - it.w / 2,
+      top: (it) => it.y = bo.minY, bottom: (it) => it.y = bo.maxY - it.h, vmiddle: (it) => it.y = (bo.minY + bo.maxY) / 2 - it.h / 2 };
+    if (fns[mode]) list.forEach(fns[mode]);
+    else if (mode === "disth") { const s = [...list].sort((a, b) => a.x - b.x); const gap = (bo.w - s.reduce((t, it) => t + it.w, 0)) / Math.max(1, s.length - 1); let x = bo.minX; s.forEach((it) => { it.x = x; x += it.w + gap; }); }
+    else if (mode === "distv") { const s = [...list].sort((a, b) => a.y - b.y); const gap = (bo.h - s.reduce((t, it) => t + it.h, 0)) / Math.max(1, s.length - 1); let y = bo.minY; s.forEach((it) => { it.y = y; y += it.h + gap; }); }
+    list.forEach(place);
+  }
+  ov.querySelectorAll("#bd-align [data-al]").forEach((b) => { b.onclick = () => { alignSel(b.dataset.al); const d = $("#bd-align"); if (d) d.removeAttribute("open"); }; });
+  ov.addEventListener("click", (e) => { if (!e.target.closest("#bd-align")) { const d = $("#bd-align"); if (d && d.open) d.removeAttribute("open"); } });
+
   $("#bd-zin").onclick = () => centerZoom(1.2);
   $("#bd-zout").onclick = () => centerZoom(1 / 1.2);
   $("#bd-zfit").onclick = fit;
   $("#bd-arrange").onclick = arrangeRow;
-  const close = () => { document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); ov.remove(); };
+  const close = () => { saveLayout(); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); document.removeEventListener("keyup", onKeyUp); window.removeEventListener("blur", resetSpace); document.removeEventListener("visibilitychange", resetSpace); ov.remove(); };
   $("#bd-close").onclick = close;
-  function onKey(e) { if (e.key === "Escape") { e.preventDefault(); close(); } }
-  document.addEventListener("keydown", onKey);
-  arrangeRow(); // começa lado a lado, ajustado à tela
+  function onKey(e) {
+    // Só ignora atalhos quando o foco está num campo de DIGITAÇÃO (não em checkbox/botão — senão
+    // os atalhos morreriam com o checkbox "Encaixar nas bordas" focado).
+    const ae = document.activeElement || {};
+    if (ae.tagName === "TEXTAREA" || ae.isContentEditable || (ae.tagName === "INPUT" && !/^(checkbox|radio|button|submit|range|color)$/i.test(ae.type || "text"))) return;
+    if (e.key === " ") { e.preventDefault(); if (!space) { space = true; stage.classList.add("board-pan"); } return; } // preventDefault: não ativa o botão focado
+    if (e.key === "Escape") { e.preventDefault(); if (sel.size) setSel([]); else close(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) { e.preventDefault(); setSel(items.slice()); }
+    else if (e.key === "1") { e.preventDefault(); fit(); }
+    else if (e.key === "0") { e.preventDefault(); centerZoom(1 / zoom); }
+    else if (sel.size && e.key.indexOf("Arrow") === 0) { e.preventDefault(); const s = e.shiftKey ? 50 : 10, dx = e.key === "ArrowLeft" ? -s : e.key === "ArrowRight" ? s : 0, dy = e.key === "ArrowUp" ? -s : e.key === "ArrowDown" ? s : 0; sel.forEach((it) => { it.x += dx; it.y += dy; place(it); }); }
+  }
+  function onKeyUp(e) { if (e.key === " ") { space = false; stage.classList.remove("board-pan"); } }
+  // Se a janela perde o foco com o Espaço pressionado, o keyup não chega — reseta p/ não travar no pan.
+  const resetSpace = () => { if (space) { space = false; stage.classList.remove("board-pan"); } };
+  document.addEventListener("keydown", onKey); document.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", resetSpace); document.addEventListener("visibilitychange", resetSpace);
+  restoreOrArrange(); // restaura a montagem salva (se houver e recente) ou começa lado a lado
 }
 
 function renderPanel(folder, task) {
@@ -1327,7 +1454,7 @@ function rgbToHex(c) {
   if (!m) return /^#[0-9a-f]{6}$/i.test(String(c)) ? c : null;
   return "#" + [1, 2, 3].map((i) => (+m[i]).toString(16).padStart(2, "0")).join("");
 }
-async function openHtmlEditor(folder, task, rel) {
+async function openHtmlEditor(folder, task, rel, opts) {
   const targets = editorTargets(task);
   let curRel = rel || (targets[0] || {}).rel;
   if (!curRel) { toast("Não há arte para editar aqui.", "error"); return; }
@@ -1347,6 +1474,8 @@ async function openHtmlEditor(folder, task, rel) {
     +   '<span class="ed-piece" id="he-piece"></span>'
     +   (multiSlide ? '<div class="ed-slidenav"><button class="ed-navbtn" id="he-prev" title="Slide anterior">‹</button><span class="ed-slide-count" id="he-count"></span><button class="ed-navbtn" id="he-next" title="Próximo slide">›</button></div>' : "")
     +   '<span style="flex:1"></span>'
+    +   (opts && opts.backToBoard ? '<button class="btn btn-sm btn-ghost" id="he-board" title="Voltar ao quadro (mantém a montagem dos slides)">&#8249; Voltar ao quadro</button>' : "")
+    +   '<button class="btn btn-sm btn-ghost" id="he-layers-btn" aria-pressed="false" title="Camadas: selecionar, reordenar e esconder elementos (mesmo os sobrepostos)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>Camadas</button>'
     +   '<button class="btn btn-sm btn-ghost he-dock-toggle" id="he-dock" aria-pressed="false" title="Encostar a barra de ferramentas à esquerda para ver a arte maior"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg><span id="he-dock-lbl">Barra à esquerda</span></button>'
     +   '<button class="btn btn-sm btn-ghost" id="he-close">Fechar</button>'
     +   '<button class="btn btn-sm btn-primary" id="he-save">Salvar arte</button>'
@@ -1369,6 +1498,8 @@ async function openHtmlEditor(folder, task, rel) {
     +     '<button data-block="footer">Rodapé @4selet</button>'
     +     '<button data-block="selo">Selo Taxa Zero</button>'
     +   "</div></details>"
+    +   '<button class="btn btn-sm" id="he-bg" title="Pintar o fundo do slide (o fundo é o piso — nada some atrás dele)">Fundo</button>'
+    +   '<input type="color" id="he-bg-input" hidden>'
     +   '<input type="file" id="he-file" accept="image/*" hidden>'
     +   '<input type="file" id="he-replace-file" accept="image/*" hidden>'
     +   '<span class="ed-sep"></span>'
@@ -1433,7 +1564,8 @@ async function openHtmlEditor(folder, task, rel) {
     +   '<button class="he-tool he-tool-txt" id="he-grid-btn" title="Grade de alinhamento" aria-pressed="false">Grade</button>'
     +   '<button class="he-tool he-tool-txt" id="he-guides-btn" title="Guias de centro" aria-pressed="false">Guias</button>'
     +   '<button class="he-tool he-tool-txt" id="he-safe-btn" title="Zonas seguras do Instagram" aria-pressed="false">Zonas IG</button>'
-    + "</div>";
+    + "</div>"
+    + '<div class="he-layers" id="he-layers" hidden></div>';
   document.body.appendChild(ov);
   document.body.classList.add("no-scroll");
   const frame = $("#he-frame"), wrap = $("#he-wrap"), handle = $("#he-handle");
@@ -1524,10 +1656,15 @@ async function openHtmlEditor(folder, task, rel) {
       const tfs = new Map(movers.map((m) => [m, getTf(m)])); // transform inicial de cada um
       const at = tfs.get(el) || getTf(el); // âncora (o clicado) — base do snap
       const single = movers.length <= 1;
+      let moved = false; // só arrasta após passar do limiar — micro-tremor no clique/duplo-clique NÃO move
       const mv = (ev) => {
         // Se o botão já não está pressionado (soltou fora do iframe), encerra.
         if (ev.buttons === 0) { up(); return; }
+        // Os eventos de mousemove são DENTRO do iframe (doc): o clientX já vem nas coordenadas da
+        // ARTE (o navegador compensa a escala do zoom). Então NÃO dividir por curScale — dividir
+        // fazia o elemento andar ~2x mais rápido que o mouse (o "mouse embaixo, conteúdo no topo").
         let dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if (!moved) { if (Math.abs(dx) + Math.abs(dy) < 4) return; moved = true; }
         if (single && !(ev.ctrlKey || ev.metaKey)) { const sn = snapMove(el, at.x + dx, at.y + dy); dx = sn.x - at.x; dy = sn.y - at.y; } // snap só ao mover 1 (Ctrl segura desliga)
         else clearGuides();
         movers.forEach((m) => { const t = tfs.get(m); setTf(m, Object.assign({}, t, { x: t.x + dx, y: t.y + dy })); }); // mesmo delta p/ todos
@@ -1654,13 +1791,14 @@ async function openHtmlEditor(folder, task, rel) {
   // select(el) = seleção única (limpa o resto). select(el, true) = Shift: alterna 'el' no conjunto.
   // select(null) = desseleciona tudo. A alça de resize só aparece com EXATAMENTE 1 selecionado.
   function select(el, additive) {
-    if (!el) { selection.clear(); current = null; selMark(); syncToolbar(null); handle.style.display = "none"; return; }
+    if (!el) { selection.clear(); current = null; selMark(); syncToolbar(null); handle.style.display = "none"; renderLayers(); return; }
     if (additive) {
       if (selection.has(el)) { selection.delete(el); if (current === el) current = selection.size ? [...selection][selection.size - 1] : null; }
       else { selection.add(el); current = el; }
     } else { selection.clear(); selection.add(el); current = el; }
     selMark(); syncToolbar(current);
     if (selection.size === 1 && current) positionHandle(); else handle.style.display = "none";
+    renderLayers();
   }
   function selectAll() {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
@@ -1677,7 +1815,7 @@ async function openHtmlEditor(folder, task, rel) {
     if (sel) sel.setAttribute("data-he-sel", "1");
     hist = hist.slice(0, hi + 1); hist.push(html); hi = hist.length - 1;
     if (hist.length > 60) { hist.shift(); hi--; }
-    updateUndo();
+    updateUndo(); renderLayers(); // mantém o painel de camadas em dia após qualquer mudança
   }
   function updateUndo() { const u = $("#he-undo"), r = $("#he-redo"); if (u) u.disabled = hi <= 0; if (r) r.disabled = hi >= hist.length - 1; }
   function applyHist() {
@@ -1695,7 +1833,7 @@ async function openHtmlEditor(folder, task, rel) {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
     const img = doc.createElement("img"); img.src = src; img.setAttribute("data-he", "1");
     const w = opts.width || Math.round(card.offsetWidth * 0.3);
-    img.style.cssText = "position:absolute;left:" + (opts.left != null ? opts.left : Math.round((card.offsetWidth - w) / 2)) + "px;top:" + (opts.top != null ? opts.top : Math.round(card.offsetHeight * 0.4)) + "px;width:" + w + "px;height:auto;" + (opts.opacity != null ? "opacity:" + opts.opacity + ";" : "");
+    img.style.cssText = "position:absolute;z-index:" + nextTopZ() + ";left:" + (opts.left != null ? opts.left : Math.round((card.offsetWidth - w) / 2)) + "px;top:" + (opts.top != null ? opts.top : Math.round(card.offsetHeight * 0.4)) + "px;width:" + w + "px;height:auto;" + (opts.opacity != null ? "opacity:" + opts.opacity + ";" : "");
     card.appendChild(img); interactive(doc, img); select(img); dirty = true; snapshot();
   }
   function addMark(type) {
@@ -1708,13 +1846,20 @@ async function openHtmlEditor(folder, task, rel) {
   $("#he-add-text").onclick = () => {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
     const el = doc.createElement("div"); el.textContent = "Novo texto";
-    el.style.cssText = "position:absolute;left:" + Math.round(card.offsetWidth * 0.28) + "px;top:" + Math.round(card.offsetHeight * 0.45) + "px;font-family:'Inter',sans-serif;font-size:56px;font-weight:700;color:#FFFFFF;";
+    // Nasce no TOPO do conteúdo (acima da arte) pra dar pra editar/re-selecionar; coerente com
+    // "Camada" (não é mais um 999 solto). Pra jogar pra trás, use Camada → Enviar para trás.
+    el.style.cssText = "position:absolute;z-index:" + nextTopZ() + ";left:" + Math.round(card.offsetWidth * 0.28) + "px;top:" + Math.round(card.offsetHeight * 0.45) + "px;font-family:'Inter',sans-serif;font-size:56px;font-weight:700;color:#FFFFFF;";
     el.setAttribute("data-he", "1"); card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot();
   };
   $("#he-logo-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addImgNode(b.dataset.src, { width: Math.round((frame.contentDocument.querySelector(".card") || {}).offsetWidth * (parseFloat(b.dataset.w) || 0.3)), top: 80 }); $("#he-logo-menu").removeAttribute("open"); }; });
   $("#he-mark-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addMark(b.dataset.mark); $("#he-mark-menu").removeAttribute("open"); }; });
   $("#he-add-img").onclick = () => $("#he-file").click();
   $("#he-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => addImgNode(rd.result, { top: 120 }); rd.readAsDataURL(f); e.target.value = ""; };
+  // Pintar o FUNDO do slide (o .card é o piso — nada some atrás dele). Cor sólida no lugar do
+  // gradiente/padrão. Snapshot só ao confirmar a cor (change), não a cada arraste do seletor.
+  $("#he-bg").onclick = () => $("#he-bg-input").click();
+  $("#he-bg-input").oninput = () => { const c = frame.contentDocument && frame.contentDocument.querySelector(".card"); if (c) { c.style.background = $("#he-bg-input").value; dirty = true; } };
+  $("#he-bg-input").onchange = () => snapshot();
   // --- Controles de texto ---
   const applyStyle = (fn) => { if (current && current.tagName !== "IMG") { fn(current); dirty = true; } };
   $("#he-size").oninput = () => applyStyle((el) => { el.style.fontSize = (parseInt($("#he-size").value, 10) || 40) + "px"; positionHandle(); });
@@ -1782,12 +1927,54 @@ async function openHtmlEditor(folder, task, rel) {
     setTf(current, Object.assign({}, t, { x: nx, y: ny })); positionHandle(); dirty = true; snapshot();
     $("#he-align2-menu").removeAttribute("open");
   }; });
-  // Ordem das camadas (z-index; position:relative sem offsets não move o elemento)
-  let zTop = 5, zBottom = 0;
+  // Ordem das camadas: o FUNDO é o piso — "Enviar para trás" nunca vai atrás dele (antes usava
+  // z-index negativo e o elemento sumia). Conteúdo vive em z-index >= 1; "para frente" = topo.
+  function nextTopZ() { let m = 0; const c = frame.contentDocument && frame.contentDocument.querySelector(".card"); if (c) c.querySelectorAll("*").forEach((e) => { const z = parseInt(gcs(e).zIndex, 10); if (!isNaN(z)) m = Math.max(m, z); }); return m + 1; }
   $("#he-layer-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => {
-    if (current) { if (gcs(current).position === "static") current.style.position = "relative"; current.style.zIndex = b.dataset.lay === "front" ? (++zTop) : (--zBottom); dirty = true; snapshot(); }
+    if (current) { if (gcs(current).position === "static") current.style.position = "relative"; current.style.zIndex = b.dataset.lay === "front" ? nextTopZ() : 1; dirty = true; snapshot(); }
     $("#he-layer-menu").removeAttribute("open");
   }; });
+  // --- Painel de camadas: lista os elementos (topo = frente). Clicar seleciona QUALQUER um (mesmo
+  // coberto), ↑/↓ reordena, olho esconde. É o que resolve "conteúdo em cima do outro". ---
+  function elLabel(el) {
+    if (el.tagName === "IMG") return "Imagem";
+    if (/^svg$/i.test(el.tagName)) return "Ícone";
+    const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+    return t ? (t.length > 26 ? t.slice(0, 26) + "…" : t) : "Bloco";
+  }
+  function layerEls() {
+    const doc = frame.contentDocument, card = doc && (doc.querySelector(".card") || doc.body);
+    if (!card) return [];
+    const els = [...card.querySelectorAll("[data-he]")].filter((e) => !(e.parentElement && e.parentElement.closest("[data-he]"))); // só folhas de topo
+    const z = (e) => { const v = parseInt(gcs(e).zIndex, 10); return isNaN(v) ? 0 : v; };
+    const ord = new Map(els.map((e, i) => [e, i]));
+    els.sort((a, b) => (z(b) - z(a)) || (ord.get(b) - ord.get(a))); // topo (frente) primeiro
+    return els;
+  }
+  function renderLayers() {
+    const panel = $("#he-layers"); if (!panel || panel.hidden) return;
+    const els = layerEls(); panel._els = els;
+    panel.innerHTML = '<div class="he-lay-head">Camadas <span class="he-lay-hint">topo = frente</span></div>'
+      + (els.length ? els.map((e, i) => '<div class="he-lay-row' + (selection.has(e) ? " sel" : "") + (e.style.visibility === "hidden" ? " hid" : "") + '" data-i="' + i + '">'
+          + '<button class="he-lay-eye" data-eye="' + i + '" title="Mostrar/ocultar">' + (e.style.visibility === "hidden" ? "&#9676;" : "&#9673;") + '</button>'
+          + '<span class="he-lay-label">' + esc(elLabel(e)) + '</span>'
+          + '<button class="he-lay-mv" data-up="' + i + '" title="Trazer para frente">&#8593;</button>'
+          + '<button class="he-lay-mv" data-down="' + i + '" title="Enviar para trás">&#8595;</button>'
+          + '</div>').join("") : '<div class="he-lay-empty">Nada para listar.</div>')
+      + '<div class="he-lay-row he-lay-bg">&#9638; Fundo <span class="he-lay-hint">(piso — pinte no botão Fundo)</span></div>';
+    panel.querySelectorAll(".he-lay-row[data-i]").forEach((row) => { row.onclick = (ev) => { if (ev.target.closest("[data-up],[data-down],[data-eye]")) return; const e = els[+row.dataset.i]; if (e) { select(e); positionHandle(); } }; });
+    panel.querySelectorAll("[data-up]").forEach((btn) => { btn.onclick = () => reorderLayer(+btn.dataset.up, -1); });
+    panel.querySelectorAll("[data-down]").forEach((btn) => { btn.onclick = () => reorderLayer(+btn.dataset.down, 1); });
+    panel.querySelectorAll("[data-eye]").forEach((btn) => { btn.onclick = () => { const e = els[+btn.dataset.eye]; if (e) { e.style.visibility = e.style.visibility === "hidden" ? "" : "hidden"; dirty = true; snapshot(); } }; });
+  }
+  function reorderLayer(i, dir) {
+    const els = ($("#he-layers") || {})._els; if (!els) return;
+    const j = i + dir; if (j < 0 || j >= els.length) return;
+    const t = els[i]; els[i] = els[j]; els[j] = t;
+    const n = els.length; els.forEach((e, k) => { if (gcs(e).position === "static") e.style.position = "relative"; e.style.zIndex = (n - k); }); // topo = maior z (acima do fundo)
+    dirty = true; snapshot();
+  }
+  $("#he-layers-btn").onclick = () => { const p = $("#he-layers"); p.hidden = !p.hidden; $("#he-layers-btn").classList.toggle("on", !p.hidden); if (!p.hidden) renderLayers(); };
   // Trocar a imagem selecionada (mantém posição/tamanho)
   $("#he-replace").onclick = () => { if (current && current.tagName === "IMG") $("#he-replace-file").click(); };
   $("#he-replace-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f || !current || current.tagName !== "IMG") return; const rd = new FileReader(); rd.onload = () => { current.src = rd.result; dirty = true; snapshot(); positionHandle(); }; rd.readAsDataURL(f); e.target.value = ""; };
@@ -1928,14 +2115,16 @@ async function openHtmlEditor(folder, task, rel) {
   // atalhos de teclado
   function onKey(e) {
     const fd = frame.contentDocument, ae = fd && fd.activeElement;
-    if (ae && ae.isContentEditable) return;
+    if (ae && ae.isContentEditable) return; // editando texto na arte → deixa o desfazer nativo agir
+    // Desfazer/refazer da ARTE valem MESMO com um campo da barra (tamanho/entrelinha/rotação/fonte)
+    // focado — os campos aplicam ao vivo e já snapshotam; senão o Ctrl+Z ficava preso pelo foco no campo.
+    if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); return; }
     const t = (document.activeElement || {}).tagName;
     if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
     if ((e.key === "Delete" || e.key === "Backspace") && selection.size) { e.preventDefault(); selection.forEach((x) => x.remove()); select(null); dirty = true; snapshot(); }
     else if (e.key === "Escape" && selection.size) { e.preventDefault(); select(null); } // Esc = desseleciona tudo
     else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) { e.preventDefault(); selectAll(); } // Ctrl+A = selecionar tudo
-    else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
-    else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) { e.preventDefault(); zoomBy(1.2); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) { e.preventDefault(); zoomBy(1 / 1.2); }
     else if ((e.ctrlKey || e.metaKey) && e.key === "0") { e.preventDefault(); applyZoom(fitScale); }
@@ -1958,6 +2147,13 @@ async function openHtmlEditor(folder, task, rel) {
   if (multiSlide) { $("#he-prev").onclick = () => goSlide(-1); $("#he-next").onclick = () => goSlide(1); }
   const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); if (dirty || changed) router(); };
   $("#he-close").onclick = close;
+  // "Voltar ao quadro": fecha o editor e reabre o quadro do carrossel restaurando a montagem.
+  // Re-busca a peça (mtimes atualizados) pro slide que acabou de ser editado aparecer atualizado.
+  if (opts && opts.backToBoard && $("#he-board")) $("#he-board").onclick = async () => {
+    const f = folder; let t = task; close();
+    try { const r = await API.task(f); if (r && r.task) t = r.task; } catch (e) {}
+    openCarouselBoard(f, t);
+  };
   let savedT = null;
   $("#he-save").onclick = async () => {
     const btn = $("#he-save"); btn.disabled = true; const o = btn.dataset.label || btn.textContent; btn.dataset.label = o;

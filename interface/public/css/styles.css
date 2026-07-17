@@ -817,6 +817,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .tc-media { font-size: 10.5px; padding: 2px 8px; }
 
 .create-result { position: sticky; top: 92px; align-self: start; }
+/* Respiro entre o cabeçalho (título + tag do modelo) e a caixa de conteúdo — sem isso a tag
+   fica colada na caixa de baixo (o cabeçalho é uma div, então .card>h3:first-child não pega). */
+#g-result { margin-top: var(--s4); }
 .create-lead { font-size: 13px; line-height: 1.5; margin: 3px 0 2px; }
 
 .gov-head { font-size: 12.5px; font-weight: 600; color: var(--text-2); margin-top: var(--s5); }
@@ -901,6 +904,20 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .login-card input { width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #FFFFFF; border-radius: var(--r-sm); padding: 12px 14px; }
 .login-card input::placeholder { color: #7f93a0; }
 .login-card input:focus { border-color: #5499B5; outline: none; box-shadow: 0 0 0 3px rgba(84,153,181,.25); }
+/* Autofill do Chrome no login: o campo Usuário ficava BRANCO com texto branco (invisível) porque o
+   box-shadow do :focus acima sobrescrevia o fundo escuro do autofill. Regra específica (mais forte
+   que o :focus) força fundo escuro + texto branco no campo preenchido automaticamente. */
+.login-card input:-webkit-autofill,
+.login-card input:-webkit-autofill:hover,
+.login-card input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #FFFFFF;
+  -webkit-box-shadow: 0 0 0 1000px #122b35 inset;
+  caret-color: #FFFFFF;
+  transition: background-color 9999s ease-in-out 0s;
+}
+.login-card input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 3px rgba(84,153,181,.25), 0 0 0 1000px #122b35 inset;
+}
 .login-card button[type="submit"] { width: 100%; margin-top: var(--s2); justify-content: center; background: #006494; border: none; color: #FFFFFF; font-weight: 700; padding: 13px; border-radius: var(--r-sm); }
 .login-card button[type="submit"]:hover:not(:disabled) { background: #0a72a5; }
 .login-err { background: rgba(196,64,64,.16); color: #ffb4b4; border: 1px solid rgba(196,64,64,.4); border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; margin-bottom: var(--s4); }
@@ -991,8 +1008,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .he-bar #he-lh { height: 30px; }
 .he-bar #he-font { width: 128px; }
 .he-bar #he-align { width: 84px; }
-.he-bar #he-size { width: 58px; }
-.he-bar #he-lh { width: 56px; }
+/* Largura suficiente pro valor + setas de incremento sem cortar (tamanho até "600",
+   entrelinha "2.95", rotação "-180"). Antes 54-58px cortava o último dígito. */
+.he-bar #he-size { width: 74px; }
+.he-bar #he-lh { width: 74px; }
 .he-bar .ed-ico.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .he-bar .ed-menu { position: relative; display: inline-block; }
 .he-bar .ed-menu > summary { list-style: none; cursor: pointer; }
@@ -1003,7 +1022,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 
 /* ---- Editor HTML: controles avançados (opacidade, rotação, espelhar, filtros, efeitos, snap, zonas IG) ---- */
 .he-bar input[type="number"] { height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); }
-.he-bar #he-rot { width: 54px; }
+.he-bar #he-rot { width: 78px; }
 .he-op { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-2); font-size: 11px; }
 .he-op input[type="range"] { width: 64px; }
 .he-bar .ed-ico svg { display: block; }
@@ -1051,6 +1070,22 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* Popover fechado não deve ocupar largura na coluna estreita (min-width dele estouraria o
    scrollWidth). Ao abrir, o handler o transforma em flyout fixo, fora da coluna. */
 .editor-ov.he-dock-left .he-bar .ed-menu:not([open]) .ed-pop { display: none; }
+
+/* ---- Painel de camadas do editor (lista de elementos; clicar seleciona até o coberto) ---- */
+#he-layers-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.he-layers { position: absolute; top: 64px; right: 16px; width: 244px; max-height: calc(100% - 132px); z-index: 70; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,.45); padding: 6px; }
+.he-lay-head { font-size: 12px; font-weight: 700; color: var(--text); padding: 6px 8px 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.he-lay-hint { font-size: 10.5px; font-weight: 400; color: var(--text-mut); }
+.he-lay-empty { font-size: 12px; color: var(--text-mut); padding: 8px; }
+.he-lay-row { display: flex; align-items: center; gap: 4px; padding: 5px 6px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--text-2); user-select: none; }
+.he-lay-row:hover { background: var(--surface-2); }
+.he-lay-row.sel { background: var(--accent-soft); color: var(--accent-strong); }
+.he-lay-row.hid .he-lay-label { opacity: .45; text-decoration: line-through; }
+.he-lay-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.he-lay-eye, .he-lay-mv { border: none; background: transparent; color: var(--text-2); cursor: pointer; width: 24px; height: 24px; border-radius: 6px; font-size: 12px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.he-lay-eye:hover, .he-lay-mv:hover { background: var(--surface-3); color: var(--text); }
+.he-lay-bg { cursor: default; color: var(--text-mut); font-size: 12px; border-top: 1px solid var(--border-soft); margin-top: 4px; }
+.he-lay-bg:hover { background: transparent; }
 /* linhas de encaixe inteligente (snap) — cor de destaque distinta do azul das guias de centro */
 .he-guideline { position: absolute; z-index: 34; pointer-events: none; background: #ff4d6d; }
 .he-guideline-v { top: 0; bottom: 0; width: 1px; }
@@ -1158,7 +1193,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 }
 .lightbox-res .dl-caret { border-top-color: #fff; }
 /* Rodapé da galeria de slides do carrossel: ação "Baixar todos (ZIP)" no canto inferior direito. */
-.strip-foot { display: flex; justify-content: flex-end; margin-top: var(--s5); }
+.strip-foot { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
 /* navegação do lightbox em grupo (slides do carrossel / mídias geradas juntas) */
 .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); color: #fff; font-size: 30px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 6; transition: background .15s ease; }
 .lightbox-nav:hover { background: rgba(255,255,255,.24); }
@@ -1203,10 +1238,19 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .board-top { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--border-soft); background: var(--surface); flex: 0 0 auto; }
 .board-title { font-weight: 700; font-size: 15px; color: var(--text); }
 .board-snap { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
-.board-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; background: var(--surface-2); cursor: grab; background-image: radial-gradient(var(--border-soft) 1px, transparent 1px); background-size: 26px 26px; }
-.board-stage:active { cursor: grabbing; }
+.board-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; background: var(--surface-2); cursor: default; background-image: radial-gradient(var(--border-soft) 1px, transparent 1px); background-size: 26px 26px; }
+.board-stage.board-pan { cursor: grab; }
+.board-stage.board-pan:active { cursor: grabbing; }
 .board-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 .board-item { position: absolute; cursor: move; line-height: 0; box-shadow: 0 8px 34px rgba(0,0,0,.45); }
+.board-item.sel { outline: 3px solid var(--accent); outline-offset: 2px; }
+.board-marquee { position: absolute; z-index: 6; border: 1px solid var(--accent); background: rgba(84,153,181,.14); border-radius: 2px; pointer-events: none; }
+.board-guide { position: absolute; z-index: 9999; background: #ff4d6d; pointer-events: none; }
+.board-top .ed-menu { position: relative; display: inline-block; }
+.board-top .ed-menu > summary { list-style: none; cursor: pointer; }
+.board-top .ed-menu > summary::-webkit-details-marker { display: none; }
+.board-align .ed-pop { min-width: 214px; }
+.ed-pop-sep { height: 1px; background: var(--border); margin: 4px 6px; }
 .board-slide { display: block; width: 100%; height: 100%; }
 .board-num { position: absolute; top: 12px; left: 12px; min-width: 40px; height: 40px; padding: 0 10px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-pill); font-size: 20px; font-weight: 800; background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 10px rgba(0,0,0,.45); pointer-events: none; }
 .board-tools { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 6px 12px; box-shadow: var(--shadow); }
