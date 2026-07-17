@@ -1127,29 +1127,36 @@ async function renderEditedHtml(folder, rel, html) {
   return { ok: true, w: base.w, h: base.h, rel };
 }
 
-// 4Selet na Mídia: renderiza o print num dispositivo (modelo escolhido em status.media.model),
-// em 2 formatos: 4:5 (ads/feed.png — publicável no IG) e 16:9 (ads/media_16x9.png — site).
-// A legenda vai em copy/instagram_caption.txt (fluxo de feed). Metadados em status.media.
+// Formatos da peça "4Selet na Mídia". 4:5 vai pra ads/feed.png (publicável no IG feed).
+const MEDIA_SIZES = {
+  "4x5":  { w: 1080, h: 1350, png: "feed.png" },
+  "1x1":  { w: 1080, h: 1080, png: "square.png" },
+  "9x16": { w: 1080, h: 1920, png: "story.png" },
+  "16x9": { w: 1920, h: 1080, png: "media_16x9.png" },
+};
+const MEDIA_SIZE_IDS = Object.keys(MEDIA_SIZES);
+// 4Selet na Mídia: renderiza o print num dispositivo (status.media.model), nos TAMANHOS
+// escolhidos (status.media.sizes; default 4:5 + 16:9). A legenda vai em copy/instagram_caption.txt.
 async function renderMedia(folder, opts) {
   const loc = requireActive(folder);
   const status = readJson(path.join(loc.path, "status.json")) || {};
   const meta = status.media || {};
   const model = (opts && opts.template) || meta.model || "tablet";
   const props = { image: meta.print || (opts && opts.image) || "", url: meta.url || "", eyebrow: meta.vehicle || "", model };
+  let sizes = (Array.isArray(meta.sizes) ? meta.sizes : []).filter((k) => MEDIA_SIZES[k]);
+  if (!sizes.length) sizes = ["4x5", "16x9"];
   const dir = path.join(loc.path, "ads");
   fs.mkdirSync(dir, { recursive: true });
   const rels = []; let err = "";
-  const jobs = [
-    { w: 1080, h: 1350, html: "feed.html", png: "feed.png", rel: "ads/feed.png" },
-    { w: 1920, h: 1080, html: "media_16x9.html", png: "media_16x9.png", rel: "ads/media_16x9.png" },
-  ];
-  for (const j of jobs) {
-    const hp = path.join(dir, j.html), pp = path.join(dir, j.png);
-    fs.writeFileSync(hp, tplMedia(Object.assign({ width: j.w, height: j.h }, props)), "utf8");
-    const r = await htmlToPng(hp, pp, j.w, j.h, RENDER_SCALE);
-    if (r.ok) rels.push(j.rel); else err = r.stderr || err;
+  for (const key of sizes) {
+    const sz = MEDIA_SIZES[key];
+    const base = sz.png.replace(/\.png$/i, "");
+    const hp = path.join(dir, base + ".html"), pp = path.join(dir, sz.png);
+    fs.writeFileSync(hp, tplMedia(Object.assign({ width: sz.w, height: sz.h }, props)), "utf8");
+    const r = await htmlToPng(hp, pp, sz.w, sz.h, RENDER_SCALE);
+    if (r.ok) rels.push("ads/" + sz.png); else err = r.stderr || err;
   }
-  return { ok: rels.indexOf("ads/feed.png") !== -1, rels, stderr: err, template: model };
+  return { ok: rels.length > 0, rels, stderr: err, template: model };
 }
 
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.

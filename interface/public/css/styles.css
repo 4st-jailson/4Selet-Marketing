@@ -419,19 +419,27 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .ig-connected .hint { flex-basis: 100%; margin: 2px 0 0; }
 
 /* ---- Publicar/Agendar no Instagram: modal + prévia (mockup do feed) ---- */
-.modal.pub-modal { max-width: 860px; width: 94vw; } /* vence o .modal base (440px) por especificidade */
+.modal.pub-modal { max-width: 860px; width: 94vw; max-height: 92vh; overflow-y: auto; position: relative; } /* vence o .modal base (440px); rola se a tela for baixa (não quebra); relative p/ o overlay de publicação */
 .pub-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.pub-body { display: flex; gap: 22px; margin-top: 14px; align-items: stretch; } /* prévia (esq) | legenda (dir); stretch faz a coluna da legenda acompanhar a altura da prévia */
+.pub-body { display: flex; gap: 22px; margin-top: 14px; align-items: stretch; } /* prévia (esq) | legenda (dir); stretch faz a coluna da direita acompanhar a altura da prévia */
 .pub-preview { flex: 0 0 auto; }
+.pub-preview .ig-post { width: 340px; max-width: 100%; } /* largura alinhada com "Ver no celular"; encolhe em telas pequenas */
 .pub-form { flex: 1 1 300px; min-width: 240px; display: flex; flex-direction: column; }
-.pub-form textarea { width: 100%; resize: vertical; flex: 1; min-height: 300px; } /* abre alta (acompanha a prévia) e ainda pode arrastar */
+.pub-form textarea { width: 100%; resize: vertical; min-height: 200px; max-height: 46vh; } /* altura moderada; NÃO estica pra não quebrar o modal */
 .pub-status { margin-bottom: 10px; }
-/* Botões (Publicar agora + Agendar) num rodapé, ABAIXO das duas colunas */
-.pub-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-soft); flex-wrap: wrap; }
-.pub-foot #pub-now { min-width: 170px; padding: 11px 20px; }
-.pub-sched { display: flex; flex-direction: column; gap: 5px; flex: 1 1 300px; max-width: 420px; }
-.pub-sched input[type="datetime-local"] { height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 8px; flex: 1; }
-@media (max-width: 720px) { .pub-body { flex-wrap: wrap; } .pub-foot { flex-direction: column; align-items: stretch; } }
+/* Rodapé no FINAL da coluna (margin-top:auto empurra pro fundo, alinhado com a prévia): agendamento em cima, botões embaixo */
+.pub-foot { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+.pub-sched { display: flex; flex-direction: column; gap: 6px; }
+.pub-sched input[type="datetime-local"] { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 10px; max-width: 300px; }
+.pub-btns { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.pub-btns #pub-now { min-width: 170px; padding: 11px 20px; }
+/* Telas menores: empilha prévia em cima / legenda embaixo, e a prévia ocupa a largura toda */
+@media (max-width: 720px) { .pub-body { flex-direction: column; align-items: stretch; } .pub-preview .ig-post { width: 100%; } .pub-foot { margin-top: 16px; } }
+/* Overlay de publicação: spinner grande + mensagem — feedback claro durante os segundos do post */
+.pub-publishing { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 30px; border-radius: inherit; background: color-mix(in srgb, var(--surface) 92%, transparent); }
+.pub-publishing p { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
+.pub-publishing .hint { max-width: 360px; font-size: 13px; font-weight: 400; }
+.spinner-lg { width: 34px; height: 34px; border-width: 3px; vertical-align: middle; }
 /* Campanha + atalho "Nova campanha" lado a lado (Criar Conteúdo) */
 .camp-pick { display: flex; gap: 8px; align-items: stretch; }
 .camp-pick select { flex: 1; min-width: 0; }
@@ -444,6 +452,10 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .model-card span { font-size: 13px; font-weight: 600; }
 .media-print-prev { margin-top: 10px; }
 .media-print-prev img { max-height: 170px; max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.size-pick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.size-chip { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-mut); }
+.size-chip input { accent-color: var(--accent); margin: 0; }
+.size-chip:has(input:checked) { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .ig-post { width: 320px; max-width: 100%; background: #fff; color: #262626; border: 1px solid #dbdbdb; border-radius: 10px; overflow: hidden; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
 .ig-post-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; }
 .ig-post-av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #5499B5, #006494); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }

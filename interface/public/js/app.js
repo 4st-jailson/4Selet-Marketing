@@ -97,6 +97,13 @@ const MEDIA_MODELS = [
   { id: "notebook", name: "Notebook", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="24" height="16" rx="1.5"/><path d="M4 30h32l-2-4H6z"/></svg>' },
   { id: "janela", name: "Janela", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/></svg>' },
 ];
+// Tamanhos/formatos que a peça "4Selet na Mídia" pode gerar (marca mais de um).
+const MEDIA_SIZE_OPTS = [
+  { id: "4x5", label: "Feed 4:5" },
+  { id: "1x1", label: "Quadrado 1:1" },
+  { id: "9x16", label: "Story 9:16" },
+  { id: "16x9", label: "Site 16:9" },
+];
 function tag(text) { return '<span class="badge plain">' + esc(text) + "</span>"; }
 function plural(n, sing, plur) { return n + " " + (n === 1 ? sing : plur); }
 function platformLabel(p) { const m = { x: "Threads/X", threads: "Threads/X", instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok", youtube: "YouTube", whatsapp: "WhatsApp", email: "E-mail" }; return m[String(p || "").toLowerCase()] || p; }
@@ -2723,14 +2730,22 @@ async function openPublishModal(task) {
         <label class="layer-lab">Legenda</label>
         <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
         <p class="hint">Edite a legenda e veja a prévia atualizar ao lado.</p>
+        <div class="pub-foot">
+          <div class="pub-sched">
+            <label class="layer-lab">Agendar para depois</label>
+            <input type="datetime-local" id="pub-when">
+          </div>
+          <div class="pub-btns">
+            <button class="btn btn-primary" id="pub-now">${connected ? "Publicar agora" : "Simular agora"}</button>
+            <button class="btn" id="pub-schedule">Agendar</button>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="pub-foot">
-      <button class="btn btn-primary" id="pub-now">${connected ? "Publicar agora" : "Simular agora"}</button>
-      <div class="pub-sched">
-        <label class="layer-lab">Agendar para depois</label>
-        <div class="flex"><input type="datetime-local" id="pub-when"><button class="btn" id="pub-schedule">Agendar</button></div>
-      </div>
+    <div class="pub-publishing" hidden>
+      <span class="spinner spinner-lg"></span>
+      <p class="pub-prog-t">Publicando no Instagram…</p>
+      <p class="hint pub-prog-h">O Instagram monta o carrossel e publica — pode levar alguns segundos. Não feche esta janela.</p>
     </div>
   </div>`;
   document.body.appendChild(ov); document.body.classList.add("no-scroll");
@@ -2741,15 +2756,27 @@ async function openPublishModal(task) {
   wireIgPreview(ov, imgs);
   const capEl = ov.querySelector("#pub-caption");
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
+  const publishing = ov.querySelector(".pub-publishing");
   ov.querySelector("#pub-now").onclick = async () => {
     const cap = capEl.value.trim();
     if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora" }))) return;
-    const btn = ov.querySelector("#pub-now"); btn.disabled = true; btn.textContent = "Publicando…";
+    const btn = ov.querySelector("#pub-now"), sBtn = ov.querySelector("#pub-schedule"), xBtn = ov.querySelector("[data-x='close']");
+    [btn, sBtn, xBtn].forEach((b) => { if (b) b.disabled = true; });
+    const tt = publishing.querySelector(".pub-prog-t"); if (tt) tt.textContent = connected ? "Publicando no Instagram…" : "Simulando publicação…";
+    publishing.hidden = false; // overlay com spinner grande + mensagem (mais intuitivo que só o texto do botão)
     try {
       const r = await API.publishPiece(task.folder, { caption: cap || undefined, dryRun: !connected });
-      toast(r.dry_run ? ("Simulado (" + r.type + "): " + r.reason) : "Publicado no Instagram!", r.dry_run ? "info" : "ok");
-      close();
-    } catch (e) { toast((e && e.message) || "Falha ao publicar.", "error"); btn.disabled = false; btn.textContent = connected ? "Publicar agora" : "Simular agora"; }
+      // Estado de SUCESSO: troca pra confirmação visível antes de fechar (some o spinner).
+      const sp = publishing.querySelector(".spinner"); if (sp) sp.remove();
+      if (tt) tt.textContent = r.dry_run ? "Simulação concluída" : "Publicado no Instagram!";
+      const hh = publishing.querySelector(".pub-prog-h"); if (hh) hh.textContent = r.dry_run ? (r.reason || "Nada foi postado (modo simulado).") : ("A peça está no ar em @" + esc(uname) + ".");
+      toast(r.dry_run ? ("Simulado (" + r.type + ")") : "Publicado no Instagram!", r.dry_run ? "info" : "ok");
+      setTimeout(close, 1200);
+    } catch (e) {
+      publishing.hidden = true;
+      [btn, sBtn, xBtn].forEach((b) => { if (b) b.disabled = false; });
+      toast((e && e.message) || "Falha ao publicar.", "error");
+    }
   };
   ov.querySelector("#pub-schedule").onclick = async () => {
     const when = ov.querySelector("#pub-when").value;
@@ -3129,6 +3156,9 @@ async function viewCreate(arg, query) {
             <div class="model-pick" id="g-media-model-pick">${MEDIA_MODELS.map((m, i) => `<button type="button" class="model-card${i === 0 ? " on" : ""}" data-model="${esc(m.id)}">${m.svg}<span>${esc(m.name)}</span></button>`).join("")}</div>
             <input type="hidden" id="g-media-model" value="tablet" />
           </div>
+          <div class="field"><label>Tamanhos a gerar <span class="hint">(marque um ou mais — Feed 4:5 é o publicável no Instagram)</span></label>
+            <div class="size-pick" id="g-media-sizes">${MEDIA_SIZE_OPTS.map((s) => `<label class="size-chip"><input type="checkbox" value="${esc(s.id)}"${(s.id === "4x5" || s.id === "16x9") ? " checked" : ""}/>${esc(s.label)}</label>`).join("")}</div>
+          </div>
         </div>
 
         <div class="form-section">
@@ -3432,6 +3462,7 @@ async function runGenerate() {
     media_vehicle: ($("#g-media-vehicle") && $("#g-media-vehicle").value.trim()) || undefined,
     media_url: ($("#g-media-url") && $("#g-media-url").value.trim()) || undefined,
     media_model: ($("#g-media-model") && $("#g-media-model").value) || undefined,
+    media_sizes: (function () { const s = Array.prototype.slice.call(document.querySelectorAll("#g-media-sizes input:checked")).map((x) => x.value); return s.length ? s : undefined; })(),
   };
   const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
   const prog = startGenProgress($("#g-result"), !!payload.research);

@@ -239,7 +239,7 @@ router.post("/save", async (req, res, next) => {
 
     // 2e) metadados da peça "4Selet na Mídia" (print + veículo + link + modelo do device).
     if (body.content_type === "media_mention") {
-      content.setMediaMeta(folder, { print: body.media_print, url: body.media_url, vehicle: body.media_vehicle, model: body.media_model });
+      content.setMediaMeta(folder, { print: body.media_print, url: body.media_url, vehicle: body.media_vehicle, model: body.media_model, sizes: body.media_sizes });
     }
 
     // 3) grava o arquivo de conteudo

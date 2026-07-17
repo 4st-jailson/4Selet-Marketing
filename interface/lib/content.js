@@ -385,11 +385,15 @@ function setMediaMeta(folder, meta) {
   const status = readJsonSafe(p);
   if (!status) return false;
   const models = ["tablet", "celular", "notebook", "janela"];
+  const validSizes = ["4x5", "1x1", "9x16", "16x9"];
+  let sizes = (Array.isArray(meta && meta.sizes) ? meta.sizes : []).filter((s) => validSizes.indexOf(s) !== -1);
+  if (!sizes.length) sizes = ["4x5", "16x9"];
   status.media = {
     print: String((meta && meta.print) || "").slice(0, 400),
     url: String((meta && meta.url) || "").slice(0, 400),
     vehicle: String((meta && meta.vehicle) || "").slice(0, 120),
     model: models.indexOf(String(meta && meta.model)) !== -1 ? String(meta.model) : "tablet",
+    sizes: sizes,
   };
   fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
   return true;
