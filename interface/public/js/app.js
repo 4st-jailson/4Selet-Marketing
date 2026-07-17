@@ -1084,11 +1084,32 @@ function carouselStrip(folder, task) {
       <span class="slide-num">${s.n}</span>
       <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
-    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}</div>`).join("");
+    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}${editable ? '<button class="btn btn-sm btn-ghost slide-regen" data-n="' + s.n + '" title="Refazer só este slide com a IA, mantendo os outros">Regerar slide</button>' : ""}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
     <div class="media-gallery mt">${items}</div>
     <div class="strip-foot"><button class="btn btn-sm btn-ghost" id="bd-open" title="Monta os slides num quadro livre (lado a lado ou onde quiser)">Ver no quadro</button><a class="btn btn-sm btn-primary" href="${API.zipUrl(folder)}" download title="Baixa os ${slides.length} slides num único arquivo .zip">Baixar todos (ZIP)</a></div></div>`;
+}
+
+// Regera UM slide do carrossel com a IA (mantém os outros). Só na zona active (peça reaberta/rascunho).
+async function regenSlide(folder, task, n) {
+  const r = await uiModal({
+    title: "Regerar slide " + n,
+    message: "A IA refaz só este slide, mantendo os outros. Deixe em branco para uma versão nova livre.",
+    fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: número maior · trocar o exemplo · mais direto ao ponto" }],
+    confirmText: "Regerar slide",
+  });
+  if (r === null) return;
+  toast("Regerando o slide " + n + "…", "info");
+  try {
+    const res = await API.regenerateSlide(folder, n - 1, (r.instruction || "").trim() || undefined);
+    if (res.rendered) toast(res.simulated ? ("Slide " + n + " regerado (simulado — configure a IA em Configurações)") : ("Slide " + n + " regerado"), res.simulated ? "warn" : "success");
+    else toast("Slide atualizado, mas o render não saiu agora" + (res.render_error ? ": " + res.render_error : "."), "warn");
+    router(); // recarrega a peça mostrando o slide novo
+  } catch (e) {
+    if (e.data && e.data.governance) toast("Esse slide feriu uma regra de marca — tente outra orientação.", "error");
+    else toast((e && e.message) || "Falha ao regerar o slide.", "error");
+  }
 }
 
 // Quadro estilo Figma para o CARROSSEL: tela livre onde cada slide vira uma imagem que se
@@ -2555,6 +2576,7 @@ async function viewTaskDetail(folder) {
   loadTaskCollections(folder);
   if ($("#btn-phone")) $("#btn-phone").onclick = () => openPhonePreview(task);
   if ($("#bd-open")) $("#bd-open").onclick = () => openCarouselBoard(folder, task);
+  $$(".slide-regen").forEach((btn) => { btn.onclick = () => regenSlide(folder, task, parseInt(btn.dataset.n, 10)); });
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
   if (isImported) loadImportedCaption(folder);

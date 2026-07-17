@@ -874,6 +874,22 @@ async function renderCarousel(folder, opts) {
   return { ok: rels.length === total, rels, stderr: lastErr || "", count: rels.length, total: total, template: tpl.id };
 }
 
+// Re-renderiza UM slide do carrossel (após regerar o conteúdo só dele), sem tocar nos outros.
+async function renderCarouselSlide(folder, n) {
+  const loc = requireActive(folder);
+  const tpl = pickTemplate(loc, null);
+  const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
+  const dir = path.join(loc.path, "slides");
+  fs.mkdirSync(dir, { recursive: true });
+  const built = carouselSlidesHtml(concept, tpl.build);
+  const item = built.find((b) => b.n === n);
+  if (!item) { const e = new Error("slide " + n + " nao existe no carrossel"); e.code = "E_NO_SLIDE"; throw e; }
+  const htmlPath = path.join(dir, "slide_" + n + ".html"), outPng = path.join(dir, "slide_" + n + ".png");
+  fs.writeFileSync(htmlPath, item.html, "utf8");
+  const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
+  return { ok: r.ok, rel: "slides/slide_" + n + ".png", stderr: r.stderr || "" };
+}
+
 // ---- Video (Remotion parametrizado) ---------------------------------------
 async function renderVideo(folder) {
   const loc = requireActive(folder);
@@ -1173,6 +1189,6 @@ async function render(folder, kind, opts) {
 }
 
 module.exports = {
-  render, renderPreview, renderForDownload, renderEditedHtml,
+  render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   TEMPLATE_IDS,
 };

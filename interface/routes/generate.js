@@ -2,6 +2,8 @@
 // parsing estruturado, brand governance e salvamento na task/campanha.
 "use strict";
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const router = express.Router();
 const ai = require("../lib/ai"); // dispatcher multi-provedor (Claude / OpenAI / ...)
 const prompts = require("../lib/prompts");
@@ -252,6 +254,53 @@ router.post("/save", async (req, res, next) => {
     }
 
     res.json({ ok: true, folder, file: rel, governance: gov, task: content.getTask(folder) });
+  } catch (e) { next(e); }
+});
+
+// POST /api/generate/slide — regera UM slide do carrossel (mantendo os outros) e re-renderiza só ele.
+router.post("/slide", async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const folder = String(body.folder || "");
+    const loc = content.findTask(folder);
+    if (!loc) return res.status(404).json({ error: "peça não encontrada" });
+    if (loc.zone !== "active") return res.status(409).json({ error: "Reabra a peça para edição antes de regerar um slide.", code: "E_NOT_EDITABLE" });
+    let carousel;
+    try { carousel = JSON.parse(fs.readFileSync(path.join(loc.path, "copy", "instagram_carousel.json"), "utf8").replace(/^﻿/, "")); }
+    catch (e) { return res.status(400).json({ error: "esta peça não tem um carrossel para regerar" }); }
+    const slides = Array.isArray(carousel.slides) ? carousel.slides : [];
+    const index = parseInt(body.index, 10);
+    if (!(index >= 0 && index < slides.length)) return res.status(400).json({ error: "índice de slide inválido" });
+
+    const st = (content.getTask(folder) || {}).status || {};
+    const campaign = st.campaign_id ? campaigns.get(st.campaign_id) : (body.campaign_id ? campaigns.get(body.campaign_id) : null);
+    const req2 = { content_type: "instagram_carousel", carousel, index, instruction: body.instruction, campaign, pillar: st.pillar || body.pillar };
+
+    const result = await ai.complete({
+      system: prompts.systemPrompt(),
+      prompt: prompts.singleSlidePrompt(req2),
+      maxTokens: 900,
+      provider: body.provider,
+      simulate: () => JSON.stringify(slides[index]), // sem chave: mantém o slide atual (sinalizado)
+    });
+    const newSlide = extractJson(result.text);
+    if (!newSlide || typeof newSlide !== "object" || Array.isArray(newSlide)) return res.status(422).json({ error: "a IA não retornou um slide válido" });
+    // preserva a foto de fundo do slide se a IA não devolver uma
+    if (!newSlide.image && slides[index] && slides[index].image) newSlide.image = slides[index].image;
+
+    // governança sobre o texto do slide novo
+    const gov = runBrandGovernance((newSlide.title || "") + "\n" + (newSlide.body || ""), { type: "instagram_carousel" });
+    if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
+
+    carousel.slides[index] = newSlide;
+    try { content.writeContentFile(folder, "copy/instagram_carousel.json", JSON.stringify(carousel, null, 2) + "\n", "regerar slide " + (index + 1)); }
+    catch (e) { return res.status(e.code === "E_NOT_EDITABLE" ? 409 : 500).json({ error: e.message, code: e.code }); }
+
+    let rr = { ok: false, stderr: "" };
+    try { rr = await render.renderCarouselSlide(folder, index + 1); }
+    catch (e) { rr = { ok: false, stderr: e.message }; }
+
+    res.json({ ok: true, simulated: result.simulated, index, slide: newSlide, rendered: rr.ok, rel: rr.rel, render_error: rr.ok ? undefined : (rr.stderr || "").slice(0, 200), governance: gov });
   } catch (e) { next(e); }
 });
 

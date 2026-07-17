@@ -91,6 +91,7 @@ const API = (() => {
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
     refine: (payload) => req("POST", "/api/generate/refine", payload),
+    regenerateSlide: (folder, index, instruction) => req("POST", "/api/generate/slide", { folder, index, instruction }),
     save: (payload) => req("POST", "/api/generate/save", payload),
     assistant: (question, context) => req("POST", "/api/generate/assistant", { question, context }),
     // auth

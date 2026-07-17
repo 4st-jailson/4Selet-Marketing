@@ -169,6 +169,32 @@ function refinementPrompt(req) {
   return lines.join("\n");
 }
 
+// Regerar UM slide de um carrossel, mantendo os outros. req: { carousel, index, instruction?, campaign?, pillar? }
+function singleSlidePrompt(req) {
+  const car = req.carousel || {};
+  const slides = Array.isArray(car.slides) ? car.slides : [];
+  const idx = req.index;
+  const cur = slides[idx] || {};
+  const lines = [];
+  lines.push("TAREFA: REGERAR **apenas o slide " + (idx + 1) + "** de um carrossel do Instagram da 4Selet, mantendo COERENCIA com os demais (nao reescreva os outros).");
+  lines.push("");
+  const pillar = pillarById(req.pillar);
+  if (pillar) { lines.push("PILAR DE CONTEUDO: " + pillar.label + " — " + pillar.angle); lines.push(""); }
+  if (req.campaign) { lines.push("CAMPANHA: " + req.campaign.name + (req.campaign.angle ? " — " + req.campaign.angle : "")); lines.push(""); }
+  lines.push("CARROSSEL ATUAL (contexto):");
+  lines.push("eyebrow: " + (car.eyebrow || ""));
+  slides.forEach((s, i) => { lines.push((i === idx ? ">> " : "   ") + "slide " + (i + 1) + ": " + (s.title || "") + (s.body ? " — " + String(s.body).slice(0, 120) : "")); });
+  lines.push("");
+  lines.push("SLIDE " + (idx + 1) + " ATUAL (sera trocado): " + JSON.stringify(cur));
+  lines.push("");
+  if (req.instruction) lines.push("ORIENTACAO DO USUARIO para este slide: " + req.instruction);
+  else lines.push("Sem orientacao especifica: gere uma NOVA versao melhor deste slide, no MESMO papel (capa/desenvolvimento/CTA) e coerente com o resto.");
+  lines.push("");
+  lines.push("Cumpra TODAS as regras de marca. Responda APENAS com o objeto JSON do slide (sem texto fora), no mesmo formato de um item de 'slides' do carrossel:");
+  lines.push('{ "title": "titulo curto (use ==palavra== p/ realce azul)", "body": "texto de apoio (opcional)", "layout": "cover|stat_grid|list|text|flow|cta (opcional)", "items": ["item de lista"], "stats": [{"value":"95%","label":"rotulo"}], "flow": [{"label":"ROTULO","icon":"cart|bank|person|shield|alert|lock|wallet|check|money|clock"}], "theme": "dark|light (opcional)" }');
+  return lines.join("\n");
+}
+
 // Assistente de ajuda (como usar a ferramenta + sugestoes de marca).
 function assistantSystem() {
   return [
@@ -385,4 +411,4 @@ function simulate(req) {
   }
 }
 
-module.exports = { systemPrompt, generationPrompt, refinementPrompt, assistantSystem, simulate };
+module.exports = { systemPrompt, generationPrompt, refinementPrompt, singleSlidePrompt, assistantSystem, simulate };
