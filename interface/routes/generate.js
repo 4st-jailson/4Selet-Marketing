@@ -304,4 +304,40 @@ router.post("/slide", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// POST /api/generate/slide-mem — regera UM slide de um carrossel AINDA EM MEMÓRIA (na criação,
+// antes de salvar). Irmão do /slide, mas SEM disco: recebe o carrossel inteiro no body e devolve só
+// o slide novo (o front funde e re-renderiza). Reusa singleSlidePrompt/systemPrompt/governança —
+// idêntico ao /slide, sem findTask/writeContentFile/renderCarouselSlide (que exigem pasta no disco).
+router.post("/slide-mem", async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const carousel = body.carousel;
+    if (!carousel || typeof carousel !== "object" || !Array.isArray(carousel.slides)) return res.status(400).json({ error: "carrossel inválido" });
+    const slides = carousel.slides;
+    const index = parseInt(body.index, 10);
+    if (!(index >= 0 && index < slides.length)) return res.status(400).json({ error: "índice de slide inválido" });
+
+    // Em memória não há status.json — campanha/pilar vêm do body (senão o prompt perde a coerência de marca).
+    const campaign = body.campaign_id ? campaigns.get(body.campaign_id) : null;
+    const req2 = { content_type: "instagram_carousel", carousel, index, instruction: body.instruction, campaign, pillar: body.pillar };
+
+    const result = await ai.complete({
+      system: prompts.systemPrompt(),
+      prompt: prompts.singleSlidePrompt(req2),
+      maxTokens: 900,
+      provider: body.provider,
+      simulate: () => JSON.stringify(slides[index]), // sem chave: mantém o slide atual (sinalizado)
+    });
+    const newSlide = extractJson(result.text);
+    if (!newSlide || typeof newSlide !== "object" || Array.isArray(newSlide)) return res.status(422).json({ error: "a IA não retornou um slide válido" });
+    // preserva a foto de fundo do slide se a IA não devolver uma
+    if (!newSlide.image && slides[index] && slides[index].image) newSlide.image = slides[index].image;
+
+    const gov = runBrandGovernance((newSlide.title || "") + "\n" + (newSlide.body || ""), { type: "instagram_carousel" });
+    if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
+
+    res.json({ ok: true, simulated: result.simulated, index, slide: newSlide, governance: gov });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

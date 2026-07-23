@@ -172,6 +172,14 @@ if (target === "approved") {
     delete status.rejected_by; delete status.rejected_at; delete status.rejection_reason;
     status.revision = (status.revision || 0) + 1;
   }
+  // Se a peca ja tinha sido publicada, reabrir p/ edicao ZERA a marca de publicada — senao ela
+  // volta a "approved" travada como "Publicado" e nunca mais da pra publicar/agendar/marcar
+  // (o front esconde "Publicar ou agendar" e o mark-published devolve E_ALREADY_PUBLISHED).
+  // Preserva o registro em previous_publication (espelha approved_by/approved_at como historico).
+  if (status.published_at) {
+    status.previous_publication = { published_at: status.published_at, published_by: status.published_by || null, last_post_id: status.last_post_id || null };
+    delete status.published_at; delete status.published_by; delete status.last_post_id;
+  }
 }
 
 const histEntry = {

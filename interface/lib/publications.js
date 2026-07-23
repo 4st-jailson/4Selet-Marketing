@@ -18,7 +18,8 @@ function save(list) {
 }
 
 // Registra uma publicação real. rec: { folder, label?, kind?, caption?, post_id?, permalink?,
-// scheduled_at? (null se direta), by? }. Evita duplicar o MESMO post (idempotência por post_id).
+// scheduled_at? (null se direta), by?, published_at? (data informada), manual? (marcação manual) }.
+// Evita duplicar o MESMO post (idempotência por post_id).
 function add(rec) {
   rec = rec || {};
   const list = load();
@@ -33,7 +34,8 @@ function add(rec) {
     permalink: rec.permalink || null,
     scheduled_at: rec.scheduled_at || null, // preenchido = veio de agendamento
     by: rec.by || null,
-    published_at: new Date().toISOString(),
+    manual: !!rec.manual, // marcada manualmente (publicação feita por fora do painel)
+    published_at: rec.published_at || new Date().toISOString(),
   };
   list.push(item); save(list); return item;
 }

@@ -12,7 +12,8 @@ const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 - NUNCA cite concorrentes por nome (Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay). Fale do "mercado" em abstrato.
 - Emojis: no maximo 1 funcional em captions/threads (-> ▸ • permitidos); proibido em headline/body de ad. Banidos: fogo, raio, foguete, dinheiro, etc.
 - CTAs aprovados (use estes ou variacoes): Solicitar convite, Ver as condicoes, Conhecer a plataforma, Migrar minha operacao, Calcular minha economia, Falar com o time, Ver como funciona. Sem urgencia fake.
-- Campanha ativa Taxa Zero: 0% por 3 meses ou ate R$ 300 mil, R$ 1,99/transacao, PIX D+10, cartao D+30. 95% de aprovacao no cartao. Acesso por convite ("Para quem sabe que e Selet.").`;
+- Campanha ativa Taxa Zero: 0% por 3 meses ou ate R$ 300 mil, R$ 1,99/transacao, PIX D+10, cartao D+30. 95% de aprovacao no cartao. Acesso por convite.
+- NUNCA use a frase-tag "Para quem sabe que e Selet." como rodape, fecho ou assinatura automatica de peca (headline, body de slide, legenda ou cena de video). NAO assine as pecas com ela. So use uma frase-tag da marca se o brief pedir explicitamente.`;
 
 const SCHEMAS = {
   instagram_caption: `{
@@ -304,7 +305,7 @@ function simulate(req) {
             "Gestor de conta dedicado de verdade",
           ] },
           { layout: "text", title: "Na pratica", body: p.caption.split("\n")[0] },
-          { layout: "cta", title: p.cta, body: "Para quem sabe que e Selet." },
+          { layout: "cta", title: p.cta, body: "Acesso por convite." },
         ],
         caption: p.caption,
         hashtags: p.hashtags,
@@ -314,7 +315,7 @@ function simulate(req) {
       return JSON.stringify({
         eyebrow: "Campanha Taxa Zero",
         slides: [
-          { layout: "cover", title: "Para quem sabe que e Selet", body: "O que muda quando a plataforma trabalha a favor da sua margem." },
+          { layout: "cover", title: "Taxa Zero na 4Selet", body: "O que muda quando a plataforma trabalha a favor da sua margem." },
           { layout: "stat_grid", title: "A oferta em numeros", stats: [
             { value: "0%", label: "de taxa por 3 meses" },
             { value: "R$ 1,99", label: "fixo por transacao" },
@@ -387,7 +388,7 @@ function simulate(req) {
         scenes: [
           { type: "hook", text: p.headline, subtitle: p.subtext, visual: "numero/dado grande em fundo Navy" },
           { type: "benefit", text: "Por que importa", subtitle: p.caption.split("\n")[0], visual: "destaque do dado" },
-          { type: "cta", text: "Para quem sabe que e Selet.", subtitle: p.cta, visual: "logo light em Navy + CTA" },
+          { type: "cta", text: "Acesso por convite.", subtitle: p.cta, visual: "logo light em Navy + CTA" },
         ],
         cta: p.cta,
         notes: p.notes + tag,
@@ -401,7 +402,7 @@ function simulate(req) {
           { type: "hook", text: "7,9% nao e o seu problema.", subtitle: "O custo invisivel esta nos outros numeros.", visual: "numero grande em fundo Navy" },
           { type: "benefit", text: "95% de aprovacao no cartao.", subtitle: "Mais vendas aprovadas, menos margem perdida.", visual: "comparativo de barras" },
           { type: "benefit", text: "PIX em D+10. " + offer + ".", subtitle: "Previsibilidade real de recebimento.", visual: "linha do tempo de recebimento" },
-          { type: "cta", text: "Para quem sabe que e Selet.", subtitle: "Acesso por convite.", visual: "logo light em Navy + CTA" },
+          { type: "cta", text: "Conhecer a plataforma.", subtitle: "Acesso por convite.", visual: "logo light em Navy + CTA" },
         ],
         cta: "Conhecer a plataforma",
         notes: "Conceito 'Os 4 Numeros', schema de cenas." + tag,

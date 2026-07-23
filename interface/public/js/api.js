@@ -85,6 +85,7 @@ const API = (() => {
     testPublish: () => req("POST", "/api/publish/test"),
     publishPiece: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder), payload || {}),
     schedulePost: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/schedule", payload || {}),
+    markPublished: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/mark-published", payload || {}),
     listSchedule: () => req("GET", "/api/publish/schedule"),
     publications: () => req("GET", "/api/publish/publications"),
     cancelSchedule: (id) => req("DELETE", "/api/publish/schedule/" + encodeURIComponent(id)),
@@ -93,6 +94,7 @@ const API = (() => {
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
     refine: (payload) => req("POST", "/api/generate/refine", payload),
     regenerateSlide: (folder, index, instruction) => req("POST", "/api/generate/slide", { folder, index, instruction }),
+    regenerateSlideMem: (payload) => req("POST", "/api/generate/slide-mem", payload || {}),
     save: (payload) => req("POST", "/api/generate/save", payload),
     assistant: (question, context) => req("POST", "/api/generate/assistant", { question, context }),
     // auth

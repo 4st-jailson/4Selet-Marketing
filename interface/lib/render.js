@@ -134,7 +134,7 @@ const RENDER_SCALE = Number(process.env.RENDER_SCALE || 2) || 2;
 // Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
 // `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
 const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
-const DEFAULT_FOOTER = ""; // sem rodapé automático (Hugo: tirar "Para quem sabe que é Selet" de toda postagem)
+const DEFAULT_FOOTER = ""; // sem rodapé automático (Hugo: tirar "4Selet" de toda postagem)
 
 // Comprimento VISÍVEL do headline (ignora as tags <span> do realce). Usado para
 // dimensionar a fonte: sem isso, o markup do destaque (ex.: "0%" vira
@@ -601,7 +601,7 @@ function slideList(slide, ctx) {
 }
 // CTA de fechamento: centralizado, logo + headline + pilula de CTA.
 function slideCta(slide, ctx) {
-  const headline = slide.title || ctx.cta || "Para quem sabe que é Selet";
+  const headline = slide.title || ctx.cta || "4Selet";
   const hl = highlightHeadline(headline);
   const n = headlineLen(hl);
 
@@ -772,7 +772,7 @@ async function renderImage(folder, opts) {
   const html = tpl.build({
     width: 1080, height: 1080,
     eyebrow: concept.eyebrow || "",
-    headline: highlightHeadline(concept.headline || "Para quem sabe que é Selet."),
+    headline: highlightHeadline(concept.headline || "4Selet."),
     subtext: concept.subtext || "",
     cta: concept.cta || "",
     badge: concept.badge || "",
@@ -789,7 +789,7 @@ async function renderFeed(folder, opts) {
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
-  const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que é Selet.";
+  const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "4Selet.";
   const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
   const htmlPath = path.join(loc.path, "ads", "feed.html");
   const outPng = path.join(loc.path, "ads", "feed.png");
@@ -815,7 +815,7 @@ async function renderFeed(folder, opts) {
 function carouselSlidesHtml(concept, buildCover) {
   const slides = Array.isArray(concept.slides) && concept.slides.length
     ? concept.slides
-    : [{ title: "Para quem sabe que é Selet", body: "" }];
+    : [{ title: "4Selet", body: "" }];
   const total = slides.length;
   const out = [];
   for (let i = 0; i < slides.length; i++) {
@@ -895,7 +895,7 @@ async function renderVideo(folder) {
   const loc = requireActive(folder);
   const concept = readJson(path.join(loc.path, "video", "concept.json")) || {};
   const scenes = Array.isArray(concept.scenes) && concept.scenes.length ? concept.scenes : [
-    { type: "hook", text: concept.hook || "Para quem sabe que é Selet.", visual: "" },
+    { type: "hook", text: concept.hook || "4Selet.", visual: "" },
   ];
   // Props para a composition BrandStory (src/BrandStory.tsx).
   // IMPORTANTE: o campo `visual` do conceito e DIRECAO DE ARTE (ex.: "Fundo Selet
@@ -949,7 +949,7 @@ function previewFields(ct, parsed) {
     return {
       width: 1080, height: 1080,
       eyebrow: parsed.eyebrow || "",
-      headline: highlightHeadline(parsed.headline || "Para quem sabe que é Selet."),
+      headline: highlightHeadline(parsed.headline || "4Selet."),
       subtext: parsed.subtext || "",
       cta: parsed.cta || "",
       badge: parsed.badge || "",
@@ -958,7 +958,7 @@ function previewFields(ct, parsed) {
   }
   if (ct.kind === "feed") {
     const caption = String(parsed.body || parsed.caption || "");
-    const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "Para quem sabe que é Selet.";
+    const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "4Selet.";
     const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
     return {
       width: 1080, height: 1350,
@@ -972,7 +972,7 @@ function previewFields(ct, parsed) {
   }
   if (ct.kind === "carousel") {
     const slides = Array.isArray(parsed.slides) && parsed.slides.length
-      ? parsed.slides : [{ title: "Para quem sabe que é Selet", body: "" }];
+      ? parsed.slides : [{ title: "4Selet", body: "" }];
     const s = slides[0] || {};
     return {
       width: 1080, height: 1350,

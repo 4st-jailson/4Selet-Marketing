@@ -408,7 +408,7 @@ function setPublished(folder, meta) {
   const p = path.join(loc.path, "status.json");
   const status = readJsonSafe(p);
   if (!status) return false;
-  status.published_at = new Date().toISOString();
+  status.published_at = (meta && meta.at) || new Date().toISOString(); // `at` = data informada (marcação manual de publicação antiga); senão agora
   if (meta && meta.by) status.published_by = String(meta.by).slice(0, 120);
   if (meta && meta.post_id) status.last_post_id = String(meta.post_id).slice(0, 120);
   fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");

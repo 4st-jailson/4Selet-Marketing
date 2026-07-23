@@ -36,6 +36,25 @@ router.post("/test", adminOnly, async (req, res) => {
 // histórico de publicações que foram ao ar (agendadas OU diretas) — aba "Publicados"
 router.get("/publications", (req, res) => res.json({ items: publications.list() }));
 
+// marca uma peça APROVADA como JÁ PUBLICADA manualmente — para publicações feitas por fora
+// do painel (ou antes do rastreamento existir). Registra no histórico p/ aparecer em "Publicados",
+// SEM postar de novo no Instagram (evita duplicar o post). Body: { published_at?, post_id?, permalink? }.
+router.post("/:folder/mark-published", (req, res) => {
+  const t = content.getTask(req.params.folder);
+  if (!t) return res.status(404).json({ error: "peça não encontrada" });
+  if (t.zone !== "approved") return res.status(409).json({ error: "só peças aprovadas podem ser marcadas como publicadas.", code: "E_NOT_APPROVED" });
+  if (t.status && t.status.published_at) return res.status(409).json({ error: "esta peça já consta como publicada.", code: "E_ALREADY_PUBLISHED" });
+  const b = req.body || {};
+  const who = req.user && (req.user.name || req.user.username);
+  let at = null;
+  if (b.published_at) { const d = new Date(b.published_at); if (!isNaN(d.getTime())) at = d.toISOString(); }
+  try {
+    content.setPublished(req.params.folder, { by: who, at: at, post_id: b.post_id });
+    const item = publications.add({ folder: req.params.folder, label: (t.status && t.status.title) || req.params.folder, kind: t.kind, post_id: b.post_id || null, permalink: b.permalink || null, published_at: at, scheduled_at: null, by: who, manual: true });
+    res.json({ ok: true, item: item, task: content.getTask(req.params.folder) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // --- agendamento ---
 // lista os agendamentos (fila)
 router.get("/schedule", (req, res) => res.json({ items: schedule.list() }));

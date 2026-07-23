@@ -1087,7 +1087,7 @@ function carouselStrip(folder, task) {
       <span class="slide-num">${s.n}</span>
       <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
-    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}${editable ? '<button class="btn btn-sm btn-ghost slide-regen" data-n="' + s.n + '" title="Refazer só este slide com a IA, mantendo os outros">Regerar slide</button>' : ""}</div>`).join("");
+    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}${editable ? '<button class="slide-regen" data-n="' + s.n + '" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ' + s.n + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span>Regerar</span></button>' : ""}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
     <div class="media-gallery mt">${items}</div>
@@ -2661,7 +2661,11 @@ function workflowActions(task) {
   const s = task.status.status;
   if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Enviar para revisão</button>`;
   if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Gerar prévia de novo</button>`;
-  if (s === "approved") return `<span class="badge approved">aprovada e salva</span><button class="btn btn-primary" data-wf="publish">Publicar ou agendar</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
+  if (s === "approved") {
+    // Já publicada: não oferece "Publicar" de novo (evita duplicar), só o selo + reabrir.
+    if (task.status.published_at) return `${statusBadge("published")}<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
+    return `<span class="badge approved">aprovada e salva</span><button class="btn btn-primary" data-wf="publish">Publicar ou agendar</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button><button class="btn btn-ghost btn-sm" data-wf="mark-published" title="Já publicou esta peça por fora do painel? Registre aqui para ela aparecer em Publicações — não posta de novo.">Marcar como já publicada</button>`;
+  }
   if (s === "rejected") return `<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
   return "";
 }
@@ -2692,6 +2696,13 @@ function bindWorkflow(task) {
           busy(); const r = await API.promote(task.folder, { to: "rejected", by: "painel", reason: res.reason || "" }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Rejeitada e arquivada", "warn");
         } else if (wf === "rework") {
           busy(); const r = await API.promote(task.folder, { to: "in_review" }); if (!r.ok) throw new Error(r.stderr || "falha"); toast("Reaberta para edição", "success");
+        } else if (wf === "mark-published") {
+          const res = await uiModal({ title: "Marcar como já publicada", message: "Use só se você JÁ publicou esta peça no Instagram por fora do painel. Ela passa a aparecer em Publicações — sem postar de novo (não duplica o post).", fields: [{ name: "at", label: "Quando foi publicada? (opcional — vazio = agora)", inputType: "datetime-local" }], confirmText: "Marcar como publicada" });
+          if (!res) return;
+          busy();
+          const payload = {};
+          if (res.at) { const d = new Date(res.at); if (!isNaN(d.getTime())) payload.published_at = d.toISOString(); }
+          const r = await API.markPublished(task.folder, payload); if (r && r.error) throw new Error(r.error); toast("Marcada como publicada — já aparece em Publicações", "success");
         }
         router();
       } catch (e) { toast(e.message, "error"); $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = false)); btn.innerHTML = orig; }
@@ -2952,7 +2963,7 @@ async function viewPublications(arg, query) {
     const rows = pubs.length ? pubs.map((p) => `<tr>
       <td><strong>${esc(p.label || p.folder)}</strong><div class="muted">${esc(p.folder)}</div></td>
       <td>${esc(fmt(p.published_at))}</td>
-      <td>${esc(p.kind || "—")}${p.scheduled_at ? ' <span class="hint">· agendada</span>' : ""}</td>
+      <td>${esc(p.kind || "—")}${p.scheduled_at ? ' <span class="hint">· agendada</span>' : (p.manual ? ' <span class="hint">· registrada manualmente</span>' : "")}</td>
       <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}</td>
     </tr>`).join("") : '<tr><td colspan="4" class="muted">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
     body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Tipo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -3803,7 +3814,7 @@ function slideItem(s, i, total) {
   const richHint = (Array.isArray(s.stats) && s.stats.length) ? '<span class="se-rich">grade: ' + s.stats.length + ' números (edite no JSON)</span>'
     : ((Array.isArray(s.items) && s.items.length) ? '<span class="se-rich">lista: ' + s.items.length + ' itens (edite no JSON)</span>' : "");
   return `<div class="se-item" data-i="${i}"${extraAttr}>
-    <div class="se-head"><span class="se-n">Slide ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
+    <div class="se-head"><span class="se-n">Slide ${i + 1}</span><div class="se-ctrls"><button class="se-mini se-regen" data-se="regen" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ${i + 1}">↻</button>${seCtrls(i, total)}</div></div>
     <input class="se-f" data-k="title" placeholder="Título do slide" value="${esc(s.title || "")}" />
     <textarea class="se-f" data-k="body" rows="2" placeholder="Texto do slide">${esc(s.body || "")}</textarea>
     <label class="se-layout">Layout do slide <select class="se-f" data-k="layout">${layoutOpts}</select>${richHint}</label>
@@ -3935,6 +3946,7 @@ function bindStructuredEditor() {
     } else if (ctl) {
       e.preventDefault();
       const item = ctl.closest(".se-item"); const list = item.parentElement; const act = ctl.dataset.se;
+      if (act === "regen") { regenSlideInCreation(ed, item, ctl); return; } // regerar slide (assíncrono) — não passa pelo renumber
       if (act === "del") { if (list.children.length > 1) item.remove(); }
       else if (act === "up") { const prev = item.previousElementSibling; if (prev) list.insertBefore(item, prev); }
       else if (act === "down") { const next = item.nextElementSibling; if (next) list.insertBefore(next, item); }
@@ -3950,6 +3962,50 @@ function applyJsonToStructured(type) {
     const html = structuredEditor(type, obj);
     if (host && html) { host.outerHTML = html; bindStructuredEditor(); toast("JSON aplicado aos campos", "success"); }
   } catch (e) { toast("JSON inválido: " + e.message, "error"); }
+}
+
+// Regera UM slide do carrossel NA CRIAÇÃO (antes de salvar) — irmão do regenSlide (peça salva),
+// mas EM MEMÓRIA: lê o carrossel atual dos campos, pede à IA só o slide N (mantendo os outros) e
+// funde de volta. Usa o endpoint /slide-mem (sem disco). O front re-renderiza os cards e, se a
+// prévia de arte estiver aberta, atualiza também.
+async function regenSlideInCreation(ed, item, ctl) {
+  if (!ed || ed.dataset.type !== "instagram_carousel") return;
+  if (ctl.disabled) return; // já em andamento — barra 2º clique / modal empilhado
+  if (!LAST_GEN || !LAST_GEN.req) { toast("Gere o conteúdo primeiro.", "warn"); return; }
+  const index = parseInt(item.dataset.i, 10);
+  const orig = ctl.innerHTML;
+  ctl.disabled = true; // trava JÁ na abertura do modal (senão dá pra clicar de novo enquanto o modal está aberto)
+  const r = await uiModal({
+    title: "Regerar slide " + (index + 1),
+    message: "A IA refaz só este slide, mantendo os outros. Deixe em branco para uma versão nova livre.",
+    fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: número maior · trocar o exemplo · mais direto ao ponto" }],
+    confirmText: "Regerar slide",
+  });
+  if (r === null) { ctl.disabled = false; return; } // cancelou: destrava
+  const parsed = structToParsed();
+  if (!parsed || !Array.isArray(parsed.slides) || !parsed.slides[index]) { ctl.disabled = false; ctl.innerHTML = orig; toast("Não consegui ler este slide.", "error"); return; }
+  ctl.innerHTML = '<span class="spinner"></span>';
+  try {
+    const res = await API.regenerateSlideMem({ carousel: parsed, index: index, instruction: (r.instruction || "").trim() || undefined, provider: LAST_GEN.req.provider, campaign_id: LAST_GEN.req.campaign_id, pillar: LAST_GEN.req.pillar });
+    if (!res || !res.slide) throw new Error("a IA não devolveu o slide");
+    parsed.slides[index] = res.slide;
+    // re-renderiza os cards a partir do carrossel já com o slide novo (sem o toast de "JSON aplicado")
+    const host = document.querySelector(".struct-ed");
+    const html = structuredEditor("instagram_carousel", parsed);
+    if (host && html) { host.outerHTML = html; bindStructuredEditor(); }
+    else { ctl.disabled = false; ctl.innerHTML = orig; } // não re-renderizou: destrava o próprio botão
+    if (LAST_GEN.res) LAST_GEN.res.parsed = parsed;
+    const warns = !!(res.governance && res.governance.warnings && res.governance.warnings.length);
+    if (res.simulated) toast("Slide " + (index + 1) + " regerado (simulado — configure a IA em Configurações)", "warn");
+    else if (warns) toast("Slide " + (index + 1) + " regerado — com avisos de marca, confira.", "warn");
+    else toast("Slide " + (index + 1) + " regerado", "success");
+    // se a prévia de arte estiver aberta, atualiza pra refletir o slide novo
+    if ($("#g-art") && $("#g-art").querySelector(".art-slides-strip")) { try { renderArtPreview(LAST_GEN.req.content_type); } catch (e) { /* prévia é opcional */ } }
+  } catch (e) {
+    ctl.disabled = false; ctl.innerHTML = orig;
+    if (e && e.data && e.data.governance) toast("Esse slide feriu uma regra de marca — tente outra orientação.", "error");
+    else toast((e && e.message) || "Falha ao regerar o slide.", "error");
+  }
 }
 
 function govHtml(gov) {
