@@ -125,9 +125,11 @@ async function htmlToPng(htmlPath, outPng, width, height, scale, opts) {
 }
 
 // Fator de resolucao dos renders FINAIS (salvos/baixados): 2x = alta resolucao.
-// A previa (renderPreview) fica em 1x de proposito — e so visualizacao na tela.
 // Tunavel por env: RENDER_SCALE.
 const RENDER_SCALE = Number(process.env.RENDER_SCALE || 2) || 2;
+// Fator da PREVIA: era 1x (so thumbnail). Agora a previa e CLICAVEL p/ ampliar no lightbox, entao
+// 1x ficava pixelado ao ampliar (ainda mais em tela de alta densidade). 2x = nitida ao ampliar.
+const PREVIEW_SCALE = Number(process.env.PREVIEW_SCALE || 2) || 2;
 
 // ---- Templates visuais da marca -------------------------------------------
 // 3 layouts on-brand (paleta 4Selet, Inter/JetBrains Mono, logo, Selet Dots).
@@ -143,9 +145,10 @@ const DEFAULT_FOOTER = ""; // sem rodapé automático (Hugo: tirar "4Selet" de t
 function headlineLen(html) { return String(html || "").replace(/<[^>]+>/g, "").length; }
 
 // 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
-function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots }) {
+function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
   const n = headlineLen(headline);
   const headlineSize = n > 36 ? 100 : n > 22 ? 120 : 168;
+  const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -177,9 +180,9 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
     background:${PALETTE.blue}; color:#FFFFFF; padding:26px 48px; border-radius:999px; }
   .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
 </style></head>
-<body><div class="card"><div class="dots"></div>
+<body><div class="card"><div class="dots"></div>${wm}
   <div class="top">
-    <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
+    <img class="logo" src="${logoSrc(logo, LOGO_LIGHT)}" alt="4Selet"/>
     ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
   </div>
   <div class="mid">
@@ -196,9 +199,10 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
 
 // 2) Bold — fundo Darker solido, simbolo "4" como marca d'agua, tudo centralizado.
 // Pensado p/ headlines curtas number-forward (ex.: "0%", "95%", "Os 4 numeros").
-function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots }) {
+function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
   const n = headlineLen(headline);
   const headlineSize = n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196;
+  const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -229,8 +233,8 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
   .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
 </style></head>
 <body><div class="card">
-  <img class="mark" src="${SIMBOLO}" alt=""/>
-  <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
+  ${wmStyle ? wm : '<img class="mark" src="' + SIMBOLO + '" alt=""/>'}
+  <img class="logo" src="${logoSrc(logo, LOGO_LIGHT)}" alt="4Selet"/>
   <div class="mid">
     ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
     ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
@@ -246,7 +250,7 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
 
 // 3) Split — banda superior clara (Cloud, logo dark + eyebrow) + banda inferior
 // escura (Navy/Darker) com headline e CTA. Contraste editorial.
-function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots }) {
+function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
   // Em formato quadrado (1080x1080) a banda inferior e mais curta — reduz a
   // tipografia e o padding para o subtexto e o CTA nao serem cortados.
   const square = height < 1200;
@@ -256,6 +260,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
   const subSize = square ? 34 : 40;
   const topFlex = square ? 22 : 26;
   const botPad = square ? 76 : 104;
+  const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -286,11 +291,11 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
 </style></head>
 <body><div class="card">
   <div class="band-top"><div class="dots"></div>
-    <img class="logo" src="${LOGO_DARK}" alt="4Selet"/>
+    <img class="logo" src="${logoSrc(logo, LOGO_DARK)}" alt="4Selet"/>
     ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
     ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
   </div>
-  <div class="band-bot">
+  <div class="band-bot">${wm}
     <div class="headline">${headline || ""}</div>
     <div>
       ${subtext ? `<div class="subtext">${esc(subtext)}</div>` : ""}
@@ -308,7 +313,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
 // Espelha as capas humanizadas do feed @4selet (ver Referencia-Instagram): a arte
 // deixa de ser so cor solida + texto e passa a combinar foto (pessoa/objeto/cena)
 // com a copy por cima. Sem `image`, cai num fundo navy (nada quebra).
-function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image, dots, titleOffsetY, titleOffsetX, titleScale }) {
+function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, footer, image, dots, titleOffsetY, titleOffsetX, titleScale, logo }) {
   const n = headlineLen(headline);
   const headlineSize = Math.round((n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156) * (Number(titleScale) || 1));
   const photo = image ? `<img class="photo" src="${escAttr(resolveImage(image))}" alt=""/>` : "";
@@ -352,7 +357,7 @@ function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, foote
   <div class="wash"></div>
   <div class="scrim"></div>
   <div class="top">
-    <img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>
+    <img class="logo" src="${logoSrc(logo, LOGO_LIGHT)}" alt="4Selet"/>
     ${badge ? `<span class="badge">${esc(badge)}</span>` : "<span></span>"}
   </div>
   <div class="content"${(titleOffsetX || titleOffsetY) ? ` style="transform:translate(${Number(titleOffsetX) || 0}px, ${Number(titleOffsetY) || 0}px)"` : ""}>
@@ -384,12 +389,12 @@ function mediaDevice(model, imgSrc, url) {
   }
   return `<div class="dev" style="perspective:2600px"><div style="width:566px;height:820px;background:#0a1015;border-radius:40px;padding:18px;box-shadow:${MED_BEZEL};transform:rotateX(4deg) rotateY(-6deg) rotate(1deg);position:relative"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:24px">${shot}</div></div></div>`;
 }
-function tplMedia({ width, height, image, url, eyebrow, headline, model }) {
+function tplMedia({ width, height, image, url, eyebrow, headline, model, logo: logoVariant }) {
   const land = width > height;
   const dev = mediaDevice(model || "tablet", resolveImage(image), url);
   const veic = eyebrow ? `<div class="veic">${esc(eyebrow)}</div>` : "";
   const title = `<div class="ttl">4Selet <span class="a">na mídia</span></div>`;
-  const logo = `<img class="logo" src="${LOGO_LIGHT}" alt="4Selet"/>`;
+  const logo = `<img class="logo" src="${logoSrc(logoVariant, LOGO_LIGHT)}" alt="4Selet"/>`;
   const common = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
     .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(130% 130% at 82% 6%, ${PALETTE.blue} 0%, ${PALETTE.navy} 44%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
     .dots{position:absolute;inset:0;background-image:radial-gradient(${PALETTE.sky}1f 2px,transparent 2px);background-size:48px 48px;opacity:.5}
@@ -413,20 +418,62 @@ function resolveTemplate(id) { return TEMPLATES[id] || tplEditorial; }
 
 // Persistencia leve da escolha de template por task (render.json na raiz).
 // Permite que "Re-renderizar" e a reabertura mantenham o layout escolhido.
+// Variantes por peça (além do template): logo e marca d'água. "" = padrão do estilo.
+const LOGO_IDS = ["light", "dark", "symbol"];
+const WATERMARK_IDS = ["word", "symbol", "outline", "none", "canto", "padrao"];
+function readRenderJson(loc) { return readJson(path.join(loc.path, "render.json")) || {}; }
 function readRenderPref(loc) {
-  const j = readJson(path.join(loc.path, "render.json"));
-  return (j && typeof j.template === "string" && TEMPLATES[j.template]) ? j.template : null;
+  const j = readRenderJson(loc);
+  return (typeof j.template === "string" && TEMPLATES[j.template]) ? j.template : null;
 }
-function writeRenderPref(loc, template) {
-  if (!TEMPLATES[template]) return;
-  try { fs.writeFileSync(path.join(loc.path, "render.json"), JSON.stringify({ template }, null, 2) + "\n", "utf8"); } catch (e) {}
+function readLogoPref(loc) { const v = readRenderJson(loc).logo; return LOGO_IDS.indexOf(v) >= 0 ? v : null; }
+function readWatermarkPref(loc) { const v = readRenderJson(loc).watermark; return WATERMARK_IDS.indexOf(v) >= 0 ? v : null; }
+// MERGE (não sobrescreve): guardar template NÃO pode apagar logo/watermark, e vice-versa.
+function writeRenderPref(loc, patch) {
+  if (!patch || typeof patch !== "object") return;
+  try {
+    const p = path.join(loc.path, "render.json");
+    const cur = readJson(p) || {};
+    ["template", "logo", "watermark"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
+    fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
+  } catch (e) {}
 }
 // Decide o template efetivo: opcao da request > preferencia salva > editorial.
 function pickTemplate(loc, requested) {
   const id = (requested && TEMPLATES[requested]) ? requested
     : (readRenderPref(loc) || "editorial");
-  if (requested && TEMPLATES[requested]) writeRenderPref(loc, requested);
+  if (requested && TEMPLATES[requested]) writeRenderPref(loc, { template: requested });
   return { id, build: resolveTemplate(id) };
+}
+// Remove uma chave do render.json (usado pra "voltar ao padrão do estilo").
+function deleteRenderPref(loc, key) {
+  try {
+    const p = path.join(loc.path, "render.json");
+    const cur = readJson(p); if (!cur || !(key in cur)) return;
+    delete cur[key];
+    fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
+  } catch (e) {}
+}
+// Logo/marca d'água efetivos: "auto" LIMPA a escolha (volta ao padrão); request válida > pref salva > "".
+function pickLogo(loc, requested) {
+  if (requested === "auto") { deleteRenderPref(loc, "logo"); return ""; }
+  const ok = LOGO_IDS.indexOf(requested) >= 0;
+  if (ok) writeRenderPref(loc, { logo: requested });
+  return ok ? requested : (readLogoPref(loc) || "");
+}
+function pickWatermark(loc, requested) {
+  if (requested === "auto") { deleteRenderPref(loc, "watermark"); return ""; }
+  const ok = WATERMARK_IDS.indexOf(requested) >= 0;
+  if (ok) writeRenderPref(loc, { watermark: requested });
+  return ok ? requested : (readWatermarkPref(loc) || "");
+}
+// Resolve a src do logo pela variante escolhida na peça; "" mantém o padrão do template (fallback).
+function logoSrc(variant, fallback) {
+  const v = String(variant || "").toLowerCase();
+  if (v === "light") return LOGO_LIGHT;
+  if (v === "dark") return LOGO_DARK;
+  if (v === "symbol") return SIMBOLO;
+  return fallback || LOGO_LIGHT;
 }
 
 // Destaca numeros/percentuais no headline (ex.: "0%", "R$ 1,99", "D+10") e permite
@@ -488,6 +535,16 @@ function watermark(spec, theme) {
     return '<img src="' + SIMBOLO + '" alt="" style="position:absolute;top:50%;right:-8%;transform:translateY(-50%);'
       + "width:60%;height:auto;z-index:0;pointer-events:none;opacity:" + Math.min(op + 0.06, 0.7) + ';" />';
   }
+  if (style === "canto") {
+    // símbolo pequeno e discreto no canto inferior direito — assinatura leve (z-index:0 = atrás do conteúdo)
+    return '<img src="' + SIMBOLO + '" alt="" style="position:absolute;bottom:56px;right:56px;'
+      + "width:92px;height:auto;z-index:0;pointer-events:none;opacity:" + Math.min(op + 0.22, 0.6) + ';" />';
+  }
+  if (style === "padrao" || style === "tile") {
+    // símbolo repetido em padrão sutil cobrindo o fundo
+    return '<div style="position:absolute;inset:0;z-index:0;pointer-events:none;opacity:'
+      + Math.min(op + 0.03, 0.1) + ";background-image:url('" + SIMBOLO + "');background-repeat:repeat;background-size:160px 160px;\"></div>";
+  }
   const text = esc(s.text != null && String(s.text) !== "" ? String(s.text) : "SELET");
   const base = "position:absolute;top:50%;right:-4%;transform:translateY(-50%);z-index:0;"
     + "font-family:'Inter',sans-serif;font-weight:800;font-size:440px;line-height:0.78;letter-spacing:-14px;white-space:nowrap;pointer-events:none;";
@@ -528,13 +585,15 @@ function carDoc(ctx, extraCss, bodyInner) {
   // A logo no topo-esquerda em todos os slides reforça o encadeamento.
   const TILE = 46;
   const offX = -((((ctx.n || 1) - 1) * (ctx.width || 1080)) % TILE);
-  const wm = ctx.watermark ? watermark(ctx.watermark, ctx.theme) : "";
+  // ctx.watermark = spec do arquétipo (slideText/slideCta); senão a escolha da PEÇA (ctx.wmStyle) vale p/ todo slide.
+  const wmSpec = ctx.watermark != null ? ctx.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : null);
+  const wm = wmSpec ? watermark(wmSpec, ctx.theme) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
 <body><div class="card"><div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
 function carTop(ctx) {
-  const logo = (ctx.theme && ctx.theme.logo) || LOGO_LIGHT;
+  const logo = logoSrc(ctx.logo, (ctx.theme && ctx.theme.logo) || LOGO_LIGHT);
   return `<div class="top"><img class="logo" src="${logo}" alt="4Selet"/></div>`;
 }
 // Rodape textual aposentado: a navegacao do carrossel agora e visual (dotsBar em carDoc).
@@ -545,7 +604,7 @@ function slideText(slide, ctx) {
   const light = String(slide.theme || "").toLowerCase() === "light";
   ctx.theme = resolveTheme(slide.theme);
   // Marca d'agua editorial no slide de frase (default "SELET"; "" desliga).
-  ctx.watermark = slide.watermark != null ? slide.watermark : "SELET";
+  ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "SELET");
   const bodyColor = light ? PALETTE.navy : PALETTE.mist;
   // No tema claro, o realce ==palavra== vai a Selet Blue (melhor contraste no Cloud).
   const accentFix = light
@@ -564,6 +623,9 @@ function slideText(slide, ctx) {
 // Grade de numeros (2x2): ate 4 cartoes valor + rotulo.
 function slideStatGrid(slide, ctx) {
   const stats = (Array.isArray(slide.stats) ? slide.stats : []).slice(0, 4);
+  // Sem números: NÃO renderiza uma grade vazia (o slide ficava só com o título). Cai no layout
+  // de texto p/ mostrar o conteúdo — o usuário pode escolher esse layout sem quebrar a peça.
+  if (!stats.length) return slideText(slide, ctx);
   const cells = stats.map((s) => `<div class="stat"><div class="stat-v">${highlightHeadline(String(s.value == null ? "" : s.value))}</div><div class="stat-l">${esc(s.label || "")}</div></div>`).join("");
   const css = `.s-title.sm { font-size:60px; margin-bottom:46px; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:28px; }
@@ -582,7 +644,10 @@ function slideStatGrid(slide, ctx) {
 // Lista com marcadores: titulo + itens com marcador Selet Blue.
 function slideList(slide, ctx) {
   const items = (Array.isArray(slide.items) ? slide.items : []).slice(0, 6)
-    .map((it) => (typeof it === "string" ? it : (it && it.text) || ""));
+    .map((it) => (typeof it === "string" ? it : (it && it.text) || ""))
+    .filter((t) => String(t || "").trim());
+  // Sem itens: NÃO renderiza uma lista vazia. Cai no texto p/ mostrar o conteúdo do slide.
+  if (!items.length) return slideText(slide, ctx);
   const lis = items.map((t) => `<div class="li"><span class="mk">&#9656;</span><span class="lt">${esc(t)}</span></div>`).join("");
   const css = `.s-title.sm { font-size:64px; margin-bottom:42px; }
     .list { display:flex; flex-direction:column; gap:28px; }
@@ -610,7 +675,7 @@ function slideCta(slide, ctx) {
   // corpo (ex.: "Venha para a 4Selet...") no mesmo tratamento + marca d'agua "SELET".
   if (String(slide.theme || "").toLowerCase() === "light") {
     ctx.theme = THEME_LIGHT;
-    ctx.watermark = slide.watermark != null ? slide.watermark : "SELET";
+    ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "SELET");
     // Corpo no MESMO formato do headline (tamanho/peso/cor) — igual a referencia:
     // texto uniforme, so o trecho de enfase muda de COR. Tamanho pelo total p/ caber.
     const total = n + (slide.body ? String(slide.body).length : 0);
@@ -639,7 +704,7 @@ function slideCta(slide, ctx) {
     .cta { margin-top:52px; font-weight:800; font-size:40px; background:${PALETTE.blue}; color:#FFFFFF; padding:30px 60px; border-radius:999px; }`;
   const inner = `<div class="top"><span></span></div>
   <div class="mid center">
-    <img class="logo-c" src="${LOGO_LIGHT}" alt="4Selet"/>
+    <img class="logo-c" src="${logoSrc(ctx.logo, LOGO_LIGHT)}" alt="4Selet"/>
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     <div class="s-title big">${hl}</div>
     ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
@@ -765,6 +830,8 @@ function slideArchetype(slide, i, total) {
 async function renderImage(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
+  const logoV = pickLogo(loc, opts && opts.logo);
+  const wmV = pickWatermark(loc, opts && opts.watermark);
   const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
   const htmlPath = path.join(loc.path, "ads", "ad.html");
   const outPng = path.join(loc.path, "ads", "ad.png");
@@ -777,6 +844,7 @@ async function renderImage(folder, opts) {
     cta: concept.cta || "",
     badge: concept.badge || "",
     image: concept.image || (opts && opts.image) || "",
+    logo: logoV, watermark: wmV,
   });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, 1080, 1080, RENDER_SCALE);
@@ -791,6 +859,8 @@ async function renderFeed(folder, opts) {
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
   const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "4Selet.";
   const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
+  const logoV = pickLogo(loc, opts && opts.logo);
+  const wmV = pickWatermark(loc, opts && opts.watermark);
   const htmlPath = path.join(loc.path, "ads", "feed.html");
   const outPng = path.join(loc.path, "ads", "feed.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
@@ -802,6 +872,7 @@ async function renderFeed(folder, opts) {
     cta: "",
     badge: "",
     image: (opts && opts.image) || "",
+    logo: logoV, watermark: wmV,
   });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
@@ -812,7 +883,9 @@ async function renderFeed(folder, opts) {
 // escolhido, demais via arquetipos). PURA (sem I/O) — usada pelo renderCarousel (grava PNG)
 // e pelo renderPreview (mostra todos os slides sem salvar), garantindo que a previa bate com
 // o render final. buildCover = funcao de template da capa (tpl.build, ex.: tplEditorial).
-function carouselSlidesHtml(concept, buildCover) {
+function carouselSlidesHtml(concept, buildCover, opts) {
+  const logoV = (opts && opts.logo) || "";        // variante de logo da peça (carTop/capa)
+  const wmV = (opts && opts.watermark) || "";     // estilo de marca d'água da peça (todos os slides)
   const slides = Array.isArray(concept.slides) && concept.slides.length
     ? concept.slides
     : [{ title: "4Selet", body: "" }];
@@ -837,6 +910,7 @@ function carouselSlidesHtml(concept, buildCover) {
         titleOffsetY: s && s.titleOffsetY, // ajuste fino de posicao do titulo (camadas)
         titleOffsetX: s && s.titleOffsetX,
         titleScale: s && s.titleScale,
+        logo: logoV, watermark: wmV,
       });
     } else {
       html = SLIDE_ARCHETYPES[arch](s, {
@@ -844,6 +918,7 @@ function carouselSlidesHtml(concept, buildCover) {
         cta: arch === "cta" ? (concept.cta || "") : "",
         footer: concept.footer,
         tagline: arch === "cta",
+        logo: logoV, wmStyle: wmV,
       });
     }
     out.push({ n: n, html: html });
@@ -854,10 +929,12 @@ function carouselSlidesHtml(concept, buildCover) {
 async function renderCarousel(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
+  const logoV = pickLogo(loc, opts && opts.logo);
+  const wmV = pickWatermark(loc, opts && opts.watermark);
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
-  const built = carouselSlidesHtml(concept, tpl.build);
+  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV });
   const total = built.length;
   const rels = [];
   let lastErr = null;
@@ -878,10 +955,12 @@ async function renderCarousel(folder, opts) {
 async function renderCarouselSlide(folder, n) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, null);
+  const logoV = pickLogo(loc, null);
+  const wmV = pickWatermark(loc, null);
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
-  const built = carouselSlidesHtml(concept, tpl.build);
+  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV });
   const item = built.find((b) => b.n === n);
   if (!item) { const e = new Error("slide " + n + " nao existe no carrossel"); e.code = "E_NO_SLIDE"; throw e; }
   const htmlPath = path.join(dir, "slide_" + n + ".html"), outPng = path.join(dir, "slide_" + n + ".png");
@@ -987,16 +1066,16 @@ function previewFields(ct, parsed) {
   return null;
 }
 
-// Renderiza um HTML (string) para dataURL PNG via arquivo temporario. Resolucao base (1x):
-// e so visualizacao na tela. Sufixo aleatorio evita colisao entre previas concorrentes.
-async function htmlStringToPngDataUrl(html, w, h) {
+// Renderiza um HTML (string) para dataURL PNG via arquivo temporario. Escala em PREVIEW_SCALE (2x)
+// p/ a previa ficar nitida ao AMPLIAR no lightbox. Sufixo aleatorio evita colisao entre previas concorrentes.
+async function htmlStringToPngDataUrl(html, w, h, scale) {
   const uniq = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   const base = path.join(os.tmpdir(), "4selet-preview-" + process.pid + "-" + uniq);
   const htmlPath = base + ".html";
   const outPng = base + ".png";
   try {
     fs.writeFileSync(htmlPath, html, "utf8");
-    const r = await htmlToPng(htmlPath, outPng, w, h);
+    const r = await htmlToPng(htmlPath, outPng, w, h, scale || PREVIEW_SCALE);
     if (!r.ok || !fs.existsSync(outPng)) return { ok: false, error: (r.stderr || r.stdout || "falha ao renderizar a previa").slice(0, 400) };
     return { ok: true, dataUrl: "data:image/png;base64," + fs.readFileSync(outPng).toString("base64") };
   } catch (e) {
@@ -1007,14 +1086,16 @@ async function htmlStringToPngDataUrl(html, w, h) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   const tplId = (template && TEMPLATES[template]) ? template : "editorial";
+  const logoV = LOGO_IDS.indexOf(logo) >= 0 ? logo : "";
+  const wmV = WATERMARK_IDS.indexOf(watermark) >= 0 ? watermark : "";
   // Carrossel: a previa mostra TODOS os slides (nao so a capa) — renderiza cada um in-memory,
   // com a MESMA montagem do render final (carouselSlidesHtml).
   if (ct.kind === "carousel") {
-    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId]);
+    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId], { logo: logoV, watermark: wmV });
     const slidesOut = [];
     for (const item of built) {
       const png = await htmlStringToPngDataUrl(item.html, 1080, 1350);
@@ -1025,7 +1106,7 @@ async function renderPreview({ content_type, parsed, template } = {}) {
   }
   const fields = previewFields(ct, parsed);
   if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
-  const png = await htmlStringToPngDataUrl(resolveTemplate(tplId)(fields), fields.width, fields.height);
+  const png = await htmlStringToPngDataUrl(resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV })), fields.width, fields.height);
   if (!png.ok) return { ok: false, error: png.error, template: tplId };
   return { ok: true, dataUrl: png.dataUrl, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };
 }
@@ -1108,10 +1189,13 @@ function relocalizeAssets(html) {
   const up = fileUrl(path.join(__dirname, "..", "public", "uploads")) + "/";
   const as = fileUrl(PATHS.ASSETS_DIR) + "/";
   const rw = (h, seg, abs) => h.replace(new RegExp('((?:src|href|xlink:href)\\s*=\\s*["\'])[^"\']*?/' + seg + '/', "gi"), "$1" + abs);
+  // Também reescreve url(...) DENTRO de style (ex.: a marca d'água "padrão" usa background-image:url(.../assets/simbolo.svg)).
+  const rwUrl = (h, seg, abs) => h.replace(new RegExp('(url\\(\\s*["\']?)[^"\')]*?/' + seg + '/', "gi"), "$1" + abs);
   let h = html;
-  h = rw(h, "uploads", up);
-  h = rw(h, "brand-assets", as); // servido como /brand-assets/ mapeia para o dir assets/
-  h = rw(h, "assets", as);
+  for (const [seg, abs] of [["uploads", up], ["brand-assets", as], ["assets", as]]) {
+    h = rw(h, seg, abs);
+    h = rwUrl(h, seg, abs);
+  }
   return h;
 }
 
@@ -1158,7 +1242,8 @@ async function renderMedia(folder, opts) {
   const status = readJson(path.join(loc.path, "status.json")) || {};
   const meta = status.media || {};
   const model = (opts && opts.template) || meta.model || "tablet";
-  const props = { image: meta.print || (opts && opts.image) || "", url: meta.url || "", eyebrow: meta.vehicle || "", model };
+  const logoV = pickLogo(loc, opts && opts.logo);
+  const props = { image: meta.print || (opts && opts.image) || "", url: meta.url || "", eyebrow: meta.vehicle || "", model, logo: logoV };
   let sizes = (Array.isArray(meta.sizes) ? meta.sizes : []).filter((k) => MEDIA_SIZES[k]);
   if (!sizes.length) sizes = ["4x5", "16x9"];
   const dir = path.join(loc.path, "ads");
@@ -1190,5 +1275,5 @@ async function render(folder, kind, opts) {
 
 module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
-  TEMPLATE_IDS,
+  TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
 };

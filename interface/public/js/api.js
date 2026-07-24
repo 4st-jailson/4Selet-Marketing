@@ -65,7 +65,7 @@ const API = (() => {
     downloadUrl: (folder, rel, scale) => "/api/content/" + encodeURIComponent(folder) + "/download?rel=" + encodeURIComponent(rel) + (scale ? "&scale=" + encodeURIComponent(scale) : ""),
     zipUrl: (folder) => "/api/content/" + encodeURIComponent(folder) + "/zip",
     preview: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preview"),
-    renderMedia: (folder, kind, template) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/render?kind=" + encodeURIComponent(kind) + (template ? "&template=" + encodeURIComponent(template) : "")),
+    renderMedia: (folder, kind, template, logo, watermark) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/render?kind=" + encodeURIComponent(kind) + (template ? "&template=" + encodeURIComponent(template) : "") + (logo ? "&logo=" + encodeURIComponent(logo) : "") + (watermark ? "&watermark=" + encodeURIComponent(watermark) : "")),
     discard: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/discard"),
     setTags: (folder, tags) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/tags", { tags }),
     promote: (folder, payload) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/promote", payload),

@@ -69,6 +69,10 @@ async function marketIntel(topic, opts = {}) {
   const client = tavily({ apiKey: key });
   const findings = [];
   const sources = [];
+  // Concorrentes proibidos (mesma lista do GOVERNANCE): MASCARA nomes que vierem crus nos findings antes
+  // de irem ao prompt — proteção DETERMINÍSTICA, não dependente só de o LLM obedecer a instrução.
+  const COMPETITORS = ["Greenn", "Hubla", "Kiwify", "Hotmart", "Eduzz", "Ticto", "Cakto", "Monetizze", "Perfect ?Pay"];
+  const mask = (txt) => COMPETITORS.reduce((s, c) => s.replace(new RegExp("\\b" + c + "\\b", "gi"), "[plataforma do mercado]"), String(txt || ""));
 
   await Promise.all(
     queries.map(async ({ focus, q }) => {
@@ -77,7 +81,7 @@ async function marketIntel(topic, opts = {}) {
         for (const r of res.results || []) {
           const snippet = String(r.content || "").replace(/\s+/g, " ").trim().slice(0, 220);
           if (!snippet) continue;
-          findings.push(`[${focus}] ${r.title}: ${snippet}`);
+          findings.push(mask(`[${focus}] ${r.title}: ${snippet}`));
           sources.push({ focus, title: r.title, url: r.url });
         }
       } catch (e) {

@@ -28,6 +28,18 @@ function extractJson(text) {
   return null;
 }
 
+// Alerta de marca PRÉ-aplicação: se o pedido do usuário citou cor fora da paleta oficial
+// (branco puro / preto puro / neon), anexa um aviso explicando o impacto + a fonte (brand_identity.md).
+// Vira warning no objeto de governança que o front já exibe.
+function paletteWarn(gov, instruction) {
+  if (!gov) return;
+  const s = String(instruction || "").toLowerCase();
+  if (/\bbranco\b|#fff\b|#ffffff\b|\bneon\b|preto puro/.test(s)) {
+    if (!Array.isArray(gov.warnings)) gov.warnings = [];
+    gov.warnings.push("Cor fora da paleta 4Selet: a marca não usa branco puro nem neon (fonte: brand_identity.md). O mais próximo na identidade é o tema claro (fundo Cloud #D9DCD6) — foi o que apliquei/priorizei.");
+  }
+}
+
 // Junta os campos textuais de um conteudo estruturado para rodar governance.
 function textForGovernance(contentTypeId, parsed) {
   if (!parsed) return "";
@@ -171,6 +183,8 @@ router.post("/preview", async (req, res, next) => {
       content_type: body.content_type,
       parsed: body.parsed || extractJson(body.raw),
       template: body.template,
+      logo: body.logo,
+      watermark: body.watermark,
     });
     if (!out.ok) return res.status(422).json(out);
     res.json(out);
@@ -234,6 +248,8 @@ router.post("/save", async (req, res, next) => {
     // 2c) #8 — semente da variante visual escolhida no brief (default da arte;
     // ignora "auto"/vazio para deixar a rotacao automatica por slug atuar).
     if (body.template_variant) content.setTemplate(folder, body.template_variant);
+    // 2c.2) variante de LOGO + estilo de MARCA D'ÁGUA escolhidos no brief (render.json, merge).
+    if (body.logo || body.watermark) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark });
 
     // 2d) grava o pilar de conteudo (eixo tematico) escolhido no brief.
     // Validado na taxonomia fechada; pilar invalido/ausente e ignorado.
@@ -292,7 +308,12 @@ router.post("/slide", async (req, res, next) => {
     const gov = runBrandGovernance((newSlide.title || "") + "\n" + (newSlide.body || ""), { type: "instagram_carousel" });
     if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
 
-    carousel.slides[index] = newSlide;
+    paletteWarn(gov, body.instruction); // alerta de marca se pediram cor fora da paleta (branco puro/neon)
+    // MERGE conservador só quando HÁ instrução pontual (campos omitidos sobrevivem do slide antigo = "não refaz a arte").
+    // Sem instrução = versão nova livre → usa o slide novo direto (evita ressuscitar arrays órfãos de um layout antigo).
+    const hasInstr = !!(body.instruction && String(body.instruction).trim());
+    const merged = hasInstr ? Object.assign({}, slides[index], newSlide) : newSlide;
+    carousel.slides[index] = merged;
     try { content.writeContentFile(folder, "copy/instagram_carousel.json", JSON.stringify(carousel, null, 2) + "\n", "regerar slide " + (index + 1)); }
     catch (e) { return res.status(e.code === "E_NOT_EDITABLE" ? 409 : 500).json({ error: e.message, code: e.code }); }
 
@@ -300,7 +321,7 @@ router.post("/slide", async (req, res, next) => {
     try { rr = await render.renderCarouselSlide(folder, index + 1); }
     catch (e) { rr = { ok: false, stderr: e.message }; }
 
-    res.json({ ok: true, simulated: result.simulated, index, slide: newSlide, rendered: rr.ok, rel: rr.rel, render_error: rr.ok ? undefined : (rr.stderr || "").slice(0, 200), governance: gov });
+    res.json({ ok: true, simulated: result.simulated, index, slide: merged, rendered: rr.ok, rel: rr.rel, render_error: rr.ok ? undefined : (rr.stderr || "").slice(0, 200), governance: gov });
   } catch (e) { next(e); }
 });
 
@@ -335,8 +356,11 @@ router.post("/slide-mem", async (req, res, next) => {
 
     const gov = runBrandGovernance((newSlide.title || "") + "\n" + (newSlide.body || ""), { type: "instagram_carousel" });
     if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
-
-    res.json({ ok: true, simulated: result.simulated, index, slide: newSlide, governance: gov });
+    paletteWarn(gov, body.instruction);
+    // MERGE só com instrução pontual (preserva omitidos); sem instrução = versão nova direta.
+    const hasInstr = !!(body.instruction && String(body.instruction).trim());
+    const merged = hasInstr ? Object.assign({}, slides[index], newSlide) : newSlide;
+    res.json({ ok: true, simulated: result.simulated, index, slide: merged, governance: gov });
   } catch (e) { next(e); }
 });
 

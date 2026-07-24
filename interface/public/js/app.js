@@ -46,6 +46,25 @@ function toast(msg, type) {
   $("#toasts").appendChild(t);
   setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); }, 4200);
 }
+// Overlay GLOBAL de carregamento: escurece a tela + círculo no meio + frase curta do que ocorre.
+// Para os pontos que recarregam/salvam e demoram — evita deixar o usuário sem saber o que acontece.
+// Uso: showBusy("Gerando a arte…"); try {…} finally { hideBusy(); }
+let _busyEl = null, _busyN = 0;
+function showBusy(msg) {
+  _busyN++;
+  if (!_busyEl) { _busyEl = document.createElement("div"); _busyEl.className = "busy-ov"; document.body.appendChild(_busyEl); }
+  _busyEl.innerHTML = '<span class="spinner spinner-lg"></span><p class="busy-msg">' + esc(msg || "Carregando…") + "</p>";
+  _busyEl.hidden = false; requestAnimationFrame(() => { if (_busyEl && _busyN > 0) _busyEl.classList.add("on"); });
+}
+// Contador de referência: dois fluxos podem pedir o overlay; só some quando o último terminar.
+function hideBusy() { _busyN = Math.max(0, _busyN - 1); if (_busyN === 0 && _busyEl) { _busyEl.classList.remove("on"); _busyEl.hidden = true; } }
+function resetBusy() { _busyN = 0; if (_busyEl) { _busyEl.classList.remove("on"); _busyEl.hidden = true; } } // defensivo ao trocar de tela
+// Marca a prévia da arte como DESATUALIZADA quando o texto muda (não mostrar imagem antiga como válida).
+function markArtStale() {
+  const box = $("#g-art"); if (!box || !box.children.length || box.classList.contains("is-stale")) return;
+  box.classList.add("is-stale");
+  const btn = $("#g-art-btn"); if (btn) btn.classList.add("attn");
+}
 
 // Mostra um erro de chamada de IA de forma clara. 429 (rate limit) vira aviso
 // ambar com instrucao de re-tentar; demais erros viram toast de erro.
@@ -204,7 +223,9 @@ function uiModal(opts) {
         ? `<textarea data-mf="${i}" rows="3" placeholder="${esc(f.placeholder || "")}">${esc(f.value || "")}</textarea>`
         : f.type === "select"
           ? `<select data-mf="${i}">${(f.options || []).map((o) => { const val = (o && typeof o === "object") ? o.value : o; const lab = (o && typeof o === "object") ? o.label : o; return `<option value="${esc(val)}"${String(f.value) === String(val) ? " selected" : ""}>${esc(lab)}</option>`; }).join("")}</select>`
-          : `<input data-mf="${i}" type="${esc(f.inputType || "text")}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" />`;
+          : f.type === "checks"
+            ? `<div class="checks" data-mf="${i}">${(f.options || []).map((o) => { const val = (o && typeof o === "object") ? o.value : o; const lab = (o && typeof o === "object") ? o.label : o; const on = (Array.isArray(f.value) ? f.value : []).map(String).indexOf(String(val)) !== -1; return `<label class="check ${on ? "on" : ""}"><input type="checkbox" value="${esc(val)}"${on ? " checked" : ""} /> ${esc(lab)}</label>`; }).join("")}</div>`
+            : `<input data-mf="${i}" type="${esc(f.inputType || "text")}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" />`;
       const sugg = (f.suggestions && f.suggestions.length)
         ? `<div class="sugg-row" data-msug="${i}">${f.suggestLabel ? '<span class="hint">' + esc(f.suggestLabel) + "</span>" : ""}${f.suggestions.map((s) => '<button type="button" class="sugg-chip" data-sugg="' + esc(s) + '">' + esc(s) + "</button>").join("")}</div>`
         : "";
@@ -220,6 +241,8 @@ function uiModal(opts) {
       </div></div>`;
     document.body.appendChild(ov);
     fields.forEach((f, i) => { if (String(f.inputType) === "password") wirePasswordEye(ov.querySelector('[data-mf="' + i + '"]')); });
+    // Grupos de checkbox (type:"checks"): realça a "pílula" ao marcar, como no formulário de campanha.
+    ov.querySelectorAll(".checks[data-mf]").forEach((box) => box.addEventListener("change", (e) => { const lab = e.target.closest(".check"); if (lab) lab.classList.toggle("on", e.target.checked); }));
     document.body.classList.add("no-scroll");
     requestAnimationFrame(() => ov.classList.add("open"));
     const opener = document.activeElement;
@@ -251,7 +274,15 @@ function uiModal(opts) {
       inp.addEventListener("input", () => refresh(true));
       refresh(false);
     });
-    const collect = () => { const o = {}; fields.forEach((f, i) => { o[f.name || i] = ov.querySelector('[data-mf="' + i + '"]').value.trim(); }); return o; };
+    const collect = () => {
+      const o = {};
+      fields.forEach((f, i) => {
+        const host = ov.querySelector('[data-mf="' + i + '"]');
+        if (f.type === "checks") o[f.name || i] = host ? [...host.querySelectorAll("input:checked")].map((x) => x.value) : [];
+        else o[f.name || i] = (host && host.value != null) ? String(host.value).trim() : "";
+      });
+      return o;
+    };
     const done = (val) => {
       ov.classList.remove("open"); document.body.classList.remove("no-scroll");
       document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); restoreFocus(opener); resolve(val);
@@ -318,6 +349,7 @@ function goBack(fallback) {
 }
 async function router() {
   NAV_COUNT++;
+  if (typeof resetBusy === "function") resetBusy(); // nunca deixar uma cortina de loading órfã ao trocar de tela
   const { route, arg, query } = parseHash();
   // Botão "voltar" na topbar: aparece em telas de detalhe (peça/campanha).
   const backBtn = $("#btn-back");
@@ -1098,12 +1130,12 @@ function carouselStrip(folder, task) {
 async function regenSlide(folder, task, n) {
   const r = await uiModal({
     title: "Regerar slide " + n,
-    message: "A IA refaz só este slide, mantendo os outros. Deixe em branco para uma versão nova livre.",
-    fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: número maior · trocar o exemplo · mais direto ao ponto" }],
+    message: "A IA refaz só este slide, mantendo os outros iguais. Diga o que mudar — ex.: “deixar o fundo claro”, “encurtar o título”, “trocar o número”, “mais direto ao ponto”, “trocar o ícone”. Deixe em branco para uma versão nova livre.",
+    fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: fundo claro · título mais curto · número maior" }],
     confirmText: "Regerar slide",
   });
   if (r === null) return;
-  toast("Regerando o slide " + n + "…", "info");
+  showBusy("Regerando o slide " + n + "…");
   try {
     const res = await API.regenerateSlide(folder, n - 1, (r.instruction || "").trim() || undefined);
     if (res.rendered) toast(res.simulated ? ("Slide " + n + " regerado (simulado — configure a IA em Configurações)") : ("Slide " + n + " regerado"), res.simulated ? "warn" : "success");
@@ -1112,7 +1144,7 @@ async function regenSlide(folder, task, n) {
   } catch (e) {
     if (e.data && e.data.governance) toast("Esse slide feriu uma regra de marca — tente outra orientação.", "error");
     else toast((e && e.message) || "Falha ao regerar o slide.", "error");
-  }
+  } finally { hideBusy(); }
 }
 
 // Quadro estilo Figma para o CARROSSEL: tela livre onde cada slide vira uma imagem que se
@@ -1383,9 +1415,18 @@ function templatePicker(task) {
       <span class="tpl-name">${esc(t.name)}</span>
       <span class="tpl-desc">${esc(t.desc)}</span>
     </label>`).join("");
+  const logoOpts = [["", "Automático"], ["light", "Completo claro"], ["dark", "Completo escuro"], ["symbol", "Só o símbolo"]]
+    .map(([v, l]) => `<option value="${v}"${v === (task.logo || "") ? " selected" : ""}>${l}</option>`).join("");
+  const wmOpts = [["", "Padrão do estilo"], ["word", "Palavra SELET"], ["symbol", "Símbolo grande"], ["outline", "Contornada"], ["canto", "No canto"], ["padrao", "Padrão repetido"], ["none", "Nenhuma"]]
+    .map(([v, l]) => `<option value="${v}"${v === (task.watermark || "") ? " selected" : ""}>${l}</option>`).join("");
   return `<div class="tpl-picker mt">
     <div class="muted" style="font-size:13px;margin-bottom:8px">Estilo visual da arte</div>
     <div class="tpl-grid">${opts}</div>
+    <div class="tpl-extra">
+      <label class="tpl-sel">Logo <select id="pick-logo">${logoOpts}</select></label>
+      <label class="tpl-sel">Marca d’água <select id="pick-wm">${wmOpts}</select></label>
+    </div>
+    <p class="hint" style="margin-top:8px;font-size:12px">O estilo, a logo e a marca d’água entram na arte ao clicar em <strong>“Gerar arte final”</strong>.</p>
   </div>`;
 }
 
@@ -1393,6 +1434,9 @@ function selectedTemplate() {
   const el = document.querySelector('input[name="render-tpl"]:checked');
   return el ? el.value : undefined;
 }
+// value "" (opção "Automático/Padrão") → sentinela "auto" p/ LIMPAR a escolha salva no re-render.
+function selectedLogo() { const el = document.getElementById("pick-logo"); return el ? (el.value || "auto") : undefined; }
+function selectedWatermark() { const el = document.getElementById("pick-wm"); return el ? (el.value || "auto") : undefined; }
 
 function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel" || kind === "media"; }
 
@@ -1500,9 +1544,10 @@ async function openHtmlEditor(folder, task, rel, opts) {
   const multiSlide = targets.length > 1;
   let assetMaps = [], dirty = false, changed = false, current = null, curScale = 1; // [prefixo file://, token /url/]
   let selection = new Set(); // multi-seleção (Shift): conjunto de selecionados; 'current' = âncora (dita toolbar/alça)
+  let pendingUp = null; // último 'mouseup' de arraste armado em document — evita acúmulo de closures entre cliques
   let hist = [], hi = -1; // desfazer/refazer: pilha de innerHTML do .card
   let artW = 1080, artH = 1080, fitScale = 1; // dimensões da arte + zoom "ajustar à tela"
-  const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;}";
+  const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;} .he-marquee{position:absolute;z-index:2147483000;border:2px solid #5499B5;background:rgba(84,153,181,.14);box-sizing:border-box;pointer-events:none;}";
   const FONTS = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap">';
 
   const ov = document.createElement("div");
@@ -1523,12 +1568,15 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +   '<details class="ed-menu" id="he-logo-menu"><summary class="btn btn-sm">+ Logo</summary><div class="ed-pop">'
     +     '<button data-src="/brand-assets/logo-4selet-light.png" data-w="0.32">Logo claro (fundo escuro)</button>'
     +     '<button data-src="/brand-assets/logo-4selet.png" data-w="0.32">Logo escuro (fundo claro)</button>'
-    +     '<button data-src="/brand-assets/simbolo.svg" data-w="0.12">Só o símbolo "4"</button>'
+    +     '<button data-src="/brand-assets/simbolo.svg" data-w="0.14">Só o símbolo "4"</button>'
     +   "</div></details>"
     +   '<details class="ed-menu" id="he-mark-menu"><summary class="btn btn-sm">+ Marca d’água</summary><div class="ed-pop">'
-    +     '<button data-mark="simbolo">Símbolo "4"</button>'
-    +     '<button data-mark="selet">Palavra "SELET"</button>'
-    +     '<button data-mark="4selet">"4SELET"</button>'
+    +     '<button data-mark="simbolo">Símbolo "4" (grande, ao fundo)</button>'
+    +     '<button data-mark="canto">Símbolo "4" no canto</button>'
+    +     '<button data-mark="padrao">Padrão de símbolos</button>'
+    +     '<button data-mark="selet">Palavra "SELET" (ao fundo)</button>'
+    +     '<button data-mark="4selet">"4SELET" (ao fundo)</button>'
+    +     '<button data-mark="outline">"SELET" contornado</button>'
     +   "</div></details>"
     +   '<button class="btn btn-sm" id="he-add-img">+ Imagem</button>'
     +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm">+ Bloco</summary><div class="ed-pop">'
@@ -1569,6 +1617,12 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +     '<label class="ed-range">Saturação<input type="range" id="he-f-sat" min="0" max="200" value="100"></label>'
     +     '<button data-filt="gray">Preto e branco</button>'
     +     '<button data-filt="none">Limpar filtros</button>'
+    +   "</div></details>"
+    +   '<details class="ed-menu" id="he-elbg-menu" title="Cor de fundo do item selecionado (plaqueta atrás do símbolo/marca)"><summary class="btn btn-sm">Fundo do item</summary><div class="ed-pop ed-pop-wide">'
+    +     '<label class="ed-range">Cor<input type="color" id="he-elbg-color" value="#003554"></label>'
+    +     '<label class="ed-range">Respiro<input type="range" id="he-elbg-pad" min="0" max="80" value="18"></label>'
+    +     '<label class="ed-range">Cantos<input type="range" id="he-elbg-rad" min="0" max="90" value="18"></label>'
+    +     '<button data-elbg="clear">Sem fundo</button>'
     +   "</div></details>"
     +   '<span class="ed-sep"></span>'
     +   '<label class="he-op" title="Opacidade"><span>Opac.</span><input type="range" id="he-opacity" min="0" max="100" value="100"></label>'
@@ -1679,9 +1733,55 @@ async function openHtmlEditor(folder, task, rel, opts) {
       el.setAttribute("data-he", "1");
       interactive(doc, el);
     });
-    card.addEventListener("mousedown", (e) => { if (e.target === card) select(null); });
+    card.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest("[data-he]")) return; // clicou num elemento — ele já tratou; não é vazio
+      e.preventDefault();
+      lassoSelect(doc, card, e); // arrastar no vazio = laço; clique simples = desseleciona (dentro do laço)
+    });
     doc.addEventListener("wheel", onWheelZoom, { passive: false }); // Ctrl+roda sobre a arte também dá zoom
     select(null); snapshot(); // baseline p/ desfazer
+  }
+  // Laço/marquee: arrastar no VAZIO da arte desenha um retângulo e seleciona todo [data-he] cuja
+  // bbox INTERSECTA o retângulo (coords do .card — o iframe já compensa o zoom). Shift = ADITIVO;
+  // sem Shift = substitui. Clique simples (sem arrastar) só desseleciona. Não gera snapshot.
+  function lassoSelect(doc, card, e0) {
+    const cr0 = card.getBoundingClientRect();
+    const sx = e0.clientX - cr0.left, sy = e0.clientY - cr0.top;
+    const additive = e0.shiftKey;
+    const base = additive ? new Set(selection) : new Set();
+    let box = null, active = false;
+    const THRESH = 4; // clique simples no vazio só desseleciona; passou disso = laço
+    const mv = (ev) => {
+      if (ev.buttons === 0) { up(); return; }
+      const cr = card.getBoundingClientRect();
+      const cx = ev.clientX - cr.left, cy = ev.clientY - cr.top;
+      if (!active) {
+        if (Math.abs(cx - sx) + Math.abs(cy - sy) < THRESH) return;
+        active = true; box = doc.createElement("div"); box.className = "he-marquee"; card.appendChild(box);
+      }
+      const x = Math.min(sx, cx), y = Math.min(sy, cy), w = Math.abs(cx - sx), h = Math.abs(cy - sy);
+      box.style.left = x + "px"; box.style.top = y + "px"; box.style.width = w + "px"; box.style.height = h + "px";
+      const rx2 = x + w, ry2 = y + h;
+      const next = new Set(base);
+      card.querySelectorAll("[data-he]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const ex = r.left - cr.left, ey = r.top - cr.top;
+        if (ex < rx2 && ex + r.width > x && ey < ry2 && ey + r.height > y) next.add(el);
+      });
+      selection.clear(); next.forEach((el) => selection.add(el)); selMark();
+    };
+    const up = () => {
+      doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up); document.removeEventListener("mouseup", up);
+      if (box && box.parentNode) box.parentNode.removeChild(box);
+      if (!active) { if (!additive) select(null); return; } // clique simples no vazio → desseleciona
+      current = selection.size ? [...selection][selection.size - 1] : null;
+      selMark(); syncToolbar(current);
+      if (selection.size === 1 && current) positionHandle(); else handle.style.display = "none";
+      renderLayers();
+    };
+    doc.addEventListener("mousemove", mv); doc.addEventListener("mouseup", up);
+    document.addEventListener("mouseup", up); // pega o soltar fora do iframe
   }
   function interactive(doc, el) {
     el.addEventListener("mousedown", (e) => {
@@ -1710,8 +1810,10 @@ async function openHtmlEditor(folder, task, rel, opts) {
       };
       const up = () => {
         doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up);
-        document.removeEventListener("mouseup", up); clearGuides(); snapshot();
+        document.removeEventListener("mouseup", up); if (pendingUp === up) pendingUp = null; clearGuides(); snapshot();
       };
+      if (pendingUp) document.removeEventListener("mouseup", pendingUp); // limpa um gesto anterior não-encerrado (fecha o leak de mouseup)
+      pendingUp = up;
       doc.addEventListener("mousemove", mv); doc.addEventListener("mouseup", up);
       document.addEventListener("mouseup", up); // pega o soltar quando o cursor sai do iframe
     });
@@ -1739,7 +1841,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     });
   }
   function positionHandle() {
-    if (!current) { handle.style.display = "none"; return; }
+    if (!current || !current.isConnected) { handle.style.display = "none"; return; } // nó removido → não plantar alça órfã (ela travava os cliques)
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
     const cr = card.getBoundingClientRect(), r = current.getBoundingClientRect();
     // Centro VISUAL (a bbox axis-aligned tem o mesmo centro do elemento, mesmo girado, pois
@@ -1809,10 +1911,19 @@ async function openHtmlEditor(folder, task, rel, opts) {
     ["he-font", "he-size", "he-bold", "he-italic", "he-align", "he-lh", "he-color", "he-eyedrop", "he-fx-menu"].forEach((id) => setCtl(id, !el || isImg)); // só texto
     ["he-replace", "he-filter-menu"].forEach((id) => setCtl(id, !isImg)); // só imagem
     ["he-opacity", "he-rot", "he-flip", "he-align2-menu", "he-layer-menu", "he-dup"].forEach((id) => setCtl(id, !el)); // qualquer elemento
+    // Fundo do item: vale p/ símbolo, marca d'água, texto e formas — MENOS logo claro/escuro (não faz sentido mudar o fundo de uma logo completa).
+    const isFullLogo = isImg && /logo-4selet(-light)?\.png/i.test(el.getAttribute("src") || "");
+    setCtl("he-elbg-menu", !el || isFullLogo);
     if (!el) return;
     const cs = gcs(el), tf = getTf(el);
     const op = parseFloat(cs.opacity); if ($("#he-opacity")) $("#he-opacity").value = Math.round((isFinite(op) ? op : 1) * 100);
     if ($("#he-rot")) $("#he-rot").value = Math.round(tf.rot || 0);
+    if (!isFullLogo && $("#he-elbg-color")) { // reflete o fundo atual do item no seletor
+      const bg = cs.backgroundColor; const hasBg = bg && bg !== "transparent" && !/,\s*0\s*\)$/.test(bg.replace(/\s+/g, " "));
+      const hx = hasBg ? rgbToHex(bg) : ""; if (hx) $("#he-elbg-color").value = hx;
+      if ($("#he-elbg-pad")) $("#he-elbg-pad").value = Math.round(parseFloat(cs.paddingTop) || 0);
+      if ($("#he-elbg-rad")) $("#he-elbg-rad").value = Math.round(parseFloat(cs.borderTopLeftRadius) || 0);
+    }
     if (isImg) {
       readFilter(el);
     } else {
@@ -1876,9 +1987,22 @@ async function openHtmlEditor(folder, task, rel, opts) {
   }
   function addMark(type) {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
-    if (type === "simbolo") { const w = Math.round(card.offsetWidth * 0.7); addImgNode("/brand-assets/simbolo.svg", { width: w, left: Math.round(card.offsetWidth * 0.5), top: Math.round(card.offsetHeight * 0.55), opacity: 0.06 }); return; }
+    const W = card.offsetWidth || 1080, H = card.offsetHeight || 1080;
+    // Símbolo "4" grande e suave, CENTRALIZADO no card (antes vazava pela direita: left=50% + width=70%).
+    if (type === "simbolo") { const w = Math.round(W * 0.62); addImgNode("/brand-assets/simbolo.svg", { width: w, left: Math.round((W - w) / 2), top: Math.round((H - w) / 2), opacity: 0.07 }); return; }
+    // Símbolo "4" pequeno e nítido no canto inferior direito — assinatura discreta da marca.
+    if (type === "canto") { const w = Math.round(W * 0.11); addImgNode("/brand-assets/simbolo.svg", { width: w, left: Math.round(W - w - W * 0.05), top: Math.round(H - w - H * 0.05), opacity: 0.9 }); return; }
+    // Padrão de símbolos repetidos cobrindo o card, bem suave (textura de marca). Selecionável p/ mover/enviar ao fundo/remover.
+    if (type === "padrao") {
+      const el = doc.createElement("div"); el.setAttribute("data-he", "1");
+      el.style.cssText = "position:absolute;z-index:" + nextTopZ() + ";left:0;top:0;width:" + W + "px;height:" + H + "px;background-image:url('/brand-assets/simbolo.svg');background-repeat:repeat;background-size:" + Math.round(W * 0.16) + "px auto;opacity:0.05;";
+      card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot(); return;
+    }
+    // Texto de marca: SELET / 4SELET sólido suave, ou "SELET" apenas contornado (vazado).
     const el = doc.createElement("div"); el.textContent = type === "4selet" ? "4SELET" : "SELET"; el.setAttribute("data-he", "1");
-    el.style.cssText = "position:absolute;left:" + Math.round(card.offsetWidth * 0.06) + "px;top:" + Math.round(card.offsetHeight * 0.42) + "px;font-family:'Inter',sans-serif;font-weight:900;font-size:200px;color:#FFFFFF;opacity:0.05;letter-spacing:-4px;white-space:nowrap;";
+    const outline = type === "outline";
+    el.style.cssText = "position:absolute;z-index:" + nextTopZ() + ";left:" + Math.round(W * 0.06) + "px;top:" + Math.round(H * 0.42) + "px;font-family:'Inter',sans-serif;font-weight:900;font-size:200px;letter-spacing:-4px;white-space:nowrap;"
+      + (outline ? "color:transparent;-webkit-text-stroke:2px #FFFFFF;opacity:0.16;" : "color:#FFFFFF;opacity:0.05;");
     card.appendChild(el); interactive(doc, el); select(el); dirty = true; snapshot();
   }
   $("#he-add-text").onclick = () => {
@@ -1910,7 +2034,13 @@ async function openHtmlEditor(folder, task, rel, opts) {
   $("#he-italic").onclick = () => { applyStyle((el) => { const it = gcs(el).fontStyle === "italic"; el.style.fontStyle = it ? "normal" : "italic"; $("#he-italic").classList.toggle("on", !it); }); if (current) snapshot(); };
   $("#he-color").oninput = () => applyStyle((el) => { el.style.color = $("#he-color").value; });
   $("#he-color").onchange = () => { if (current) snapshot(); };
-  $("#he-del").onclick = () => { if (selection.size) { selection.forEach((x) => x.remove()); select(null); dirty = true; snapshot(); } };
+  $("#he-del").onclick = () => {
+    if (!selection.size) return;
+    selection.forEach((x) => { x.removeAttribute("data-he-sel"); x.remove(); });
+    selection.clear(); current = null;      // nenhuma closure de arraste ressuscita um nó morto
+    handle.style.display = "none";          // some com a alça ANTES de qualquer re-layout
+    select(null); dirty = true; snapshot();
+  };
   $("#he-undo").onclick = undo; $("#he-redo").onclick = redo;
 
   // ===== Recursos "editor completo" (lote pedido pelo Hugo) =====
@@ -1921,6 +2051,11 @@ async function openHtmlEditor(folder, task, rel, opts) {
   // Rotação (graus)
   $("#he-rot").oninput = () => applyAny((el) => { setTf(el, Object.assign({}, getTf(el), { rot: parseFloat($("#he-rot").value) || 0 })); positionHandle(); });
   $("#he-rot").onchange = () => { if (current) snapshot(); };
+  // Fundo do item (plaqueta colorida atrás do símbolo/marca d'água): cor + respiro (padding) + cantos, ao vivo.
+  const applyElBg = () => { const c = $("#he-elbg-color").value, p = $("#he-elbg-pad").value, r = $("#he-elbg-rad").value; applyAny((el) => { el.style.backgroundColor = c; el.style.padding = p + "px"; el.style.borderRadius = r + "px"; }); positionHandle(); };
+  ["he-elbg-color", "he-elbg-pad", "he-elbg-rad"].forEach((id) => { const e = $("#" + id); if (e) { e.oninput = applyElBg; e.onchange = () => { if (current) snapshot(); }; } });
+  const elbgClear = $("#he-elbg-menu") && $("#he-elbg-menu").querySelector('[data-elbg="clear"]');
+  if (elbgClear) elbgClear.onclick = () => { applyAny((el) => { el.style.backgroundColor = ""; el.style.padding = ""; el.style.borderRadius = ""; }); if (current) snapshot(); positionHandle(); $("#he-elbg-menu").removeAttribute("open"); };
   // Espelhar na horizontal
   $("#he-flip").onclick = () => { applyAny((el) => { const t = getTf(el); setTf(el, Object.assign({}, t, { fx: -t.fx })); }); if (current) snapshot(); };
   // Duplicar (Ctrl+D)
@@ -2193,7 +2328,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); return; }
     const t = (document.activeElement || {}).tagName;
     if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
-    if ((e.key === "Delete" || e.key === "Backspace") && selection.size) { e.preventDefault(); selection.forEach((x) => x.remove()); select(null); dirty = true; snapshot(); }
+    if ((e.key === "Delete" || e.key === "Backspace") && selection.size) { e.preventDefault(); selection.forEach((x) => { x.removeAttribute("data-he-sel"); x.remove(); }); selection.clear(); current = null; handle.style.display = "none"; select(null); dirty = true; snapshot(); }
     else if (e.key === "Escape" && selection.size) { e.preventDefault(); select(null); } // Esc = desseleciona tudo
     else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) { e.preventDefault(); selectAll(); } // Ctrl+A = selecionar tudo
     else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) { e.preventDefault(); zoomBy(1.2); }
@@ -2296,7 +2431,7 @@ async function doRestore(folder, file, id, task) {
   toast("Restaurando…", "info");
   try {
     await API.restoreVersion(folder, file, id);
-    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate());
+    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark());
     toast("Versão restaurada.", "success");
     router();
   } catch (e) { toast((e && e.message) || "Erro ao restaurar.", "error"); }
@@ -2309,6 +2444,7 @@ async function refineTask(folder, task) {
   const s = task.status;
   const ctId = btn.dataset.ct, file = btn.dataset.file;
   btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> ajustando…';
+  showBusy("Ajustando com IA…");
   try {
     const current = await API.taskFile(folder, file);
     const r = await API.refine({ content_type: ctId, current, instruction, images: REFINE_IMAGES.slice(), campaign_id: s.campaign_id || undefined, pillar: task.pillar || undefined });
@@ -2321,8 +2457,8 @@ async function refineTask(folder, task) {
       parsed: r.parsed, raw: r.raw,
     });
     if (autoRenders(task.kind)) {
-      btn.innerHTML = '<span class="spinner"></span> atualizando a arte…';
-      const rr = await API.renderMedia(folder, task.kind, selectedTemplate());
+      btn.innerHTML = '<span class="spinner"></span> atualizando a arte…'; showBusy("Atualizando a arte…");
+      const rr = await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark());
       if (!rr.ok) toast("Ajustado, mas falhou a geração da arte: " + (rr.stderr || rr.error || "erro"), "warn");
       else toast("Ajustado e arte atualizada", "success");
     } else if (task.kind === "video") {
@@ -2335,7 +2471,7 @@ async function refineTask(folder, task) {
     if (e.status === 422 && e.data && e.data.governance) toast("Ajuste bloqueado por regra de marca — reescreva a orientação.", "error");
     else toastAiError(e);
     btn.disabled = false; btn.textContent = orig;
-  }
+  } finally { hideBusy(); }
 }
 
 // ---- Legenda de peça importada (ler/gravar no detalhe) ----
@@ -2433,6 +2569,7 @@ async function runImport() {
   const totalMB = payload.images.reduce((a, d) => a + d.length, 0) / (1024 * 1024);
   if (totalMB > 14) { toast("As imagens somam demais para enviar de uma vez (~" + totalMB.toFixed(0) + "MB). Use menos slides ou imagens menores.", "error"); return; }
   const btn = $("#imp-run"); btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> importando…';
+  showBusy("Importando o conteúdo…");
   try {
     const r = await API.importContent(payload);
     toast("Conteúdo importado como rascunho", "success");
@@ -2441,7 +2578,7 @@ async function runImport() {
   } catch (e) {
     toast((e && e.message) || "Falha ao importar", "error");
     btn.disabled = false; btn.textContent = orig;
-  }
+  } finally { hideBusy(); }
 }
 async function viewImport(arg, query) {
   setTitle("Importar conteúdo");
@@ -2595,12 +2732,15 @@ async function viewTaskDetail(folder) {
       const btn = $("#btn-render"); const out = $("#render-out");
       btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> gerando arte…';
       out.textContent = task.kind === "video" ? "isto pode levar alguns minutos…" : "";
+      showBusy(task.kind === "video" ? "Renderizando o vídeo… (pode levar alguns minutos)" : "Gerando a arte…");
       try {
-        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate());
+        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate(), selectedLogo(), selectedWatermark());
         if (!r.ok) throw new Error(r.stderr || r.error || "falha ao gerar a arte");
-        toast("Arte gerada", "success"); router();
-      } catch (e) { toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }
+        hideBusy(); toast("Arte gerada", "success"); router();
+      } catch (e) { hideBusy(); toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }
     };
+    // Logo/marca d'água: trocar o seletor DESTACA "Gerar arte final" — é onde a escolha entra na arte.
+    $$("#pick-logo, #pick-wm").forEach((el) => { el.onchange = () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }; });
   }
   if ($("#btn-discard")) {
     $("#btn-discard").onclick = async () => {
@@ -3022,7 +3162,8 @@ function renderLbItem() {
     : `<img src="${it.url}" alt="" class="${canEdit ? "lb-editable" : ""}"${canEdit ? ' title="Duplo-clique para editar"' : ""} />`;
   setLightboxNewTab(null);
   const dl = $("#lightbox-dl"), res = $("#lightbox-res");
-  if (it.type === "image" && it.dlUrl) {
+  // Menu de resolução (dlMenu) só p/ URL SERVIDA — nunca p/ data URL (o &scale= corromperia o base64).
+  if (it.type === "image" && it.dlUrl && !it.dlUrl.startsWith("data:")) {
     if (res) { res.innerHTML = dlMenu(it.dlUrl, "Baixar"); res.style.display = ""; }
     if (dl) dl.style.display = "none";
   } else {
@@ -3069,6 +3210,21 @@ function openLightboxFromEl(el) {
   _lbItems = medias.map(lbItemFromMedia);
   _lbIdx = Math.max(0, medias.indexOf(mediaEl));
   if (!lb || !stage) { window.open(_lbItems[_lbIdx].url, "_blank"); return; }
+  renderLbItem();
+  lbShow();
+}
+// Abre a prévia da arte do "Criar conteúdo" no lightbox. As imagens são data URLs (a peça
+// ainda não foi salva), então agrupamos os slides do #g-art e navegamos entre eles com as setas.
+// dlUrl vazio de propósito: baixa o PNG direto (sem o menu de resolução, que só serve a URL servida).
+function openArtLightbox(imgEl) {
+  if (!imgEl) return;
+  const box = document.getElementById("g-art");
+  const imgs = box ? Array.from(box.querySelectorAll("img.art-img")) : [];
+  const list = imgs.length ? imgs : [imgEl];
+  _lbItems = list.map((im) => ({ url: im.getAttribute("src") || "", type: "image", dlUrl: "", editable: false, folder: "", rel: "" }));
+  _lbIdx = Math.max(0, list.indexOf(imgEl));
+  const lb = document.getElementById("lightbox");
+  if (!lb) { window.open(_lbItems[_lbIdx].url, "_blank"); return; }
   renderLbItem();
   lbShow();
 }
@@ -3161,6 +3317,7 @@ function setupLightbox() {
 }
 window.openLightbox = openLightbox;
 window.openLightboxFromEl = openLightboxFromEl;
+window.openArtLightbox = openArtLightbox;
 window.openHtmlLightbox = openHtmlLightbox;
 window.openTextLightbox = openTextLightbox;
 window.closeLightbox = closeLightbox;
@@ -3252,6 +3409,14 @@ async function viewCreate(arg, query) {
           <div class="field art-only"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
             <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option><option value="photo">Foto — imagem enviada + texto por cima</option></select>
           </div>
+          <div class="row art-only">
+            <div class="field"><label>Logo (opcional)</label>
+              <select id="g-logo"><option value="">Automático (padrão do estilo)</option><option value="light">Completo claro — fundo escuro</option><option value="dark">Completo escuro — fundo claro</option><option value="symbol">Só o símbolo “4”</option></select>
+            </div>
+            <div class="field"><label>Marca d’água (opcional) <span class="hint">(atrás do conteúdo)</span></label>
+              <select id="g-wm"><option value="">Padrão do estilo</option><option value="word">Palavra SELET</option><option value="symbol">Símbolo grande</option><option value="outline">Palavra contornada</option><option value="canto">Símbolo no canto</option><option value="padrao">Padrão repetido</option><option value="none">Nenhuma</option></select>
+            </div>
+          </div>
           <div class="field" id="g-photo-row" style="display:none">
             <label>Imagem da peça <span class="hint">(enviada por você; entra como fundo da arte “Foto”)</span></label>
             <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-photo-file" accept="image/*" hidden /> Enviar imagem</label><span class="hint" id="g-photo-hint"></span></div>
@@ -3273,7 +3438,8 @@ async function viewCreate(arg, query) {
         </div>
       </div>
       <div class="card create-result">
-        <div class="flex-between"><h3>Resultado</h3><span id="g-flag"></span></div>
+        <div class="flex-between"><h3>Revisão da peça</h3><span id="g-flag"></span></div>
+        <p class="muted" style="margin:0 0 6px;font-size:12.5px">Revise o texto e o <strong>layout</strong> de cada slide. A prévia da arte aparece abaixo — a versão final é gerada ao salvar.</p>
         <div id="g-result"><div class="empty">Descreva a peça e clique em <strong>Gerar com IA</strong>. Sua equipe de IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca.</div></div>
       </div>
     </div>`);
@@ -3310,21 +3476,35 @@ async function viewCreate(arg, query) {
   async function createCampaignInline() {
     const pillarOpts = [{ value: "", label: "—" }].concat((State.meta.pillars || []).map((p) => ({ value: p, label: p })));
     const statusOpts = ["active", "paused", "done"].map((s) => ({ value: s, label: statusLabel(s) }));
+    const platformOpts = (State.meta.platforms || []).map((p) => ({ value: p, label: platformLabel(p) }));
     const r = await uiModal({
       title: "Nova campanha",
-      message: "Cria a campanha aqui mesmo. Os demais detalhes (período, plataformas, mensagens-chave) você completa depois em Campanhas.",
+      message: "Crie a campanha completa aqui mesmo — você ainda pode ajustar tudo depois em Campanhas.",
       confirmText: "Criar campanha",
       fields: [
         { name: "name", label: "Nome (mín. 3 caracteres)", placeholder: "ex.: Taxa Zero — 2º semestre" },
+        { name: "objective", label: "Objetivo (opcional)", type: "textarea", placeholder: "O que esta campanha precisa alcançar?" },
         { name: "angle", label: "Ângulo (opcional)", placeholder: "ex.: 0% por 3 meses" },
+        { name: "platforms", label: "Plataformas", type: "checks", options: platformOpts, value: ["instagram"] },
+        { name: "start", label: "Início (opcional)", inputType: "date" },
+        { name: "end", label: "Fim (opcional)", inputType: "date" },
         { name: "pillar", label: "Pilar estratégico (opcional)", type: "select", options: pillarOpts, value: "" },
+        { name: "messages", label: "Mensagens-chave (opcional — uma por linha)", type: "textarea", placeholder: "Um ponto por linha" },
+        { name: "notes", label: "Notas (opcional)", type: "textarea", placeholder: "Observações internas" },
         { name: "status", label: "Status", type: "select", options: statusOpts, value: "active" },
       ],
     });
     if (!r) return;
     if (!r.name || r.name.length < 3) { toast("Dê um nome com ao menos 3 caracteres.", "error"); return; }
+    const payload = {
+      name: r.name, objective: (r.objective || "").trim(), angle: (r.angle || "").trim(),
+      pillar: r.pillar || "", status: r.status || "active",
+      start_date: r.start || "", end_date: r.end || "", notes: (r.notes || "").trim(),
+      platforms: Array.isArray(r.platforms) ? r.platforms : [],
+      key_messages: (r.messages || "").split("\n").map((s) => s.trim()).filter(Boolean),
+    };
     try {
-      const { campaign } = await API.createCampaign(r);
+      const { campaign } = await API.createCampaign(payload);
       const sel = $("#g-camp");
       const opt = document.createElement("option");
       opt.value = campaign.id; opt.textContent = campaign.name;
@@ -3518,6 +3698,8 @@ async function runGenerate() {
     extra: $("#g-extra").value.trim() || undefined,
     research: ($("#g-research") && $("#g-research").checked) || undefined,
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
+    logo: ($("#g-logo") && $("#g-logo").value) || undefined,
+    watermark: ($("#g-wm") && $("#g-wm").value) || undefined,
     pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
     cta: ctaDirective(),
     image: ((($("#g-style") && $("#g-style").value) === "photo") && $("#g-image") && $("#g-image").value) ? $("#g-image").value : undefined,
@@ -3534,7 +3716,7 @@ async function runGenerate() {
     const r = await API.generate(payload);
     clearInterval(prog);
     LAST_GEN = { req: payload, res: r };
-    renderGenResult(r);
+    renderGenResult(r, { autoPreview: true }); // prévia automática só aqui (1ª geração), não a cada refino
   } catch (e) {
     clearInterval(prog);
     $("#g-result").innerHTML = '<div class="empty">Não foi possível gerar agora. Ajuste a descrição e clique em <strong>Gerar com IA</strong> de novo.</div>';
@@ -3543,7 +3725,7 @@ async function runGenerate() {
   finally { btn.disabled = false; btn.textContent = "Gerar com IA"; }
 }
 
-function renderGenResult(r) {
+function renderGenResult(r, opts) {
   $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain" title="Modelo de IA que gerou esta peça">' + esc(modelLabel(r.model)) + "</span>";
   if (r.research_requested) {
     $("#g-flag").innerHTML += r.research_used
@@ -3635,7 +3817,15 @@ function renderGenResult(r) {
     $("#g-edit").addEventListener("input", () => { const m = $("#g-mock"); if (m) m.innerHTML = socialMock(mockKind, $("#g-edit").value); });
   }
   // #1 — botão de prévia renderizada da arte.
-  if (visualKind && $("#g-art-btn")) $("#g-art-btn").onclick = () => renderArtPreview(r.content_type, ct.kind);
+  if (visualKind && $("#g-art-btn")) {
+    $("#g-art-btn").onclick = () => renderArtPreview(r.content_type, ct.kind);
+    // Prévia da arte AUTOMÁTICA só na 1ª geração (opts.autoPreview); no refino o usuário clica em
+    // "Atualizar" — evita re-renderizar N slides do carrossel via Playwright a cada ajuste.
+    if (opts && opts.autoPreview) renderArtPreview(r.content_type, ct.kind);
+    // Ao editar o texto depois, marca a prévia como DESATUALIZADA (não deixa achar que a arte velha é a nova).
+    const rc = $("#g-result");
+    if (rc && !rc._staleWired) { rc._staleWired = true; rc.addEventListener("input", markArtStale); }
+  }
 }
 
 // #1 — renderiza a arte final (sem salvar) a partir do conteúdo atual em tela.
@@ -3651,31 +3841,37 @@ async function renderArtPreview(contentType, kind) {
   }
   // Template: estilo escolhido no brief; se "Automático", a mesma variação por slug usada no salvamento.
   let template = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
+  const logo = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
+  const watermark = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";
   if (!template) {
     const task = ($("#g-task") && $("#g-task").value) || slugify(($("#g-title") && $("#g-title").value) || "");
     const date = ($("#g-date") && $("#g-date").value) || todayISO();
     template = autoVariant(task + "_" + date);
   }
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> renderizando…';
-  box.innerHTML = "";
+  box.innerHTML = ""; box.classList.remove("is-stale"); btn.classList.remove("attn");
+  showBusy(ct && ct.kind === "carousel" ? "Renderizando os slides…" : "Renderizando a prévia da arte…");
   try {
-    const out = await API.renderPreview({ content_type: contentType, parsed, template });
+    const out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark });
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     if (out.slides && out.slides.length) {
       // Carrossel: mostra TODOS os slides na ordem, cada um com número e baixar.
-      box.innerHTML = `<div class="art-slides-strip">${out.slides.map((s) => `<div class="art-slide"><span class="slide-num">${s.n}</span><img class="art-img art-slide-img" src="${s.dataUrl}" alt="Slide ${s.n}" /><a class="art-slide-dl" href="${s.dataUrl}" download="slide-${s.n}.png" title="Baixar slide ${s.n}">baixar</a></div>`).join("")}</div>
+      box.innerHTML = `<div class="art-slides-strip">${out.slides.map((s) => `<div class="art-slide"><span class="slide-num">${s.n}</span><img class="art-img art-slide-img" src="${s.dataUrl}" alt="Slide ${s.n}" title="Clique para ampliar" onclick="openArtLightbox(this)" /><a class="art-slide-dl" href="${s.dataUrl}" download="slide-${s.n}.png" title="Baixar slide ${s.n}">baixar</a></div>`).join("")}</div>
         <div class="flex mt" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.slides.length} slides · ${out.width}×${out.height}</span></div>`;
     } else {
-      box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" />
+      box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" title="Clique para ampliar" onclick="openArtLightbox(this)" />
         <div class="flex flex-between mt" style="align-items:center;gap:10px;flex-wrap:wrap">
-          <span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height}</span>
+          <span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height} · clique para ampliar</span>
           <a class="btn btn-sm btn-ghost" href="${out.dataUrl}" download="${esc(fname)}">Baixar imagem</a>
         </div>`;
     }
+    box.classList.remove("is-stale"); // a imagem exibida corresponde ao render atual, mesmo que o texto tenha mudado durante o await
+    if (btn) btn.classList.remove("attn");
   } catch (e) {
     box.innerHTML = `<div class="field-error" style="display:block">${esc((e && e.message) || "falha ao renderizar a prévia")}</div>`;
   } finally {
-    btn.disabled = false; btn.textContent = "Atualizar prévia da arte";
+    hideBusy();
+    btn.disabled = false; btn.textContent = "Atualizar prévia da arte"; btn.classList.remove("attn");
   }
 }
 
@@ -3732,6 +3928,7 @@ async function refineGenerated() {
     pillar: LAST_GEN.req.pillar || undefined,
   };
   const btn = $("#g-refine-btn"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ajustando…';
+  showBusy("Ajustando com IA…");
   try {
     const r = await API.refine(payload);
     LAST_GEN.res = Object.assign({}, LAST_GEN.res, {
@@ -3743,7 +3940,7 @@ async function refineGenerated() {
   } catch (e) {
     toastAiError(e);
     btn.disabled = false; btn.textContent = "Aplicar ajuste";
-  }
+  } finally { hideBusy(); }
 }
 
 function composeText(parsed, raw) {
@@ -3802,7 +3999,48 @@ function seCtrls(i, total) {
     `<button class="se-mini se-del" data-se="del" title="Remover" aria-label="Remover"${total <= 1 ? " disabled" : ""}>✕</button>`;
 }
 
-const SLIDE_LAYOUTS = [["", "Automático"], ["cover", "Capa"], ["stat_grid", "Grade de números"], ["list", "Lista"], ["text", "Texto"], ["cta", "CTA"]];
+// [valor, nome curto, descrição em linguagem de leigo]. O nome aparece no seletor; a descrição
+// e a miniatura (layoutThumb) explicam o que cada layout faz — sem jargão.
+const SLIDE_LAYOUTS = [
+  ["", "Automático", "A IA escolhe o layout que melhor combina com o texto deste slide"],
+  ["cover", "Capa de destaque", "Título grande de abertura, como a capa do carrossel"],
+  ["text", "Texto explicativo", "Um parágrafo para desenvolver a ideia com calma"],
+  ["stat_grid", "Número em destaque", "Destaca números em cartões grandes (ex.: 95%). Precisa de números no slide."],
+  ["list", "Lista de pontos", "Vários itens em lista com marcador. Precisa de itens no slide."],
+  ["cta", "Chamada final", "Frase de fechamento com um botão de ação"],
+];
+function layoutName(v) { const f = SLIDE_LAYOUTS.find((x) => x[0] === String(v || "")); return f ? f[1] : SLIDE_LAYOUTS[0][1]; }
+// Aviso/dica sob o seletor de layout: alerta quando o layout escolhido PRECISA de um dado que o
+// slide não tem (stat_grid→números, list→itens) — nesse caso o render cai em texto (não quebra).
+function layoutDataHint(layout, s) {
+  s = s || {};
+  const nStats = (Array.isArray(s.stats) ? s.stats : []).length;
+  const nItems = (Array.isArray(s.items) ? s.items : []).length;
+  if (layout === "stat_grid" && !nStats) return '<span class="se-rich se-warn">Sem números neste slide — vai aparecer como texto. Adicione números em JSON (avançado).</span>';
+  if (layout === "list" && !nItems) return '<span class="se-rich se-warn">Sem itens neste slide — vai aparecer como texto. Adicione itens em JSON (avançado).</span>';
+  if (nStats) return '<span class="se-rich">grade: ' + nStats + ' números (edite no JSON)</span>';
+  if (nItems) return '<span class="se-rich">lista: ' + nItems + ' itens (edite no JSON)</span>';
+  return "";
+}
+// Miniatura SVG (40×50, retrato) que representa cada layout — desenhada na paleta da marca.
+function layoutThumb(v) {
+  const NA = "#003554", SK = "#5499B5", WH = "#EAF0F2", MI = "#7F9BAA";
+  const wrap = (inner) => `<svg class="lt-svg" viewBox="0 0 40 50" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="40" height="50" rx="4" fill="${NA}"/>${inner}</svg>`;
+  switch (String(v || "")) {
+    case "cover":
+      return wrap(`<circle cx="8" cy="8" r="1.8" fill="${SK}"/><rect x="7" y="19" width="26" height="5" rx="2.5" fill="${WH}"/><rect x="7" y="26" width="19" height="5" rx="2.5" fill="${WH}"/><rect x="7" y="39" width="11" height="3" rx="1.5" fill="${SK}"/>`);
+    case "text":
+      return wrap(`<circle cx="8" cy="8" r="1.8" fill="${SK}"/><rect x="7" y="16" width="21" height="3.5" rx="1.75" fill="${WH}"/><rect x="7" y="25" width="26" height="2" rx="1" fill="${MI}"/><rect x="7" y="30" width="26" height="2" rx="1" fill="${MI}"/><rect x="7" y="35" width="18" height="2" rx="1" fill="${MI}"/>`);
+    case "stat_grid":
+      return wrap(`<circle cx="8" cy="7" r="1.6" fill="${SK}"/>` + [[7, 14], [22, 14], [7, 31], [22, 31]].map(([x, y]) => `<rect x="${x}" y="${y}" width="11" height="13" rx="2" fill="none" stroke="${SK}" stroke-width="1"/><rect x="${x + 2.5}" y="${y + 4.5}" width="6" height="4" rx="1" fill="${WH}"/>`).join(""));
+    case "list":
+      return wrap(`<circle cx="8" cy="7" r="1.6" fill="${SK}"/>` + [16, 24, 32, 40].map((y) => `<path d="M7 ${y - 2.2} l3 2.2 l-3 2.2 z" fill="${SK}"/><rect x="13" y="${y - 1.4}" width="20" height="2.6" rx="1.3" fill="${WH}"/>`).join(""));
+    case "cta":
+      return wrap(`<rect x="9" y="15" width="22" height="4.5" rx="2.25" fill="${WH}"/><rect x="12" y="23" width="16" height="2.6" rx="1.3" fill="${MI}"/><rect x="9" y="33" width="22" height="8.5" rx="4.25" fill="${SK}"/>`);
+    default: // automático
+      return wrap(`<path d="M20 13 l1.9 4.6 l4.9 .4 l-3.7 3.2 l1.1 4.8 l-4.2-2.6 l-4.2 2.6 l1.1-4.8 l-3.7-3.2 l4.9-.4 z" fill="${SK}"/><rect x="10" y="35" width="20" height="2" rx="1" fill="${MI}"/><rect x="13" y="40" width="14" height="2" rx="1" fill="${MI}"/>`);
+  }
+}
 function slideItem(s, i, total) {
   // Preserva campos não editáveis aqui (items, stats) para não perdê-los no
   // sync do JSON. O layout é exposto no seletor abaixo.
@@ -3810,14 +4048,15 @@ function slideItem(s, i, total) {
   Object.keys(s || {}).forEach((k) => { if (k !== "title" && k !== "body" && k !== "layout") extra[k] = s[k]; });
   const extraAttr = Object.keys(extra).length ? ` data-extra="${esc(JSON.stringify(extra)).replace(/"/g, "&quot;")}"` : "";
   const cur = String(s.layout || "");
-  const layoutOpts = SLIDE_LAYOUTS.map(([v, l]) => `<option value="${v}"${v === cur ? " selected" : ""}>${l}</option>`).join("");
-  const richHint = (Array.isArray(s.stats) && s.stats.length) ? '<span class="se-rich">grade: ' + s.stats.length + ' números (edite no JSON)</span>'
-    : ((Array.isArray(s.items) && s.items.length) ? '<span class="se-rich">lista: ' + s.items.length + ' itens (edite no JSON)</span>' : "");
+  const layoutOpts = SLIDE_LAYOUTS.map(([v, name, desc]) => `<button type="button" class="lay-opt${v === cur ? " on" : ""}" data-lay="${v}"><span class="lay-thumb">${layoutThumb(v)}</span><span class="lay-txt"><span class="lay-name">${esc(name)}</span><span class="lay-desc">${esc(desc)}</span></span></button>`).join("");
+  const richHint = layoutDataHint(cur, s);
   return `<div class="se-item" data-i="${i}"${extraAttr}>
     <div class="se-head"><span class="se-n">Slide ${i + 1}</span><div class="se-ctrls"><button class="se-mini se-regen" data-se="regen" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ${i + 1}">↻</button>${seCtrls(i, total)}</div></div>
     <input class="se-f" data-k="title" placeholder="Título do slide" value="${esc(s.title || "")}" />
     <textarea class="se-f" data-k="body" rows="2" placeholder="Texto do slide">${esc(s.body || "")}</textarea>
-    <label class="se-layout">Layout do slide <select class="se-f" data-k="layout">${layoutOpts}</select>${richHint}</label>
+    <div class="se-layout"><span class="se-layout-lab">Layout do slide</span>
+      <input type="hidden" data-k="layout" value="${esc(cur)}" />
+      <details class="ed-menu lay-menu"><summary class="lay-sum"><span class="lay-thumb">${layoutThumb(cur)}</span><span class="lay-name">${esc(layoutName(cur))}</span><span class="lay-caret" aria-hidden="true"></span></summary><div class="ed-pop lay-pop">${layoutOpts}</div></details><span class="se-lay-hint">${richHint}</span></div>
   </div>`;
 }
 // Campo de hashtags compartilhado pelos editores estruturados. Pré-preenche com as tags
@@ -3932,6 +4171,27 @@ function bindStructuredEditor() {
   if (!ed) return;
   ed.addEventListener("input", syncJsonMirror);
   ed.addEventListener("click", (e) => {
+    // Seletor de layout com miniatura: grava no input escondido (data-k=layout), atualiza o
+    // resumo e o realce, e sincroniza o JSON — reaproveita o input event que já dispara syncJsonMirror.
+    const layOpt = e.target.closest(".lay-opt");
+    if (layOpt) {
+      e.preventDefault();
+      const item = layOpt.closest(".se-item"); const menu = layOpt.closest(".lay-menu");
+      const hidden = item && item.querySelector('input[data-k="layout"]');
+      const v = layOpt.dataset.lay || "";
+      if (hidden) hidden.value = v;
+      // Atualiza o aviso "precisa de números/itens" conforme o layout escolhido vs. os dados do slide.
+      const hintBox = item && item.querySelector(".se-lay-hint");
+      if (hintBox) { let ex = {}; try { ex = item.dataset.extra ? JSON.parse(item.dataset.extra) : {}; } catch (e) { ex = {}; } hintBox.innerHTML = layoutDataHint(v, ex); }
+      if (menu) {
+        const sum = menu.querySelector(".lay-sum");
+        if (sum) { const th = sum.querySelector(".lay-thumb"); if (th) th.innerHTML = layoutThumb(v); const nm = sum.querySelector(".lay-name"); if (nm) nm.textContent = layoutName(v); }
+        menu.querySelectorAll(".lay-opt").forEach((b) => b.classList.toggle("on", b === layOpt));
+        menu.removeAttribute("open");
+      }
+      syncJsonMirror(); // sincroniza o JSON espelho direto (mais robusto que disparar um evento sintético)
+      return;
+    }
     const add = e.target.closest("[data-se-add]");
     const ctl = e.target.closest("[data-se]");
     if (add) {
@@ -3977,8 +4237,8 @@ async function regenSlideInCreation(ed, item, ctl) {
   ctl.disabled = true; // trava JÁ na abertura do modal (senão dá pra clicar de novo enquanto o modal está aberto)
   const r = await uiModal({
     title: "Regerar slide " + (index + 1),
-    message: "A IA refaz só este slide, mantendo os outros. Deixe em branco para uma versão nova livre.",
-    fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: número maior · trocar o exemplo · mais direto ao ponto" }],
+    message: "A IA refaz só este slide, mantendo os outros iguais. Diga o que mudar — ex.: “deixar o fundo claro”, “encurtar o título”, “trocar o número”, “mais direto ao ponto”, “trocar o ícone”. Deixe em branco para uma versão nova livre.",
+    fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: fundo claro · título mais curto · número maior" }],
     confirmText: "Regerar slide",
   });
   if (r === null) { ctl.disabled = false; return; } // cancelou: destrava
@@ -4061,6 +4321,7 @@ async function saveGenerated() {
   if (ct.format === "json") { try { parsed = JSON.parse(editVal); } catch (e) { toast("JSON inválido no editor: " + e.message, "error"); return; } }
   const payload = Object.assign({}, LAST_GEN.req, { task_name: task, title, task_date: date, parsed, raw });
   const btn = $("#g-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando…';
+  showBusy("Salvando o conteúdo…");
   let saved = false;
   try {
     const r = await API.save(payload);
@@ -4072,10 +4333,12 @@ async function saveGenerated() {
     // de clicar "Gerar arte final" depois. Se o render falhar, salva mesmo assim (dá pra gerar
     // na peça). Tipos de texto (LinkedIn/Threads/vídeo) não entram aqui.
     if (autoRenders(ct.kind)) {
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando a arte…';
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando a arte…'; showBusy("Gerando a arte…");
       try {
         const tpl = (LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
-        await API.renderMedia(r.folder, ct.kind, tpl);
+        const lg = (LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
+        const wmk = (LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";
+        await API.renderMedia(r.folder, ct.kind, tpl, lg, wmk);
         toast("Peça salva e arte gerada", "success");
       } catch (e) {
         toast('Peça salva. A arte não renderizou agora — gere em "Gerar arte final" na peça.', "warn");
@@ -4086,7 +4349,9 @@ async function saveGenerated() {
     // Fluxo enxuto: envia AUTOMÁTICO para revisão ao salvar (gera a prévia + promove
     // rascunho -> em revisão), pra a peça já nascer pronta pra Aprovar — elimina o clique
     // manual "Enviar para revisão". Se falhar, a peça fica em rascunho e o botão manual segue.
+    showBusy("Enviando para revisão…");
     try { await API.preview(r.folder); } catch (e) { /* melhor esforço — não bloqueia o salvar */ }
+    hideBusy();
     // #1 — trava o botão após sucesso (evita salvar/duplicar de novo) e mostra "✓ Salvo".
     btn.disabled = true; btn.textContent = "✓ Salvo";
     showSaveBanner(r.folder);
@@ -4094,7 +4359,7 @@ async function saveGenerated() {
     if (e.status === 422 && e.data && e.data.governance) { $("#g-gov").innerHTML = govHtml(e.data.governance); toast("Bloqueado por regra de marca — corrija o conteúdo.", "error"); }
     else if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); }
     else toast(e.message, "error");
-  } finally { if (!saved) { btn.disabled = false; btn.textContent = "Salvar na campanha"; } }
+  } finally { hideBusy(); if (!saved) { btn.disabled = false; btn.textContent = "Salvar na campanha"; } }
 }
 
 /* =====================================================================

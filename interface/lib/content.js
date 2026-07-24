@@ -190,6 +190,8 @@ function getTask(folder) {
       const rp = readJsonSafe(path.join(loc.path, "render.json"));
       return (rp && typeof rp.template === "string") ? rp.template : null;
     })(),
+    logo: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.logo === "string") ? rp.logo : null; })(),
+    watermark: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.watermark === "string") ? rp.watermark : null; })(),
     pillar: (status && typeof status.pillar === "string") ? status.pillar : null,
   };
 }
@@ -361,6 +363,22 @@ function setTemplate(folder, template) {
   fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
   return true;
 }
+// Grava a variante de LOGO e o estilo de MARCA D'ÁGUA por peça no mesmo render.json (MERGE —
+// não apaga o template). "" ou inválido = não mexe naquele campo (mantém o que estava).
+const VALID_LOGOS = ["light", "dark", "symbol"];
+const VALID_WATERMARKS = ["word", "symbol", "outline", "none", "canto", "padrao"];
+function setRenderPref(folder, patch) {
+  const loc = findTask(folder);
+  if (!loc || !patch) return false;
+  const p = path.join(loc.path, "render.json");
+  const cur = readJsonSafe(p) || {};
+  if (patch.logo === "auto") delete cur.logo; // "auto" = voltar ao padrão do estilo
+  else if (VALID_LOGOS.includes(String(patch.logo))) cur.logo = String(patch.logo);
+  if (patch.watermark === "auto") delete cur.watermark;
+  else if (VALID_WATERMARKS.includes(String(patch.watermark))) cur.watermark = String(patch.watermark);
+  fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
+  return true;
+}
 
 // Grava o pilar de conteudo (eixo tematico) no status.json. Validado contra a
 // taxonomia fechada CONTENT_PILLARS; pilar invalido/ausente e ignorado.
@@ -529,5 +547,5 @@ function discardTask(folder) {
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setPillar, setMediaMeta, setPublished, setImported, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, setImported, markViewed, setTags, generatePreview, promote, discardTask,
 };

@@ -173,8 +173,12 @@ router.post("/:folder/render", async (req, res) => {
   const kind = String((req.query.kind || req.body && req.body.kind || t.kind || "").trim());
   const reqTpl = String((req.query.template || (req.body && req.body.template) || "").trim());
   const template = render.TEMPLATE_IDS.includes(reqTpl) ? reqTpl : undefined;
+  const reqLogo = String((req.query.logo || (req.body && req.body.logo) || "").trim());
+  const logo = (render.LOGO_IDS.includes(reqLogo) || reqLogo === "auto") ? reqLogo : undefined;
+  const reqWm = String((req.query.watermark || (req.body && req.body.watermark) || "").trim());
+  const watermark = (render.WATERMARK_IDS.includes(reqWm) || reqWm === "auto") ? reqWm : undefined;
   try {
-    const r = await render.render(req.params.folder, kind, { template });
+    const r = await render.render(req.params.folder, kind, { template, logo, watermark });
     const task = content.getTask(req.params.folder);
     const payload = Object.assign({ kind, task }, r);
     // Sem isto, uma falha de render (r.ok=false) chegava ao front como "HTTP 400" cru

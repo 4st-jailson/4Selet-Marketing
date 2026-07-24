@@ -13,7 +13,8 @@ const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 - Emojis: no maximo 1 funcional em captions/threads (-> ▸ • permitidos); proibido em headline/body de ad. Banidos: fogo, raio, foguete, dinheiro, etc.
 - CTAs aprovados (use estes ou variacoes): Solicitar convite, Ver as condicoes, Conhecer a plataforma, Migrar minha operacao, Calcular minha economia, Falar com o time, Ver como funciona. Sem urgencia fake.
 - Campanha ativa Taxa Zero: 0% por 3 meses ou ate R$ 300 mil, R$ 1,99/transacao, PIX D+10, cartao D+30. 95% de aprovacao no cartao. Acesso por convite.
-- NUNCA use a frase-tag "Para quem sabe que e Selet." como rodape, fecho ou assinatura automatica de peca (headline, body de slide, legenda ou cena de video). NAO assine as pecas com ela. So use uma frase-tag da marca se o brief pedir explicitamente.`;
+- NUNCA use a frase-tag "Para quem sabe que e Selet." como rodape, fecho ou assinatura automatica de peca (headline, body de slide, legenda ou cena de video). NAO assine as pecas com ela. So use uma frase-tag da marca se o brief pedir explicitamente.
+- Dados numericos sobre a 4Selet (taxa, prazo, % de aprovacao, valores) vem EXCLUSIVAMENTE dos knowledge files — NUNCA de pesquisa de mercado. Pesquisa externa jamais sobrescreve um numero oficial da marca nem introduz nome/dado de concorrente na peca.`;
 
 const SCHEMAS = {
   instagram_caption: `{
@@ -128,6 +129,7 @@ function generationPrompt(req) {
   if (req.research && Array.isArray(req.research.findings) && req.research.findings.length) {
     lines.push("INTELIGENCIA DE MERCADO (pesquisa AO VIVO via Tavily — use como apoio factual e de atualidade; NAO copie literalmente: sintetize, valide contra os knowledge files e mantenha a voz/regras da marca 4Selet):");
     req.research.findings.slice(0, 12).forEach((f) => lines.push("- " + f));
+    lines.push("PRIORIDADE ABSOLUTA: os knowledge files e as REGRAS DURAS vencem SEMPRE. Se a pesquisa contradisser um numero oficial da marca (taxa, prazo, aprovacao) ou citar/insinuar um concorrente, IGNORE esse ponto — nunca reproduza numero de concorrente nem contradiga a Taxa Zero oficial. A pesquisa serve so para atualidade/angulo, jamais como fonte de dados sobre a 4Selet.");
     lines.push("");
   }
   lines.push("FORMATO DE SAIDA — responda APENAS com um objeto JSON valido, sem texto fora do JSON, neste schema:");
@@ -186,13 +188,23 @@ function singleSlidePrompt(req) {
   lines.push("eyebrow: " + (car.eyebrow || ""));
   slides.forEach((s, i) => { lines.push((i === idx ? ">> " : "   ") + "slide " + (i + 1) + ": " + (s.title || "") + (s.body ? " — " + String(s.body).slice(0, 120) : "")); });
   lines.push("");
-  lines.push("SLIDE " + (idx + 1) + " ATUAL (sera trocado): " + JSON.stringify(cur));
+  const hasInstruction = !!(req.instruction && String(req.instruction).trim());
+  lines.push("SLIDE " + (idx + 1) + " ATUAL (esta e a BASE — preserve): " + JSON.stringify(cur));
   lines.push("");
-  if (req.instruction) lines.push("ORIENTACAO DO USUARIO para este slide: " + req.instruction);
-  else lines.push("Sem orientacao especifica: gere uma NOVA versao melhor deste slide, no MESMO papel (capa/desenvolvimento/CTA) e coerente com o resto.");
+  if (hasInstruction) {
+    lines.push("ORIENTACAO DO USUARIO para este slide: " + req.instruction);
+    lines.push("");
+    lines.push("REGRA DE OURO (ajuste CONSERVADOR — nao refaca a arte): devolva o MESMO objeto do slide, COPIANDO VERBATIM todos os campos atuais (title, body, layout, items, stats, flow, theme, watermark, titleOffsetY, titleOffsetX, titleScale, orient, tone, note, image) e alterando APENAS o que a orientacao pede. NAO reescreva titulo/corpo/layout se o pedido nao for sobre eles.");
+    lines.push("MAPEAMENTO de pedidos comuns para o CAMPO certo (mude so o campo, nao o texto):");
+    lines.push('- "fundo claro/branco", "tema claro" -> "theme":"light" (fundo Cloud da marca; a 4Selet NAO usa branco puro). "fundo escuro" -> "theme":"dark".');
+    lines.push('- "subir/descer/deslocar o titulo", "titulo maior/menor" -> "titleOffsetY"/"titleOffsetX"/"titleScale".');
+    lines.push('- "trocar o icone X" -> o "icon" do no em "flow". "mudar a marca d\'agua" -> "watermark".');
+  } else {
+    lines.push("Sem orientacao especifica: gere uma NOVA versao melhor deste slide, no MESMO papel (capa/desenvolvimento/CTA) e coerente com o resto.");
+  }
   lines.push("");
-  lines.push("Cumpra TODAS as regras de marca. Responda APENAS com o objeto JSON do slide (sem texto fora), no mesmo formato de um item de 'slides' do carrossel:");
-  lines.push('{ "title": "titulo curto (use ==palavra== p/ realce azul)", "body": "texto de apoio (opcional)", "layout": "cover|stat_grid|list|text|flow|cta (opcional)", "items": ["item de lista"], "stats": [{"value":"95%","label":"rotulo"}], "flow": [{"label":"ROTULO","icon":"cart|bank|person|shield|alert|lock|wallet|check|money|clock"}], "theme": "dark|light (opcional)" }');
+  lines.push("Cumpra TODAS as regras de marca. Responda APENAS com o objeto JSON do slide (sem texto fora), PRESERVANDO os campos que ja existiam, no formato de um item de 'slides':");
+  lines.push('{ "title": "titulo (use ==palavra== p/ realce azul)", "body": "texto de apoio", "layout": "cover|stat_grid|list|text|flow|cta", "items": ["item"], "stats": [{"value":"95%","label":"rotulo"}], "flow": [{"label":"ROTULO","icon":"cart|bank|person|shield|alert|lock|wallet|check|money|clock"}], "theme": "dark|light", "watermark": "word|symbol|outline|none (ou {text,style})", "orient": "row|col", "tone": "(preserve)", "note": "(preserve)", "titleOffsetX": 0, "titleOffsetY": 0, "titleScale": 1, "image": "(preserve se existir)" }');
   return lines.join("\n");
 }
 
