@@ -73,6 +73,9 @@ function fileUrl(p) { let s = path.resolve(p).replace(/\\/g, "/"); if (s[0] !== 
 const LOGO_LIGHT = fileUrl(path.join(ASSETS, "logo-4selet-light.png"));
 const LOGO_DARK = fileUrl(path.join(ASSETS, "logo-4selet.png"));
 const SIMBOLO = fileUrl(path.join(ASSETS, "simbolo.svg"));
+// SELO da marca: o "4" branco dentro do quadrado azul arredondado (com borda), SEM o wordmark SELET.
+// É a marca que aparece na arte por padrao (preferencia do Hugo). O simbolo.svg (traço) fica só p/ marca d'agua.
+const SIMBOLO_SELO = fileUrl(path.join(ASSETS, "simbolo-selo.svg"));
 
 // Resolve o JS do CLI do Remotion (sem depender do shim .cmd do npx).
 let _remotionCli = null;
@@ -470,10 +473,11 @@ function pickWatermark(loc, requested) {
 // Resolve a src do logo pela variante escolhida na peça; "" mantém o padrão do template (fallback).
 function logoSrc(variant, fallback) {
   const v = String(variant || "").toLowerCase();
-  if (v === "light") return LOGO_LIGHT;
-  if (v === "dark") return LOGO_DARK;
-  if (v === "symbol") return SIMBOLO;
-  return fallback || LOGO_LIGHT;
+  if (v === "light") return LOGO_LIGHT;   // wordmark completo (fundo escuro)
+  if (v === "dark") return LOGO_DARK;     // wordmark completo (fundo claro)
+  if (v === "symbol") return SIMBOLO_SELO; // só o selo "4"
+  // PADRAO da arte = só o selo "4" (sem o wordmark SELET). O selo funciona em qualquer fundo.
+  return SIMBOLO_SELO;
 }
 
 // Destaca numeros/percentuais no headline (ex.: "0%", "R$ 1,99", "D+10") e permite

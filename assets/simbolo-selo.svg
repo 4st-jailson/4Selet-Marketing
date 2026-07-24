@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Símbolo 4Selet (SELO oficial) — o "4" branco vazado dentro do quadrado azul arredondado da marca.
+     Mesma geometria do "4" do logotipo (logo-4selet), com a borda/quadrado ao redor. SEM o wordmark SELET. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <rect width="1080" height="1080" rx="232" ry="232" fill="#5499B5"/>
+  <g fill="none" stroke="#ffffff" stroke-width="124" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M648 196 V884"/>
+    <path d="M648 196 L246 664 H854"/>
+  </g>
+</svg>

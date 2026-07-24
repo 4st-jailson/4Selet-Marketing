@@ -1467,7 +1467,11 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .se-layout-lab { color: var(--text-dim); }
 .se-rich { font-family: var(--mono); font-size: 12px; color: var(--brand-sky); opacity: .9; }
 .se-rich.se-warn { font-family: inherit; color: var(--warn); opacity: 1; line-height: 1.35; }
-.se-lay-hint { display: inline-flex; flex: 1 1 100%; }
+.se-lay-hint { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px; flex: 1 1 100%; }
+.se-lay-fix { padding: 2px 9px; font: inherit; font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn); border-radius: 6px; cursor: pointer; transition: background var(--tr), color var(--tr); }
+.se-lay-fix:hover { background: var(--warn); color: var(--surface); }
+.flash-hl { animation: flashHl 1.8s ease; }
+@keyframes flashHl { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } 18%, 70% { box-shadow: 0 0 0 3px var(--ring); } }
 
 /* Seletor de layout do slide com MINIATURA (substitui o <select> nativo — reaproveita .ed-menu/.ed-pop) */
 .lay-menu { position: relative; display: inline-flex; }

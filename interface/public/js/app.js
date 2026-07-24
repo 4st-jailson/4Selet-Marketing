@@ -1568,7 +1568,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +   '<details class="ed-menu" id="he-logo-menu"><summary class="btn btn-sm">+ Logo</summary><div class="ed-pop">'
     +     '<button data-src="/brand-assets/logo-4selet-light.png" data-w="0.32">Logo claro (fundo escuro)</button>'
     +     '<button data-src="/brand-assets/logo-4selet.png" data-w="0.32">Logo escuro (fundo claro)</button>'
-    +     '<button data-src="/brand-assets/simbolo.svg" data-w="0.14">Só o símbolo "4"</button>'
+    +     '<button data-src="/brand-assets/simbolo-selo.svg" data-w="0.14">Só o símbolo "4" (selo)</button>'
     +   "</div></details>"
     +   '<details class="ed-menu" id="he-mark-menu"><summary class="btn btn-sm">+ Marca d’água</summary><div class="ed-pop">'
     +     '<button data-mark="simbolo">Símbolo "4" (grande, ao fundo)</button>'
@@ -4016,11 +4016,44 @@ function layoutDataHint(layout, s) {
   s = s || {};
   const nStats = (Array.isArray(s.stats) ? s.stats : []).length;
   const nItems = (Array.isArray(s.items) ? s.items : []).length;
-  if (layout === "stat_grid" && !nStats) return '<span class="se-rich se-warn">Sem números neste slide — vai aparecer como texto. Adicione números em JSON (avançado).</span>';
-  if (layout === "list" && !nItems) return '<span class="se-rich se-warn">Sem itens neste slide — vai aparecer como texto. Adicione itens em JSON (avançado).</span>';
+  if (layout === "stat_grid" && !nStats) return '<span class="se-rich se-warn">Sem números neste slide — vai aparecer como texto. <button type="button" class="se-lay-fix" data-lay-fix="stats">Inserir números</button></span>';
+  if (layout === "list" && !nItems) return '<span class="se-rich se-warn">Sem itens neste slide — vai aparecer como texto. <button type="button" class="se-lay-fix" data-lay-fix="items">Inserir itens</button></span>';
   if (nStats) return '<span class="se-rich">grade: ' + nStats + ' números (edite no JSON)</span>';
   if (nItems) return '<span class="se-rich">lista: ' + nItems + ' itens (edite no JSON)</span>';
   return "";
+}
+// "Inserir números/itens": o layout precisa de um dado que o slide não tem — insere um exemplo, sincroniza o
+// JSON, atualiza o aviso e LEVA o usuário ao editor avançado com o campo destacado (o que o Hugo pediu).
+async function insertSlideData(item, kind) {
+  if (!item) return;
+  const isStats = kind === "stats";
+  const ok = await uiModal({
+    title: isStats ? "Inserir números" : "Inserir itens",
+    message: isStats
+      ? "O layout “Número em destaque” mostra dados fortes em cartões grandes — ex.: 95% de aprovação, PIX em D+10. Vou adicionar 2 exemplos pra você trocar pelos números reais e abrir o editor avançado já destacando onde editar."
+      : "O layout “Lista de pontos” mostra tópicos, um embaixo do outro. Vou adicionar 2 itens de exemplo pra você editar e abrir o editor avançado já destacando onde editar.",
+    confirmText: isStats ? "Inserir exemplo de números" : "Inserir exemplo de itens",
+  });
+  if (!ok) return;
+  let ex = {}; try { ex = item.dataset.extra ? JSON.parse(item.dataset.extra) : {}; } catch (e) { ex = {}; }
+  if (isStats && !(Array.isArray(ex.stats) && ex.stats.length)) ex.stats = [{ value: "95%", label: "aprovação no cartão" }, { value: "D+10", label: "PIX na conta" }];
+  if (!isStats && !(Array.isArray(ex.items) && ex.items.length)) ex.items = ["Primeiro ponto", "Segundo ponto"];
+  item.dataset.extra = JSON.stringify(ex);
+  syncJsonMirror(); // reflete no #g-edit
+  const hintBox = item.querySelector(".se-lay-hint");
+  const layout = (item.querySelector('input[data-k="layout"]') || {}).value || "";
+  if (hintBox) hintBox.innerHTML = layoutDataHint(layout, ex);
+  highlightJsonField(isStats ? "stats" : "items");
+  toast(isStats ? "Números de exemplo inseridos — edite no JSON destacado" : "Itens de exemplo inseridos — edite no JSON destacado", "success");
+}
+// Abre o "JSON (avançado)", rola até ele e SELECIONA o trecho do campo (stats/items) p/ destacar onde editar.
+function highlightJsonField(field) {
+  const det = document.querySelector("details.json-adv"); if (det) det.open = true;
+  const ta = $("#g-edit"); if (!ta) return;
+  ta.scrollIntoView({ behavior: "smooth", block: "center" });
+  ta.classList.add("flash-hl"); setTimeout(() => ta.classList.remove("flash-hl"), 1800);
+  const v = ta.value; const idx = v.indexOf('"' + field + '"');
+  if (idx >= 0) { const end = v.indexOf("]", idx); setTimeout(() => { try { ta.focus(); ta.setSelectionRange(idx, end > idx ? end + 1 : idx); } catch (e) {} }, 350); }
 }
 // Miniatura SVG (40×50, retrato) que representa cada layout — desenhada na paleta da marca.
 function layoutThumb(v) {
@@ -4192,6 +4225,9 @@ function bindStructuredEditor() {
       syncJsonMirror(); // sincroniza o JSON espelho direto (mais robusto que disparar um evento sintético)
       return;
     }
+    // "Inserir números/itens": o layout precisa de um dado que o slide não tem — insere um exemplo e leva ao campo.
+    const layFix = e.target.closest(".se-lay-fix");
+    if (layFix) { e.preventDefault(); insertSlideData(layFix.closest(".se-item"), layFix.dataset.layFix); return; }
     const add = e.target.closest("[data-se-add]");
     const ctl = e.target.closest("[data-se]");
     if (add) {
