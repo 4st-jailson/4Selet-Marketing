@@ -97,6 +97,7 @@ app.use("/api/collections", require("./routes/collections"));
 app.use("/api/content", require("./routes/content"));
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
+app.use("/api/pexels", require("./routes/pexels"));
 app.use("/api/publish", require("./routes/publish"));
 
 // Disparador de agendamentos: publica as peças agendadas no horário (passando pelo gate).

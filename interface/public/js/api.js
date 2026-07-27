@@ -33,6 +33,11 @@ const API = (() => {
     // Tavily (pesquisa de mercado)
     saveTavilyKey: (key) => req("POST", "/api/settings/tavily-key", { key }),
     testTavily: () => req("POST", "/api/settings/tavily-test"),
+    // Pexels (banco de imagens)
+    savePexelsKey: (key) => req("POST", "/api/settings/pexels-key", { key }),
+    testPexels: () => req("POST", "/api/settings/pexels-test"),
+    pexelsSearch: (payload) => req("POST", "/api/pexels/search", payload),
+    pexelsPick: (payload) => req("POST", "/api/pexels/pick", payload),
     // credenciais de integração inseridas pelo painel (admin) — grava em data/, nunca volta o valor
     saveCredential: (name, value) => req("POST", "/api/settings/credential", { name, value }),
     // provedores de IA (multi-IA: Claude / ChatGPT / ...)

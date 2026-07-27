@@ -303,6 +303,53 @@ function uiModal(opts) {
 function uiConfirm(message, opts) {
   return uiModal(Object.assign({ title: "Confirmar", message: message, confirmText: "Confirmar" }, opts || {})).then((v) => !!v);
 }
+// Modal de busca de imagens (Pexels): digita o tema, vê miniaturas, escolhe UMA → o backend baixa só ela
+// pro /uploads/ e devolve a url servida. Resolve com a url (ou null se cancelar). Precisa da chave (Configurações).
+function pexelsSearchModal(opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    const ov = document.createElement("div"); ov.className = "modal-ov";
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:780px;width:94vw">
+      <h3>Buscar imagem (Pexels)</h3>
+      <p class="muted mt">Fotos de banco gratuitas. Só a que você escolher é baixada pra peça.</p>
+      <div class="flex mt" style="gap:8px"><input id="px-q" placeholder="ex.: produtor digital, escritório, dinheiro…" style="flex:1" value="${esc(opts.query || "")}" /><button class="btn btn-primary" id="px-go">Buscar</button></div>
+      <div id="px-grid" class="px-grid mt"><p class="muted">Digite um tema e clique em Buscar.</p></div>
+      <div class="modal-actions"><button class="btn btn-ghost" id="px-cancel">Fechar</button></div>
+    </div>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const q = ov.querySelector("#px-q"), grid = ov.querySelector("#px-grid");
+    const done = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(val || null); };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    document.addEventListener("keydown", onKey);
+    ov.querySelector("#px-cancel").onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    const search = async () => {
+      const query = (q.value || "").trim();
+      if (query.length < 2) { grid.innerHTML = '<p class="muted">Digite ao menos 2 letras.</p>'; return; }
+      grid.innerHTML = '<div class="px-loading"><span class="spinner"></span> buscando…</div>';
+      try {
+        const r = await API.pexelsSearch({ query: query, perPage: 24, orientation: opts.orientation });
+        if (!r || !r.ok) throw new Error((r && r.error === "no_key") ? "Configure a chave da Pexels em Configurações." : ((r && r.error) || "falha na busca"));
+        if (!r.photos.length) { grid.innerHTML = '<p class="muted">Nada encontrado. Tente outras palavras.</p>'; return; }
+        grid.innerHTML = r.photos.map((p) => `<button class="px-cell" data-full="${esc(p.full)}" data-name="${esc(query)}" title="Foto de ${esc(p.photographer || "Pexels")}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" loading="lazy" /></button>`).join("");
+        grid.querySelectorAll(".px-cell").forEach((cell) => { cell.onclick = async () => {
+          grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = true; }); cell.classList.add("picking");
+          try { const pick = await API.pexelsPick({ url: cell.dataset.full, name: cell.dataset.name }); if (!pick || !pick.ok || !pick.url) throw new Error((pick && pick.error) || "falha ao baixar"); done(pick.url); }
+          catch (e) { toast((e && e.data && e.data.error) || (e && e.message) || "falha ao baixar a imagem", "error"); cell.classList.remove("picking"); grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = false; }); }
+        }; });
+      } catch (e) {
+        const err = (e && e.data && e.data.error) || (e && e.message) || "erro";
+        const msg = err === "no_key" ? "Configure a chave da Pexels em Configurações." : err;
+        grid.innerHTML = '<p class="field-error" style="display:block">' + esc(msg) + "</p>";
+      }
+    };
+    ov.querySelector("#px-go").onclick = search;
+    q.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); search(); } };
+    q.focus();
+    if (opts.query) search();
+  });
+}
 /* ============================ router ============================ */
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "") || "dashboard";
@@ -1581,6 +1628,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +     '<button data-mark="outline">"SELET" contornado</button>'
     +   "</div></details>"
     +   '<button class="btn btn-sm" id="he-add-img">+ Imagem</button>'
+    +   '<button class="btn btn-sm" id="he-search-img" title="Buscar foto de banco (Pexels) e inserir">+ Buscar imagem</button>'
     +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm">+ Bloco</summary><div class="ed-pop">'
     +     '<button data-block="cta">CTA WhatsApp</button>'
     +     '<button data-block="footer">Rodapé @4selet</button>'
@@ -2028,6 +2076,8 @@ async function openHtmlEditor(folder, task, rel, opts) {
   $("#he-mark-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addMark(b.dataset.mark); $("#he-mark-menu").removeAttribute("open"); }; });
   $("#he-add-img").onclick = () => $("#he-file").click();
   $("#he-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => addImgNode(rd.result, { top: 120 }); rd.readAsDataURL(f); e.target.value = ""; };
+  // Buscar foto de banco (Pexels) → baixa SÓ a escolhida pro /uploads/ e insere como imagem editável.
+  $("#he-search-img").onclick = async () => { const url = await pexelsSearchModal({}); if (url) addImgNode(url, { top: 120 }); };
   // Pintar o FUNDO do slide (o .card é o piso — nada some atrás dele). Cor sólida no lugar do
   // gradiente/padrão. Snapshot só ao confirmar a cor (change), não a cada arraste do seletor.
   $("#he-bg").onclick = () => $("#he-bg-input").click();
@@ -4507,6 +4557,7 @@ async function viewSettings() {
   const integ = (integRes && integRes.integrations) || [];
   const ig = (igRes && igRes.instagram) || {};
   const tav = integ.find((x) => x.id === "tavily") || {};
+  const pex = integ.find((x) => x.id === "pexels") || {};
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
@@ -4592,10 +4643,19 @@ async function viewSettings() {
       <p class="hint mt">A chave você pega em tavily.com (painel da conta). Só administradores configuram.</p>
     </div>
     <div class="card mt" style="max-width:660px">
+      <h3>Banco de imagens (Pexels)</h3>
+      <p class="muted mt">Adicione a chave da Pexels para <strong>buscar fotos de banco</strong> e inserir nas artes (na edição). Só a foto que você escolher é baixada. A chave fica só no servidor e nunca vai para o navegador.</p>
+      <div class="kv mt"><div class="k">Status</div><div>${pex.configured ? '<span class="badge ok">Conectada</span> <span class="hint">— use “Buscar imagem” no editor de arte</span>' : '<span class="badge paused">Não configurada</span>'}</div></div>
+      <hr class="sep" />
+      <div class="field"><label>Chave Pexels</label><input id="pex-key" type="password" placeholder="${pex.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui"}" /></div>
+      <div class="flex"><button class="btn btn-primary" id="pex-save">Salvar chave</button><button class="btn" id="pex-test">Testar</button><span id="pex-out" class="muted"></span></div>
+      <p class="hint mt">A chave é grátis: crie em pexels.com/api. Só administradores configuram.</p>
+    </div>
+    <div class="card mt" style="max-width:660px">
       <div class="flex-between"><h3>Outras integrações</h3><button class="btn btn-sm" id="cred-add">Inserir credenciais</button></div>
       <p class="muted mt">Serviços que ainda se configuram no servidor. Se quiser <strong>conectar um deles pelo painel</strong>, clique em “Inserir credenciais”. Claude, ChatGPT, Instagram e Tavily têm cartões próprios acima, com o token/chave de cada um. Aqui aparece só o status, nunca os valores.</p>
       ${(() => {
-        const rest = integ.filter((it) => !["anthropic", "openai", "tavily", "instagram"].includes(it.id));
+        const rest = integ.filter((it) => !["anthropic", "openai", "tavily", "pexels", "instagram"].includes(it.id));
         if (!rest.length) return '<p class="muted mt">Nenhuma outra integração no momento.</p>';
         return '<ul class="integ-list mt">' + rest.map((it) => {
           const ok = !!it.configured;
@@ -4670,6 +4730,18 @@ async function viewSettings() {
   if ($("#tav-test")) $("#tav-test").onclick = async () => {
     const out = $("#tav-out"); out.textContent = "Testando…";
     try { const r = await API.testTavily(); out.textContent = "Funcionando (" + (r.results || 0) + " resultado(s))."; toast("Tavily respondeu.", "ok"); }
+    catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
+  };
+  if ($("#pex-save")) $("#pex-save").onclick = async () => {
+    const out = $("#pex-out"), key = ($("#pex-key").value || "").trim();
+    if (key.length < 16) { out.textContent = "Cole uma chave válida."; return; }
+    out.textContent = "Salvando…";
+    try { await API.savePexelsKey(key); toast("Chave Pexels salva.", "success"); viewSettings(); }
+    catch (e) { out.textContent = "Falhou: " + ((e && e.message) || "erro"); }
+  };
+  if ($("#pex-test")) $("#pex-test").onclick = async () => {
+    const out = $("#pex-out"); out.textContent = "Testando…";
+    try { const r = await API.testPexels(); out.textContent = "Funcionando (" + (r.results || 0) + " foto(s))."; toast("Pexels respondeu.", "success"); }
     catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
   };
   if ($("#cred-add")) $("#cred-add").onclick = openCredentialsModal;

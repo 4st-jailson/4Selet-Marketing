@@ -7,6 +7,7 @@ const router = express.Router();
 const ai = require("../lib/anthropic");
 const aihub = require("../lib/ai"); // multi-provedor (Claude / OpenAI / ...)
 const research = require("../lib/research");
+const pexels = require("../lib/pexels");
 const credentials = require("../lib/credentials");
 const { PATHS } = require("../lib/config");
 
@@ -55,6 +56,14 @@ router.get("/integrations", (req, res) => {
       detail: research.isConfigured()
         ? "Pronta — marque 'Pesquisar mercado com Tavily' ao gerar."
         : "Defina TAVILY_API_KEY e instale @tavily/core.",
+    },
+    {
+      id: "pexels", name: "Pexels (banco de imagens)", required: false,
+      purpose: "Buscar fotos de banco e inserir nas artes — só a foto escolhida é baixada.",
+      configured: pexels.isConfigured(),
+      detail: pexels.isConfigured()
+        ? "Pronta — use 'Buscar imagem' na criação/edição das artes."
+        : "Cole a chave da Pexels (crie grátis em pexels.com/api).",
     },
     {
       id: "redis", name: "Redis / BullMQ (fila)", required: false,
@@ -110,6 +119,15 @@ router.post("/tavily-key", (req, res) => {
 });
 router.post("/tavily-test", async (req, res) => {
   const r = await research.testKey();
+  res.status(r.ok ? 200 : 400).json(r);
+});
+// --- Pexels (banco de imagens): salvar a chave + testar ---
+router.post("/pexels-key", (req, res) => {
+  try { pexels.saveKey(req.body && req.body.key); res.json({ ok: true, configured: pexels.isConfigured() }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post("/pexels-test", async (req, res) => {
+  const r = await pexels.testKey();
   res.status(r.ok ? 200 : 400).json(r);
 });
 
