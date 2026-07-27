@@ -476,9 +476,9 @@ function logoSrc(variant, fallback) {
   const v = String(variant || "").toLowerCase();
   if (v === "light") return LOGO_LIGHT;   // wordmark completo (fundo escuro)
   if (v === "dark") return LOGO_DARK;     // wordmark completo (fundo claro)
-  if (v === "symbol") return SIMBOLO_SELO; // só o selo "4"
-  // PADRAO da arte = só o selo "4" (sem o wordmark SELET). O selo funciona em qualquer fundo.
-  return SIMBOLO_SELO;
+  if (v === "symbol") return SIMBOLO_SELO; // só o selo "4" (opção "Só o símbolo" na peça)
+  // PADRAO da arte = LOGO COMPLETO "4Selet" (wordmark). O selo "4" só quando a peça escolhe "symbol".
+  return fallback || LOGO_LIGHT;
 }
 
 // Destaca numeros/percentuais no headline (ex.: "0%", "R$ 1,99", "D+10") e permite

@@ -4040,11 +4040,12 @@ async function insertSlideData(item, kind) {
   if (!isStats && !(Array.isArray(ex.items) && ex.items.length)) ex.items = ["Primeiro ponto", "Segundo ponto"];
   item.dataset.extra = JSON.stringify(ex);
   syncJsonMirror(); // reflete no #g-edit
+  markArtStale(); // a mudança FOI aplicada — marca a prévia como desatualizada (some a impressão de "não fez nada")
   const hintBox = item.querySelector(".se-lay-hint");
   const layout = (item.querySelector('input[data-k="layout"]') || {}).value || "";
   if (hintBox) hintBox.innerHTML = layoutDataHint(layout, ex);
   highlightJsonField(isStats ? "stats" : "items");
-  toast(isStats ? "Números de exemplo inseridos — edite no JSON destacado" : "Itens de exemplo inseridos — edite no JSON destacado", "success");
+  toast(isStats ? "Números inseridos — edite os valores e clique em “Atualizar prévia da arte”" : "Itens inseridos — edite os valores e clique em “Atualizar prévia da arte”", "success");
 }
 // Abre o "JSON (avançado)", rola até ele e SELECIONA o trecho do campo (stats/items) p/ destacar onde editar.
 function highlightJsonField(field) {
@@ -4223,6 +4224,7 @@ function bindStructuredEditor() {
         menu.removeAttribute("open");
       }
       syncJsonMirror(); // sincroniza o JSON espelho direto (mais robusto que disparar um evento sintético)
+      markArtStale(); // trocar o layout muda a arte — marca a prévia como desatualizada
       return;
     }
     // "Inserir números/itens": o layout precisa de um dado que o slide não tem — insere um exemplo e leva ao campo.
