@@ -1568,7 +1568,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +   '<details class="ed-menu" id="he-logo-menu"><summary class="btn btn-sm">+ Logo</summary><div class="ed-pop">'
     +     '<button data-src="/brand-assets/logo-4selet-light.png" data-w="0.32">Logo claro (fundo escuro)</button>'
     +     '<button data-src="/brand-assets/logo-4selet.png" data-w="0.32">Logo escuro (fundo claro)</button>'
-    +     '<button data-src="/brand-assets/simbolo-selo.svg" data-w="0.14">Só o símbolo "4" (selo)</button>'
+    +     '<button data-src="/brand-assets/simbolo-selo.png" data-w="0.14">Só o símbolo "4" (selo)</button>'
     +   "</div></details>"
     +   '<details class="ed-menu" id="he-mark-menu"><summary class="btn btn-sm">+ Marca d’água</summary><div class="ed-pop">'
     +     '<button data-mark="simbolo">Símbolo "4" (grande, ao fundo)</button>'

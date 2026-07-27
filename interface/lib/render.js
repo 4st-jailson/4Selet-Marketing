@@ -73,9 +73,10 @@ function fileUrl(p) { let s = path.resolve(p).replace(/\\/g, "/"); if (s[0] !== 
 const LOGO_LIGHT = fileUrl(path.join(ASSETS, "logo-4selet-light.png"));
 const LOGO_DARK = fileUrl(path.join(ASSETS, "logo-4selet.png"));
 const SIMBOLO = fileUrl(path.join(ASSETS, "simbolo.svg"));
-// SELO da marca: o "4" branco dentro do quadrado azul arredondado (com borda), SEM o wordmark SELET.
-// É a marca que aparece na arte por padrao (preferencia do Hugo). O simbolo.svg (traço) fica só p/ marca d'agua.
-const SIMBOLO_SELO = fileUrl(path.join(ASSETS, "simbolo-selo.svg"));
+// SELO da marca: o "4" recortado (vazado) do quadrado azul arredondado — EXTRAÍDO do logotipo oficial
+// (assets/simbolo-selo.png, crop do símbolo de logo-4selet-light.png), SEM o wordmark SELET. É a marca que
+// aparece na arte por padrao (preferencia do Hugo). O simbolo.svg (traço) fica só p/ marca d'agua.
+const SIMBOLO_SELO = fileUrl(path.join(ASSETS, "simbolo-selo.png"));
 
 // Resolve o JS do CLI do Remotion (sem depender do shim .cmd do npx).
 let _remotionCli = null;
