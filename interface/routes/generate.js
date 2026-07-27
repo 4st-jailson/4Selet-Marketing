@@ -185,6 +185,7 @@ router.post("/preview", async (req, res, next) => {
       template: body.template,
       logo: body.logo,
       watermark: body.watermark,
+      only: body.only, // renderiza só o slide desse índice (progresso "slide N de M" no carrossel)
     });
     if (!out.ok) return res.status(422).json(out);
     res.json(out);

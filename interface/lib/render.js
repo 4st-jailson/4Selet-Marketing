@@ -1091,7 +1091,7 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark, only } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   const tplId = (template && TEMPLATES[template]) ? template : "editorial";
@@ -1101,13 +1101,21 @@ async function renderPreview({ content_type, parsed, template, logo, watermark }
   // com a MESMA montagem do render final (carouselSlidesHtml).
   if (ct.kind === "carousel") {
     const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId], { logo: logoV, watermark: wmV });
+    // "only" = renderiza SO o slide desse indice (o carrossel inteiro e montado p/ preservar o contexto
+    // de posicao — 1o=capa, ultimo=cta). O frontend chama slide-a-slide p/ mostrar "slide N de M".
+    if (only != null && built.length) {
+      const i = Math.max(0, Math.min(built.length - 1, Number(only) || 0));
+      const png = await htmlStringToPngDataUrl(built[i].html, 1080, 1350);
+      if (!png.ok) return { ok: false, error: png.error, template: tplId };
+      return { ok: true, slides: [{ n: built[i].n, dataUrl: png.dataUrl }], total: built.length, only: i, template: tplId, kind: ct.kind, width: 1080, height: 1350 };
+    }
     const slidesOut = [];
     for (const item of built) {
       const png = await htmlStringToPngDataUrl(item.html, 1080, 1350);
       if (!png.ok) return { ok: false, error: png.error, template: tplId };
       slidesOut.push({ n: item.n, dataUrl: png.dataUrl });
     }
-    return { ok: true, slides: slidesOut, template: tplId, kind: ct.kind, width: 1080, height: 1350 };
+    return { ok: true, slides: slidesOut, total: built.length, template: tplId, kind: ct.kind, width: 1080, height: 1350 };
   }
   const fields = previewFields(ct, parsed);
   if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };

@@ -59,6 +59,8 @@ function showBusy(msg) {
 // Contador de referência: dois fluxos podem pedir o overlay; só some quando o último terminar.
 function hideBusy() { _busyN = Math.max(0, _busyN - 1); if (_busyN === 0 && _busyEl) { _busyEl.classList.remove("on"); _busyEl.hidden = true; } }
 function resetBusy() { _busyN = 0; if (_busyEl) { _busyEl.classList.remove("on"); _busyEl.hidden = true; } } // defensivo ao trocar de tela
+// Atualiza a FRASE do overlay sem mexer no contador (ex.: progresso "slide 3 de 8" durante o render).
+function setBusyMsg(msg) { if (_busyEl) { const m = _busyEl.querySelector(".busy-msg"); if (m) m.textContent = msg || ""; } }
 // Marca a prévia da arte como DESATUALIZADA quando o texto muda (não mostrar imagem antiga como válida).
 function markArtStale() {
   const box = $("#g-art"); if (!box || !box.children.length || box.classList.contains("is-stale")) return;
@@ -1750,8 +1752,21 @@ async function openHtmlEditor(folder, task, rel, opts) {
     const sx = e0.clientX - cr0.left, sy = e0.clientY - cr0.top;
     const additive = e0.shiftKey;
     const base = additive ? new Set(selection) : new Set();
-    let box = null, active = false;
+    let box = null, active = false, raf = 0, pend = null;
     const THRESH = 4; // clique simples no vazio só desseleciona; passou disso = laço
+    // Parte CARA: percorre TODOS os [data-he] testando interseção. Rodava a cada mousemove (travava em
+    // slide carregado). Agora roda no máx. 1x por frame (rAF); a caixa do laço acompanha o mouse na hora.
+    const recalc = () => {
+      raf = 0; if (!pend) return;
+      const { x, y, rx2, ry2, cr } = pend;
+      const next = new Set(base);
+      card.querySelectorAll("[data-he]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const ex = r.left - cr.left, ey = r.top - cr.top;
+        if (ex < rx2 && ex + r.width > x && ey < ry2 && ey + r.height > y) next.add(el);
+      });
+      selection.clear(); next.forEach((el) => selection.add(el)); selMark();
+    };
     const mv = (ev) => {
       if (ev.buttons === 0) { up(); return; }
       const cr = card.getBoundingClientRect();
@@ -1761,18 +1776,14 @@ async function openHtmlEditor(folder, task, rel, opts) {
         active = true; box = doc.createElement("div"); box.className = "he-marquee"; card.appendChild(box);
       }
       const x = Math.min(sx, cx), y = Math.min(sy, cy), w = Math.abs(cx - sx), h = Math.abs(cy - sy);
-      box.style.left = x + "px"; box.style.top = y + "px"; box.style.width = w + "px"; box.style.height = h + "px";
-      const rx2 = x + w, ry2 = y + h;
-      const next = new Set(base);
-      card.querySelectorAll("[data-he]").forEach((el) => {
-        const r = el.getBoundingClientRect();
-        const ex = r.left - cr.left, ey = r.top - cr.top;
-        if (ex < rx2 && ex + r.width > x && ey < ry2 && ey + r.height > y) next.add(el);
-      });
-      selection.clear(); next.forEach((el) => selection.add(el)); selMark();
+      box.style.left = x + "px"; box.style.top = y + "px"; box.style.width = w + "px"; box.style.height = h + "px"; // visual imediato (barato)
+      pend = { x, y, rx2: x + w, ry2: y + h, cr };
+      if (!raf) raf = requestAnimationFrame(recalc);
     };
     const up = () => {
       doc.removeEventListener("mousemove", mv); doc.removeEventListener("mouseup", up); document.removeEventListener("mouseup", up);
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (active && pend) recalc(); // seleção final garantida, sem esperar o frame
       if (box && box.parentNode) box.parentNode.removeChild(box);
       if (!active) { if (!additive) select(null); return; } // clique simples no vazio → desseleciona
       current = selection.size ? [...selection][selection.size - 1] : null;
@@ -3614,7 +3625,11 @@ async function viewCreate(arg, query) {
     if (!c || pillarTouched) return;
     const pid = suggestPillarFromCamp(c);
     const sel = $("#g-pillar");
-    if (pid && sel && sel.value !== pid) { sel.value = pid; updPillarDesc(); }
+    if (pid && sel && sel.value !== pid) {
+      sel.value = pid; updPillarDesc();
+      const lbl = (sel.options[sel.selectedIndex] || {}).text || pid;
+      toast("Pilar sugerido pela campanha: " + lbl, "info"); // avisa que o sistema escolheu por você
+    }
   };
   if ($("#g-pillar")) {
     $("#g-pillar").addEventListener("change", () => { pillarTouched = true; updPillarDesc(); });
@@ -3852,7 +3867,23 @@ async function renderArtPreview(contentType, kind) {
   box.innerHTML = ""; box.classList.remove("is-stale"); btn.classList.remove("attn");
   showBusy(ct && ct.kind === "carousel" ? "Renderizando os slides…" : "Renderizando a prévia da arte…");
   try {
-    const out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark });
+    let out;
+    if (ct && ct.kind === "carousel") {
+      // Carrossel: renderiza slide-a-slide p/ mostrar progresso "slide N de M" (o render em 2x demora).
+      let total = (parsed && Array.isArray(parsed.slides) ? parsed.slides.length : 0) || 1;
+      const slides = []; let tpl2 = template;
+      for (let i = 0; i < total; i++) {
+        setBusyMsg("Renderizando slide " + (i + 1) + " de " + total + "…");
+        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, only: i });
+        if (!r || !r.slides || !r.slides[0]) throw new Error((r && r.error) || "falha ao renderizar a prévia");
+        slides.push(r.slides[0]);
+        if (r.template) tpl2 = r.template;
+        if (typeof r.total === "number" && r.total > 0) total = r.total; // o backend informa o total real de slides
+      }
+      out = { ok: true, slides, template: tpl2, kind: "carousel", width: 1080, height: 1350 };
+    } else {
+      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark });
+    }
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     if (out.slides && out.slides.length) {
       // Carrossel: mostra TODOS os slides na ordem, cada um com número e baixar.
