@@ -3614,12 +3614,16 @@ async function viewCreate(arg, query) {
   // Casa por palavra-chave do nome/ângulo/objetivo; o usuário pode sobrescrever a qualquer momento.
   const suggestPillarFromCamp = (c) => {
     if (!c) return "";
-    const hay = ((c.name || "") + " " + (c.angle || "") + " " + (c.objective || "")).toLowerCase();
+    // Considera nome + ângulo + objetivo + MENSAGENS-CHAVE (mais contexto p/ identificar o tema).
+    const km = Array.isArray(c.key_messages) ? c.key_messages.join(" ") : "";
+    const hay = ((c.name || "") + " " + (c.angle || "") + " " + (c.objective || "") + " " + km).toLowerCase();
+    // Casa a palavra-chave como PALAVRA INTEIRA (evita falso positivo: "prova" dentro de "aprovação").
+    const hasWord = (kw) => { try { return new RegExp("(^|[^\\p{L}0-9])" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^\\p{L}0-9]|$)", "u").test(hay); } catch (e) { return hay.indexOf(kw) !== -1; } };
     for (const p of (State.meta.content_pillars || [])) {
       const kw = String(p.short || p.label || "").toLowerCase().trim();
-      if (kw && hay.indexOf(kw) !== -1) return p.id;
+      if (kw && hasWord(kw)) return p.id;
     }
-    return /taxa\s*zero/.test(hay) ? "taxa_zero" : "";
+    return /(^|[^\p{L}0-9])taxa\s*zero([^\p{L}0-9]|$)/u.test(hay) ? "taxa_zero" : "";
   };
   const applyCampPillar = (c) => {
     if (!c || pillarTouched) return;
