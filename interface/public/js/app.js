@@ -332,7 +332,7 @@ function pexelsSearchModal(opts) {
         const r = await API.pexelsSearch({ query: query, perPage: 24, orientation: opts.orientation });
         if (!r || !r.ok) throw new Error((r && r.error === "no_key") ? "Configure a chave da Pexels em Configurações." : ((r && r.error) || "falha na busca"));
         if (!r.photos.length) { grid.innerHTML = '<p class="muted">Nada encontrado. Tente outras palavras.</p>'; return; }
-        grid.innerHTML = r.photos.map((p) => `<button class="px-cell" data-full="${esc(p.full)}" data-name="${esc(query)}" title="Foto de ${esc(p.photographer || "Pexels")}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" loading="lazy" /></button>`).join("");
+        grid.innerHTML = r.photos.map((p) => `<button class="px-cell" data-full="${esc(p.full)}" data-name="${esc(query)}" title="Foto de ${esc(p.photographer || "Pexels")}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" /></button>`).join("");
         grid.querySelectorAll(".px-cell").forEach((cell) => { cell.onclick = async () => {
           grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = true; }); cell.classList.add("picking");
           try { const pick = await API.pexelsPick({ url: cell.dataset.full, name: cell.dataset.name }); if (!pick || !pick.ok || !pick.url) throw new Error((pick && pick.error) || "falha ao baixar"); done(pick.url); }

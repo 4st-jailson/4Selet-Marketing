@@ -23,7 +23,7 @@ app.use((req, res, next) => {
   //  moderno; os dois juntos eram redundantes.)
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader("Content-Security-Policy",
-    "default-src 'self'; img-src 'self' data: blob:; " +
+    "default-src 'self'; img-src 'self' data: blob: https://*.pexels.com; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; " +
     "script-src 'self' 'unsafe-inline'; frame-src 'self' blob:; connect-src 'self'; " +
     "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
