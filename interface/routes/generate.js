@@ -218,6 +218,9 @@ router.post("/save", async (req, res, next) => {
     const ct = v.contentType;
     const parsed = body.parsed || extractJson(body.raw);
     if (!parsed && !body.raw) return res.status(400).json({ error: "nenhum conteudo para salvar" });
+    // Foto do acervo (estilo "Foto"/Pexels): PERSISTE no conteudo salvo p/ o RE-render respeitar
+    // (o generate injeta em parsed.image so p/ o render inicial; sem isto, "Gerar arte final" perdia a foto).
+    if (body.image && parsed) parsed.image = String(body.image);
 
     // Gate de governanca: bloqueia erros duros antes de gravar
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || body.raw, { type: body.content_type });

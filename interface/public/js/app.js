@@ -3480,7 +3480,7 @@ async function viewCreate(arg, query) {
           </div>
           <div class="field" id="g-photo-row" style="display:none">
             <label>Imagem da peça <span class="hint">(enviada por você; entra como fundo da arte “Foto”)</span></label>
-            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-photo-file" accept="image/*" hidden /> Enviar imagem</label><span class="hint" id="g-photo-hint"></span></div>
+            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-photo-file" accept="image/*" hidden /> Enviar imagem</label><button type="button" class="btn btn-sm btn-ghost" id="g-photo-search" title="Buscar foto de banco (Pexels)">Buscar na Pexels</button><span class="hint" id="g-photo-hint"></span></div>
             <div class="photo-gallery" id="g-photo-gallery"></div>
             <input type="hidden" id="g-image" value="" />
           </div>
@@ -3640,6 +3640,12 @@ async function viewCreate(arg, query) {
     } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
     e.target.value = "";
   });
+  // Buscar foto de banco (Pexels) para a arte "Foto": abre o modal, baixa SÓ a escolhida pro acervo e a seleciona.
+  if ($("#g-photo-search")) $("#g-photo-search").onclick = async () => {
+    const seed = (($("#g-brief") && $("#g-brief").value) || ($("#g-title") && $("#g-title").value) || "").trim().slice(0, 60);
+    const url = await pexelsSearchModal({ query: seed });
+    if (url) { $("#g-image").value = url; await loadPhotoGallery(url); const hint = $("#g-photo-hint"); if (hint) hint.textContent = "foto da Pexels adicionada"; toast("Foto da Pexels adicionada ao acervo", "success"); }
+  };
   loadPhotoGallery("");
   updPhotoRow();
   // ---- 4Selet na Mídia: upload do print + seletor de modelo do device ----
@@ -3908,6 +3914,8 @@ async function renderArtPreview(contentType, kind) {
     if (ct && ct.format === "json") { try { parsed = JSON.parse(ed.value); } catch (e) { /* mantém o último parsed válido */ } }
     else parsed = { body: ed.value };
   }
+  // Foto do acervo/Pexels (estilo "Foto"): garante a foto na PRÉVIA (o structToParsed pode não preservá-la).
+  if (parsed && typeof parsed === "object" && ($("#g-style") && $("#g-style").value) === "photo" && $("#g-image") && $("#g-image").value) parsed.image = $("#g-image").value;
   // Template: estilo escolhido no brief; se "Automático", a mesma variação por slug usada no salvamento.
   let template = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
   const logo = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
