@@ -47,16 +47,23 @@ function apiGet(urlStr, key) {
   });
 }
 
-// search(query, opts) -> { ok, photos:[{id, thumb, full, alt, photographer, photographer_url, width, height}], total }
+// Cores aceitas pela Pexels (filtro opcional da busca avancada).
+const PEXELS_COLORS = ["red", "orange", "yellow", "green", "turquoise", "blue", "violet", "pink", "brown", "black", "gray", "white"];
+// search(query, opts) -> { ok, photos:[...], total, page, perPage, hasMore }
+// opts: { perPage, page, orientation(landscape|portrait|square), color(nome|hex 6 dig), size(large|medium|small) }
 async function search(query, opts = {}) {
   const key = getKey();
   if (!key) return { ok: false, error: "no_key" };
   const q = String(query || "").trim().slice(0, 100);
   if (!q) return { ok: false, error: "busca vazia" };
-  const perPage = Math.max(1, Math.min(30, Number(opts.perPage) || 24));
+  // Ate 80 (limite da Pexels): o modal compacto pede 24; a pagina avancada pede mais.
+  const perPage = Math.max(1, Math.min(80, Number(opts.perPage) || 24));
   const page = Math.max(1, Number(opts.page) || 1);
   const orient = /^(landscape|portrait|square)$/.test(opts.orientation || "") ? "&orientation=" + opts.orientation : "";
-  const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(q) + "&per_page=" + perPage + "&page=" + page + orient + "&locale=pt-BR";
+  const colorRaw = String(opts.color || "").toLowerCase().replace(/^#/, "");
+  const color = (PEXELS_COLORS.includes(colorRaw) || /^[0-9a-f]{6}$/.test(colorRaw)) ? "&color=" + encodeURIComponent(colorRaw) : "";
+  const size = /^(large|medium|small)$/.test(opts.size || "") ? "&size=" + opts.size : "";
+  const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(q) + "&per_page=" + perPage + "&page=" + page + orient + color + size + "&locale=pt-BR";
   try {
     const j = await apiGet(url, key);
     const photos = (j.photos || []).map((p) => ({
@@ -68,7 +75,10 @@ async function search(query, opts = {}) {
       photographer_url: p.photographer_url || "",
       width: p.width, height: p.height,
     })).filter((p) => p.full);
-    return { ok: true, photos, total: j.total_results || photos.length, page };
+    const total = j.total_results || photos.length;
+    // hasMore: a Pexels manda next_page quando ha mais; confirmamos pela contagem tambem.
+    const hasMore = !!j.next_page || (page * perPage) < total;
+    return { ok: true, photos, total, page, perPage, hasMore };
   } catch (e) { return { ok: false, error: (e && e.message) || "falha na busca Pexels" }; }
 }
 

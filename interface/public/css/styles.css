@@ -1184,6 +1184,55 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .px-cell:disabled { cursor: default; }
 .px-loading { display: flex; align-items: center; gap: 8px; padding: 20px; color: var(--text-mut); }
 
+/* ---- Foto de fundo por-slide (editor de carrossel) ---- */
+.se-photo { display: flex; align-items: center; gap: 10px; margin-top: var(--s3); padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--r-sm); background: var(--surface-2); }
+.se-photo.has { border-style: solid; }
+.se-photo-thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: var(--r-xs); background-size: cover; background-position: center; background-color: var(--thumb-bg); border: 1px solid var(--border); }
+.se-photo-lab { flex: 1 1 auto; font-size: 13px; color: var(--text-2); }
+.se-photo-lab.muted { color: var(--text-mut); }
+.se-photo-acts { display: inline-flex; gap: 6px; }
+.se-photo .se-photo-x { color: var(--err); }
+
+/* ---- Página completa de busca de imagens (Pexels "Ver mais") ---- */
+.px-page { position: fixed; inset: 0; z-index: 1700; display: flex; flex-direction: column; background: var(--bg-grad); opacity: 0; transition: opacity var(--tr); }
+.px-page.open { opacity: 1; }
+.px-page-bar { flex: 0 0 auto; display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s6); border-bottom: 1px solid var(--border); background: var(--surface); }
+.px-page-title { margin: 0; font-size: 18px; }
+.px-page-cred { font-size: 12.5px; margin-left: auto; }
+.px-page-body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; width: 100%; max-width: 1120px; margin: 0 auto; padding: var(--s5) var(--s6); }
+.px-page-tools { flex: 0 0 auto; }
+.px-tool-row { display: flex; gap: 10px; }
+.px-tool-q { flex: 1 1 auto; }
+.px-facets { display: flex; flex-wrap: wrap; gap: var(--s5); margin-top: var(--s4); }
+.px-facet { display: flex; flex-direction: column; gap: 6px; }
+.px-facet-lab { font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-mut); }
+.px-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.px-seg button { padding: 7px 13px; font-size: 13px; font-family: inherit; color: var(--text-2); background: var(--surface-2); border: 0; border-left: 1px solid var(--border); cursor: pointer; transition: background var(--tr), color var(--tr); }
+.px-seg button:first-child { border-left: 0; }
+.px-seg button:hover { background: var(--surface-3); }
+.px-seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.px-colors { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.px-color { padding: 0; width: 28px; height: 28px; border: 2px solid transparent; border-radius: var(--r-pill); background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.px-color.on { border-color: var(--accent); }
+.px-swatch { width: 20px; height: 20px; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.px-swatch.none { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); position: relative; }
+.px-swatch.none::after { content: ""; position: absolute; inset: 3px; border-top: 2px solid var(--text-mut); transform: rotate(45deg); }
+.px-page-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: var(--s5); display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); grid-auto-rows: 168px; gap: 10px; align-content: start; }
+.px-page-hint { grid-column: 1 / -1; padding: 40px 0; text-align: center; }
+.px-page-grid .px-loading { grid-column: 1 / -1; justify-content: center; }
+.px-page-grid .field-error { grid-column: 1 / -1; }
+.px-cell-lg { position: relative; height: 100%; border-radius: var(--r-sm); }
+.px-cell-lg img { height: 100%; }
+.px-cell-cred { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 11px; line-height: 1.2; color: #fff; text-align: left; background: linear-gradient(180deg, transparent, rgba(0,0,0,.68)); opacity: 0; transition: opacity var(--tr); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.px-cell-lg:hover .px-cell-cred { opacity: 1; }
+.px-page-pager { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: var(--s5); padding-top: var(--s4); }
+.px-page-count { font-size: 13px; min-width: 200px; text-align: center; }
+@media (max-width: 640px) {
+  .px-page-cred { display: none; }
+  .px-facets { gap: var(--s4); }
+  .px-page-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); grid-auto-rows: 132px; }
+}
+
 /* ---- Anexo de imagem de referência no "Ajustar com IA" ---- */
 .refine-attach { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .refine-imgs { display: flex; gap: 10px; flex-wrap: wrap; }

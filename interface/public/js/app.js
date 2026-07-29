@@ -314,7 +314,7 @@ function pexelsSearchModal(opts) {
       <p class="muted mt">Fotos de banco gratuitas. Só a que você escolher é baixada pra peça.</p>
       <div class="flex mt" style="gap:8px"><input id="px-q" placeholder="ex.: produtor digital, escritório, dinheiro…" style="flex:1" value="${esc(opts.query || "")}" /><button class="btn btn-primary" id="px-go">Buscar</button></div>
       <div id="px-grid" class="px-grid mt"><p class="muted">Digite um tema e clique em Buscar.</p></div>
-      <div class="modal-actions"><button class="btn btn-ghost" id="px-cancel">Fechar</button></div>
+      <div class="modal-actions"><button class="btn btn-ghost" id="px-more" title="Abrir a busca completa, com filtros de orientação, cor e tamanho">Ver mais opções &#8599;</button><button class="btn btn-ghost" id="px-cancel">Fechar</button></div>
     </div>`;
     document.body.appendChild(ov); document.body.classList.add("no-scroll");
     requestAnimationFrame(() => ov.classList.add("open"));
@@ -324,6 +324,13 @@ function pexelsSearchModal(opts) {
     document.addEventListener("keydown", onKey);
     ov.querySelector("#px-cancel").onclick = () => done(null);
     ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    // "Ver mais opções": fecha este modal e abre a PÁGINA completa de busca (filtros + paginação).
+    // Resolve a promise deste modal COM a promise da página — assim quem chamou recebe a foto escolhida
+    // lá e a aplica no MESMO lugar (editor / slide / criação), ou seja, "volta pra onde estava".
+    ov.querySelector("#px-more").onclick = () => {
+      ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160);
+      resolve(pexelsSearchPage(Object.assign({}, opts, { query: q.value })));
+    };
     const search = async () => {
       const query = (q.value || "").trim();
       if (query.length < 2) { grid.innerHTML = '<p class="muted">Digite ao menos 2 letras.</p>'; return; }
@@ -348,6 +355,112 @@ function pexelsSearchModal(opts) {
     q.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); search(); } };
     q.focus();
     if (opts.query) search();
+  });
+}
+// Página completa de busca de imagens (Pexels) — o "Ver mais": filtros avançados (orientação, cor,
+// tamanho) + paginação + grade maior com crédito do autor. É um overlay em tela cheia (NÃO troca de
+// rota — preserva o que o usuário estava montando). Resolve com a url da foto baixada (baixa só a
+// escolhida, como o modal) ou null se ele voltar sem escolher.
+const PX_COLORS = [["", "Todas"], ["red", "Vermelho"], ["orange", "Laranja"], ["yellow", "Amarelo"], ["green", "Verde"], ["turquoise", "Turquesa"], ["blue", "Azul"], ["violet", "Violeta"], ["pink", "Rosa"], ["brown", "Marrom"], ["black", "Preto"], ["gray", "Cinza"], ["white", "Branco"]];
+const PX_HEX = { red: "#C0392B", orange: "#E67E22", yellow: "#F1C40F", green: "#27AE60", turquoise: "#1ABC9C", blue: "#006494", violet: "#8E44AD", pink: "#E84393", brown: "#8D6E63", black: "#111418", gray: "#95A5A6", white: "#ffffff" };
+function pexelsSearchPage(opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    const st = { query: (opts.query || "").trim(), orientation: opts.orientation || "", color: "", size: "", page: 1, total: 0, hasMore: false, busy: false };
+    const ov = document.createElement("div"); ov.className = "px-page";
+    ov.innerHTML = `
+      <div class="px-page-bar">
+        <button class="btn btn-ghost btn-sm" id="pxp-back" title="Voltar para onde você estava">&#8592; Voltar</button>
+        <h3 class="px-page-title">Buscar imagem</h3>
+        <span class="px-page-cred muted">Banco gratuito Pexels · só a foto escolhida é baixada para a peça</span>
+      </div>
+      <div class="px-page-body">
+        <div class="px-page-tools">
+          <div class="px-tool-row">
+            <input id="pxp-q" class="px-tool-q" placeholder="ex.: produtor digital, escritório moderno, aperto de mãos…" value="${esc(st.query)}" />
+            <button class="btn btn-primary" id="pxp-go">Buscar</button>
+          </div>
+          <div class="px-facets">
+            <div class="px-facet"><span class="px-facet-lab">Orientação</span><div class="px-seg" data-facet="orientation">
+              <button type="button" data-v="" class="on">Todas</button><button type="button" data-v="portrait">Retrato</button><button type="button" data-v="landscape">Paisagem</button><button type="button" data-v="square">Quadrada</button>
+            </div></div>
+            <div class="px-facet"><span class="px-facet-lab">Tamanho mínimo</span><div class="px-seg" data-facet="size">
+              <button type="button" data-v="" class="on">Qualquer</button><button type="button" data-v="large">Grande</button><button type="button" data-v="medium">Média</button><button type="button" data-v="small">Pequena</button>
+            </div></div>
+            <div class="px-facet px-facet-color"><span class="px-facet-lab">Cor predominante</span><div class="px-colors" data-facet="color">
+              ${PX_COLORS.map(([v, name]) => `<button type="button" data-v="${v}" class="px-color${v === "" ? " on" : ""}" title="${esc(name)}"><span class="px-swatch${v === "" ? " none" : ""}" style="${v ? "background:" + PX_HEX[v] : ""}"></span></button>`).join("")}
+            </div></div>
+          </div>
+        </div>
+        <div id="pxp-grid" class="px-page-grid"><p class="muted px-page-hint">Digite um tema e clique em Buscar para ver as fotos.</p></div>
+        <div class="px-page-pager" id="pxp-pager" hidden>
+          <button class="btn btn-ghost btn-sm" id="pxp-prev">&#8592; Anterior</button>
+          <span class="px-page-count muted" id="pxp-count"></span>
+          <button class="btn btn-ghost btn-sm" id="pxp-next">Próxima &#8594;</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const qy = (s) => ov.querySelector(s);
+    const grid = qy("#pxp-grid"), pager = qy("#pxp-pager"), qEl = qy("#pxp-q");
+    const close = (val) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 180); resolve(val || null); };
+    const onKey = (e) => { if (e.key === "Escape") close(null); };
+    document.addEventListener("keydown", onKey);
+    qy("#pxp-back").onclick = () => close(null);
+
+    async function run() {
+      st.query = (qEl.value || "").trim();
+      if (st.query.length < 2) { grid.innerHTML = '<p class="muted px-page-hint">Digite ao menos 2 letras.</p>'; pager.hidden = true; return; }
+      if (st.busy) return;
+      st.busy = true;
+      grid.innerHTML = '<div class="px-loading"><span class="spinner"></span> buscando…</div>';
+      try {
+        const r = await API.pexelsSearch({ query: st.query, perPage: 30, page: st.page, orientation: st.orientation, color: st.color, size: st.size });
+        if (!r || !r.ok) throw new Error((r && r.error === "no_key") ? "Configure a chave da Pexels em Configurações." : ((r && r.error) || "falha na busca"));
+        st.total = r.total || 0; st.hasMore = !!r.hasMore;
+        if (!r.photos.length) { grid.innerHTML = '<p class="muted px-page-hint">Nada encontrado. Ajuste as palavras ou os filtros.</p>'; pager.hidden = true; st.busy = false; return; }
+        grid.innerHTML = r.photos.map((p) => `<button class="px-cell px-cell-lg" data-full="${esc(p.full)}" data-name="${esc(st.query)}" title="Foto de ${esc(p.photographer || "Pexels")}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" /><span class="px-cell-cred">${esc(p.photographer || "Pexels")}</span></button>`).join("");
+        grid.querySelectorAll(".px-cell").forEach((cell) => { cell.onclick = () => pick(cell); });
+        pager.hidden = false;
+        qy("#pxp-count").textContent = st.total ? ("Página " + st.page + " · " + st.total.toLocaleString("pt-BR") + " resultados") : ("Página " + st.page);
+        qy("#pxp-prev").disabled = st.page <= 1;
+        qy("#pxp-next").disabled = !st.hasMore;
+        grid.scrollTop = 0;
+      } catch (e) {
+        const err = (e && e.data && e.data.error) || (e && e.message) || "erro";
+        const msg = err === "no_key" ? "Configure a chave da Pexels em Configurações." : err;
+        grid.innerHTML = '<p class="field-error" style="display:block">' + esc(msg) + "</p>"; pager.hidden = true;
+      }
+      st.busy = false;
+    }
+    async function pick(cell) {
+      if (st.busy) return;
+      st.busy = true;
+      grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = true; }); cell.classList.add("picking");
+      try {
+        const p = await API.pexelsPick({ url: cell.dataset.full, name: cell.dataset.name });
+        if (!p || !p.ok || !p.url) throw new Error((p && p.error) || "falha ao baixar");
+        close(p.url);
+      } catch (e) {
+        toast((e && e.data && e.data.error) || (e && e.message) || "falha ao baixar a imagem", "error");
+        cell.classList.remove("picking"); grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = false; }); st.busy = false;
+      }
+    }
+    // Filtros (segmentos + cores): trocam o estado, resetam a página e re-buscam se já há um termo.
+    ov.querySelectorAll("[data-facet]").forEach((seg) => {
+      seg.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-v]"); if (!b) return;
+        st[seg.dataset.facet] = b.dataset.v; st.page = 1;
+        seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+        if (st.query.length >= 2) run();
+      });
+    });
+    qy("#pxp-go").onclick = () => { st.page = 1; run(); };
+    qEl.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); st.page = 1; run(); } };
+    qy("#pxp-prev").onclick = () => { if (st.page > 1) { st.page--; run(); } };
+    qy("#pxp-next").onclick = () => { if (st.hasMore) { st.page++; run(); } };
+    qEl.focus();
+    if (st.query) run();
   });
 }
 /* ============================ router ============================ */
@@ -4168,6 +4281,35 @@ function layoutThumb(v) {
       return wrap(`<path d="M20 13 l1.9 4.6 l4.9 .4 l-3.7 3.2 l1.1 4.8 l-4.2-2.6 l-4.2 2.6 l1.1-4.8 l-3.7-3.2 l4.9-.4 z" fill="${SK}"/><rect x="10" y="35" width="20" height="2" rx="1" fill="${MI}"/><rect x="13" y="40" width="14" height="2" rx="1" fill="${MI}"/>`);
   }
 }
+// Linha "Foto de fundo" de um slide: mostra a miniatura + trocar/remover quando há foto,
+// ou o botão de buscar quando não há. A foto vive em slide.image (guardado no data-extra do
+// item e no JSON salvo) — o carrossel a desenha atrás do conteúdo, com scrim de leitura.
+function slidePhotoRow(img) {
+  img = String(img || "");
+  if (img) {
+    return `<div class="se-photo has" data-photo>
+      <span class="se-photo-thumb" style="background-image:url('${esc(img)}')"></span>
+      <span class="se-photo-lab">Foto de fundo anexada</span>
+      <span class="se-photo-acts"><button type="button" class="se-mini se-photo-btn" data-se-photo>Trocar</button><button type="button" class="se-mini se-photo-x" data-se-photo-x title="Remover a foto de fundo deste slide">Remover</button></span>
+    </div>`;
+  }
+  return `<div class="se-photo" data-photo>
+    <span class="se-photo-lab muted">Foto de fundo do slide <span class="hint">(opcional)</span></span>
+    <button type="button" class="se-mini se-photo-btn" data-se-photo>+ Buscar foto</button>
+  </div>`;
+}
+// Aplica (ou remove, url vazia) a foto de fundo de um slide na edição: atualiza o data-extra do
+// item, re-renderiza a linha de foto e sincroniza JSON + prévia (marca desatualizada).
+function setSlidePhoto(item, url) {
+  if (!item) return;
+  let extra = {};
+  try { extra = item.dataset.extra ? JSON.parse(item.dataset.extra) : {}; } catch (e) { extra = {}; }
+  if (url) extra.image = String(url); else delete extra.image;
+  if (Object.keys(extra).length) item.dataset.extra = JSON.stringify(extra); else delete item.dataset.extra;
+  const row = item.querySelector("[data-photo]");
+  if (row) { const tmp = document.createElement("div"); tmp.innerHTML = slidePhotoRow(url); row.replaceWith(tmp.firstElementChild); }
+  syncJsonMirror(); markArtStale();
+}
 function slideItem(s, i, total) {
   // Preserva campos não editáveis aqui (items, stats) para não perdê-los no
   // sync do JSON. O layout é exposto no seletor abaixo.
@@ -4184,6 +4326,7 @@ function slideItem(s, i, total) {
     <div class="se-layout"><span class="se-layout-lab">Layout do slide</span>
       <input type="hidden" data-k="layout" value="${esc(cur)}" />
       <details class="ed-menu lay-menu"><summary class="lay-sum"><span class="lay-thumb">${layoutThumb(cur)}</span><span class="lay-name">${esc(layoutName(cur))}</span><span class="lay-caret" aria-hidden="true"></span></summary><div class="ed-pop lay-pop">${layoutOpts}</div></details><span class="se-lay-hint">${richHint}</span></div>
+    ${slidePhotoRow(s.image)}
   </div>`;
 }
 // Campo de hashtags compartilhado pelos editores estruturados. Pré-preenche com as tags
@@ -4323,6 +4466,17 @@ function bindStructuredEditor() {
     // "Inserir números/itens": o layout precisa de um dado que o slide não tem — insere um exemplo e leva ao campo.
     const layFix = e.target.closest(".se-lay-fix");
     if (layFix) { e.preventDefault(); insertSlideData(layFix.closest(".se-item"), layFix.dataset.layFix); return; }
+    // Foto de fundo por-slide: buscar (abre o modal Pexels, semeado com o título) ou remover.
+    const photoBtn = e.target.closest("[data-se-photo]");
+    if (photoBtn) {
+      e.preventDefault();
+      const item = photoBtn.closest(".se-item");
+      const seed = ((item.querySelector('[data-k="title"]') || {}).value || (item.querySelector('[data-k="body"]') || {}).value || "").trim();
+      pexelsSearchModal({ query: seed, orientation: "portrait" }).then((url) => { if (url) setSlidePhoto(item, url); });
+      return;
+    }
+    const photoX = e.target.closest("[data-se-photo-x]");
+    if (photoX) { e.preventDefault(); setSlidePhoto(photoX.closest(".se-item"), ""); return; }
     const add = e.target.closest("[data-se-add]");
     const ctl = e.target.closest("[data-se]");
     if (add) {

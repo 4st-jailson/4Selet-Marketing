@@ -574,6 +574,10 @@ function carBase(width, height, theme) {
     background:${t.bg};
     display:flex; flex-direction:column; padding:90px 86px; }
   .dots { position:absolute; inset:0; background-image:radial-gradient(${t.dotTex} 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
+  /* Foto de fundo opcional do slide (atras de tudo) + scrim de leitura acima dela. */
+  .s-photo { position:absolute; inset:0; z-index:0; background-size:cover; background-position:center; }
+  .s-scrim { position:absolute; inset:0; z-index:1; }
+  .card.has-photo .dots { opacity:.16; z-index:1; }
   .top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; }
   .logo { height:46px; }
   .pageno { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.8; }
@@ -593,9 +597,19 @@ function carDoc(ctx, extraCss, bodyInner) {
   // ctx.watermark = spec do arquétipo (slideText/slideCta); senão a escolha da PEÇA (ctx.wmStyle) vale p/ todo slide.
   const wmSpec = ctx.watermark != null ? ctx.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : null);
   const wm = wmSpec ? watermark(wmSpec, ctx.theme) : "";
+  // Foto de fundo do slide (opcional, por-slide): fica ATRAS do conteudo com um scrim que
+  // preserva a leitura do texto. O scrim adapta a cor ao tema (escuro -> escurece; claro ->
+  // clareia) pra o texto (claro no escuro / escuro no claro) continuar legivel sobre a foto.
+  let photo = "";
+  if (ctx.image) {
+    const scrim = ctx.theme === THEME_LIGHT
+      ? "linear-gradient(180deg, rgba(224,228,222,.74) 0%, rgba(224,228,222,.56) 42%, rgba(224,228,222,.9) 100%)"
+      : "linear-gradient(180deg, rgba(4,20,28,.64) 0%, rgba(4,20,28,.48) 42%, rgba(4,20,28,.88) 100%)";
+    photo = `<div class="s-photo" style="background-image:url('${escAttr(resolveImage(ctx.image))}')"></div><div class="s-scrim" style="background:${scrim}"></div>`;
+  }
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
-<body><div class="card"><div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
+<body><div class="card${ctx.image ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
 function carTop(ctx) {
   const logo = logoSrc(ctx.logo, (ctx.theme && ctx.theme.logo) || LOGO_LIGHT);
@@ -923,6 +937,7 @@ function carouselSlidesHtml(concept, buildCover, opts) {
         cta: arch === "cta" ? (concept.cta || "") : "",
         footer: concept.footer,
         tagline: arch === "cta",
+        image: (s && s.image) || "", // foto de fundo por-slide (opcional) — o carDoc a desenha sob o conteudo
         logo: logoV, wmStyle: wmV,
       });
     }
@@ -1288,5 +1303,6 @@ async function render(folder, kind, opts) {
 
 module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
+  carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
 };

@@ -20,11 +20,11 @@ function magicExt(b) {
 }
 function safeStem(name) { return String(name || "pexels").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 32) || "pexels"; }
 
-// POST /api/pexels/search { query, page, orientation, perPage } -> { ok, photos:[...], total }
+// POST /api/pexels/search { query, page, orientation, perPage, color, size } -> { ok, photos:[...], total, hasMore }
 router.post("/search", express.json({ limit: "8kb" }), async (req, res) => {
   const b = req.body || {};
   if (!pexels.isConfigured()) return res.status(400).json({ ok: false, error: "no_key" });
-  const r = await pexels.search(b.query, { page: b.page, orientation: b.orientation, perPage: b.perPage });
+  const r = await pexels.search(b.query, { page: b.page, orientation: b.orientation, perPage: b.perPage, color: b.color, size: b.size });
   res.status(r.ok ? 200 : 400).json(r);
 });
 
