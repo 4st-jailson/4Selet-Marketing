@@ -1295,10 +1295,12 @@ function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: l
   const boff = Math.round(mn * 0.085);
   const corner = (s) => `<div style="position:absolute;${s}width:${bW}px;height:${bH}px;border:${bt}px solid ${P.sky};border-radius:${bR}px;opacity:.18;pointer-events:none;"></div>`;
   const brackets =
-    corner(`left:${-boff}px;top:${Math.round(topH * 0.55)}px;`) +
-    corner(`right:${-boff}px;top:${Math.round(topH * 0.55)}px;`) +
-    corner(`left:${-boff}px;bottom:${Math.round(botH * 0.55)}px;`) +
-    corner(`right:${-boff}px;bottom:${Math.round(botH * 0.55)}px;`);
+    corner(`left:${-boff}px;top:${Math.round(topH * 0.5)}px;`) +
+    corner(`right:${-boff}px;top:${Math.round(topH * 0.5)}px;`) +
+    corner(`left:${-boff}px;top:${Math.round(H * 0.44)}px;`) +
+    corner(`right:${-boff}px;top:${Math.round(H * 0.44)}px;`) +
+    corner(`left:${-boff}px;bottom:${Math.round(botH * 0.5)}px;`) +
+    corner(`right:${-boff}px;bottom:${Math.round(botH * 0.5)}px;`);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${FONT_LINK}
   <style>*{margin:0;padding:0;box-sizing:border-box;}</style></head>
@@ -1307,7 +1309,7 @@ function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: l
       ${circuit}
       ${brackets}
 
-      <div style="position:absolute;left:0;right:0;top:${Math.round(topH*0.32)}px;display:flex;justify-content:center;">
+      <div style="position:absolute;left:50%;top:${Math.round(topH*0.16)}px;transform:translateX(-50%);width:${Math.round(W*0.46)}px;height:${Math.round(topH*0.62)}px;border:${bt}px solid rgba(84,153,181,.55);border-radius:${bR}px;display:flex;align-items:center;justify-content:center;">
         <img src="${escAttr(logo)}" style="height:${logoH}px;display:block;"/>
       </div>
 
