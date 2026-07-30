@@ -1157,7 +1157,7 @@ function tplMediaSelo({ width, height, image, eyebrow, url, headline, logo: logo
     .screen img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
     .scr-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9fb0b8;font-size:${r(cardW * 0.06)}px;background:repeating-linear-gradient(45deg,#eef2f4,#eef2f4 20px,#e6ebee 20px,#e6ebee 40px)}
     .glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(118deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 16%, rgba(255,255,255,0) 34%)}
-    .seal{position:absolute;top:${r(-sealD * 0.14)}px;right:${r(-sealD * 0.12)}px;z-index:5;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
+    .seal{position:absolute;bottom:${r(-sealD * 0.16)}px;right:${r(-sealD * 0.12)}px;z-index:5;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
     .seal svg{display:block}
     .seal-sym{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${r(sealD * 0.46)}px;height:auto;display:block}
     .botbar{position:absolute;display:flex;align-items:flex-end;justify-content:space-between;z-index:6;gap:16px}
