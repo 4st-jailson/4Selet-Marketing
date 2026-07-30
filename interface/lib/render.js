@@ -1162,7 +1162,7 @@ function tplMediaSelo({ width, height, image, eyebrow, url, headline, logo: logo
     .screen img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
     .scr-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9fb0b8;font-size:${r(cardW * 0.06)}px;background:repeating-linear-gradient(45deg,#eef2f4,#eef2f4 20px,#e6ebee 20px,#e6ebee 40px)}
     .glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(118deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 16%, rgba(255,255,255,0) 34%)}
-    .seal{position:absolute;top:${r(-sealD * 0.34)}px;right:${r(-sealD * 0.24)}px;z-index:5;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
+    .seal{position:absolute;top:${r(-sealD * 0.14)}px;right:${r(-sealD * 0.12)}px;z-index:5;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
     .seal svg{display:block}
     .selt{font-family:'JetBrains Mono',monospace;font-size:${sealFont}px;font-weight:500;letter-spacing:${r(sealFont * 0.12)}px}
     .seal-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:${sealBig}px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.4)}
@@ -1241,64 +1241,25 @@ function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: l
     stageTop = safeTop;
   }
 
-  // Card frontal e traseiro dentro do stage.
-  // Ratio dos cards: aproxima o print (retrato-ish). Front maior, back deslocado atrás.
-  const cardAspect = land ? (stageW * 0.72) / stageH : stageW / (stageH * 0.82) > 0 ? null : null;
-
-  // Dimensiona o card frontal para caber deixando espaço para o deslocamento do de trás.
-  const offX = Math.round(mn * 0.045);
-  const offY = Math.round(mn * 0.05);
-
-  let frontW, frontH;
-  if (land) {
-    frontH = Math.round(stageH * 0.86);
-    frontW = Math.round(stageW * 0.82);
-  } else {
-    frontW = Math.round(stageW * 0.86);
-    frontH = Math.round(stageH * 0.82);
-  }
-  // garante que o card de trás (deslocado) caiba no stage
-  if (frontW + offX > stageW) frontW = stageW - offX;
-  if (frontH + offY > stageH) frontH = stageH - offY;
-
-  // centraliza o conjunto (front + offsets) no stage
-  const groupW = frontW + offX;
-  const groupH = frontH + offY;
-  const gLeft = stageLeft + Math.round((stageW - groupW) / 2);
-  const gTop = stageTop + Math.round((stageH - groupH) / 2);
-
-  // back card (atrás, deslocado para baixo-direita), menor e mais apagado
-  const backScale = 0.94;
-  const backW = Math.round(frontW * backScale);
-  const backH = Math.round(frontH * backScale);
-  const backLeft = gLeft + offX + Math.round((frontW - backW) / 2);
-  const backTop = gTop + offY + Math.round((frontH - backH) / 2);
-
-  const frontLeft = gLeft;
-  const frontTop = gTop;
-
-  const radius = Math.round(mn * 0.02);
+  // Card ÚNICO da matéria: mostra o print completo, reto, sem cortar nem duplicar.
+  // (Antes eram dois cards sobrepostos — o de trás deixava a manchete "vazar".)
+  const radius = Math.round(mn * 0.022);
   const frontBorder = Math.max(2, Math.round(mn * 0.004));
+  let cardH = Math.round(stageH * (land ? 0.92 : 0.99));
+  let cardW = Math.round(cardH * 0.75); // 3:4 = proporção do print da matéria
+  const maxCardW = Math.round(stageW * (land ? 0.98 : 0.92));
+  if (cardW > maxCardW) { cardW = maxCardW; cardH = Math.round(cardW / 0.75); }
+  const cardLeft = Math.round(stageLeft + (stageW - cardW) / 2);
+  const cardTop = Math.round(stageTop + (stageH - cardH) / 2);
 
   const imgStyle = `width:100%;height:100%;object-fit:cover;object-position:top center;display:block;`;
-  const fallbackChip = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${P.navy};color:${P.mist};font-family:'Inter',sans-serif;font-weight:700;`;
-
-  const backInner = src
+  const cardInner = src
     ? `<img src="${escAttr(src)}" style="${imgStyle}"/>`
-    : `<div style="${fallbackChip}"></div>`;
-  const frontInner = src
-    ? `<img src="${escAttr(src)}" style="${imgStyle}"/>`
-    : (headline
-        ? `<div style="${fallbackChip}font-size:${Math.round(mn*0.03)}px;padding:${pad}px;text-align:center;line-height:1.2;">${esc(headline)}</div>`
-        : `<div style="${fallbackChip}"></div>`);
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${P.navy};color:${P.mist};font-family:'Inter',sans-serif;font-weight:700;font-size:${Math.round(mn*0.03)}px;">print da matéria</div>`;
 
   const camadas = `
-    <div style="position:absolute;left:${backLeft}px;top:${backTop}px;width:${backW}px;height:${backH}px;border-radius:${radius}px;overflow:hidden;box-shadow:0 ${Math.round(mn*0.02)}px ${Math.round(mn*0.05)}px rgba(0,0,0,.45);transform:rotate(-1.5deg);filter:saturate(.85) brightness(.82);">
-      ${backInner}
-      <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,53,84,.28), rgba(7,33,43,.5));"></div>
-    </div>
-    <div style="position:absolute;left:${frontLeft}px;top:${frontTop}px;width:${frontW}px;height:${frontH}px;border-radius:${radius}px;overflow:hidden;border:${frontBorder}px solid rgba(255,255,255,.9);box-shadow:0 ${Math.round(mn*0.03)}px ${Math.round(mn*0.07)}px rgba(0,0,0,.55);transform:rotate(1deg);background:#fff;">
-      ${frontInner}
+    <div style="position:absolute;left:${cardLeft}px;top:${cardTop}px;width:${cardW}px;height:${cardH}px;border-radius:${radius}px;overflow:hidden;border:${frontBorder}px solid rgba(255,255,255,.92);box-shadow:0 ${Math.round(mn*0.03)}px ${Math.round(mn*0.075)}px -${Math.round(mn*0.02)}px rgba(0,0,0,.6),0 0 0 1px rgba(84,153,181,.18);background:#fff;">
+      ${cardInner}
     </div>`;
 
   // ---- barra vertical + brand topo-direita ----
@@ -1333,13 +1294,26 @@ function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: l
       </g>
     </svg>`;
 
+  // molduras de tecnologia nos cantos (frame Selet — referência do Hugo)
+  const bt = Math.max(2, Math.round(mn * 0.0032));
+  const bR = Math.round(mn * 0.03);
+  const bW = Math.round(W * 0.24), bH = Math.round(H * 0.13);
+  const boff = Math.round(mn * 0.085);
+  const corner = (s) => `<div style="position:absolute;${s}width:${bW}px;height:${bH}px;border:${bt}px solid ${P.sky};border-radius:${bR}px;opacity:.18;pointer-events:none;"></div>`;
+  const brackets =
+    corner(`left:${-boff}px;top:${Math.round(topH * 0.55)}px;`) +
+    corner(`right:${-boff}px;top:${Math.round(topH * 0.55)}px;`) +
+    corner(`left:${-boff}px;bottom:${Math.round(botH * 0.55)}px;`) +
+    corner(`right:${-boff}px;bottom:${Math.round(botH * 0.55)}px;`);
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${FONT_LINK}
   <style>*{margin:0;padding:0;box-sizing:border-box;}</style></head>
   <body style="margin:0;">
     <div class="card" style="position:relative;width:${W}px;height:${H}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${P.blue} 0%, ${P.navy} 45%, ${P.darker} 100%);font-family:'Inter',sans-serif;">
       ${circuit}
+      ${brackets}
 
-      <div style="position:absolute;left:${pad}px;top:${Math.round(topH*0.34)}px;display:flex;align-items:center;">
+      <div style="position:absolute;left:0;right:0;top:${Math.round(topH*0.32)}px;display:flex;justify-content:center;">
         <img src="${escAttr(logo)}" style="height:${logoH}px;display:block;"/>
       </div>
 
