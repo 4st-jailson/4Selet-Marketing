@@ -615,7 +615,7 @@ const PHOTO_SCENES = {
   // o tablet sobre mesa de madeira ESCURA, com cafe preto, caneta e caderno.
   // Tela em paisagem: o print retrato entra por "cover" (mostra o topo da materia).
   maos_mesa: {
-    file: "base_maos_mesa_escura.jpg", w: 1880, h: 1255, zoom: 1, safeW: 0.94, safeH: 0.8,
+    file: "base_maos_mesa_escura.jpg", w: 1880, h: 1255, zoom: 1, safeW: 0.72, safeH: 0.48, straighten: true,
     screen: { tl: [0.245, 0.472], tr: [0.711, 0.314], br: [0.741, 0.655], bl: [0.306, 0.808] },
     grade: "brightness(.92) saturate(.9) contrast(1.04)",
     tint: "linear-gradient(155deg, rgba(0,53,84,.26), rgba(7,33,43,.44))",
@@ -643,24 +643,46 @@ function tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: 
   // em qualquer formato (4:5 / 1:1 / 9:16 / 16:9), sem cortar o device.
   const pw = sc.w || 1000, ph = sc.h || 1500;
   const q = sc.screen;
+  const cx0 = (q.tl[0] + q.tr[0] + q.br[0] + q.bl[0]) / 4;
+  const cy0 = (q.tl[1] + q.tr[1] + q.br[1] + q.bl[1]) / 4;
+  // ENDIREITAR: gira a FOTO INTEIRA ate a tela ficar na horizontal. A materia sai
+  // RETA sem perder a mao nem o cenario — o que gira e a cena (numa foto de mesa
+  // vista de cima, girar alguns graus e imperceptivel).
+  let rotDeg = 0;
+  if (sc.straighten) {
+    const a1 = Math.atan2((q.tr[1] - q.tl[1]) * ph, (q.tr[0] - q.tl[0]) * pw);
+    const a2 = Math.atan2((q.br[1] - q.bl[1]) * ph, (q.br[0] - q.bl[0]) * pw);
+    rotDeg = -(((a1 + a2) / 2) * 180) / Math.PI;
+  }
+  const rad = (rotDeg * Math.PI) / 180, cosR = Math.cos(rad), sinR = Math.sin(rad);
+  // bbox da tela DEPOIS de endireitar — e o que a trava de escala precisa respeitar
+  const rotPt = (p) => { const dx = (p[0] - cx0) * pw, dy = (p[1] - cy0) * ph; return [dx * cosR - dy * sinR, dx * sinR + dy * cosR]; };
+  const rp = [q.tl, q.tr, q.br, q.bl].map(rotPt);
+  const qwPx = Math.max(...rp.map((p) => p[0])) - Math.min(...rp.map((p) => p[0]));
+  const qhPx = Math.max(...rp.map((p) => p[1])) - Math.min(...rp.map((p) => p[1]));
   // zoom: folga extra alem do "cover" — permite recentralizar o aparelho no quadro
   let scale = Math.max(width / pw, height / ph) * (sc.zoom || 1);
+  // Ao endireitar, NAO forcamos cobrir o quadro inteiro: a foto vira um "cartao"
+  // levemente girado sobre o fundo da marca — assim a cena (mao, cafe, caderno)
+  // aparece inteira em vez de ser devorada pelo zoom.
   // TRAVA: o aparelho tem que caber INTEIRO no formato. Em paisagem (16:9) o "cover"
   // de uma foto retrato cortaria a tela ao meio — aqui limitamos a escala pelo
   // tamanho da tela na foto (+ folga p/ moldura e barras de marca).
-  const qw = Math.max(q.tl[0], q.tr[0], q.br[0], q.bl[0]) - Math.min(q.tl[0], q.tr[0], q.br[0], q.bl[0]);
-  const qh = Math.max(q.tl[1], q.tr[1], q.br[1], q.bl[1]) - Math.min(q.tl[1], q.tr[1], q.br[1], q.bl[1]);
   const availW = width * (sc.safeW || 0.9), availH = height * (sc.safeH || 0.74); // folga p/ topbar/botbar
-  const scaleMax = Math.min((availW / Math.max(0.01, qw)) / pw, (availH / Math.max(0.01, qh)) / ph);
+  const scaleMax = Math.min(availW / Math.max(1, qwPx), availH / Math.max(1, qhPx));
   if (scale > scaleMax) scale = scaleMax;
   const dispW = pw * scale, dispH = ph * scale;
-  const cx = (q.tl[0] + q.tr[0] + q.br[0] + q.bl[0]) / 4;
-  const cy = (q.tl[1] + q.tr[1] + q.br[1] + q.bl[1]) / 4;
+  // Rotacao acontece EM TORNO do centro da tela, entao ancorar esse centro no centro
+  // do quadro continua valendo depois de endireitar.
+  const cx = cx0, cy = cy0;
   let offX = width / 2 - cx * dispW, offY = height / 2 - cy * dispH;
   // Se a foto cobre o formato, desliza dentro dos limites (sem mostrar borda vazia).
   // Se NAO cobre (paisagem), centraliza — o fundo da marca aparece em volta.
-  offX = dispW >= width ? Math.min(0, Math.max(width - dispW, offX)) : (width - dispW) / 2;
-  offY = dispH >= height ? Math.min(0, Math.max(height - dispH, offY)) : (height - dispH) / 2;
+  // Com rotacao, NAO desliza: a tela fica no centro (o giro e em torno dela).
+  if (!rotDeg) {
+    offX = dispW >= width ? Math.min(0, Math.max(width - dispW, offX)) : (width - dispW) / 2;
+    offY = dispH >= height ? Math.min(0, Math.max(height - dispH, offY)) : (height - dispH) / 2;
+  }
 
   // Cantos da tela em px do wrapper
   const P = (p) => [p[0] * dispW, p[1] * dispH];
@@ -690,7 +712,7 @@ function tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: 
 
   const css = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
     .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${PALETTE.blue} 0%, ${PALETTE.navy} 45%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
-    .ph{position:absolute;left:${r(offX)}px;top:${r(offY)}px;width:${r(dispW)}px;height:${r(dispH)}px;z-index:1;overflow:hidden;${dispW < width || dispH < height ? `border-radius:${r(mn * 0.022)}px;box-shadow:0 ${r(mn * 0.03)}px ${r(mn * 0.07)}px -${r(mn * 0.02)}px rgba(0,0,0,.65)` : ""}}
+    .ph{position:absolute;left:${r(offX)}px;top:${r(offY)}px;width:${r(dispW)}px;height:${r(dispH)}px;z-index:1;overflow:hidden;${rotDeg ? `transform:rotate(${rotDeg.toFixed(3)}deg);transform-origin:${r(cx * dispW)}px ${r(cy * dispH)}px;border-radius:${r(mn * 0.02)}px;box-shadow:0 ${r(mn * 0.035)}px ${r(mn * 0.08)}px -${r(mn * 0.02)}px rgba(0,0,0,.7);` : ""}${dispW < width || dispH < height ? `border-radius:${r(mn * 0.022)}px;box-shadow:0 ${r(mn * 0.03)}px ${r(mn * 0.07)}px -${r(mn * 0.02)}px rgba(0,0,0,.65)` : ""}}
     .ph>img.bg{width:100%;height:100%;object-fit:fill;display:block;filter:${sc.grade || "none"}}
     .tint{position:absolute;inset:0;pointer-events:none;background:${sc.tint || "none"};z-index:1}
     .scr{position:absolute;left:0;top:0;width:${srcW}px;height:${srcH}px;transform-origin:0 0;transform:${mtx};overflow:hidden;background:#fff;z-index:2}
