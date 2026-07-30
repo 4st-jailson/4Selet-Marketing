@@ -657,15 +657,22 @@ function tplMediaNavegador({ width, height, image, eyebrow, url, headline, logo:
       '<div style="flex:1 1 auto;min-height:0;background:#fff;overflow:hidden;">' + contentInner + '</div>' +
     '</div>';
 
+  // Janela do browser dimensionada pra que o CORPO tenha a proporção do print
+  // (~3:4) — a matéria cabe INTEIRA, sem corte, em qualquer formato.
+  const PRINT_ASPECT = 0.75;
+  const availH = height - topPad - botPad;
+  const availW = width - px * 2;
+  let winW = Math.round((availH - chromeH) * PRINT_ASPECT);
+  if (land && winW > availW * 0.5) winW = Math.round(availW * 0.5);
+  if (!land && winW > availW) winW = availW;
+  const winH = Math.round(winW / PRINT_ASPECT + chromeH);
+
   let centerArea;
   if (land) {
-    // Janela RETRATO (proporção ~3:4 do print) pra matéria caber sem cortar no meio.
-    const centerH = height - topPad - botPad;
-    const winW = Math.round(Math.min((width - px * 2) * 0.6, (centerH - chromeH) * 0.75));
     centerArea =
-      '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;align-items:center;gap:' + Math.round(width * 0.04) + 'px;z-index:2;">' +
-        '<div style="width:' + winW + 'px;height:100%;flex:0 0 auto;">' + browserWindow + '</div>' +
-        '<div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;">' +
+      '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;align-items:center;gap:' + Math.round(width * 0.05) + 'px;z-index:2;">' +
+        '<div style="width:' + winW + 'px;height:' + winH + 'px;flex:0 0 auto;">' + browserWindow + '</div>' +
+        '<div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;">' +
           (headline
             ? '<div style="font-family:\'JetBrains Mono\',monospace;color:' + P.sky + ';font-size:' + Math.round(minDim * 0.024) + 'px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:' + Math.round(minDim * 0.03) + 'px;">Na imprensa</div>' +
               '<div style="font-family:\'Inter\',sans-serif;color:#fff;font-weight:800;font-size:' + Math.round(minDim * 0.05) + 'px;line-height:1.18;">' + esc(headline) + '</div>'
@@ -674,11 +681,8 @@ function tplMediaNavegador({ width, height, image, eyebrow, url, headline, logo:
       '</div>';
   } else {
     centerArea =
-      '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;flex-direction:column;z-index:2;">' +
-        (headline
-          ? '<div style="font-family:\'Inter\',sans-serif;color:#fff;font-weight:800;font-size:' + Math.round(minDim * 0.044) + 'px;line-height:1.2;margin-bottom:' + Math.round(height * 0.028) + 'px;flex:0 0 auto;">' + esc(headline) + '</div>'
-          : '') +
-        '<div style="flex:1 1 auto;min-height:0;">' + browserWindow + '</div>' +
+      '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;align-items:center;justify-content:center;z-index:2;">' +
+        '<div style="width:' + winW + 'px;height:' + winH + 'px;">' + browserWindow + '</div>' +
       '</div>';
   }
 
