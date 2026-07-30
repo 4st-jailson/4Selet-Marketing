@@ -16,7 +16,7 @@ const SECRET_FILE = PATHS.SESSION_SECRET_FILE;
 
 const ROLES = ["admin", "membro"];
 const COOKIE = "s4mkt_sid";
-const SESSION_TTL_S = 12 * 60 * 60; // 12h
+const SESSION_TTL_S = 7 * 24 * 60 * 60; // 7 dias (era 12h — Hugo cansava de relogar)
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 
 function ensureDataDir() {

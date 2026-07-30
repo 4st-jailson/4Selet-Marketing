@@ -82,7 +82,9 @@ function classifyKind(files, status) {
 // Primeiro arquivo de imagem (thumbnail) ou video, para preview na biblioteca.
 function pickThumb(files) {
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
-  const img = rels.find((r) => /slide_0*1\.(png|jpe?g)$/i.test(r)) || rels.find(isImage);
+  // Ignora *.bg.png (camada de FUNDO do editor, sem o print/artigo — deixava a
+  // miniatura da biblioteca branca nas peças de mídia). Prefere a arte final.
+  const img = rels.find((r) => /slide_0*1\.(png|jpe?g)$/i.test(r)) || rels.find((r) => isImage(r) && !/\.bg\.png$/i.test(r));
   if (img) return { rel: img, type: "image" };
   const vid = rels.find(isVideo);
   if (vid) return { rel: vid, type: "video" };

@@ -659,7 +659,9 @@ function tplMediaNavegador({ width, height, image, eyebrow, url, headline, logo:
 
   let centerArea;
   if (land) {
-    const winW = Math.round((width - px * 2) * 0.62);
+    // Janela RETRATO (proporção ~3:4 do print) pra matéria caber sem cortar no meio.
+    const centerH = height - topPad - botPad;
+    const winW = Math.round(Math.min((width - px * 2) * 0.6, (centerH - chromeH) * 0.75));
     centerArea =
       '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;align-items:center;gap:' + Math.round(width * 0.04) + 'px;z-index:2;">' +
         '<div style="width:' + winW + 'px;height:100%;flex:0 0 auto;">' + browserWindow + '</div>' +
@@ -1088,28 +1090,17 @@ function tplMediaSelo({ width, height, image, eyebrow, url, headline, logo: logo
   const frame = Math.max(6, r(cardW * 0.022));
   const innerRad = Math.max(6, cardRad - frame);
 
-  // SELO circular: sobreposto no canto superior-direito do card.
-  const sealD = r(mn * (land ? 0.2 : 0.24));
-  const ring = Math.max(2, r(sealD * 0.02));
-  const sealFont = r(sealD * 0.088);
-  const sealBig = r(sealD * 0.34);
-  // texto curvo em torno do "4" central: circulo SVG com path para textPath.
+  // SELO simples: badge circular com o SÍMBOLO "4" da marca — sem texto curvo
+  // (o texto em arco cortava e ficava ilegível). Referência limpa ao logo 4Selet.
+  const sealD = r(mn * (land ? 0.115 : 0.14));
+  const ring = Math.max(2, r(sealD * 0.028));
   const cx = sealD / 2, cy = sealD / 2;
-  const rTop = r(sealD * 0.365), rBot = r(sealD * 0.365);
-  const topArc = `M ${cx - rTop} ${cy} A ${rTop} ${rTop} 0 0 1 ${cx + rTop} ${cy}`;
-  const botArc = `M ${cx - rBot} ${cy} A ${rBot} ${rBot} 0 0 0 ${cx + rBot} ${cy}`;
   const seal = `<div class="seal" style="width:${sealD}px;height:${sealD}px">
       <svg viewBox="0 0 ${sealD} ${sealD}" width="${sealD}" height="${sealD}">
-        <defs>
-          <path id="selarcT" d="${topArc}"/>
-          <path id="selarcB" d="${botArc}"/>
-        </defs>
         <circle cx="${cx}" cy="${cy}" r="${r(sealD / 2 - ring)}" fill="${PALETTE.darker}" stroke="${PALETTE.sky}" stroke-width="${ring}"/>
-        <circle cx="${cx}" cy="${cy}" r="${r(sealD / 2 - ring * 3.2)}" fill="none" stroke="${PALETTE.sky}" stroke-width="1" opacity="0.5"/>
-        <text class="selt" fill="${PALETTE.cloud}"><textPath href="#selarcT" startOffset="50%" text-anchor="middle">DESTAQUE NA IMPRENSA</textPath></text>
-        <text class="selt" fill="${PALETTE.sky}"><textPath href="#selarcB" startOffset="50%" text-anchor="middle">4 S E L E T · N A · M Í D I A</textPath></text>
+        <circle cx="${cx}" cy="${cy}" r="${r(sealD / 2 - ring * 3.2)}" fill="none" stroke="${PALETTE.sky}" stroke-width="1.5" opacity="0.4"/>
       </svg>
-      <div class="seal-num">4</div>
+      <img class="seal-sym" src="${SIMBOLO_SELO}" alt="4Selet"/>
     </div>`;
 
   // grafismo de circuito
@@ -1164,8 +1155,7 @@ function tplMediaSelo({ width, height, image, eyebrow, url, headline, logo: logo
     .glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(118deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 16%, rgba(255,255,255,0) 34%)}
     .seal{position:absolute;top:${r(-sealD * 0.14)}px;right:${r(-sealD * 0.12)}px;z-index:5;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
     .seal svg{display:block}
-    .selt{font-family:'JetBrains Mono',monospace;font-size:${sealFont}px;font-weight:500;letter-spacing:${r(sealFont * 0.12)}px}
-    .seal-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:${sealBig}px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+    .seal-sym{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${r(sealD * 0.46)}px;height:auto;display:block}
     .botbar{position:absolute;display:flex;align-items:flex-end;justify-content:space-between;z-index:6;gap:16px}
     .veic-card{background:#fff;border-radius:${r(cardFont * 0.85)}px;padding:${r(cardFont * 0.72)}px ${r(cardFont * 1.25)}px;color:${PALETTE.navy};font-weight:800;font-size:${cardFont}px;letter-spacing:-.3px;box-shadow:0 12px 26px -8px rgba(0,0,0,.5);max-width:52%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cta{display:flex;align-items:center;gap:${r(ctaFont * 0.7)}px}
