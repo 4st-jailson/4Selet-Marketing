@@ -466,7 +466,8 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .camp-pick #g-camp-new { flex: none; white-space: nowrap; }
 /* 4Selet na Mídia: seletor de modelo do device (miniatura) + prévia do print */
 .model-pick { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
-.model-card { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 18px; min-width: 88px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-mut); cursor: pointer; transition: border-color var(--tr), background var(--tr), color var(--tr); }
+.model-card { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 7px; padding: 12px 10px; width: 116px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-mut); cursor: pointer; transition: border-color var(--tr), background var(--tr), color var(--tr); }
+.model-card span { text-align: center; }
 .model-card:hover { border-color: var(--accent); color: var(--text); }
 .model-card.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--text); }
 .model-card span { font-size: 13px; font-weight: 600; }
@@ -664,6 +665,10 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .content-card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: var(--shadow); text-decoration: none; }
 .cc-thumb { position: relative; aspect-ratio: 4 / 3; background: var(--thumb-bg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .cc-thumb .thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Mídia "4Selet na Mídia": arte 4:5 com muita área branca (janela/card) — mostra a arte INTEIRA
+   (contain) no card 4:3 em vez de cortar pro centro branco. Fundo navy p/ a moldura ficar coesa. */
+.cc-media .cc-thumb { background: #07212B; }
+.cc-media .cc-thumb .thumb { object-fit: contain; }
 .cc-ph { font-size: 34px; color: var(--text-mut); }
 .content-card:not(.thumb-fallback) .cc-ph { display: none; }
 .cc-zoom { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: var(--r-sm); border: none; cursor: pointer; font-size: 14px; background: rgba(6,20,27,.6); color: #fff; backdrop-filter: blur(4px); opacity: 0; transition: opacity var(--tr); }
@@ -1009,6 +1014,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .editor-stage { flex: 1; min-height: 0; display: flex; align-items: safe center; justify-content: safe center; overflow: auto; padding: 24px;
   background: radial-gradient(circle at 50% 32%, #13272f, #0a1a22 72%); }
 .editor-stage .canvas-container { box-shadow: 0 24px 70px rgba(0,0,0,.55); border-radius: 4px; }
+/* Readout DISCRETO de dimensões (toggle) — fixo no canto inferior esquerdo do editor, some quando desligado */
+.he-dims { position: fixed; left: 18px; bottom: 18px; z-index: 20; display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; background: rgba(6,20,26,.86); border: 1px solid var(--border); border-radius: 8px; font-size: 11.5px; line-height: 1.35; color: var(--text-2); pointer-events: none; font-variant-numeric: tabular-nums; box-shadow: var(--shadow-sm); }
+.he-dims b { color: var(--text); font-weight: 700; }
+.he-dims .hed-sel { color: var(--accent-strong); }
 
 /* ---- Editor HTML: edita o HTML real da peça e re-renderiza (Playwright) ---- */
 .he-bar { display: flex; gap: 6px; align-items: center; padding: 9px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
@@ -1091,7 +1100,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .editor-ov.he-dock-left .editor-stage { grid-area: stage; }
 .editor-ov.he-dock-left .he-bar {
   grid-area: bar; flex-direction: column; flex-wrap: nowrap; align-items: stretch;
-  gap: 5px; padding: 10px; overflow-y: auto; overflow-x: hidden;
+  gap: 5px; padding: 10px 10px 16px; overflow-y: auto; overflow-x: hidden;
   border-bottom: none; border-right: 1px solid var(--border);
 }
 .editor-ov.he-dock-left .he-bar > * { width: 100%; flex: 0 0 auto; }
@@ -1106,6 +1115,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .editor-ov.he-dock-left .he-bar .he-op input[type="range"] { width: 100px; }
 .editor-ov.he-dock-left .he-bar .ed-sep { width: 100%; height: 1px; margin: 4px 0; }
 .editor-ov.he-dock-left .he-tools { left: calc(50% + var(--he-dock-w) / 2); } /* centra sobre o palco (metade da coluna) */
+/* No dock (barra à esquerda), o readout (fixo, inferior-esquerdo) cairia SOBRE a coluna da barra e
+   cobriria os últimos botões. Joga ele pra logo à DIREITA da coluna — segue no canto inferior, sobre
+   o palco, sem sobrepor nada. No modo "barra no topo" ele fica no canto normal (não há barra à esq.). */
+.editor-ov.he-dock-left .he-dims { left: calc(var(--he-dock-w) + 20px); }
 /* Agrupa controles pequenos em linhas — evita a coluna monótona de botões full-width (o "N"
    deixa de virar uma barra gigante). No topo o grupo é transparente (display:contents), então
    a barra horizontal fica idêntica; só na coluna à esquerda ele vira uma linha de itens. */
@@ -1177,7 +1190,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
 /* Busca de imagens (Pexels): grade de miniaturas */
 .px-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; }
-.px-cell { padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: var(--surface-2); line-height: 0; }
+/* Dica/erro/"buscando…" ocupam a LINHA TODA do grid (senão o texto cabe em 1 coluna e quebra feio). */
+.px-grid > p, .px-grid > .px-loading, .px-grid > .field-error { grid-column: 1 / -1; margin: 0; }
+.px-cell { position: relative; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: var(--surface-2); line-height: 0; }
 .px-cell img { width: 100%; height: 118px; object-fit: cover; display: block; }
 .px-cell:hover { border-color: var(--accent); }
 .px-cell.picking { opacity: .5; }
@@ -1225,6 +1240,23 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .px-cell-lg img { height: 100%; }
 .px-cell-cred { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 11px; line-height: 1.2; color: #fff; text-align: left; background: linear-gradient(180deg, transparent, rgba(0,0,0,.68)); opacity: 0; transition: opacity var(--tr); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .px-cell-lg:hover .px-cell-cred { opacity: 1; }
+/* dimensões em px de cada foto — DISCRETO, aparece só ao passar o mouse na imagem (canto sup-esq) */
+.px-cell-dim { position: absolute; top: 5px; left: 5px; padding: 2px 6px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,.92); background: rgba(0,0,0,.5); border-radius: 5px; letter-spacing: .2px; pointer-events: none; opacity: 0; transition: opacity var(--tr); }
+.px-cell:hover .px-cell-dim { opacity: 1; }
+.px-cell.px-low { outline: 2px solid var(--warn); outline-offset: -2px; }
+.px-cell.px-low .px-cell-dim { background: color-mix(in srgb, var(--warn) 84%, #000); }
+.px-low-tag { color: #ffe08a; }
+.px-target-note { margin-top: 10px; font-size: 12.5px; line-height: 1.7; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 12px; }
+/* campos discretos de tamanho customizado (larg × alt) dentro da nota — seletor específico p/ vencer
+   a regra global de input (que forçava width:100% e quebrava o layout). */
+.px-target-note input.px-size-in { display: inline-block; width: 58px; padding: 2px 6px; margin: 0 1px; font-size: 12px; text-align: center; border-radius: var(--r-xs); background: var(--surface); border: 1px solid var(--border); color: var(--text); font-variant-numeric: tabular-nums; vertical-align: baseline; }
+.px-target-note input.px-size-in:focus { border-color: var(--accent); outline: none; }
+.px-size-x { color: var(--text-mut); font-size: 12px; margin: 0 2px; }
+.px-size-u { color: var(--text-mut); font-size: 12px; margin-left: 3px; }
+.px-size-use { margin-left: 8px; padding: 2px 8px; font-size: 11.5px; background: transparent; border: 1px solid var(--border); border-radius: var(--r-xs); color: var(--accent-strong); cursor: pointer; white-space: nowrap; }
+.px-size-use:hover { border-color: var(--accent); background: var(--accent-soft); }
+.px-target-note input.px-size-in::-webkit-inner-spin-button, .px-target-note input.px-size-in::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.px-target-note .px-low-tag { color: var(--warn); font-weight: 700; }
 .px-page-pager { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: var(--s5); padding-top: var(--s4); }
 .px-page-count { font-size: 13px; min-width: 200px; text-align: center; }
 @media (max-width: 640px) {

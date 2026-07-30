@@ -22,6 +22,19 @@ const API = (() => {
     }
     return data;
   }
+  // Cache curto das buscas Pexels: evita GASTAR a cota da API refazendo buscas IDÊNTICAS —
+  // paginar ida-e-volta, alternar um filtro e voltar, reabrir a mesma busca, ou o modal→"Ver mais"
+  // que repetem o mesmo termo. Chave = payload (query+filtros+página). TTL 5min, teto 50 entradas.
+  const _pxCache = new Map();
+  const PX_CACHE_MS = 5 * 60 * 1000;
+  async function pexelsSearchCached(payload) {
+    const key = JSON.stringify(payload || {});
+    const hit = _pxCache.get(key);
+    if (hit && (Date.now() - hit.t) < PX_CACHE_MS) return hit.data;
+    const data = await req("POST", "/api/pexels/search", payload);
+    if (data && data.ok) { _pxCache.set(key, { t: Date.now(), data }); if (_pxCache.size > 50) _pxCache.delete(_pxCache.keys().next().value); }
+    return data;
+  }
   return {
     meta: () => req("GET", "/api/meta"),
     // settings
@@ -36,7 +49,7 @@ const API = (() => {
     // Pexels (banco de imagens)
     savePexelsKey: (key) => req("POST", "/api/settings/pexels-key", { key }),
     testPexels: () => req("POST", "/api/settings/pexels-test"),
-    pexelsSearch: (payload) => req("POST", "/api/pexels/search", payload),
+    pexelsSearch: (payload) => pexelsSearchCached(payload),
     pexelsPick: (payload) => req("POST", "/api/pexels/pick", payload),
     // credenciais de integração inseridas pelo painel (admin) — grava em data/, nunca volta o valor
     saveCredential: (name, value) => req("POST", "/api/settings/credential", { name, value }),

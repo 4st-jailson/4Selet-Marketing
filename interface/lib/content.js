@@ -56,7 +56,14 @@ function isImage(rel) { return IMAGE_EXT.includes(extOf(rel)); }
 function isVideo(rel) { return VIDEO_EXT.includes(extOf(rel)); }
 
 // Deduz o "kind" da peca a partir dos arquivos presentes (e do status).
-function classifyKind(files) {
+// O status vem PRIMEIRO: uma peca "4Selet na Midia" (media_mention) grava a legenda no MESMO
+// arquivo do feed (copy/instagram_caption.txt) e a arte fica em ads/*.png — sem esta ancora ela
+// se classificava como feed/image e o "Gerar arte final" renderizava um feed no lugar do mockup
+// de device. status.media (setMediaMeta) e a fonte de verdade do tipo Midia; status.content_type
+// (quando gravado) e um hint de maxima prioridade que sobrevive a edicoes manuais.
+function classifyKind(files, status) {
+  if (status && status.content_type === "media_mention") return "media";
+  if (status && status.media) return "media";
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
   const has = (re) => rels.some((r) => re.test(r));
   if (rels.some(isVideo) || has(/video\/(scenes|concept)\.json$/)) return "video";
@@ -124,7 +131,7 @@ function listTasks() {
         tags: Array.isArray(status.tags) ? status.tags : [],
         pillar: (typeof status.pillar === "string") ? status.pillar : null,
         imported: !!status.imported,
-        kind: classifyKind(files),
+        kind: classifyKind(files, status),
         thumb: pickThumb(files),
       });
     }
@@ -184,7 +191,7 @@ function getTask(folder) {
     status,
     files: annotated,
     tags: Array.isArray(status && status.tags) ? status.tags : [],
-    kind: classifyKind(files),
+    kind: classifyKind(files, status),
     thumb: pickThumb(files),
     template: (function () {
       const rp = readJsonSafe(path.join(loc.path, "render.json"));
@@ -403,7 +410,7 @@ function setMediaMeta(folder, meta) {
   const p = path.join(loc.path, "status.json");
   const status = readJsonSafe(p);
   if (!status) return false;
-  const models = ["tablet", "celular", "notebook", "janela"];
+  const models = ["hand_tablet", "celular", "navegador", "citacao", "split", "selo", "camadas", "tablet", "notebook", "janela"];
   const validSizes = ["4x5", "1x1", "9x16", "16x9"];
   let sizes = (Array.isArray(meta && meta.sizes) ? meta.sizes : []).filter((s) => validSizes.indexOf(s) !== -1);
   if (!sizes.length) sizes = ["4x5", "16x9"];
@@ -411,9 +418,13 @@ function setMediaMeta(folder, meta) {
     print: String((meta && meta.print) || "").slice(0, 400),
     url: String((meta && meta.url) || "").slice(0, 400),
     vehicle: String((meta && meta.vehicle) || "").slice(0, 120),
-    model: models.indexOf(String(meta && meta.model)) !== -1 ? String(meta.model) : "tablet",
+    headline: String((meta && meta.headline) || "").slice(0, 240),
+    model: models.indexOf(String(meta && meta.model)) !== -1 ? String(meta.model) : "hand_tablet",
     sizes: sizes,
   };
+  // Ancora o tipo no status: hint de maxima prioridade p/ o classifyKind (sobrevive a edicoes
+  // que porventura removam status.media) — a peca Midia nunca mais se classifica como feed/image.
+  status.content_type = "media_mention";
   fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
   return true;
 }

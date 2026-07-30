@@ -11,6 +11,16 @@ const pexels = require("../lib/pexels");
 const credentials = require("../lib/credentials");
 const { PATHS } = require("../lib/config");
 
+// Só administradores CONFIGURAM chaves/modelos (a UI já promete "Só administradores
+// configuram" e esconde a seção; isto fecha a rota, não só o CSS). Rotas de LEITURA
+// (GET) e os testes de chave seguem abertas a quem já está logado.
+function adminOnly(req, res, next) {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ error: "Apenas administradores podem alterar estas configurações." });
+  }
+  next();
+}
+
 router.get("/", (req, res) => {
   res.json({
     has_key: ai.hasKey(),
@@ -93,7 +103,7 @@ router.get("/integrations", (req, res) => {
   res.json({ integrations });
 });
 
-router.post("/key", (req, res) => {
+router.post("/key", adminOnly, (req, res) => {
   try {
     ai.saveApiKey(req.body && req.body.key);
     res.json({ ok: true, has_key: true, masked_key: ai.maskKey() });
@@ -102,7 +112,7 @@ router.post("/key", (req, res) => {
   }
 });
 
-router.post("/model", (req, res) => {
+router.post("/model", adminOnly, (req, res) => {
   const model = ai.saveModel(req.body && req.body.model);
   res.json({ ok: true, model });
 });
@@ -113,7 +123,7 @@ router.post("/test", async (req, res) => {
 });
 
 // --- Tavily (pesquisa de mercado): salvar a chave (grava no .env) + testar ---
-router.post("/tavily-key", (req, res) => {
+router.post("/tavily-key", adminOnly, (req, res) => {
   try { research.saveKey(req.body && req.body.key); res.json({ ok: true, configured: research.isConfigured() }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -122,7 +132,7 @@ router.post("/tavily-test", async (req, res) => {
   res.status(r.ok ? 200 : 400).json(r);
 });
 // --- Pexels (banco de imagens): salvar a chave + testar ---
-router.post("/pexels-key", (req, res) => {
+router.post("/pexels-key", adminOnly, (req, res) => {
   try { pexels.saveKey(req.body && req.body.key); res.json({ ok: true, configured: pexels.isConfigured() }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -149,14 +159,14 @@ router.post("/credential", (req, res) => {
 router.get("/providers", (req, res) => {
   res.json({ providers: aihub.providers(), default: aihub.defaultProvider() });
 });
-router.post("/provider/key", (req, res) => {
+router.post("/provider/key", adminOnly, (req, res) => {
   try {
     const { provider, key } = req.body || {};
     aihub.saveKey(provider, key);
     res.json({ ok: true, providers: aihub.providers() });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.post("/provider/model", (req, res) => {
+router.post("/provider/model", adminOnly, (req, res) => {
   try {
     const { provider, model } = req.body || {};
     const m = aihub.saveModel(provider, model);
@@ -167,7 +177,7 @@ router.post("/provider/test", async (req, res) => {
   const r = await aihub.testKey((req.body || {}).provider);
   res.status(r.ok ? 200 : 400).json(r);
 });
-router.post("/provider/default", (req, res) => {
+router.post("/provider/default", adminOnly, (req, res) => {
   try {
     const p = aihub.setDefaultProvider((req.body || {}).provider);
     res.json({ ok: true, default: p, providers: aihub.providers() });

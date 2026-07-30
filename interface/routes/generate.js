@@ -186,6 +186,7 @@ router.post("/preview", async (req, res, next) => {
       logo: body.logo,
       watermark: body.watermark,
       only: body.only, // renderiza só o slide desse índice (progresso "slide N de M" no carrossel)
+      media: body.media, // metadados da "4Selet na Mídia" (print/modelo/veículo) p/ a prévia do mockup
     });
     if (!out.ok) return res.status(422).json(out);
     res.json(out);
@@ -261,7 +262,7 @@ router.post("/save", async (req, res, next) => {
 
     // 2e) metadados da peça "4Selet na Mídia" (print + veículo + link + modelo do device).
     if (body.content_type === "media_mention") {
-      content.setMediaMeta(folder, { print: body.media_print, url: body.media_url, vehicle: body.media_vehicle, model: body.media_model, sizes: body.media_sizes });
+      content.setMediaMeta(folder, { print: body.media_print, url: body.media_url, vehicle: body.media_vehicle, headline: body.media_headline, model: body.media_model, sizes: body.media_sizes });
     }
 
     // 3) grava o arquivo de conteudo

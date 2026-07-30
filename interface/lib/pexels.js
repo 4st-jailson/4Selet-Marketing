@@ -63,7 +63,11 @@ async function search(query, opts = {}) {
   const colorRaw = String(opts.color || "").toLowerCase().replace(/^#/, "");
   const color = (PEXELS_COLORS.includes(colorRaw) || /^[0-9a-f]{6}$/.test(colorRaw)) ? "&color=" + encodeURIComponent(colorRaw) : "";
   const size = /^(large|medium|small)$/.test(opts.size || "") ? "&size=" + opts.size : "";
-  const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(q) + "&per_page=" + perPage + "&page=" + page + orient + color + size + "&locale=pt-BR";
+  // ATENCAO: NAO usar &locale=pt-BR — a Pexels IGNORA o filtro &color quando o locale esta setado
+  // (cor amarela/vermelha voltavam identicas a busca sem cor, e o total_results ficava sempre 8000/
+  // nao refletia os filtros). Sem locale, cor+tamanho+orientacao filtram de verdade e o total bate.
+  // A busca multilingue da Pexels entende o termo em portugues mesmo sem locale (validado).
+  const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(q) + "&per_page=" + perPage + "&page=" + page + orient + color + size;
   try {
     const j = await apiGet(url, key);
     const photos = (j.photos || []).map((p) => ({
@@ -74,6 +78,7 @@ async function search(query, opts = {}) {
       photographer: p.photographer || "",
       photographer_url: p.photographer_url || "",
       width: p.width, height: p.height,
+      avg_color: p.avg_color || "", // cor média da foto — usada p/ REFINAR o filtro de cor no front
     })).filter((p) => p.full);
     const total = j.total_results || photos.length;
     // hasMore: a Pexels manda next_page quando ha mais; confirmamos pela contagem tambem.

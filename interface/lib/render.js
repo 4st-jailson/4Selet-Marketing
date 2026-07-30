@@ -393,8 +393,980 @@ function mediaDevice(model, imgSrc, url) {
   }
   return `<div class="dev" style="perspective:2600px"><div style="width:566px;height:820px;background:#0a1015;border-radius:40px;padding:18px;box-shadow:${MED_BEZEL};transform:rotateX(4deg) rotateY(-6deg) rotate(1deg);position:relative"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:24px">${shot}</div></div></div>`;
 }
+
+// ---- Mockup FOTORREALISTA "mão segurando tablet" (modelo hand_tablet) --------------------
+// Em vez de desenhar uma moldura chapada em CSS, projetamos o print da matéria na TELA de uma
+// FOTO real de mão segurando um tablet (assets/mockup-hand-tablet.jpg, cottonbro studio/Pexels).
+// A projeção é uma HOMOGRAFIA (matriz 3x3) embutida num matrix3d de CSS que mapeia o retângulo do
+// print nos 4 cantos MEDIDOS da tela na foto — o Chromium/Playwright rasteriza isso de forma exata.
+function matrix3dForQuad(w, h, dst) {
+  const src = [[0, 0], [w, 0], [w, h], [0, h]]; // TL,TR,BR,BL da fonte
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = src[i], [u, v] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+  }
+  const hh = solveLinear(A, b);
+  const H = [hh[0], hh[1], hh[2], hh[3], hh[4], hh[5], hh[6], hh[7], 1];
+  const m = [H[0], H[3], 0, H[6], H[1], H[4], 0, H[7], 0, 0, 1, 0, H[2], H[5], 0, H[8]]; // column-major
+  return "matrix3d(" + m.map((n) => +n.toFixed(9)).join(",") + ")";
+}
+function solveLinear(A, b) {
+  const n = b.length, M = A.map((row, i) => row.concat(b[i]));
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    const t = M[col]; M[col] = M[piv]; M[piv] = t;
+    const d = M[col][col];
+    for (let c = col; c <= n; c++) M[col][c] /= d;
+    for (let r = 0; r < n; r++) { if (r === col) continue; const f = M[r][col]; for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c]; }
+  }
+  return M.map((row) => row[n]);
+}
+const MOCKUP_HAND_TABLET = fileUrl(path.join(ASSETS, "mockup-hand-tablet.jpg"));
+// Foto-base: mão segurando tablet em RETRATO, lendo uma matéria (cottonbro/Pexels 5998828). A tela é
+// portrait — a matéria (retrato) encaixa sem cortar, ao contrário do tablet deitado anterior.
+const HAND_TABLET_NAT = { w: 4103, h: 6154 };                                    // dimensões nativas da foto-base
+const HAND_TABLET_CORNERS = [[0.325, 0.185], [0.665, 0.235], [0.628, 0.515], [0.245, 0.448]]; // cantos da TELA (TL,TR,BR,BL), medidos
+const HAND_TABLET_CENTROID = [0.466, 0.346];                                     // centro da tela (p/ posicionar o palco)
+// Monta o "palco": a foto da mão+tablet (largura SW) com o print projetado na tela + reflexo de vidro.
+function handTabletStage(printSrc, SW) {
+  const SH = Math.round(SW * HAND_TABLET_NAT.h / HAND_TABLET_NAT.w);
+  const dst = HAND_TABLET_CORNERS.map(([x, y]) => [x * SW, y * SH]);
+  const PW = 1200, PH = 1600; // caixa-fonte RETRATO 3:4 (tela do iPad em pé); print entra com object-fit:cover
+  const warp = matrix3dForQuad(PW, PH, dst);
+  const box = `width:${PW}px;height:${PH}px;transform:${warp}`;
+  const shot = printSrc
+    ? `<img class="ht-shot" src="${escAttr(printSrc)}" style="${box}"/>`
+    : `<div class="ht-shot ht-empty" style="${box}">print da matéria</div>`;
+  // Camadas: foto-base < tint navy (funde a foto no fundo da marca) < print (brilhante, por cima do
+  // tint) < reflexo de vidro. O tint escurece/azula a foto SEM tocar o print (que vem depois).
+  const html = `<div class="ht-stage" style="width:${SW}px;height:${SH}px">
+    <img class="ht-photo" src="${MOCKUP_HAND_TABLET}" alt=""/>
+    <div class="ht-tint"></div>${shot}
+    <div class="ht-glass" style="${box}"></div></div>`;
+  return { SW, SH, html };
+}
+// Composição da arte com o mockup fotorrealista: fundo Navy + Selet Dots + título + palco + logo.
+function tplMediaHand({ width, height, image, eyebrow, logo: logoVariant }) {
+  const land = width > height;
+  const tune = land ? { scale: 0.46, cx: 0.71, cy: 0.52 } : { scale: 1.0, cx: 0.5, cy: 0.47 };
+  const SW = Math.round(width * tune.scale);
+  const st = handTabletStage(resolveImage(image), SW);
+  const left = Math.round(tune.cx * width - HAND_TABLET_CENTROID[0] * st.SW);
+  const top = Math.round(tune.cy * height - HAND_TABLET_CENTROID[1] * st.SH);
+  const veic = eyebrow ? `<div class="veic">${esc(eyebrow)}</div>` : "";
+  const title = `<div class="ttl">4Selet <span class="a">na mídia</span></div>`;
+  const logo = `<img class="logo" src="${logoSrc(logoVariant, LOGO_LIGHT)}" alt="4Selet"/>`;
+  const css = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
+    .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(135% 120% at 80% 0%, ${PALETTE.blue} 0%, ${PALETTE.navy} 42%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
+    .dots{position:absolute;inset:0;background-image:radial-gradient(${PALETTE.sky}1f 2px,transparent 2px);background-size:48px 48px;opacity:.5;z-index:0}
+    .ht-stage{position:absolute;left:${left}px;top:${top}px;z-index:1}
+    .ht-photo{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+    /* Tint navy sobre a foto (funde no fundo da marca) — multiplica com a foto; NÃO afeta o print (z acima). */
+    .ht-tint{position:absolute;inset:0;z-index:1;mix-blend-mode:multiply;background:linear-gradient(158deg, ${PALETTE.navy} 0%, ${PALETTE.darker} 100%);opacity:.7}
+    .ht-shot{position:absolute;top:0;left:0;z-index:2;transform-origin:0 0;object-fit:cover;object-position:top center;backface-visibility:hidden;box-shadow:0 0 22px rgba(0,0,0,.35)}
+    .ht-empty{display:flex;align-items:center;justify-content:center;background:#fff;color:#9fb0b8;font-size:60px}
+    .ht-glass{position:absolute;top:0;left:0;z-index:3;transform-origin:0 0;pointer-events:none;background:linear-gradient(122deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.04) 22%,rgba(255,255,255,0) 46%)}
+    /* Mistura a foto (fundo escuro) no Navy: scrim no topo (fundo do título) + vinheta nas bordas. */
+    .scrim{position:absolute;inset:0;z-index:2;pointer-events:none;background:
+      linear-gradient(180deg, ${PALETTE.darker} 0%, rgba(7,33,43,.72) 12%, rgba(7,33,43,0) ${land ? 34 : 30}%),
+      radial-gradient(150% 90% at 50% 42%, rgba(7,33,43,0) 55%, rgba(7,33,43,.55) 100%),
+      linear-gradient(0deg, ${PALETTE.darker} 0%, rgba(7,33,43,0) 16%)}
+    .fg{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:space-between;padding:${land ? "74px 90px" : "78px 74px 62px"}}
+    .ttl{font-size:${land ? 60 : 66}px;font-weight:800;letter-spacing:-1px;line-height:1.02}.ttl .a{color:${PALETTE.sky}}
+    .veic{font-family:'JetBrains Mono',monospace;color:${PALETTE.mist};font-size:${land ? 22 : 23}px;letter-spacing:3px;text-transform:uppercase;margin-top:10px}
+    .logo{height:46px;opacity:.95;align-self:flex-start}`;
+  const head = `<div>${title}${veic}</div>`;
+  const body = `<div class="dots"></div>${st.html}<div class="scrim"></div><div class="fg">${head}${logo}</div>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+}
+// TABLET LIMPO "4Selet na Mídia": a matéria entra RETA (retângulo perfeito) numa moldura de tablet
+// com inclinação LEVE (rotação 2D só do device — nada de perspectiva que entorta). Fundo Navy +
+// linhas de tecnologia + título + logo. Substituiu o warp fotográfico (matrix3d) que ENTORTAVA a
+// matéria — feedback do Hugo 2026-07-29 ("a notícia está torta; marca séria não posta qualquer coisa").
+// Segue a referência que o Hugo mandou (tablet limpo, matéria alinhada, grafismo navy).
+function tplMediaTabletClean({ width, height, image, eyebrow, url, model, logo: logoVariant }) {
+  const r = Math.round;
+  const land = width > height;
+  const img = resolveImage(image);
+  const phone = model === "celular"; // celular: tela estreita → artigo encaixa por LARGURA (contain), não corta
+  const shot = img ? `<img class="scr-img${phone ? " fit" : ""}" src="${escAttr(img)}" alt=""/>` : `<div class="scr-empty">print da matéria</div>`;
+  const veh = String(eyebrow || "").split(/[·|]/)[0].trim();               // nome do veículo (card)
+  const domain = (String(url || "").match(/^https?:\/\/([^/]+)/) || [, ""])[1].replace(/^www\./, ""); // URL do CTA
+  // Device MAIOR (tablet ~3:4 ou celular estreito): o "4Selet na mídia" saiu do centro pro canto.
+  const ASP = phone ? 0.478 : 0.75;
+  const tbH = phone
+    ? (land ? r(height * 0.80) : r(Math.min(height * 0.74, width * 1.26)))
+    : (land ? r(height * 0.72) : r(Math.min(height * 0.60, width * 0.90)));
+  const tbW = r(tbH * ASP);
+  const pad = Math.max(10, r(tbW * (phone ? 0.04 : 0.028)));
+  const rad = r(tbW * (phone ? 0.14 : 0.063));
+  const srad = Math.max(10, rad - pad + 2);
+  const rot = land ? -2.5 : -3;
+  const tabFont = r(tbW * 0.06);
+  const logoH = r((land ? height : width) * 0.04);
+  const kickFont = r((land ? height : width) * 0.03);
+  const cardFont = r((land ? height : width) * 0.026);
+  const ctaFont = r((land ? height : width) * 0.024);
+  const px = r(width * 0.062);
+  const stageTop = r(height * 0.52 - tbH / 2);
+  const tech = `<svg class="tech" viewBox="0 0 ${width} ${height}" fill="none" preserveAspectRatio="xMidYMid slice">
+    <g stroke="${PALETTE.sky}" stroke-width="1" opacity="0.12">
+      <path d="M-20 ${r(height*.28)} H${r(width*.12)} V${r(height*.34)} H${r(width*.21)}"/>
+      <path d="M${width+20} ${r(height*.30)} H${r(width*.88)} V${r(height*.24)}"/>
+      <path d="M-20 ${r(height*.72)} H${r(width*.15)} V${r(height*.66)}"/>
+      <path d="M${width+20} ${r(height*.70)} H${r(width*.85)} V${r(height*.76)} H${r(width*.70)}"/>
+    </g>
+    <g fill="${PALETTE.sky}" opacity="0.45">
+      <circle cx="${r(width*.21)}" cy="${r(height*.34)}" r="3"/><circle cx="${r(width*.88)}" cy="${r(height*.24)}" r="3"/>
+      <circle cx="${r(width*.15)}" cy="${r(height*.66)}" r="3"/><circle cx="${r(width*.70)}" cy="${r(height*.76)}" r="3"/>
+    </g></svg>`;
+  const notch = phone ? `<div class="notch" style="width:${r(tbW*0.36)}px;height:${r(tbW*0.05)}px;top:${r(pad*0.42)}px"></div>` : "";
+  const device = `<div class="dev-wrap" style="transform:rotate(${rot}deg)"><div class="cast"></div>
+    <div class="tablet" style="width:${tbW}px;height:${tbH}px;padding:${pad}px;border-radius:${rad}px">
+      <div class="screen" style="border-radius:${srad}px">${shot}<div class="backlight"></div><div class="glass"></div></div>${notch}
+    </div></div>`;
+  const topbar = `<div class="topbar" style="top:${r(height*0.058)}px;left:${px}px;right:${px}px">
+      <img class="logo4" src="${logoSrc(logoVariant, LOGO_LIGHT)}" alt="4Selet"/>
+      <div class="kicker"><b>4Selet</b><i>na mídia</i><span class="kbar"></span></div></div>`;
+  const botbar = `<div class="botbar" style="bottom:${r(height*0.052)}px;left:${px}px;right:${px}px">
+      ${veh ? `<div class="veic-card">${esc(veh)}</div>` : "<span></span>"}
+      ${domain ? `<div class="cta"><div class="cta-txt"><div class="cta-l">Leia a matéria completa</div><div class="cta-u">${esc(domain)}</div></div><div class="cta-arrow">&#8250;</div></div>` : "<span></span>"}</div>`;
+  const css = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
+    .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${PALETTE.blue} 0%, ${PALETTE.navy} 45%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
+    .tech{position:absolute;inset:0;z-index:1;pointer-events:none}
+    .vig{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(140% 92% at 50% 116%, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 55%),radial-gradient(120% 80% at 50% -18%, rgba(84,153,181,.14) 0%, rgba(0,0,0,0) 60%)}
+    .topbar{position:absolute;display:flex;align-items:center;justify-content:space-between;z-index:5}
+    .logo4{height:${logoH}px;display:block;opacity:.98}
+    .kicker{display:flex;align-items:center;font-size:${kickFont}px;color:#fff}
+    .kicker b{font-weight:800;color:#fff}.kicker i{font-style:normal;font-weight:600;color:${PALETTE.sky};margin-left:${r(kickFont*0.28)}px}
+    .kicker .kbar{width:2px;height:${r(kickFont*1.15)}px;background:${PALETTE.sky};margin-left:${r(kickFont*0.5)}px;border-radius:2px}
+    .stage{position:absolute;left:0;right:0;z-index:3;display:flex;justify-content:center}
+    .dev-wrap{position:relative;transform-origin:center}
+    .cast{position:absolute;left:50%;bottom:${r(-tbH*0.05)}px;width:${r(tbW*0.95)}px;height:${r(tbH*0.16)}px;transform:translateX(-50%);background:radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,.6) 0%, rgba(0,0,0,0) 72%);filter:blur(6px);z-index:0}
+    .tablet{position:relative;z-index:2;background:linear-gradient(150deg,#12181d,#080b0e);box-shadow:0 2px 0 rgba(255,255,255,.05) inset,0 40px 90px -20px rgba(0,0,0,.72),0 18px 40px -14px rgba(0,0,0,.55),0 0 0 1px rgba(84,153,181,.16)}
+    .tablet::before{content:"";position:absolute;inset:0;border-radius:${rad}px;padding:1px;background:linear-gradient(150deg, rgba(255,255,255,.22), rgba(255,255,255,0) 38%, rgba(84,153,181,.18));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+    .screen{position:relative;width:100%;height:100%;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.5) inset}
+    .screen img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+    .screen img.fit{object-fit:contain;object-position:top center;background:#fff}
+    .notch{position:absolute;left:50%;transform:translateX(-50%);background:#05090d;border-radius:99px;z-index:4}
+    .scr-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9fb0b8;font-size:${tabFont}px;background:repeating-linear-gradient(45deg,#eef2f4,#eef2f4 20px,#e6ebee 20px,#e6ebee 40px)}
+    .backlight{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;background:radial-gradient(120% 70% at 50% 0%, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 45%)}
+    .glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(118deg, rgba(255,255,255,.20) 0%, rgba(255,255,255,.05) 16%, rgba(255,255,255,0) 34%)}
+    .botbar{position:absolute;display:flex;align-items:flex-end;justify-content:space-between;z-index:5;gap:16px}
+    .veic-card{background:#fff;border-radius:${r(cardFont*0.85)}px;padding:${r(cardFont*0.72)}px ${r(cardFont*1.25)}px;color:${PALETTE.navy};font-weight:800;font-size:${cardFont}px;letter-spacing:-.3px;box-shadow:0 12px 26px -8px rgba(0,0,0,.55);max-width:52%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cta{display:flex;align-items:center;gap:${r(ctaFont*0.7)}px}
+    .cta-txt{text-align:right;line-height:1.18}
+    .cta-l{color:${PALETTE.cloud};font-size:${ctaFont}px;font-weight:500}
+    .cta-u{color:${PALETTE.sky};font-size:${r(ctaFont*1.02)}px;font-weight:700}
+    .cta-arrow{width:${r(ctaFont*1.95)}px;height:${r(ctaFont*1.95)}px;border-radius:50%;border:2px solid ${PALETTE.sky};color:${PALETTE.sky};display:flex;align-items:center;justify-content:center;font-size:${r(ctaFont*1.35)}px;font-weight:700;line-height:1}`;
+  const body = `${tech}<div class="vig"></div>
+    ${topbar}
+    <div class="stage" style="top:${stageTop}px">${device}</div>
+    ${botbar}`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+}
+
+// ===== Layouts alternativos de "4Selet na Mídia" (gerados+validados 2026-07-29): navegador, citação, split, selo, camadas.
+// Mesmo enquadramento de marca (logo topo, "4Selet na mídia", card do veículo, CTA). Matéria SEMPRE reta. =====
+function tplMediaNavegador({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
+  const land = width > height;
+  const minDim = Math.min(width, height);
+  const dom = (String(url || '').match(/^https?:\/\/([^/]+)/) || [, ''])[1].replace(/^www\./, '');
+  const veic = String(eyebrow || '').split(/[·|]/)[0].trim();
+  const img = resolveImage(image);
+  const logo = logoSrc(logoVariant, LOGO_LIGHT);
+
+  const px = Math.round(width * 0.06);
+  const topPad = Math.round(height * 0.12);
+  const botPad = Math.round(height * 0.135);
+  const logoH = Math.round(minDim * 0.04);
+
+  const P = PALETTE;
+
+  const brandTag =
+    '<div style="display:flex;align-items:center;gap:' + Math.round(minDim * 0.02) + 'px;">' +
+      '<div style="font-family:\'Inter\',sans-serif;font-size:' + Math.round(minDim * 0.026) + 'px;line-height:1;letter-spacing:.2px;">' +
+        '<span style="font-weight:800;color:#fff;">4Selet</span>' +
+        '<span style="font-weight:700;color:' + P.sky + ';">&nbsp;na mídia</span>' +
+      '</div>' +
+      '<div style="width:' + Math.max(3, Math.round(minDim * 0.006)) + 'px;height:' + Math.round(minDim * 0.05) + 'px;background:' + P.sky + ';border-radius:99px;"></div>' +
+    '</div>';
+
+  const topBar =
+    '<div style="position:absolute;top:' + Math.round(height * 0.05) + 'px;left:' + px + 'px;right:' + px + 'px;display:flex;align-items:center;justify-content:space-between;z-index:5;">' +
+      '<img src="' + escAttr(logo) + '" style="height:' + logoH + 'px;width:auto;display:block;" />' +
+      brandTag +
+    '</div>';
+
+  const veicCard = veic
+    ? '<div style="background:#fff;border-radius:' + Math.round(minDim * 0.022) + 'px;padding:' + Math.round(minDim * 0.018) + 'px ' + Math.round(minDim * 0.032) + 'px;box-shadow:0 ' + Math.round(minDim * 0.012) + 'px ' + Math.round(minDim * 0.03) + 'px rgba(0,0,0,.28);max-width:' + Math.round(width * 0.5) + 'px;">' +
+        '<div style="font-family:\'Inter\',sans-serif;font-weight:800;color:' + P.navy + ';font-size:' + Math.round(minDim * 0.03) + 'px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(veic) + '</div>' +
+      '</div>'
+    : '';
+
+  const ctaBlock = dom
+    ? '<div style="display:flex;align-items:center;gap:' + Math.round(minDim * 0.022) + 'px;">' +
+        '<div style="text-align:right;font-family:\'Inter\',sans-serif;line-height:1.15;">' +
+          '<div style="color:' + P.cloud + ';font-size:' + Math.round(minDim * 0.022) + 'px;font-weight:600;">Leia a matéria completa</div>' +
+          '<div style="color:' + P.sky + ';font-size:' + Math.round(minDim * 0.026) + 'px;font-weight:700;">' + esc(dom) + '</div>' +
+        '</div>' +
+        '<div style="width:' + Math.round(minDim * 0.06) + 'px;height:' + Math.round(minDim * 0.06) + 'px;border-radius:99px;border:' + Math.max(2, Math.round(minDim * 0.004)) + 'px solid ' + P.sky + ';display:flex;align-items:center;justify-content:center;color:' + P.sky + ';font-size:' + Math.round(minDim * 0.036) + 'px;font-weight:700;line-height:1;font-family:\'Inter\',sans-serif;">&#8250;</div>' +
+      '</div>'
+    : '';
+
+  const bottomBar =
+    '<div style="position:absolute;bottom:' + Math.round(height * 0.05) + 'px;left:' + px + 'px;right:' + px + 'px;display:flex;align-items:center;justify-content:space-between;gap:' + Math.round(minDim * 0.03) + 'px;z-index:5;">' +
+      veicCard +
+      ctaBlock +
+    '</div>';
+
+  // Browser window
+  const winRadius = Math.round(minDim * 0.028);
+  const chromeH = Math.round(minDim * 0.055);
+  const dotSz = Math.round(chromeH * 0.28);
+  const dotGap = Math.round(dotSz * 0.7);
+
+  const addressBar =
+    '<div style="flex:1;height:' + Math.round(chromeH * 0.6) + 'px;margin:0 ' + Math.round(chromeH * 0.4) + 'px;background:rgba(255,255,255,.14);border-radius:99px;display:flex;align-items:center;padding:0 ' + Math.round(chromeH * 0.45) + 'px;overflow:hidden;">' +
+      '<span style="color:' + P.mist + ';font-size:' + Math.round(chromeH * 0.32) + 'px;margin-right:' + Math.round(chromeH * 0.3) + 'px;line-height:1;">&#128274;</span>'.replace('&#128274;', '') +
+      '<span style="font-family:\'JetBrains Mono\',monospace;color:' + P.cloud + ';font-size:' + Math.round(chromeH * 0.34) + 'px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(dom || 'matéria') + '</span>' +
+    '</div>';
+
+  const browserChrome =
+    '<div style="height:' + chromeH + 'px;background:linear-gradient(180deg,#0d3244,#0a2a39);display:flex;align-items:center;padding:0 ' + Math.round(chromeH * 0.55) + 'px;border-bottom:1px solid rgba(255,255,255,.08);flex:0 0 auto;">' +
+      '<div style="display:flex;gap:' + dotGap + 'px;flex:0 0 auto;">' +
+        '<div style="width:' + dotSz + 'px;height:' + dotSz + 'px;border-radius:99px;background:#ff5f57;"></div>' +
+        '<div style="width:' + dotSz + 'px;height:' + dotSz + 'px;border-radius:99px;background:#febc2e;"></div>' +
+        '<div style="width:' + dotSz + 'px;height:' + dotSz + 'px;border-radius:99px;background:#28c840;"></div>' +
+      '</div>' +
+      addressBar +
+    '</div>';
+
+  const contentInner = img
+    ? '<img src="' + escAttr(img) + '" style="width:100%;height:100%;object-fit:cover;object-position:top center;display:block;" />'
+    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0a2130;padding:' + Math.round(minDim * 0.05) + 'px;box-sizing:border-box;">' +
+        '<div style="font-family:\'Inter\',sans-serif;color:#fff;font-weight:800;font-size:' + Math.round(minDim * 0.042) + 'px;line-height:1.25;text-align:center;">' + esc(headline || '') + '</div>' +
+      '</div>';
+
+  const browserWindow =
+    '<div style="width:100%;height:100%;border-radius:' + winRadius + 'px;overflow:hidden;background:#0a2a39;box-shadow:0 ' + Math.round(minDim * 0.03) + 'px ' + Math.round(minDim * 0.07) + 'px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06);display:flex;flex-direction:column;">' +
+      browserChrome +
+      '<div style="flex:1 1 auto;min-height:0;background:#fff;overflow:hidden;">' + contentInner + '</div>' +
+    '</div>';
+
+  let centerArea;
+  if (land) {
+    const winW = Math.round((width - px * 2) * 0.62);
+    centerArea =
+      '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;align-items:center;gap:' + Math.round(width * 0.04) + 'px;z-index:2;">' +
+        '<div style="width:' + winW + 'px;height:100%;flex:0 0 auto;">' + browserWindow + '</div>' +
+        '<div style="flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;">' +
+          (headline
+            ? '<div style="font-family:\'JetBrains Mono\',monospace;color:' + P.sky + ';font-size:' + Math.round(minDim * 0.024) + 'px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:' + Math.round(minDim * 0.03) + 'px;">Na imprensa</div>' +
+              '<div style="font-family:\'Inter\',sans-serif;color:#fff;font-weight:800;font-size:' + Math.round(minDim * 0.05) + 'px;line-height:1.18;">' + esc(headline) + '</div>'
+            : '<div style="font-family:\'Inter\',sans-serif;color:#fff;font-weight:800;font-size:' + Math.round(minDim * 0.055) + 'px;line-height:1.15;">4Selet<br><span style="color:' + P.sky + ';">na mídia</span></div>') +
+        '</div>' +
+      '</div>';
+  } else {
+    centerArea =
+      '<div style="position:absolute;top:' + topPad + 'px;left:' + px + 'px;right:' + px + 'px;bottom:' + botPad + 'px;display:flex;flex-direction:column;z-index:2;">' +
+        (headline
+          ? '<div style="font-family:\'Inter\',sans-serif;color:#fff;font-weight:800;font-size:' + Math.round(minDim * 0.044) + 'px;line-height:1.2;margin-bottom:' + Math.round(height * 0.028) + 'px;flex:0 0 auto;">' + esc(headline) + '</div>'
+          : '') +
+        '<div style="flex:1 1 auto;min-height:0;">' + browserWindow + '</div>' +
+      '</div>';
+  }
+
+  const circuit =
+    '<svg viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" style="position:absolute;inset:0;opacity:.12;z-index:1;" preserveAspectRatio="none">' +
+      '<g stroke="' + P.sky + '" stroke-width="' + Math.max(1, Math.round(minDim * 0.0018)) + '" fill="none">' +
+        '<path d="M0 ' + Math.round(height * 0.2) + ' H' + Math.round(width * 0.3) + ' V' + Math.round(height * 0.32) + ' H' + Math.round(width * 0.55) + '"/>' +
+        '<path d="M' + width + ' ' + Math.round(height * 0.15) + ' H' + Math.round(width * 0.72) + ' V' + Math.round(height * 0.28) + '"/>' +
+        '<path d="M' + Math.round(width * 0.12) + ' ' + height + ' V' + Math.round(height * 0.78) + ' H' + Math.round(width * 0.4) + '"/>' +
+        '<path d="M' + width + ' ' + Math.round(height * 0.82) + ' H' + Math.round(width * 0.68) + ' V' + Math.round(height * 0.7) + '"/>' +
+      '</g>' +
+      '<g fill="' + P.sky + '">' +
+        '<circle cx="' + Math.round(width * 0.3) + '" cy="' + Math.round(height * 0.2) + '" r="' + Math.round(minDim * 0.008) + '"/>' +
+        '<circle cx="' + Math.round(width * 0.55) + '" cy="' + Math.round(height * 0.32) + '" r="' + Math.round(minDim * 0.008) + '"/>' +
+        '<circle cx="' + Math.round(width * 0.72) + '" cy="' + Math.round(height * 0.28) + '" r="' + Math.round(minDim * 0.008) + '"/>' +
+        '<circle cx="' + Math.round(width * 0.4) + '" cy="' + Math.round(height * 0.78) + '" r="' + Math.round(minDim * 0.008) + '"/>' +
+        '<circle cx="' + Math.round(width * 0.68) + '" cy="' + Math.round(height * 0.7) + '" r="' + Math.round(minDim * 0.008) + '"/>' +
+      '</g>' +
+    '</svg>';
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">' + FONT_LINK +
+    '<style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:' + width + 'px;height:' + height + 'px;}</style></head>' +
+    '<body><div style="position:relative;width:' + width + 'px;height:' + height + 'px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%,' + P.blue + ' 0%,' + P.navy + ' 45%,' + P.darker + ' 100%);font-family:\'Inter\',sans-serif;">' +
+      circuit +
+      topBar +
+      centerArea +
+      bottomBar +
+    '</div></body></html>';
+}
+
+function tplMediaCitacao({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
+  const W = Number(width) || 1080;
+  const H = Number(height) || 1350;
+  const land = W > H;
+  const MIN = Math.min(W, H);
+  const MAX = Math.max(W, H);
+
+  const src = image ? resolveImage(image) : '';
+  const hasImg = !!src;
+  const quote = String(headline || '').trim();
+  const hasQuote = !!quote;
+
+  const logo = logoSrc(logoVariant, LOGO_LIGHT);
+  const P = PALETTE;
+
+  const veiculo = String(eyebrow || '').split(/[·|]/)[0].trim();
+  const domain = (String(url || '').match(/^https?:\/\/([^/]+)/) || [, ''])[1].replace(/^www\.|\/$/, '');
+  const hasDomain = !!domain;
+
+  // scaling refs
+  const padX = Math.round(W * 0.06);
+  const topSafe = Math.round(H * 0.12);
+  const botSafe = Math.round(H * 0.135);
+  const logoH = Math.round(MIN * 0.04);
+
+  // typography
+  const eyeSize = Math.round(MIN * 0.018);
+  const brandSize = Math.round(MIN * 0.028);
+  const veiculoSize = Math.round(MIN * 0.026);
+  const ctaTopSize = Math.round(MIN * 0.017);
+  const ctaDomSize = Math.round(MIN * 0.022);
+
+  // quote sizing: bigger in portrait, moderate in landscape
+  const qLen = quote.length;
+  let quoteBase = land ? MIN * 0.052 : MIN * 0.06;
+  if (qLen > 90) quoteBase *= 0.82;
+  else if (qLen > 60) quoteBase *= 0.9;
+  const quoteSize = Math.round(quoteBase);
+  const bigMarkSize = Math.round(MIN * (land ? 0.2 : 0.24));
+
+  // circuit graphism nodes
+  const circuit = `
+    <g stroke="${P.sky}" stroke-width="${Math.max(1, Math.round(MIN * 0.0016))}" fill="none" opacity="0.12">
+      <path d="M ${W * 0.05} ${H * 0.3} H ${W * 0.28} V ${H * 0.46} H ${W * 0.4}"/>
+      <path d="M ${W * 0.62} ${H * 0.62} H ${W * 0.8} V ${H * 0.78} H ${W * 0.95}"/>
+      <path d="M ${W * 0.72} ${H * 0.16} V ${H * 0.32} H ${W * 0.9}"/>
+      <path d="M ${W * 0.1} ${H * 0.7} V ${H * 0.86} H ${W * 0.34}"/>
+      <circle cx="${W * 0.28}" cy="${H * 0.3}" r="${MIN * 0.007}"/>
+      <circle cx="${W * 0.4}" cy="${H * 0.46}" r="${MIN * 0.007}"/>
+      <circle cx="${W * 0.8}" cy="${H * 0.62}" r="${MIN * 0.007}"/>
+      <circle cx="${W * 0.9}" cy="${H * 0.32}" r="${MIN * 0.007}"/>
+      <circle cx="${W * 0.34}" cy="${H * 0.86}" r="${MIN * 0.007}"/>
+      <circle cx="${W * 0.72}" cy="${H * 0.16}" r="${MIN * 0.007}"/>
+    </g>`;
+
+  // topbar (brand frame)
+  const topbar = `
+    <div style="position:absolute;top:${Math.round(H * 0.045)}px;left:${padX}px;right:${padX}px;display:flex;align-items:center;justify-content:space-between;">
+      <img src="${escAttr(logo)}" style="height:${logoH}px;width:auto;display:block;" />
+      <div style="display:flex;align-items:center;gap:${Math.round(MIN * 0.014)}px;">
+        <span style="font-family:'Inter',sans-serif;font-size:${brandSize}px;line-height:1;">
+          <span style="font-weight:800;color:#fff;">4Selet</span>
+          <span style="font-weight:700;color:${P.sky};"> na mídia</span>
+        </span>
+        <span style="display:block;width:${Math.max(2, Math.round(MIN * 0.004))}px;height:${Math.round(brandSize * 1.25)}px;background:${P.sky};border-radius:2px;"></span>
+      </div>
+    </div>`;
+
+  // footer left card + right CTA
+  const footerCard = `
+    <div style="display:inline-flex;align-items:center;background:#fff;border-radius:${Math.round(MIN * 0.02)}px;padding:${Math.round(MIN * 0.016)}px ${Math.round(MIN * 0.026)}px;box-shadow:0 ${Math.round(MIN * 0.008)}px ${Math.round(MIN * 0.024)}px rgba(0,0,0,0.28);">
+      <span style="font-family:'Inter',sans-serif;font-weight:800;color:${P.navy};font-size:${veiculoSize}px;line-height:1;letter-spacing:-0.01em;">${esc(veiculo)}</span>
+    </div>`;
+
+  const ctaRight = hasDomain ? `
+    <div style="display:flex;align-items:center;gap:${Math.round(MIN * 0.018)}px;">
+      <div style="text-align:right;">
+        <div style="font-family:'JetBrains Mono',monospace;font-weight:500;color:${P.cloud};font-size:${ctaTopSize}px;line-height:1;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:${Math.round(MIN * 0.008)}px;">Leia a matéria completa</div>
+        <div style="font-family:'Inter',sans-serif;font-weight:700;color:${P.sky};font-size:${ctaDomSize}px;line-height:1;">${esc(domain)}</div>
+      </div>
+      <div style="flex:0 0 auto;width:${Math.round(MIN * 0.058)}px;height:${Math.round(MIN * 0.058)}px;border-radius:50%;border:${Math.max(2, Math.round(MIN * 0.003))}px solid ${P.sky};display:flex;align-items:center;justify-content:center;">
+        <span style="font-family:'Inter',sans-serif;color:${P.sky};font-size:${Math.round(MIN * 0.036)}px;line-height:1;font-weight:700;margin-top:-${Math.round(MIN * 0.004)}px;">›</span>
+      </div>
+    </div>` : '';
+
+  const footer = `
+    <div style="position:absolute;bottom:${Math.round(H * 0.05)}px;left:${padX}px;right:${padX}px;display:flex;align-items:center;justify-content:space-between;gap:${padX}px;">
+      ${footerCard}
+      ${ctaRight}
+    </div>`;
+
+  // thumbnail (small straight print card)
+  const thumbCard = (w, h) => hasImg ? `
+    <div style="width:${w}px;height:${h}px;border-radius:${Math.round(MIN * 0.016)}px;overflow:hidden;box-shadow:0 ${Math.round(MIN * 0.01)}px ${Math.round(MIN * 0.03)}px rgba(0,0,0,0.4);border:${Math.max(1, Math.round(MIN * 0.002))}px solid rgba(255,255,255,0.12);flex:0 0 auto;">
+      <img src="${escAttr(src)}" style="width:100%;height:100%;object-fit:cover;object-position:top center;display:block;" />
+    </div>` : '';
+
+  // ===== central content =====
+  let center;
+
+  if (hasQuote) {
+    // big decorative quote mark + headline as editorial quote + attribution + thumbnail
+    const bigMark = `<div style="font-family:'Inter',sans-serif;font-weight:800;color:${P.sky};font-size:${bigMarkSize}px;line-height:0.7;opacity:0.9;height:${Math.round(bigMarkSize * 0.55)}px;overflow:hidden;">“</div>`;
+    const attribution = `<div style="font-family:'Inter',sans-serif;font-weight:700;color:${P.sky};font-size:${Math.round(MIN * 0.026)}px;line-height:1;margin-top:${Math.round(MIN * 0.03)}px;">— ${esc(veiculo)}</div>`;
+    const quoteBlock = `<div style="font-family:'Inter',sans-serif;font-weight:800;color:#fff;font-size:${quoteSize}px;line-height:1.18;letter-spacing:-0.015em;max-width:100%;">${esc(quote)}”</div>`;
+
+    if (land) {
+      const thW = Math.round(W * 0.26);
+      const thH = Math.round(thW * 1.15);
+      center = `
+        <div style="position:absolute;left:${padX}px;right:${padX}px;top:${topSafe}px;bottom:${botSafe}px;display:flex;align-items:center;gap:${Math.round(W * 0.05)}px;">
+          <div style="flex:1 1 auto;min-width:0;">
+            ${bigMark}
+            ${quoteBlock}
+            ${attribution}
+          </div>
+          ${thumbCard(thW, thH)}
+        </div>`;
+    } else {
+      const thW = Math.round(W * 0.4);
+      const thH = Math.round(thW * 0.72);
+      center = `
+        <div style="position:absolute;left:${padX}px;right:${padX}px;top:${topSafe}px;bottom:${botSafe}px;display:flex;flex-direction:column;justify-content:center;">
+          ${bigMark}
+          ${quoteBlock}
+          ${attribution}
+          <div style="margin-top:${Math.round(MIN * 0.05)}px;">${thumbCard(thW, thH)}</div>
+        </div>`;
+    }
+  } else {
+    // fallback: large straight print card centered, no invented text
+    if (hasImg) {
+      let cW, cH;
+      if (land) {
+        cH = Math.round((H - topSafe - botSafe) * 0.92);
+        cW = Math.round(cH * 1.25);
+        if (cW > W - padX * 2) { cW = Math.round(W * 0.6); cH = Math.round(cW * 0.8); }
+      } else {
+        cW = Math.round(W - padX * 2);
+        cH = Math.round((H - topSafe - botSafe) * 0.9);
+      }
+      center = `
+        <div style="position:absolute;left:${padX}px;right:${padX}px;top:${topSafe}px;bottom:${botSafe}px;display:flex;align-items:center;justify-content:center;">
+          <div style="width:${cW}px;height:${cH}px;border-radius:${Math.round(MIN * 0.02)}px;overflow:hidden;box-shadow:0 ${Math.round(MIN * 0.014)}px ${Math.round(MIN * 0.04)}px rgba(0,0,0,0.45);border:${Math.max(1, Math.round(MIN * 0.0025))}px solid rgba(255,255,255,0.14);">
+            <img src="${escAttr(src)}" style="width:100%;height:100%;object-fit:cover;object-position:top center;display:block;" />
+          </div>
+        </div>`;
+    } else {
+      const bigMark = `<div style="font-family:'Inter',sans-serif;font-weight:800;color:${P.sky};font-size:${bigMarkSize}px;line-height:0.7;">“</div>`;
+      center = `
+        <div style="position:absolute;left:${padX}px;right:${padX}px;top:${topSafe}px;bottom:${botSafe}px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;">
+          ${bigMark}
+          <div style="font-family:'Inter',sans-serif;font-weight:800;color:#fff;font-size:${Math.round(MIN * 0.04)}px;line-height:1.2;">${esc(veiculo)}</div>
+        </div>`;
+    }
+  }
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+${FONT_LINK}
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:${W}px;height:${H}px;}
+  body{overflow:hidden;background:${P.navy};}
+  .stage{position:relative;width:${W}px;height:${H}px;overflow:hidden;
+    background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${P.blue} 0%, ${P.navy} 45%, ${P.darker} 100%);}
+  .circuit{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <svg class="circuit" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${circuit}</svg>
+    ${topbar}
+    ${center}
+    ${footer}
+  </div>
+</body>
+</html>`;
+}
+
+function tplMediaSplit({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
+  const land = width > height;
+  const minDim = Math.min(width, height);
+  const imgSrc = image ? resolveImage(image) : '';
+  const hasHeadline = String(headline || '').trim().length > 0;
+  const veiculo = String(eyebrow || '').split(/[·|]/)[0].trim();
+  const domain = (String(url || '').match(/^https?:\/\/([^/]+)/) || [, ''])[1].replace(/^www\./, '');
+
+  const logo = logoSrc(logoVariant, LOGO_LIGHT);
+  const logoH = Math.round(minDim * 0.04);
+
+  const padTop = Math.round(height * 0.12);
+  const padBottom = Math.round(height * 0.135);
+  const padSide = Math.round(width * 0.06);
+
+  const barTopH = Math.round(minDim * 0.045);
+  const barBotH = Math.round(minDim * 0.065);
+
+  const p = PALETTE;
+
+  const headlineSize = land ? Math.round(width * 0.036) : Math.round(width * 0.052);
+  const eyebrowSize = Math.round(minDim * 0.02);
+  const brandTagSize = Math.round(minDim * 0.026);
+  const cardTextSize = Math.round(minDim * 0.028);
+  const ctaTopSize = Math.round(minDim * 0.019);
+  const ctaBotSize = Math.round(minDim * 0.024);
+
+  const circuit = `
+    <svg class="ckt" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="${p.sky}" stroke-width="${Math.max(1, Math.round(minDim*0.0018))}" fill="none" opacity="0.12">
+        <path d="M0 ${Math.round(height*0.22)} H ${Math.round(width*0.28)} V ${Math.round(height*0.34)} H ${Math.round(width*0.5)}"/>
+        <path d="M ${width} ${Math.round(height*0.7)} H ${Math.round(width*0.7)} V ${Math.round(height*0.58)} H ${Math.round(width*0.5)}"/>
+        <path d="M ${Math.round(width*0.14)} ${height} V ${Math.round(height*0.82)} H ${Math.round(width*0.34)}"/>
+        <path d="M ${Math.round(width*0.86)} 0 V ${Math.round(height*0.16)} H ${Math.round(width*0.64)}"/>
+      </g>
+      <g fill="${p.sky}" opacity="0.12">
+        <circle cx="${Math.round(width*0.28)}" cy="${Math.round(height*0.22)}" r="${Math.round(minDim*0.008)}"/>
+        <circle cx="${Math.round(width*0.5)}" cy="${Math.round(height*0.34)}" r="${Math.round(minDim*0.008)}"/>
+        <circle cx="${Math.round(width*0.7)}" cy="${Math.round(height*0.7)}" r="${Math.round(minDim*0.008)}"/>
+        <circle cx="${Math.round(width*0.34)}" cy="${Math.round(height*0.82)}" r="${Math.round(minDim*0.008)}"/>
+        <circle cx="${Math.round(width*0.64)}" cy="${Math.round(height*0.16)}" r="${Math.round(minDim*0.008)}"/>
+      </g>
+    </svg>`;
+
+  const brandTop = `
+    <div class="brand-top">
+      <img class="logo" src="${escAttr(logo)}" alt="4Selet"/>
+      <div class="brand-tag">
+        <span class="bar-v"></span>
+        <span><span class="b1">4Selet</span> <span class="b2">na mídia</span></span>
+      </div>
+    </div>`;
+
+  const footer = `
+    <div class="footer">
+      ${veiculo ? `<div class="veic-card">${esc(veiculo)}</div>` : `<div></div>`}
+      ${domain ? `<div class="cta">
+        <div class="cta-txt">
+          <div class="cta-top">Leia a matéria completa</div>
+          <div class="cta-bot">${esc(domain)}</div>
+        </div>
+        <div class="cta-arrow">›</div>
+      </div>` : `<div></div>`}
+    </div>`;
+
+  const deviceInner = imgSrc
+    ? `<img class="shot" src="${escAttr(imgSrc)}" alt=""/>`
+    : `<div class="shot shot-empty"></div>`;
+
+  const device = `
+    <div class="device">
+      <div class="device-frame">${deviceInner}</div>
+    </div>`;
+
+  const textBlock = `
+    <div class="text-block">
+      <div class="eyebrow">${esc(String(eyebrow || veiculo || '').toUpperCase())}</div>
+      ${hasHeadline ? `<h1 class="headline">${esc(headline)}</h1>` : ``}
+    </div>`;
+
+  const showText = hasHeadline;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${FONT_LINK}
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:${width}px;height:${height}px}
+  .stage{position:relative;width:${width}px;height:${height}px;overflow:hidden;
+    background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${p.blue} 0%, ${p.navy} 45%, ${p.darker} 100%);
+    font-family:'Inter',system-ui,sans-serif;color:#fff}
+  .ckt{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .frame{position:absolute;inset:0;
+    padding:${padTop}px ${padSide}px ${padBottom}px ${padSide}px;
+    display:flex;flex-direction:column}
+  .brand-top{position:absolute;top:${Math.round(height*0.045)}px;left:${padSide}px;right:${padSide}px;
+    display:flex;align-items:center;justify-content:space-between}
+  .logo{height:${logoH}px;width:auto;display:block}
+  .brand-tag{display:flex;align-items:center;gap:${Math.round(minDim*0.014)}px;
+    font-size:${brandTagSize}px;line-height:1}
+  .bar-v{width:${Math.max(2,Math.round(minDim*0.004))}px;height:${Math.round(brandTagSize*1.1)}px;
+    background:${p.sky};border-radius:2px;display:inline-block}
+  .b1{font-weight:800;color:#fff}
+  .b2{font-weight:700;color:${p.sky}}
+
+  .content{flex:1;display:flex;min-height:0;
+    ${land ? 'flex-direction:row;align-items:center;gap:'+Math.round(width*0.05)+'px'
+           : 'flex-direction:column;align-items:stretch;gap:'+Math.round(height*0.045)+'px'}}
+
+  .text-block{${land ? 'flex:1 1 44%;' : (showText ? 'flex:0 0 auto;' : 'display:none;')}
+    display:flex;flex-direction:column;gap:${Math.round(minDim*0.022)}px;
+    ${land ? '' : 'text-align:'+(land?'left':'left')+';'}}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-weight:500;color:${p.sky};
+    font-size:${eyebrowSize}px;letter-spacing:${Math.round(eyebrowSize*0.14)}px;
+    text-transform:uppercase;line-height:1.3;
+    ${showText?'':'display:none'}}
+  .headline{font-weight:800;color:#fff;font-size:${headlineSize}px;
+    line-height:1.12;letter-spacing:-0.01em;
+    text-wrap:balance}
+
+  .device{${land ? 'flex:1 1 52%;' : 'flex:1 1 auto;min-height:0;'}
+    display:flex;align-items:center;justify-content:center}
+  .device-frame{position:relative;
+    max-width:100%;max-height:100%;
+    ${land ? 'height:'+Math.round(height*0.72)+'px;' : (showText? 'height:100%;' : 'height:100%;')}
+    aspect-ratio:${land ? '4 / 3' : '4 / 3'};
+    ${land ? '' : 'width:100%;'}
+    border-radius:${Math.round(minDim*0.02)}px;
+    background:${p.darker};
+    padding:${Math.round(minDim*0.012)}px;
+    box-shadow:0 ${Math.round(minDim*0.03)}px ${Math.round(minDim*0.06)}px rgba(0,0,0,.45),
+      0 0 0 ${Math.max(1,Math.round(minDim*0.002))}px rgba(84,153,181,.35);
+    transform:rotate(${land? -1.2 : -1}deg);
+    overflow:hidden}
+  .shot{width:100%;height:100%;display:block;object-fit:cover;object-position:top center;
+    border-radius:${Math.round(minDim*0.012)}px}
+  .shot-empty{background:linear-gradient(160deg,${p.navy},${p.darker})}
+
+  .footer{position:absolute;bottom:${Math.round(height*0.05)}px;left:${padSide}px;right:${padSide}px;
+    display:flex;align-items:center;justify-content:space-between;gap:${Math.round(width*0.03)}px}
+  .veic-card{background:#fff;color:${p.navy};font-weight:800;
+    font-size:${cardTextSize}px;line-height:1;
+    padding:${Math.round(minDim*0.016)}px ${Math.round(minDim*0.028)}px;
+    border-radius:${Math.round(minDim*0.02)}px;
+    box-shadow:0 ${Math.round(minDim*0.006)}px ${Math.round(minDim*0.014)}px rgba(0,0,0,.25);
+    max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cta{display:flex;align-items:center;gap:${Math.round(minDim*0.016)}px}
+  .cta-txt{text-align:right;line-height:1.2}
+  .cta-top{color:${p.cloud};font-size:${ctaTopSize}px;font-weight:500}
+  .cta-bot{color:${p.sky};font-size:${ctaBotSize}px;font-weight:700}
+  .cta-arrow{width:${Math.round(minDim*0.055)}px;height:${Math.round(minDim*0.055)}px;
+    border:${Math.max(1,Math.round(minDim*0.003))}px solid ${p.sky};border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:${p.sky};font-size:${Math.round(minDim*0.036)}px;font-weight:700;
+    line-height:0;padding-bottom:${Math.round(minDim*0.004)}px}
+</style></head>
+<body>
+  <div class="stage">
+    ${circuit}
+    ${brandTop}
+    <div class="frame">
+      <div class="content">
+        ${land ? textBlock + device : textBlock + device}
+      </div>
+    </div>
+    ${footer}
+  </div>
+</body></html>`;
+}
+
+function tplMediaSelo({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
+  const r = Math.round;
+  const land = width > height;
+  const mn = Math.min(width, height);
+  const img = resolveImage(image);
+  const shot = img ? `<img src="${escAttr(img)}" alt=""/>` : `<div class="scr-empty">print da matéria</div>`;
+  const veh = String(eyebrow || "").split(/[·|]/)[0].trim();
+  const domain = (String(url || "").match(/^https?:\/\/([^/]+)/) || [, ""])[1].replace(/^www\./, "");
+
+  // area segura: topo ~12% / rodape ~13.5% / lateral ~6%
+  const px = r(width * 0.06);
+  const topSafe = r(height * 0.12);
+  const botSafe = r(height * 0.135);
+  const availH = height - topSafe - botSafe;
+  const availW = width - px * 2;
+
+  // CARD do print: retangulo reto, moldura fina. Retrato ~4:5, paisagem ~4:3 e menor (deixa ar).
+  let cardW, cardH;
+  if (land) {
+    cardH = r(Math.min(availH * 0.9, availW * 0.5 * (5 / 4)));
+    cardW = r(cardH * (4 / 5));
+    if (cardW > availW * 0.52) { cardW = r(availW * 0.52); cardH = r(cardW * (5 / 4)); }
+  } else {
+    cardW = r(Math.min(availW * 0.82, availH * (4 / 5)));
+    cardH = r(cardW * (5 / 4));
+    if (cardH > availH * 0.94) { cardH = r(availH * 0.94); cardW = r(cardH * (4 / 5)); }
+  }
+  const cardRad = r(cardW * 0.045);
+  const frame = Math.max(6, r(cardW * 0.022));
+  const innerRad = Math.max(6, cardRad - frame);
+
+  // SELO circular: sobreposto no canto superior-direito do card.
+  const sealD = r(mn * (land ? 0.2 : 0.24));
+  const ring = Math.max(2, r(sealD * 0.02));
+  const sealFont = r(sealD * 0.088);
+  const sealBig = r(sealD * 0.34);
+  // texto curvo em torno do "4" central: circulo SVG com path para textPath.
+  const cx = sealD / 2, cy = sealD / 2;
+  const rTop = r(sealD * 0.365), rBot = r(sealD * 0.365);
+  const topArc = `M ${cx - rTop} ${cy} A ${rTop} ${rTop} 0 0 1 ${cx + rTop} ${cy}`;
+  const botArc = `M ${cx - rBot} ${cy} A ${rBot} ${rBot} 0 0 0 ${cx + rBot} ${cy}`;
+  const seal = `<div class="seal" style="width:${sealD}px;height:${sealD}px">
+      <svg viewBox="0 0 ${sealD} ${sealD}" width="${sealD}" height="${sealD}">
+        <defs>
+          <path id="selarcT" d="${topArc}"/>
+          <path id="selarcB" d="${botArc}"/>
+        </defs>
+        <circle cx="${cx}" cy="${cy}" r="${r(sealD / 2 - ring)}" fill="${PALETTE.darker}" stroke="${PALETTE.sky}" stroke-width="${ring}"/>
+        <circle cx="${cx}" cy="${cy}" r="${r(sealD / 2 - ring * 3.2)}" fill="none" stroke="${PALETTE.sky}" stroke-width="1" opacity="0.5"/>
+        <text class="selt" fill="${PALETTE.cloud}"><textPath href="#selarcT" startOffset="50%" text-anchor="middle">DESTAQUE NA IMPRENSA</textPath></text>
+        <text class="selt" fill="${PALETTE.sky}"><textPath href="#selarcB" startOffset="50%" text-anchor="middle">4 S E L E T · N A · M Í D I A</textPath></text>
+      </svg>
+      <div class="seal-num">4</div>
+    </div>`;
+
+  // grafismo de circuito
+  const tech = `<svg class="tech" viewBox="0 0 ${width} ${height}" fill="none" preserveAspectRatio="xMidYMid slice">
+    <g stroke="${PALETTE.sky}" stroke-width="1" opacity="0.12">
+      <path d="M-20 ${r(height * .26)} H${r(width * .13)} V${r(height * .32)} H${r(width * .22)}"/>
+      <path d="M${width + 20} ${r(height * .28)} H${r(width * .87)} V${r(height * .22)}"/>
+      <path d="M-20 ${r(height * .74)} H${r(width * .16)} V${r(height * .68)}"/>
+      <path d="M${width + 20} ${r(height * .72)} H${r(width * .84)} V${r(height * .78)} H${r(width * .69)}"/>
+    </g>
+    <g fill="${PALETTE.sky}" opacity="0.42">
+      <circle cx="${r(width * .22)}" cy="${r(height * .32)}" r="3"/><circle cx="${r(width * .87)}" cy="${r(height * .22)}" r="3"/>
+      <circle cx="${r(width * .16)}" cy="${r(height * .68)}" r="3"/><circle cx="${r(width * .69)}" cy="${r(height * .78)}" r="3"/>
+    </g></svg>`;
+
+  const logoH = r(mn * 0.04);
+  const kickFont = r(mn * 0.028);
+  const cardFont = r(mn * 0.024);
+  const ctaFont = r(mn * 0.022);
+
+  const topbar = `<div class="topbar" style="top:${r(height * 0.055)}px;left:${px}px;right:${px}px">
+      <img class="logo4" src="${logoSrc(logoVariant, LOGO_LIGHT)}" alt="4Selet"/>
+      <div class="kicker"><b>4Selet</b><i>na mídia</i><span class="kbar"></span></div></div>`;
+  const botbar = `<div class="botbar" style="bottom:${r(height * 0.05)}px;left:${px}px;right:${px}px">
+      ${veh ? `<div class="veic-card">${esc(veh)}</div>` : "<span></span>"}
+      ${domain ? `<div class="cta"><div class="cta-txt"><div class="cta-l">Leia a matéria completa</div><div class="cta-u">${esc(domain)}</div></div><div class="cta-arrow">&#8250;</div></div>` : "<span></span>"}</div>`;
+
+  const stage = `<div class="stage">
+      <div class="card-wrap" style="width:${cardW}px">
+        <div class="mshot" style="width:${cardW}px;height:${cardH}px;border-radius:${cardRad}px;padding:${frame}px">
+          <div class="screen" style="border-radius:${innerRad}px">${shot}<div class="glass"></div></div>
+        </div>
+        ${seal}
+      </div>
+    </div>`;
+
+  const css = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
+    .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${PALETTE.blue} 0%, ${PALETTE.navy} 45%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
+    .tech{position:absolute;inset:0;z-index:1;pointer-events:none}
+    .vig{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(140% 92% at 50% 116%, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 55%),radial-gradient(120% 80% at 50% -18%, rgba(84,153,181,.12) 0%, rgba(0,0,0,0) 60%)}
+    .topbar{position:absolute;display:flex;align-items:center;justify-content:space-between;z-index:6}
+    .logo4{height:${logoH}px;display:block;opacity:.98}
+    .kicker{display:flex;align-items:center;font-size:${kickFont}px;color:#fff}
+    .kicker b{font-weight:800;color:#fff}.kicker i{font-style:normal;font-weight:700;color:${PALETTE.sky};margin-left:${r(kickFont * 0.28)}px}
+    .kicker .kbar{width:2px;height:${r(kickFont * 1.15)}px;background:${PALETTE.sky};margin-left:${r(kickFont * 0.5)}px;border-radius:2px}
+    .stage{position:absolute;left:${px}px;right:${px}px;top:${topSafe}px;height:${availH}px;display:flex;align-items:center;justify-content:center;z-index:3}
+    .card-wrap{position:relative}
+    .mshot{position:relative;background:linear-gradient(150deg,#fdfefe,#e7edf0);box-shadow:0 40px 90px -22px rgba(0,0,0,.7),0 16px 40px -16px rgba(0,0,0,.55),0 0 0 1px rgba(84,153,181,.2)}
+    .screen{position:relative;width:100%;height:100%;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(7,33,43,.12) inset}
+    .screen img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+    .scr-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9fb0b8;font-size:${r(cardW * 0.06)}px;background:repeating-linear-gradient(45deg,#eef2f4,#eef2f4 20px,#e6ebee 20px,#e6ebee 40px)}
+    .glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(118deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 16%, rgba(255,255,255,0) 34%)}
+    .seal{position:absolute;top:${r(-sealD * 0.34)}px;right:${r(-sealD * 0.24)}px;z-index:5;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
+    .seal svg{display:block}
+    .selt{font-family:'JetBrains Mono',monospace;font-size:${sealFont}px;font-weight:500;letter-spacing:${r(sealFont * 0.12)}px}
+    .seal-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:${sealBig}px;color:#fff;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+    .botbar{position:absolute;display:flex;align-items:flex-end;justify-content:space-between;z-index:6;gap:16px}
+    .veic-card{background:#fff;border-radius:${r(cardFont * 0.85)}px;padding:${r(cardFont * 0.72)}px ${r(cardFont * 1.25)}px;color:${PALETTE.navy};font-weight:800;font-size:${cardFont}px;letter-spacing:-.3px;box-shadow:0 12px 26px -8px rgba(0,0,0,.5);max-width:52%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cta{display:flex;align-items:center;gap:${r(ctaFont * 0.7)}px}
+    .cta-txt{text-align:right;line-height:1.18}
+    .cta-l{color:${PALETTE.cloud};font-size:${ctaFont}px;font-weight:500}
+    .cta-u{color:${PALETTE.sky};font-size:${r(ctaFont * 1.02)}px;font-weight:700}
+    .cta-arrow{width:${r(ctaFont * 1.95)}px;height:${r(ctaFont * 1.95)}px;border-radius:50%;border:2px solid ${PALETTE.sky};color:${PALETTE.sky};display:flex;align-items:center;justify-content:center;font-size:${r(ctaFont * 1.35)}px;font-weight:700;line-height:1}`;
+
+  const body = `${tech}<div class="vig"></div>${topbar}${stage}${botbar}`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+}
+
+function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
+  const W = width, H = height;
+  const land = W > H;
+  const mn = Math.min(W, H);
+  const dom = (String(url || '').match(/^https?:\/\/([^/]+)/) || [, ''])[1].replace(/^www\./, '');
+  const veiculo = String(eyebrow || '').split(/[·|]/)[0].trim();
+  const brandTop = String(eyebrow || '').trim();
+  const src = image ? resolveImage(image) : '';
+  const logo = logoSrc(logoVariant, LOGO_LIGHT);
+
+  const P = PALETTE;
+  const pad = Math.round(mn * 0.06);
+  const topH = Math.round(H * 0.12);
+  const botH = Math.round(H * 0.135);
+  const safeTop = topH;
+  const safeBot = botH;
+  const safeH = H - safeTop - safeBot;
+  const safeW = W - pad * 2;
+
+  const logoH = Math.round(mn * 0.04);
+  const eyebrowFont = Math.round(mn * 0.018);
+  const brandFont = Math.round(mn * 0.026);
+  const veicFont = Math.round(mn * 0.026);
+  const ctaTopFont = Math.round(mn * 0.016);
+  const ctaDomFont = Math.round(mn * 0.021);
+  const arrowR = Math.round(mn * 0.032);
+
+  // ---- área central: camadas ----
+  // Em paisagem: texto à esquerda, camadas à direita.
+  // Em retrato: camadas ocupam a área segura central.
+  let stageW, stageH, stageLeft, stageTop, textBlock = '';
+
+  if (land) {
+    const colGap = Math.round(safeW * 0.05);
+    const textW = Math.round(safeW * 0.42);
+    stageW = safeW - textW - colGap;
+    stageH = safeH;
+    stageLeft = pad + textW + colGap;
+    stageTop = safeTop;
+
+    const kFont = Math.round(mn * 0.052);
+    if (headline) {
+      textBlock = `
+      <div style="position:absolute;left:${pad}px;top:${safeTop}px;width:${textW}px;height:${safeH}px;display:flex;flex-direction:column;justify-content:center;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:${eyebrowFont}px;letter-spacing:.18em;text-transform:uppercase;color:${P.sky};margin-bottom:${Math.round(mn*0.024)}px;">Na imprensa</div>
+        <div style="font-family:'Inter',sans-serif;font-weight:800;font-size:${kFont}px;line-height:1.08;color:#fff;letter-spacing:-.01em;">${esc(headline)}</div>
+        <div style="width:${Math.round(mn*0.09)}px;height:${Math.round(mn*0.006)}px;background:${P.sky};border-radius:99px;margin-top:${Math.round(mn*0.03)}px;"></div>
+      </div>`;
+    } else {
+      textBlock = `
+      <div style="position:absolute;left:${pad}px;top:${safeTop}px;width:${textW}px;height:${safeH}px;display:flex;flex-direction:column;justify-content:center;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:${eyebrowFont}px;letter-spacing:.18em;text-transform:uppercase;color:${P.sky};margin-bottom:${Math.round(mn*0.028)}px;">Na imprensa</div>
+        <div style="font-family:'Inter',sans-serif;font-weight:800;font-size:${Math.round(mn*0.06)}px;line-height:1.05;color:#fff;letter-spacing:-.01em;">Cobertura<br/>na imprensa</div>
+        <div style="width:${Math.round(mn*0.09)}px;height:${Math.round(mn*0.006)}px;background:${P.sky};border-radius:99px;margin-top:${Math.round(mn*0.03)}px;"></div>
+      </div>`;
+    }
+  } else {
+    stageW = safeW;
+    stageH = safeH;
+    stageLeft = pad;
+    stageTop = safeTop;
+  }
+
+  // Card frontal e traseiro dentro do stage.
+  // Ratio dos cards: aproxima o print (retrato-ish). Front maior, back deslocado atrás.
+  const cardAspect = land ? (stageW * 0.72) / stageH : stageW / (stageH * 0.82) > 0 ? null : null;
+
+  // Dimensiona o card frontal para caber deixando espaço para o deslocamento do de trás.
+  const offX = Math.round(mn * 0.045);
+  const offY = Math.round(mn * 0.05);
+
+  let frontW, frontH;
+  if (land) {
+    frontH = Math.round(stageH * 0.86);
+    frontW = Math.round(stageW * 0.82);
+  } else {
+    frontW = Math.round(stageW * 0.86);
+    frontH = Math.round(stageH * 0.82);
+  }
+  // garante que o card de trás (deslocado) caiba no stage
+  if (frontW + offX > stageW) frontW = stageW - offX;
+  if (frontH + offY > stageH) frontH = stageH - offY;
+
+  // centraliza o conjunto (front + offsets) no stage
+  const groupW = frontW + offX;
+  const groupH = frontH + offY;
+  const gLeft = stageLeft + Math.round((stageW - groupW) / 2);
+  const gTop = stageTop + Math.round((stageH - groupH) / 2);
+
+  // back card (atrás, deslocado para baixo-direita), menor e mais apagado
+  const backScale = 0.94;
+  const backW = Math.round(frontW * backScale);
+  const backH = Math.round(frontH * backScale);
+  const backLeft = gLeft + offX + Math.round((frontW - backW) / 2);
+  const backTop = gTop + offY + Math.round((frontH - backH) / 2);
+
+  const frontLeft = gLeft;
+  const frontTop = gTop;
+
+  const radius = Math.round(mn * 0.02);
+  const frontBorder = Math.max(2, Math.round(mn * 0.004));
+
+  const imgStyle = `width:100%;height:100%;object-fit:cover;object-position:top center;display:block;`;
+  const fallbackChip = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${P.navy};color:${P.mist};font-family:'Inter',sans-serif;font-weight:700;`;
+
+  const backInner = src
+    ? `<img src="${escAttr(src)}" style="${imgStyle}"/>`
+    : `<div style="${fallbackChip}"></div>`;
+  const frontInner = src
+    ? `<img src="${escAttr(src)}" style="${imgStyle}"/>`
+    : (headline
+        ? `<div style="${fallbackChip}font-size:${Math.round(mn*0.03)}px;padding:${pad}px;text-align:center;line-height:1.2;">${esc(headline)}</div>`
+        : `<div style="${fallbackChip}"></div>`);
+
+  const camadas = `
+    <div style="position:absolute;left:${backLeft}px;top:${backTop}px;width:${backW}px;height:${backH}px;border-radius:${radius}px;overflow:hidden;box-shadow:0 ${Math.round(mn*0.02)}px ${Math.round(mn*0.05)}px rgba(0,0,0,.45);transform:rotate(-1.5deg);filter:saturate(.85) brightness(.82);">
+      ${backInner}
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,53,84,.28), rgba(7,33,43,.5));"></div>
+    </div>
+    <div style="position:absolute;left:${frontLeft}px;top:${frontTop}px;width:${frontW}px;height:${frontH}px;border-radius:${radius}px;overflow:hidden;border:${frontBorder}px solid rgba(255,255,255,.9);box-shadow:0 ${Math.round(mn*0.03)}px ${Math.round(mn*0.07)}px rgba(0,0,0,.55);transform:rotate(1deg);background:#fff;">
+      ${frontInner}
+    </div>`;
+
+  // ---- barra vertical + brand topo-direita ----
+  const brandBar = `<span style="display:inline-block;width:${Math.max(2,Math.round(mn*0.004))}px;height:${brandFont}px;background:${P.sky};border-radius:99px;margin-right:${Math.round(mn*0.014)}px;"></span>`;
+
+  // ---- rodapé direita (CTA) ----
+  const ctaBlock = dom ? `
+    <div style="position:absolute;right:${pad}px;bottom:${Math.round(botH*0.28)}px;display:flex;align-items:center;gap:${Math.round(mn*0.016)}px;">
+      <div style="text-align:right;">
+        <div style="font-family:'Inter',sans-serif;font-weight:500;font-size:${ctaTopFont}px;color:${P.cloud};letter-spacing:.01em;">Leia a matéria completa</div>
+        <div style="font-family:'Inter',sans-serif;font-weight:700;font-size:${ctaDomFont}px;color:${P.sky};letter-spacing:.01em;">${esc(dom)}</div>
+      </div>
+      <div style="width:${arrowR*2}px;height:${arrowR*2}px;border-radius:99px;border:${Math.max(2,Math.round(mn*0.0035))}px solid ${P.sky};display:flex;align-items:center;justify-content:center;color:${P.sky};font-family:'Inter',sans-serif;font-weight:700;font-size:${Math.round(arrowR*1.3)}px;line-height:1;">›</div>
+    </div>` : '';
+
+  // ---- grafismo de circuito ----
+  const circuit = `
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="position:absolute;inset:0;opacity:.12;" preserveAspectRatio="none">
+      <g stroke="${P.sky}" stroke-width="${Math.max(1,Math.round(mn*0.0016))}" fill="none">
+        <path d="M0 ${Math.round(H*0.2)} H ${Math.round(W*0.28)} V ${Math.round(H*0.34)} H ${Math.round(W*0.4)}"/>
+        <path d="M${W} ${Math.round(H*0.62)} H ${Math.round(W*0.7)} V ${Math.round(H*0.5)} H ${Math.round(W*0.58)}"/>
+        <path d="M${Math.round(W*0.12)} ${H} V ${Math.round(H*0.78)} H ${Math.round(W*0.26)}"/>
+        <path d="M${Math.round(W*0.88)} 0 V ${Math.round(H*0.16)} H ${Math.round(W*0.74)}"/>
+      </g>
+      <g fill="${P.sky}">
+        <circle cx="${Math.round(W*0.28)}" cy="${Math.round(H*0.2)}" r="${Math.round(mn*0.006)}"/>
+        <circle cx="${Math.round(W*0.4)}" cy="${Math.round(H*0.34)}" r="${Math.round(mn*0.006)}"/>
+        <circle cx="${Math.round(W*0.7)}" cy="${Math.round(H*0.62)}" r="${Math.round(mn*0.006)}"/>
+        <circle cx="${Math.round(W*0.58)}" cy="${Math.round(H*0.5)}" r="${Math.round(mn*0.006)}"/>
+        <circle cx="${Math.round(W*0.26)}" cy="${Math.round(H*0.78)}" r="${Math.round(mn*0.006)}"/>
+        <circle cx="${Math.round(W*0.74)}" cy="${Math.round(H*0.16)}" r="${Math.round(mn*0.006)}"/>
+      </g>
+    </svg>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${FONT_LINK}
+  <style>*{margin:0;padding:0;box-sizing:border-box;}</style></head>
+  <body style="margin:0;">
+    <div class="card" style="position:relative;width:${W}px;height:${H}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${P.blue} 0%, ${P.navy} 45%, ${P.darker} 100%);font-family:'Inter',sans-serif;">
+      ${circuit}
+
+      <div style="position:absolute;left:${pad}px;top:${Math.round(topH*0.34)}px;display:flex;align-items:center;">
+        <img src="${escAttr(logo)}" style="height:${logoH}px;display:block;"/>
+      </div>
+
+      <div style="position:absolute;right:${pad}px;top:${Math.round(topH*0.34)}px;display:flex;align-items:center;height:${logoH}px;">
+        ${brandBar}
+        <span style="font-family:'Inter',sans-serif;font-size:${brandFont}px;line-height:1;">
+          <span style="font-weight:800;color:#fff;">4Selet</span> <span style="font-weight:700;color:${P.sky};">na mídia</span>
+        </span>
+      </div>
+
+      ${textBlock}
+      ${camadas}
+
+      <div style="position:absolute;left:${pad}px;bottom:${Math.round(botH*0.28)}px;background:#fff;border-radius:${Math.round(mn*0.014)}px;padding:${Math.round(mn*0.014)}px ${Math.round(mn*0.024)}px;box-shadow:0 ${Math.round(mn*0.008)}px ${Math.round(mn*0.02)}px rgba(0,0,0,.35);max-width:${Math.round(W*0.45)}px;">
+        <span style="font-family:'Inter',sans-serif;font-weight:800;font-size:${veicFont}px;color:${P.navy};letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${esc(veiculo)}</span>
+      </div>
+
+      ${ctaBlock}
+    </div>
+  </body></html>`;
+}
+
 function tplMedia({ width, height, image, url, eyebrow, headline, model, logo: logoVariant }) {
   const land = width > height;
+  if (model === "hand_tablet" || model === "celular") return tplMediaTabletClean({ width, height, image, eyebrow, url, model, logo: logoVariant });
+  const LAYOUTS = { navegador: tplMediaNavegador, citacao: tplMediaCitacao, split: tplMediaSplit, selo: tplMediaSelo, camadas: tplMediaCamadas };
+  if (LAYOUTS[model]) return LAYOUTS[model]({ width, height, image, eyebrow, url, headline, logo: logoVariant });
   const dev = mediaDevice(model || "tablet", resolveImage(image), url);
   const veic = eyebrow ? `<div class="veic">${esc(eyebrow)}</div>` : "";
   const title = `<div class="ttl">4Selet <span class="a">na mídia</span></div>`;
@@ -1106,12 +2078,23 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark, only } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark, only, media } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   const tplId = (template && TEMPLATES[template]) ? template : "editorial";
   const logoV = LOGO_IDS.indexOf(logo) >= 0 ? logo : "";
   const wmV = WATERMARK_IDS.indexOf(watermark) >= 0 ? watermark : "";
+  // 4Selet na Mídia: a prévia monta o mockup de device (tplMedia) a partir dos metadados do form
+  // (print/modelo/veículo), no 1º tamanho marcado. Sem print ainda, mostra a moldura vazia.
+  if (ct.kind === "media") {
+    const m = media || {};
+    const szKey = (Array.isArray(m.sizes) ? m.sizes : []).find((k) => MEDIA_SIZES[k]) || "4x5";
+    const sz = MEDIA_SIZES[szKey];
+    const html = tplMedia({ width: sz.w, height: sz.h, image: m.print || "", url: m.url || "", eyebrow: m.vehicle || "", headline: m.headline || "", model: m.model || "hand_tablet", logo: logoV });
+    const png = await htmlStringToPngDataUrl(html, sz.w, sz.h);
+    if (!png.ok) return { ok: false, error: png.error };
+    return { ok: true, dataUrl: png.dataUrl, template: m.model || "tablet", kind: ct.kind, width: sz.w, height: sz.h };
+  }
   // Carrossel: a previa mostra TODOS os slides (nao so a capa) — renderiza cada um in-memory,
   // com a MESMA montagem do render final (carouselSlidesHtml).
   if (ct.kind === "carousel") {
@@ -1271,7 +2254,7 @@ async function renderMedia(folder, opts) {
   const meta = status.media || {};
   const model = (opts && opts.template) || meta.model || "tablet";
   const logoV = pickLogo(loc, opts && opts.logo);
-  const props = { image: meta.print || (opts && opts.image) || "", url: meta.url || "", eyebrow: meta.vehicle || "", model, logo: logoV };
+  const props = { image: meta.print || (opts && opts.image) || "", url: meta.url || "", eyebrow: meta.vehicle || "", headline: meta.headline || "", model, logo: logoV };
   let sizes = (Array.isArray(meta.sizes) ? meta.sizes : []).filter((k) => MEDIA_SIZES[k]);
   if (!sizes.length) sizes = ["4x5", "16x9"];
   const dir = path.join(loc.path, "ads");
@@ -1304,5 +2287,6 @@ async function render(folder, kind, opts) {
 module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
+  tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
 };

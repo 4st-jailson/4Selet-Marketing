@@ -113,11 +113,42 @@ function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "ima
 function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video" || k === "media"; }
 // Modelos de dispositivo da peça "4Selet na Mídia" (miniatura schematic + nome).
 const MEDIA_MODELS = [
-  { id: "tablet", name: "Tablet", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
+  { id: "hand_tablet", name: "Tablet", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
   { id: "celular", name: "Celular", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
-  { id: "notebook", name: "Notebook", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="24" height="16" rx="1.5"/><path d="M4 30h32l-2-4H6z"/></svg>' },
-  { id: "janela", name: "Janela", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/></svg>' },
+  { id: "navegador", name: "Navegador", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/><circle cx="9" cy="11" r=".6" fill="currentColor"/><circle cx="12.5" cy="11" r=".6" fill="currentColor"/><circle cx="16" cy="11" r=".6" fill="currentColor"/></svg>' },
+  { id: "citacao", name: "Citação", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="currentColor"><path d="M11 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H19v9.5zM24 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H32v9.5z"/></svg>' },
+  { id: "split", name: "Split", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="20" y1="8" x2="20" y2="32"/></svg>' },
+  { id: "selo", name: "Selo", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="6.5"/></svg>' },
+  { id: "camadas", name: "Camadas", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="12" y="6" width="20" height="26" rx="2"/><path d="M8 12v20a2 2 0 002 2h16"/></svg>' },
 ];
+function mediaModelName(id) { const m = MEDIA_MODELS.find((x) => x.id === id); return m ? m.name : (id || "Tablet"); }
+// Tamanho da arte (px) por tipo de conteúdo — referência p/ escolher imagens do tamanho certo na busca.
+function artSizeForType(typeId) {
+  const ct = metaType(typeId); const k = ct && ct.kind;
+  if (k === "image") return { w: 1080, h: 1080 };       // quadrado
+  return { w: 1080, h: 1350 };                            // feed / carrossel / mídia — retrato 4:5
+}
+// Proporção ideal do print por modelo de dispositivo — avisa (sem travar) quando o print destoa
+// muito, pra o usuário não se assustar com um corte. r = largura/altura do print.
+const MEDIA_ASPECT = {
+  hand_tablet: null, // tablet na mão: cover-crop tolera vertical e horizontal — não avisa
+  tablet: { warnIf: (r) => r > 1.15, msg: "Dica: o Tablet mostra melhor um print VERTICAL (tela em pé). Um print largo aparece pequeno." },
+  celular: { warnIf: (r) => r > 0.85, msg: "Dica: no Celular, use um print de CELULAR (vertical) — um print largo corta bastante." },
+  notebook: { warnIf: (r) => r < 1.1, msg: "Dica: o Notebook mostra melhor um print HORIZONTAL (tela larga)." },
+  janela: { warnIf: (r) => r < 1.1, msg: "Dica: a Janela (navegador) mostra melhor um print HORIZONTAL (página de site)." },
+};
+// Compara a proporção do print enviado com o modelo escolhido e mostra a dica se destoar.
+function checkMediaAspect() {
+  const el = $("#g-media-aspect"); if (!el) return;
+  const url = ($("#g-media-image") || {}).value, model = ($("#g-media-model") || {}).value;
+  const spec = MEDIA_ASPECT[model];
+  const clear = () => { el.textContent = ""; el.style.display = "none"; };
+  if (!url || !spec) return clear();
+  const img = new Image();
+  img.onload = () => { const r = img.naturalWidth / img.naturalHeight; if (spec.warnIf(r)) { el.textContent = spec.msg; el.style.display = ""; } else clear(); };
+  img.onerror = clear;
+  img.src = url;
+}
 // Tamanhos/formatos que a peça "4Selet na Mídia" pode gerar (marca mais de um).
 const MEDIA_SIZE_OPTS = [
   { id: "4x5", label: "Feed 4:5" },
@@ -339,7 +370,11 @@ function pexelsSearchModal(opts) {
         const r = await API.pexelsSearch({ query: query, perPage: 24, orientation: opts.orientation });
         if (!r || !r.ok) throw new Error((r && r.error === "no_key") ? "Configure a chave da Pexels em Configurações." : ((r && r.error) || "falha na busca"));
         if (!r.photos.length) { grid.innerHTML = '<p class="muted">Nada encontrado. Tente outras palavras.</p>'; return; }
-        grid.innerHTML = r.photos.map((p) => `<button class="px-cell" data-full="${esc(p.full)}" data-name="${esc(query)}" title="Foto de ${esc(p.photographer || "Pexels")}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" /></button>`).join("");
+        grid.innerHTML = r.photos.map((p) => {
+          const dims = (p.width && p.height) ? p.width + "×" + p.height : "";
+          const low = !!(opts.target && opts.target.w && p.width && (p.width < opts.target.w || p.height < opts.target.h));
+          return `<button class="px-cell${low ? " px-low" : ""}" data-full="${esc(p.full)}" data-name="${esc(query)}" title="Foto de ${esc(p.photographer || "Pexels")}${dims ? " · " + dims + "px" : ""}${low ? " — menor que a arte" : ""}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" />${dims ? `<span class="px-cell-dim">${dims}${low ? ' <span class="px-low-tag">⚠</span>' : ""}</span>` : ""}</button>`;
+        }).join("");
         grid.querySelectorAll(".px-cell").forEach((cell) => { cell.onclick = async () => {
           grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = true; }); cell.classList.add("picking");
           try { const pick = await API.pexelsPick({ url: cell.dataset.full, name: cell.dataset.name }); if (!pick || !pick.ok || !pick.url) throw new Error((pick && pick.error) || "falha ao baixar"); done(pick.url); }
@@ -363,10 +398,33 @@ function pexelsSearchModal(opts) {
 // escolhida, como o modal) ou null se ele voltar sem escolher.
 const PX_COLORS = [["", "Todas"], ["red", "Vermelho"], ["orange", "Laranja"], ["yellow", "Amarelo"], ["green", "Verde"], ["turquoise", "Turquesa"], ["blue", "Azul"], ["violet", "Violeta"], ["pink", "Rosa"], ["brown", "Marrom"], ["black", "Preto"], ["gray", "Cinza"], ["white", "Branco"]];
 const PX_HEX = { red: "#C0392B", orange: "#E67E22", yellow: "#F1C40F", green: "#27AE60", turquoise: "#1ABC9C", blue: "#006494", violet: "#8E44AD", pink: "#E84393", brown: "#8D6E63", black: "#111418", gray: "#95A5A6", white: "#ffffff" };
+// Refino de cor no FRONT: a Pexels filtra por &color de forma FRACA (ex.: "branco" devolve fotos
+// escuras). Pontuamos cada foto pela avg_color REAL vs a cor escolhida e ficamos só com as que combinam.
+function pxHexToRgb(hex) { hex = String(hex || "").replace("#", ""); if (hex.length !== 6) return null; const n = parseInt(hex, 16); return isNaN(n) ? null : [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function pxRgbToHsl(r, g, b) { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, s = 0, l = (mx + mn) / 2; if (mx !== mn) { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; } return [h, s, l]; }
+const PX_HUE = { red: 2, orange: 28, yellow: 50, green: 130, turquoise: 168, blue: 205, violet: 278, pink: 330, brown: 25 };
+// score 0-1 de quão bem a cor média (avgHex) casa com a cor pedida (name).
+function pxColorScore(avgHex, name) {
+  const rgb = pxHexToRgb(avgHex); if (!rgb) return 0.5;
+  const hsl = pxRgbToHsl(rgb[0], rgb[1], rgb[2]), h = hsl[0], s = hsl[1], l = hsl[2];
+  if (name === "white") return (l > 0.62 && s < 0.4) ? Math.min(1, 0.3 + (l - 0.62) / 0.3) : 0;
+  if (name === "black") return (l < 0.3 && s < 0.5) ? Math.min(1, 0.3 + (0.3 - l) / 0.25) : 0;
+  if (name === "gray") return (s < 0.16 && l >= 0.25 && l <= 0.8) ? 1 - Math.abs(l - 0.5) : 0;
+  const t = PX_HUE[name]; if (t == null) return 0.5;
+  let dh = Math.abs(h - t); if (dh > 180) dh = 360 - dh;
+  if (name === "brown") return (dh < 45 && s > 0.12 && s < 0.62 && l < 0.55) ? Math.max(0, 1 - dh / 45) : 0;
+  // cores que "encardem" quando escuras (amarelo vira oliva; laranja/verde/turquesa somem) exigem mais luz.
+  const darkFloor = name === "yellow" ? 0.45 : (name === "orange" || name === "green" || name === "turquoise") ? 0.3 : 0.16;
+  const lightOk = (l >= darkFloor && l <= 0.9) ? 1 : 0.25;
+  return Math.max(0, 1 - dh / 35) * Math.min(1, s / 0.25) * lightOk;
+}
 function pexelsSearchPage(opts) {
   opts = opts || {};
   return new Promise((resolve) => {
-    const st = { query: (opts.query || "").trim(), orientation: opts.orientation || "", color: "", size: "", page: 1, total: 0, hasMore: false, busy: false };
+    // target = tamanho mínimo ATIVO (px) p/ FILTRAR — null por padrão (traz TODOS os tamanhos; o
+    // usuário só define se quiser). artSize = tamanho da arte (só sugestão/atalho, não filtra sozinho).
+    // seq = supera buscas concorrentes (a última seleção vence). colorNote = texto da contagem por cor.
+    const st = { query: (opts.query || "").trim(), orientation: opts.orientation || "", color: "", size: "", page: 1, total: 0, hasMore: false, busy: false, seq: 0, target: null, artSize: (opts.target && opts.target.w && opts.target.h) ? opts.target : null, colorNote: "" };
     const ov = document.createElement("div"); ov.className = "px-page";
     ov.innerHTML = `
       <div class="px-page-bar">
@@ -380,12 +438,13 @@ function pexelsSearchPage(opts) {
             <input id="pxp-q" class="px-tool-q" placeholder="ex.: produtor digital, escritório moderno, aperto de mãos…" value="${esc(st.query)}" />
             <button class="btn btn-primary" id="pxp-go">Buscar</button>
           </div>
+          <div class="px-target-note">Tamanho mínimo da foto: <input type="number" class="px-size-in" id="pxp-tw" min="0" step="10" placeholder="${st.artSize ? st.artSize.w : "larg."}" title="Largura mínima em pixels" /><span class="px-size-x">×</span><input type="number" class="px-size-in" id="pxp-th" min="0" step="10" placeholder="${st.artSize ? st.artSize.h : "alt."}" title="Altura mínima em pixels" /><span class="px-size-u">px</span> <span class="muted">— vazio traz todas. Preencher evita fotos pequenas e borradas.</span>${st.artSize ? ` <button type="button" class="px-size-use" id="pxp-size-use" title="Preencher com o tamanho da sua arte">usar o tamanho da arte (${st.artSize.w}×${st.artSize.h})</button>` : ""}</div>
           <div class="px-facets">
             <div class="px-facet"><span class="px-facet-lab">Orientação</span><div class="px-seg" data-facet="orientation">
               <button type="button" data-v="" class="on">Todas</button><button type="button" data-v="portrait">Retrato</button><button type="button" data-v="landscape">Paisagem</button><button type="button" data-v="square">Quadrada</button>
             </div></div>
-            <div class="px-facet"><span class="px-facet-lab">Tamanho mínimo</span><div class="px-seg" data-facet="size">
-              <button type="button" data-v="" class="on">Qualquer</button><button type="button" data-v="large">Grande</button><button type="button" data-v="medium">Média</button><button type="button" data-v="small">Pequena</button>
+            <div class="px-facet"><span class="px-facet-lab">Resolução mínima</span><div class="px-seg" data-facet="size">
+              <button type="button" data-v="" class="on">Qualquer</button><button type="button" data-v="medium">Alta</button><button type="button" data-v="large">Máxima</button>
             </div></div>
             <div class="px-facet px-facet-color"><span class="px-facet-lab">Cor predominante</span><div class="px-colors" data-facet="color">
               ${PX_COLORS.map(([v, name]) => `<button type="button" data-v="${v}" class="px-color${v === "" ? " on" : ""}" title="${esc(name)}"><span class="px-swatch${v === "" ? " none" : ""}" style="${v ? "background:" + PX_HEX[v] : ""}"></span></button>`).join("")}
@@ -408,30 +467,68 @@ function pexelsSearchPage(opts) {
     document.addEventListener("keydown", onKey);
     qy("#pxp-back").onclick = () => close(null);
 
+    // HTML de uma foto: miniatura + dimensões em px (no hover) + crédito. As fotos menores que o
+    // tamanho mínimo (quando definido) já foram FILTRADAS fora em renderList — aqui não há marcação.
+    function cellHtml(p) {
+      const dims = (p.width && p.height) ? p.width + "×" + p.height : "";
+      const tt = "Foto de " + (p.photographer || "Pexels") + (dims ? " · " + dims + "px" : "");
+      return `<button class="px-cell px-cell-lg" data-full="${esc(p.full)}" data-name="${esc(st.query)}" title="${esc(tt)}">`
+        + `<img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" />`
+        + (dims ? `<span class="px-cell-dim">${dims}</span>` : "")
+        + `<span class="px-cell-cred">${esc(p.photographer || "Pexels")}</span></button>`;
+    }
+    // Monta a grade a partir de st.lastPhotos aplicando o FILTRO de tamanho mínimo (st.target; null =
+    // TODOS os tamanhos) + atualiza a contagem. Puramente local — não chama a API.
+    function renderList() {
+      let vis = st.lastPhotos || [];
+      if (st.target) vis = vis.filter((p) => p.width >= st.target.w && p.height >= st.target.h);
+      const cnt = qy("#pxp-count");
+      if (!vis.length) {
+        grid.innerHTML = '<p class="muted px-page-hint">' + (st.target ? ("Nenhuma foto a partir de " + st.target.w + "×" + st.target.h + "px nesta busca — reduza o tamanho mínimo ou tente outro termo.") : "Nada encontrado.") + "</p>";
+        if (cnt) cnt.textContent = "Página " + st.page + (st.target ? " · 0 desse tamanho" : "");
+        return;
+      }
+      grid.innerHTML = vis.map(cellHtml).join("");
+      grid.querySelectorAll(".px-cell").forEach((cell) => { cell.onclick = () => pick(cell); });
+      if (cnt) {
+        const ctx = st.color ? st.colorNote : (st.total ? st.total.toLocaleString("pt-BR") + " resultados" : "");
+        cnt.textContent = "Página " + st.page + " · " + (st.target ? (vis.length + " fotos a partir de " + st.target.w + "×" + st.target.h + "px") : ctx);
+      }
+    }
     async function run() {
       st.query = (qEl.value || "").trim();
       if (st.query.length < 2) { grid.innerHTML = '<p class="muted px-page-hint">Digite ao menos 2 letras.</p>'; pager.hidden = true; return; }
-      if (st.busy) return;
-      st.busy = true;
+      const seq = ++st.seq; // toda busca ganha um número; só a MAIS RECENTE renderiza (troca de filtro rápida não "perde")
       grid.innerHTML = '<div class="px-loading"><span class="spinner"></span> buscando…</div>';
       try {
-        const r = await API.pexelsSearch({ query: st.query, perPage: 30, page: st.page, orientation: st.orientation, color: st.color, size: st.size });
+        // Com cor selecionada, pede MAIS por página (80, ainda 1 chamada) p/ ter de onde filtrar —
+        // o filtro de cor da Pexels é fraco, então refinamos aqui pela avg_color real de cada foto.
+        const r = await API.pexelsSearch({ query: st.query, perPage: st.color ? 80 : 30, page: st.page, orientation: st.orientation, color: st.color, size: st.size });
+        if (seq !== st.seq) return; // uma busca mais nova começou — descarta este resultado (evita resultado fora de sincronia com os filtros)
         if (!r || !r.ok) throw new Error((r && r.error === "no_key") ? "Configure a chave da Pexels em Configurações." : ((r && r.error) || "falha na busca"));
         st.total = r.total || 0; st.hasMore = !!r.hasMore;
-        if (!r.photos.length) { grid.innerHTML = '<p class="muted px-page-hint">Nada encontrado. Ajuste as palavras ou os filtros.</p>'; pager.hidden = true; st.busy = false; return; }
-        grid.innerHTML = r.photos.map((p) => `<button class="px-cell px-cell-lg" data-full="${esc(p.full)}" data-name="${esc(st.query)}" title="Foto de ${esc(p.photographer || "Pexels")}"><img src="${esc(p.thumb)}" alt="${esc(p.alt || "")}" /><span class="px-cell-cred">${esc(p.photographer || "Pexels")}</span></button>`).join("");
-        grid.querySelectorAll(".px-cell").forEach((cell) => { cell.onclick = () => pick(cell); });
+        if (!r.photos.length) { grid.innerHTML = '<p class="muted px-page-hint">Nada encontrado. Ajuste as palavras ou os filtros.</p>'; pager.hidden = true; st.lastPhotos = []; return; }
+        // REFINO DE COR: pontua cada foto pela avg_color e fica só com as que combinam (ordenadas). Se
+        // casaram poucas, mostra as MELHORES ordenadas (não deixa a tela vazia). Sem cor, passa direto.
+        let photos = r.photos; st.colorNote = "";
+        if (st.color) {
+          const scored = photos.map((p) => ({ p, sc: pxColorScore(p.avg_color, st.color) })).sort((a, b) => b.sc - a.sc);
+          const good = scored.filter((x) => x.sc >= 0.3).map((x) => x.p);
+          if (good.length >= 5) { photos = good.slice(0, 45); st.colorNote = photos.length + " fotos nesta cor"; }
+          else { photos = scored.slice(0, 30).map((x) => x.p); st.colorNote = "poucas fotos nesta cor neste tema — mostrando as mais próximas"; } // honesto: a fonte não tem essa cor
+        }
+        st.lastPhotos = photos; // guarda p/ re-renderizar (ex.: mudar o tamanho mínimo) SEM nova chamada à API
         pager.hidden = false;
-        qy("#pxp-count").textContent = st.total ? ("Página " + st.page + " · " + st.total.toLocaleString("pt-BR") + " resultados") : ("Página " + st.page);
+        renderList(); // aplica o filtro de tamanho mínimo (st.target) + monta a grade + a contagem
         qy("#pxp-prev").disabled = st.page <= 1;
         qy("#pxp-next").disabled = !st.hasMore;
         grid.scrollTop = 0;
       } catch (e) {
+        if (seq !== st.seq) return;
         const err = (e && e.data && e.data.error) || (e && e.message) || "erro";
         const msg = err === "no_key" ? "Configure a chave da Pexels em Configurações." : err;
         grid.innerHTML = '<p class="field-error" style="display:block">' + esc(msg) + "</p>"; pager.hidden = true;
       }
-      st.busy = false;
     }
     async function pick(cell) {
       if (st.busy) return;
@@ -446,15 +543,30 @@ function pexelsSearchPage(opts) {
         cell.classList.remove("picking"); grid.querySelectorAll(".px-cell").forEach((c) => { c.disabled = false; }); st.busy = false;
       }
     }
-    // Filtros (segmentos + cores): trocam o estado, resetam a página e re-buscam se já há um termo.
+    // Debounce: trocar filtros em sequência rápida dispara UMA busca (não uma por clique) — economiza a cota da API.
+    let _fTimer = null;
+    const runSoon = () => { clearTimeout(_fTimer); _fTimer = setTimeout(() => run(), 300); };
+    // Filtros (segmentos + cores): trocam o estado, resetam a página e re-buscam (debounced) se já há termo.
     ov.querySelectorAll("[data-facet]").forEach((seg) => {
       seg.addEventListener("click", (e) => {
         const b = e.target.closest("button[data-v]"); if (!b) return;
         st[seg.dataset.facet] = b.dataset.v; st.page = 1;
         seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-        if (st.query.length >= 2) run();
+        if (st.query.length >= 2) runSoon();
       });
     });
+    // Tamanho MÍNIMO (opcional): os campos larg×alt FILTRAM as fotos menores (VAZIO = todos os
+    // tamanhos). É filtro LOCAL sobre a última busca — nenhuma chamada extra à API.
+    const twEl = qy("#pxp-tw"), thEl = qy("#pxp-th");
+    const applySize = () => {
+      const w = parseInt(twEl.value, 10) || 0, h = parseInt(thEl.value, 10) || 0;
+      st.target = (w > 0 && h > 0) ? { w, h } : null;
+      renderList();
+    };
+    if (twEl) twEl.addEventListener("input", applySize);
+    if (thEl) thEl.addEventListener("input", applySize);
+    const useBtn = qy("#pxp-size-use"); // atalho: preenche com o tamanho da arte
+    if (useBtn) useBtn.onclick = () => { if (st.artSize && twEl && thEl) { twEl.value = st.artSize.w; thEl.value = st.artSize.h; applySize(); } };
     qy("#pxp-go").onclick = () => { st.page = 1; run(); };
     qEl.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); st.page = 1; run(); } };
     qy("#pxp-prev").onclick = () => { if (st.page > 1) { st.page--; run(); } };
@@ -798,7 +910,7 @@ function taskCard(t) {
   const tagsHtml = (t.tags && t.tags.length)
     ? '<div class="cc-tags">' + t.tags.slice(0, 4).map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") + (t.tags.length > 4 ? '<span class="cc-tag more">+' + (t.tags.length - 4) + "</span>" : "") + "</div>"
     : "";
-  return `<a class="content-card ${hasThumb ? "" : "thumb-fallback"}" href="#/task/${encodeURIComponent(t.folder)}">
+  return `<a class="content-card ${hasThumb ? "" : "thumb-fallback"}${t.kind === "media" ? " cc-media" : ""}" href="#/task/${encodeURIComponent(t.folder)}">
     <div class="cc-thumb">${thumbHtml(t)}<span class="cc-ph">${kindIcon(t.kind)}</span>${newBadge}${zoomBtn}</div>
     <div class="cc-body">
       <div class="cc-title">${esc(displayName(t))}</div>
@@ -1260,7 +1372,7 @@ function mediaGallery(folder, task) {
   const imgs = task.files.filter((f) => f.isImage && !/\.bg\.png$/i.test(f.rel));
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
-  const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed") && !(task.status && task.status.imported);
+  const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed" || task.kind === "media") && !(task.status && task.status.imported);
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
     .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
@@ -1740,9 +1852,9 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +     '<button data-mark="4selet">"4SELET" (ao fundo)</button>'
     +     '<button data-mark="outline">"SELET" contornado</button>'
     +   "</div></details>"
-    +   '<button class="btn btn-sm" id="he-add-img">+ Imagem</button>'
-    +   '<button class="btn btn-sm" id="he-search-img" title="Buscar foto de banco (Pexels) e inserir">+ Buscar imagem</button>'
-    +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm">+ Bloco</summary><div class="ed-pop">'
+    +   '<button class="btn btn-sm" id="he-add-img" title="Enviar uma imagem do seu computador">+ Enviar imagem</button>'
+    +   '<button class="btn btn-sm" id="he-search-img" title="Buscar foto de banco de imagens (Pexels) e inserir">+ Buscar imagem</button>'
+    +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm" title="Inserir um elemento pronto da marca: CTA, rodapé ou selo">+ Elemento pronto</summary><div class="ed-pop">'
     +     '<button data-block="cta">CTA WhatsApp</button>'
     +     '<button data-block="footer">Rodapé @4selet</button>'
     +     '<button data-block="selo">Selo Taxa Zero</button>'
@@ -1806,11 +1918,13 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +   '<button class="btn btn-sm" id="he-parent" title="Selecionar o grupo/bloco em volta do item (pra mover vários juntos)">Grupo ↑</button>'
     +   '<button class="btn btn-sm" id="he-dup" title="Duplicar (Ctrl+D)">Duplicar</button>'
     +   '<span class="ed-sep"></span>'
+    +   '<button class="btn btn-sm he-dock-toggle" id="he-dims-btn" title="Mostrar/ocultar as dimensões da arte e do item selecionado (em pixels)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></svg><span>Medidas</span></button>'
+    +   '<span class="ed-sep"></span>'
     +   '<div class="he-grp"><button class="btn btn-sm ed-ico" id="he-undo" title="Desfazer (Ctrl+Z)">↶</button>'
     +   '<button class="btn btn-sm ed-ico" id="he-redo" title="Refazer (Ctrl+Y)">↷</button></div>'
     +   '<button class="btn btn-sm btn-danger" id="he-del" title="Remover (Del)">Remover</button>'
     + "</div>"
-    + '<div class="editor-stage"><div class="he-wrap" id="he-wrap"><iframe id="he-frame" title="Editor visual" sandbox="allow-same-origin"></iframe><div class="he-overlay" id="he-overlay"></div><div class="he-safe" id="he-safe" hidden><span class="he-safe-tag">Área segura</span></div><div class="he-guideline he-guideline-v" id="he-gl-v" hidden></div><div class="he-guideline he-guideline-h" id="he-gl-h" hidden></div><div class="he-handle" id="he-handle" style="display:none"></div></div></div>'
+    + '<div class="editor-stage"><div class="he-dims" id="he-dims" hidden></div><div class="he-wrap" id="he-wrap"><iframe id="he-frame" title="Editor visual" sandbox="allow-same-origin"></iframe><div class="he-overlay" id="he-overlay"></div><div class="he-safe" id="he-safe" hidden><span class="he-safe-tag">Área segura</span></div><div class="he-guideline he-guideline-v" id="he-gl-v" hidden></div><div class="he-guideline he-guideline-h" id="he-gl-h" hidden></div><div class="he-handle" id="he-handle" style="display:none"></div></div></div>'
     + '<div class="he-tools" id="he-tools">'
     +   '<button class="he-tool" id="he-zoom-out" title="Diminuir (Ctrl -)" aria-label="Diminuir zoom">&#8722;</button>'
     +   '<button class="he-tool he-zoom-val" id="he-zoom-val" title="Ajustar à tela (Ctrl 0)">100%</button>'
@@ -1859,6 +1973,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     const card = doc.querySelector(".card") || doc.body;
     artW = card.offsetWidth || 1080; artH = card.offsetHeight || 1080;
     frame.style.width = artW + "px"; frame.style.height = artH + "px";
+    updateDims(); // arte carregou → atualiza o readout de dimensões (se ligado)
     const stage = ov.querySelector(".editor-stage");
     fitScale = Math.min((stage.clientWidth - 48) / artW, (stage.clientHeight - 48) / artH, 1);
     applyZoom(fitScale); // aplica escala "ajustar à tela" + atualiza wrap/handle/leitura de %
@@ -1878,6 +1993,11 @@ async function openHtmlEditor(folder, task, rel, opts) {
     // e move/redimensiona via transform (translate + scale) — pixel-perfect no re-render.
     Array.from(doc.querySelectorAll("body *")).forEach((el) => {
       if (el === card) return;
+      // Mockup de mídia (4Selet na Mídia): a foto do device + o print deformado por matrix3d +
+      // o vidro (.ht-stage) são o "quadro" da peça — travados. Sem isto, arrastar o print
+      // sobrescreveria o matrix3d (getTf só entende translate/rotate/scale) e destruiria o warp.
+      // O título, o veículo e o logo (fora do .ht-stage) seguem editáveis normalmente.
+      if (el.closest(".ht-stage")) return;
       // Já dentro de algo editável (ex.: o <svg> de uma caixa de ícone já marcada)? ignora,
       // pra não empilhar seleção. (querySelectorAll dá ordem de documento: pai antes do filho.)
       if (el.parentElement && el.parentElement.closest("[data-he]")) return;
@@ -2027,6 +2147,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     handle.style.left = ((cx + dx) * curScale - 7) + "px";
     handle.style.top = ((cy + dy) * curScale - 7) + "px";
     handle.style.display = "block";
+    updateDims(); // mantém o readout de dimensões em dia ao mover/redimensionar
   }
   // Zoom do palco: reescala o iframe e ajusta o wrap; a matemática de arrastar/redimensionar
   // já usa curScale, então mover/redimensionar continua 1:1 em qualquer zoom.
@@ -2112,15 +2233,38 @@ async function openHtmlEditor(folder, task, rel, opts) {
   // select(el) = seleção única (limpa o resto). select(el, true) = Shift: alterna 'el' no conjunto.
   // select(null) = desseleciona tudo. A alça de resize só aparece com EXATAMENTE 1 selecionado.
   function select(el, additive) {
-    if (!el) { selection.clear(); current = null; selMark(); syncToolbar(null); handle.style.display = "none"; renderLayers(); return; }
+    if (!el) { selection.clear(); current = null; selMark(); syncToolbar(null); handle.style.display = "none"; renderLayers(); updateDims(); return; }
     if (additive) {
       if (selection.has(el)) { selection.delete(el); if (current === el) current = selection.size ? [...selection][selection.size - 1] : null; }
       else { selection.add(el); current = el; }
     } else { selection.clear(); selection.add(el); current = el; }
     selMark(); syncToolbar(current);
     if (selection.size === 1 && current) positionHandle(); else handle.style.display = "none";
-    renderLayers();
+    renderLayers(); updateDims();
   }
+  // Readout DISCRETO de dimensões (toggle "he-dims-btn", lembrado por localStorage): mostra o tamanho
+  // da ARTE (artW×artH) e o tamanho+posição do ITEM selecionado, em pixels da arte. Some quando desligado.
+  function updateDims() {
+    const box = ov.querySelector("#he-dims"); if (!box || box.hidden) return;
+    let html = '<span class="hed-art">Arte <b>' + Math.round(artW) + "×" + Math.round(artH) + " px</b></span>";
+    const doc = frame.contentDocument, cardEl = doc && doc.querySelector(".card");
+    if (cardEl && selection.size === 1 && current) {
+      const cr = cardEl.getBoundingClientRect(), r = current.getBoundingClientRect();
+      html += '<span class="hed-sel">Item <b>' + Math.round(r.width) + "×" + Math.round(r.height) + " px</b> · x " + Math.round(r.left - cr.left) + " · y " + Math.round(r.top - cr.top) + "</span>";
+    } else if (selection.size > 1) {
+      html += '<span class="hed-sel">' + selection.size + " itens selecionados</span>";
+    }
+    box.innerHTML = html;
+  }
+  function applyDims(on) {
+    const box = ov.querySelector("#he-dims"), btn = ov.querySelector("#he-dims-btn");
+    if (box) box.hidden = !on;
+    if (btn) btn.classList.toggle("on", on);
+    try { localStorage.setItem("he_dims2", on ? "1" : "0"); } catch (e) {}
+    if (on) updateDims();
+  }
+  if (ov.querySelector("#he-dims-btn")) ov.querySelector("#he-dims-btn").onclick = () => applyDims(ov.querySelector("#he-dims").hidden);
+  try { applyDims(localStorage.getItem("he_dims2") !== "0"); } catch (e) {}
   function selectAll() {
     const doc = frame.contentDocument, card = doc.querySelector(".card") || doc.body;
     const all = [...card.querySelectorAll("[data-he]")]; if (!all.length) return;
@@ -2190,7 +2334,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
   $("#he-add-img").onclick = () => $("#he-file").click();
   $("#he-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => addImgNode(rd.result, { top: 120 }); rd.readAsDataURL(f); e.target.value = ""; };
   // Buscar foto de banco (Pexels) → baixa SÓ a escolhida pro /uploads/ e insere como imagem editável.
-  $("#he-search-img").onclick = async () => { const url = await pexelsSearchModal({}); if (url) addImgNode(url, { top: 120 }); };
+  $("#he-search-img").onclick = async () => { const url = await pexelsSearchModal({ target: { w: Math.round(artW), h: Math.round(artH) } }); if (url) addImgNode(url, { top: 120 }); };
   // Pintar o FUNDO do slide (o .card é o piso — nada some atrás dele). Cor sólida no lugar do
   // gradiente/padrão. Snapshot só ao confirmar a cor (change), não a cada arraste do seletor.
   $("#he-bg").onclick = () => $("#he-bg-input").click();
@@ -2486,7 +2630,8 @@ async function openHtmlEditor(folder, task, rel, opts) {
     requestAnimationFrame(refit); // recomputa "ajustar à tela" pro novo espaço
   }
   $("#he-dock").onclick = () => setDock(!ov.classList.contains("he-dock-left"));
-  try { if (localStorage.getItem(HE_DOCK_KEY) === "1") setDock(true); } catch (e) {}
+  // PADRÃO = barra à esquerda (dock): abre docado a menos que o usuário tenha escolhido "no topo".
+  try { if (localStorage.getItem(HE_DOCK_KEY) !== "0") setDock(true); } catch (e) { setDock(true); }
 
   // Ctrl/Cmd + roda do mouse = zoom (padrão dos editores). Sem Ctrl, rola o palco normalmente.
   ov.querySelector(".editor-stage").addEventListener("wheel", onWheelZoom, { passive: false });
@@ -3525,15 +3670,24 @@ async function viewCreate(arg, query) {
         <p class="muted create-lead">Você descreve uma vez. A IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing faria.</p>
 
         <div class="form-section">
-          <div class="form-section-head"><span class="fs-num">1</span><h4>O que criar</h4></div>
-          <div class="field"><label>Tipo de conteúdo</label>
+          <div class="form-section-head"><span class="fs-num">1</span><h4>Sobre a peça</h4></div>
+          <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="hint" style="margin-top:4px">Descreva em uma frase o que você quer comunicar — é daqui que a IA parte.</div><div class="field-error" id="e-brief" role="alert"></div></div>
+          <div class="field"><label>Título da peça <span class="hint">(nome só pra você achar depois — sugerimos a partir do tema)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
+          <div class="field"><label>Assunto da peça <span class="hint">(o tema editorial — ex.: Taxa Zero, Educacional, Prova. Deixe em branco que a IA decide)</span></label>
+            <select id="g-pillar">${pillarOpts}</select>
+            <div class="hint" id="g-pillar-desc"></div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-head"><span class="fs-num">2</span><h4>Formato — onde vai publicar</h4></div>
+          <div class="field"><label>Formato da peça <span class="hint">Não sabe qual? Comece pelo Feed do Instagram.</span></label>
             <div class="type-grid" id="g-type-grid">${typeCards}</div>
             <input type="hidden" id="g-type" value="${esc(preType)}" />
             <div class="hint" id="g-type-desc"></div>
           </div>
           <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
           <div class="field"><label>Campanha <span class="hint">(opcional — liga a peça à campanha e já sugere o tema)</span></label><div class="camp-pick"><select id="g-camp">${campOpts}</select><button type="button" class="btn btn-sm btn-ghost" id="g-camp-new" title="Criar uma campanha sem sair desta tela">＋ Nova campanha</button></div></div>
-          <div class="field"><label>IA que vai gerar <span class="hint">(escolha o provedor; o modelo de cada um fica em Configurações)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
         </div>
 
         <div class="form-section media-only" id="g-media-section" style="display:none">
@@ -3547,9 +3701,11 @@ async function viewCreate(arg, query) {
             <div class="field"><label>Veículo</label><input id="g-media-vehicle" placeholder="ex.: Valor Econômico" /></div>
             <div class="field"><label>Link da matéria <span class="hint">(opcional)</span></label><input id="g-media-url" type="url" placeholder="https://valor.globo.com/..." /></div>
           </div>
+          <div class="field"><label>Manchete da matéria <span class="hint">(opcional — usada nos modelos Citação e Split)</span></label><input id="g-media-headline" placeholder="ex.: Por que o produtor digital deixou de escolher plataforma pela taxa" /></div>
           <div class="field"><label>Modelo do dispositivo <span class="hint">(como o print aparece na arte)</span></label>
             <div class="model-pick" id="g-media-model-pick">${MEDIA_MODELS.map((m, i) => `<button type="button" class="model-card${i === 0 ? " on" : ""}" data-model="${esc(m.id)}">${m.svg}<span>${esc(m.name)}</span></button>`).join("")}</div>
-            <input type="hidden" id="g-media-model" value="tablet" />
+            <input type="hidden" id="g-media-model" value="${esc(MEDIA_MODELS[0].id)}" />
+            <div class="hint" id="g-media-aspect" style="display:none;color:var(--warn);margin-top:2px"></div>
           </div>
           <div class="field"><label>Tamanhos a gerar <span class="hint">(marque um ou mais — Feed 4:5 é o publicável no Instagram)</span></label>
             <div class="size-pick" id="g-media-sizes">${MEDIA_SIZE_OPTS.map((s) => `<label class="size-chip"><input type="checkbox" value="${esc(s.id)}"${(s.id === "4x5" || s.id === "16x9") ? " checked" : ""}/>${esc(s.label)}</label>`).join("")}</div>
@@ -3557,21 +3713,11 @@ async function viewCreate(arg, query) {
         </div>
 
         <div class="form-section">
-          <div class="form-section-head"><span class="fs-num">2</span><h4>Sobre a peça</h4></div>
-          <div class="field"><label>Título da peça <span class="hint">(nome legível, ex.: “Taxa Zero — produtores 50k+”)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
-          <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="field-error" id="e-brief" role="alert"></div></div>
-          <div class="field"><label>Pilar de conteúdo <span class="hint">(o tema central da peça — seu feed não é só Taxa Zero)</span></label>
-            <select id="g-pillar">${pillarOpts}</select>
-            <div class="hint" id="g-pillar-desc"></div>
-          </div>
-          <div class="field"><label>Data</label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
-        </div>
-
-        <div class="form-section">
           <div class="form-section-head"><span class="fs-num">3</span><h4>Ajustes <span class="fs-opt">— opcional</span></h4></div>
         <details class="adv-block">
           <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
           <p class="muted adv-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
+          <div class="field"><label>IA que vai gerar <span class="hint">(provedor; o modelo de cada um fica em Configurações — o padrão já funciona)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
           <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; oriente a IA aqui — o CTA final você ajusta no resultado)</span></label>
             <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer chamada" />
             <div class="sugg-row" id="g-cta-sugg">${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<button type="button" class="sugg-chip" data-cta="${esc(c)}">${esc(c)}</button>`).join("")}</div>
@@ -3587,8 +3733,8 @@ async function viewCreate(arg, query) {
             <div class="field"><label>Logo (opcional)</label>
               <select id="g-logo"><option value="">Automático (padrão do estilo)</option><option value="light">Completo claro — fundo escuro</option><option value="dark">Completo escuro — fundo claro</option><option value="symbol">Só o símbolo “4”</option></select>
             </div>
-            <div class="field"><label>Marca d’água (opcional) <span class="hint">(atrás do conteúdo)</span></label>
-              <select id="g-wm"><option value="">Padrão do estilo</option><option value="word">Palavra SELET</option><option value="symbol">Símbolo grande</option><option value="outline">Palavra contornada</option><option value="canto">Símbolo no canto</option><option value="padrao">Padrão repetido</option><option value="none">Nenhuma</option></select>
+            <div class="field"><label>Marca d’água (opcional)</label>
+              <select id="g-wm" title="Aparece sutil, atrás do conteúdo da arte"><option value="">Padrão do estilo</option><option value="word">Palavra SELET</option><option value="symbol">Símbolo grande</option><option value="outline">Palavra contornada</option><option value="canto">Símbolo no canto</option><option value="padrao">Padrão repetido</option><option value="none">Nenhuma</option></select>
             </div>
           </div>
           <div class="field" id="g-photo-row" style="display:none">
@@ -3600,9 +3746,10 @@ async function viewCreate(arg, query) {
           <div class="field mood-field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — vale para arte e vídeo, sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
           <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         </details>
-          <details class="adv-block">
-            <summary>Identificador técnico (avançado)</summary>
+          <details class="adv-block"${(State.user && State.user.role === "admin") ? "" : ' style="display:none"'}>
+            <summary>Identificador técnico e data (avançado)</summary>
             <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" aria-describedby="e-task" /><div class="field-error" id="e-task" role="alert"></div></div>
+            <div class="field"><label>Data da peça <span class="hint">(entra no identificador/pasta e organiza na biblioteca; NÃO é a data de publicação — no uso normal, deixe em hoje)</span></label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
           </details>
         </div>
 
@@ -3626,7 +3773,7 @@ async function viewCreate(arg, query) {
     const set = (selected && selected.length) ? selected : ["instagram"];
     $("#g-plats").innerHTML = State.meta.platforms.map((p) => checkPill("gplat", p, set.includes(p), platformLabel(p))).join("");
     bindCheckPills($("#g-plats"));
-    $("#g-plats-hint").textContent = inherited ? "(herdadas da campanha — ajuste se quiser)" : "";
+    $("#g-plats-hint").textContent = inherited ? "(herdadas da campanha — ajuste se quiser)" : "(já marcamos a indicada; mude só pra publicar em mais de uma)";
   }
   // garante que a plataforma natural do tipo (config.js define .platform) esteja marcada
   function ensureTypePlatform() {
@@ -3756,7 +3903,7 @@ async function viewCreate(arg, query) {
   // Buscar foto de banco (Pexels) para a arte "Foto": abre o modal, baixa SÓ a escolhida pro acervo e a seleciona.
   if ($("#g-photo-search")) $("#g-photo-search").onclick = async () => {
     const seed = (($("#g-brief") && $("#g-brief").value) || ($("#g-title") && $("#g-title").value) || "").trim().slice(0, 60);
-    const url = await pexelsSearchModal({ query: seed });
+    const url = await pexelsSearchModal({ query: seed, target: artSizeForType($("#g-type") && $("#g-type").value) });
     if (url) { $("#g-image").value = url; await loadPhotoGallery(url); const hint = $("#g-photo-hint"); if (hint) hint.textContent = "foto da Pexels adicionada"; toast("Foto da Pexels adicionada ao acervo", "success"); }
   };
   loadPhotoGallery("");
@@ -3768,7 +3915,7 @@ async function viewCreate(arg, query) {
     try {
       const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(f); });
       const r = await fetch("/api/uploads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, dataUrl }) }).then((x) => x.json());
-      if (r && r.url) { $("#g-media-image").value = r.url; const pv = $("#g-media-prev"); if (pv) pv.innerHTML = '<img src="' + esc(r.url) + '" alt="print da matéria"/>'; if (hint) hint.textContent = "print enviado"; }
+      if (r && r.url) { $("#g-media-image").value = r.url; const pv = $("#g-media-prev"); if (pv) pv.innerHTML = '<img src="' + esc(r.url) + '" alt="print da matéria"/>'; if (hint) hint.textContent = "print enviado"; checkMediaAspect(); markArtStale(); }
       else { if (hint) hint.textContent = "falha no envio"; toast((r && r.error) || "falha no envio", "error"); }
     } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
     e.target.value = "";
@@ -3776,6 +3923,8 @@ async function viewCreate(arg, query) {
   $$("#g-media-model-pick .model-card").forEach((b) => { b.onclick = () => {
     $$("#g-media-model-pick .model-card").forEach((x) => x.classList.toggle("on", x === b));
     if ($("#g-media-model")) $("#g-media-model").value = b.dataset.model;
+    checkMediaAspect(); // avisa se o print destoa da proporção do dispositivo
+    markArtStale(); // trocar o dispositivo muda o mockup — prévia desatualizada
   }; });
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
   const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
@@ -3895,6 +4044,7 @@ async function runGenerate() {
     media_print: ($("#g-media-image") && $("#g-media-image").value) || undefined,
     media_vehicle: ($("#g-media-vehicle") && $("#g-media-vehicle").value.trim()) || undefined,
     media_url: ($("#g-media-url") && $("#g-media-url").value.trim()) || undefined,
+    media_headline: ($("#g-media-headline") && $("#g-media-headline").value.trim()) || undefined,
     media_model: ($("#g-media-model") && $("#g-media-model").value) || undefined,
     media_sizes: (function () { const s = Array.prototype.slice.call(document.querySelectorAll("#g-media-sizes input:checked")).map((x) => x.value); return s.length ? s : undefined; })(),
   };
@@ -3961,10 +4111,13 @@ function renderGenResult(r, opts) {
        </details>`
     : "";
   // #1 — prévia RENDERIZADA da arte (imagem final) para tipos visuais.
-  const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel";
+  const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel" || ct.kind === "media";
+  const artDesc = ct.kind === "media"
+    ? "Monta o mockup da aparição: o print da matéria no dispositivo escolhido, na identidade 4Selet. Não salva nada — confira antes de salvar."
+    : `Renderiza a imagem final ${ct.kind === "carousel" ? "de TODOS os slides " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe se quiser (rascunho rápido).`;
   const artHtml = visualKind
     ? `<details class="art-preview-box mt" open><summary>Prévia da arte</summary>
-         <p class="muted" style="font-size:12px;margin:8px 0">Renderiza a imagem final ${ct.kind === "carousel" ? "de TODOS os slides " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe se quiser (rascunho rápido).</p>
+         <p class="muted" style="font-size:12px;margin:8px 0">${artDesc}</p>
          <button class="btn btn-ghost btn-sm" id="g-art-btn" type="button">Ver prévia da arte</button>
          <div id="g-art" class="art-preview mt"></div>
        </details>`
@@ -3989,7 +4142,7 @@ function renderGenResult(r, opts) {
       <textarea id="g-refine" rows="2" placeholder="ex.: encurte o headline e troque o CTA por Solicitar convite"></textarea>
       <button class="btn btn-sm mt" id="g-refine-btn">Aplicar ajuste</button>
     </div>
-    <div class="flex mt"><button class="btn btn-primary" id="g-save">Salvar na campanha</button><button class="btn btn-ghost" id="g-regen">Gerar de novo</button></div>`;
+    <div class="flex mt"><button class="btn btn-primary" id="g-save">Salvar peça</button><button class="btn btn-ghost" id="g-regen" title="Descarta este resultado e gera outra versão do zero">Começar do zero</button></div>`;
   $("#g-regen").onclick = runGenerate;
   $("#g-save").onclick = saveGenerated;
   $("#g-refine-btn").onclick = refineGenerated;
@@ -4020,6 +4173,37 @@ function renderGenResult(r, opts) {
 async function renderArtPreview(contentType, kind) {
   const btn = $("#g-art-btn"); const box = $("#g-art");
   if (!btn || !box) return;
+  // 4Selet na Mídia: a prévia é o MOCKUP do device (não usa #g-edit nem estilo). Monta o payload
+  // "media" direto do formulário (print/veículo/modelo/tamanhos) e chama o renderPreview específico.
+  if (kind === "media") {
+    const media = {
+      print: ($("#g-media-image") && $("#g-media-image").value) || "",
+      vehicle: ($("#g-media-vehicle") && $("#g-media-vehicle").value) || "",
+      url: ($("#g-media-url") && $("#g-media-url").value) || "",
+      headline: ($("#g-media-headline") && $("#g-media-headline").value) || "",
+      model: ($("#g-media-model") && $("#g-media-model").value) || "tablet",
+      sizes: Array.prototype.slice.call(document.querySelectorAll("#g-media-sizes input:checked")).map((x) => x.value),
+    };
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> renderizando…';
+    box.innerHTML = ""; box.classList.remove("is-stale"); btn.classList.remove("attn");
+    showBusy("Montando o mockup da aparição…");
+    try {
+      const out = await API.renderPreview({ content_type: contentType, media });
+      if (!out || !out.ok) throw new Error((out && out.error) || "falha ao renderizar a prévia");
+      const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "midia-4selet").slice(0, 40)) + ".png";
+      box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia do mockup" title="Clique para ampliar" onclick="openArtLightbox(this)" />
+        <div class="flex flex-between mt" style="align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="muted" style="font-size:12px">Mockup: <strong>${esc(mediaModelName(out.template))}</strong> · ${out.width}×${out.height} · clique para ampliar</span>
+          <a class="btn btn-sm btn-ghost" href="${out.dataUrl}" download="${esc(fname)}">Baixar imagem</a>
+        </div>`;
+      box.classList.remove("is-stale");
+    } catch (e) {
+      box.innerHTML = `<div class="field-error" style="display:block">${esc((e && e.message) || "falha ao renderizar a prévia")}</div>`;
+    } finally {
+      hideBusy(); btn.disabled = false; btn.textContent = "Atualizar prévia da arte"; btn.classList.remove("attn");
+    }
+    return;
+  }
   const ct = metaType(contentType);
   let parsed = LAST_GEN && LAST_GEN.res ? LAST_GEN.res.parsed : null;
   const ed = $("#g-edit");
@@ -4472,7 +4656,7 @@ function bindStructuredEditor() {
       e.preventDefault();
       const item = photoBtn.closest(".se-item");
       const seed = ((item.querySelector('[data-k="title"]') || {}).value || (item.querySelector('[data-k="body"]') || {}).value || "").trim();
-      pexelsSearchModal({ query: seed, orientation: "portrait" }).then((url) => { if (url) setSlidePhoto(item, url); });
+      pexelsSearchModal({ query: seed, orientation: "portrait", target: { w: 1080, h: 1350 } }).then((url) => { if (url) setSlidePhoto(item, url); });
       return;
     }
     const photoX = e.target.closest("[data-se-photo-x]");
@@ -4605,6 +4789,12 @@ async function saveGenerated() {
   let parsed = null, raw = editVal;
   if (ct.format === "json") { try { parsed = JSON.parse(editVal); } catch (e) { toast("JSON inválido no editor: " + e.message, "error"); return; } }
   const payload = Object.assign({}, LAST_GEN.req, { task_name: task, title, task_date: date, parsed, raw });
+  // No estilo "Foto", a imagem pode ter sido escolhida DEPOIS de gerar (acervo/Pexels):
+  // LAST_GEN.req foi montado na hora da geração e não a tem, mas a prévia já mostra a foto ao vivo.
+  // Releia do DOM para a peça SALVA sair com a mesma foto que aparece na prévia (era perda silenciosa).
+  if ($("#g-style") && $("#g-style").value === "photo") {
+    payload.image = ($("#g-image") && $("#g-image").value) || undefined;
+  }
   const btn = $("#g-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando…';
   showBusy("Salvando o conteúdo…");
   let saved = false;
@@ -4644,7 +4834,7 @@ async function saveGenerated() {
     if (e.status === 422 && e.data && e.data.governance) { $("#g-gov").innerHTML = govHtml(e.data.governance); toast("Bloqueado por regra de marca — corrija o conteúdo.", "error"); }
     else if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); }
     else toast(e.message, "error");
-  } finally { hideBusy(); if (!saved) { btn.disabled = false; btn.textContent = "Salvar na campanha"; } }
+  } finally { hideBusy(); if (!saved) { btn.disabled = false; btn.textContent = "Salvar peça"; } }
 }
 
 /* =====================================================================
