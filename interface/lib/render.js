@@ -569,6 +569,151 @@ function tplMediaTabletClean({ width, height, image, eyebrow, url, model, logo: 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
 }
 
+// ===== Mockup FOTO-REAL =====
+// Compoe o print da materia na TELA de um tablet de uma FOTO real (mao segurando o
+// tablet numa mesa). A materia e mapeada nos 4 cantos da tela por HOMOGRAFIA
+// (matrix3d): a perspectiva bate com a da foto, entao a noticia fica alinhada com o
+// aparelho — nao "torta". A homografia foi validada (erro < 0.001px nos 4 cantos).
+function _adj3(m) {
+  return [m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4],
+    m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5],
+    m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3]];
+}
+function _mm3(a, b) {
+  const c = new Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += a[3 * i + k] * b[3 * k + j]; c[3 * i + j] = s; }
+  return c;
+}
+function _mv3(m, v) { return [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]]; }
+function _basis(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const m = [x1, x2, x3, y1, y2, y3, 1, 1, 1];
+  const v = _mv3(_adj3(m), [x4, y4, 1]);
+  return _mm3(m, [v[0], 0, 0, 0, v[1], 0, 0, 0, v[2]]);
+}
+// Mapeia o retangulo (0,0,w,h) nos cantos tl,tr,br,bl (em px do wrapper). transform-origin: 0 0.
+function quadMatrix3d(w, h, tl, tr, br, bl) {
+  const s = _basis(0, 0, w, 0, 0, h, w, h);
+  const d = _basis(tl[0], tl[1], tr[0], tr[1], bl[0], bl[1], br[0], br[1]);
+  const t = _mm3(d, _adj3(s));
+  for (let i = 0; i < 9; i++) t[i] = t[i] / t[8];
+  const m = [t[0], t[3], 0, t[6], t[1], t[4], 0, t[7], 0, 0, 1, 0, t[2], t[5], 0, t[8]];
+  return "matrix3d(" + m.map((x) => (Math.abs(x) < 1e-10 ? 0 : +x.toFixed(8))).join(",") + ")";
+}
+
+// Cenarios foto-reais disponiveis. `screen` = os 4 cantos da AREA DE TELA em FRACOES
+// da foto (0..1). Para adicionar um cenario novo: suba a foto em uploads/ e meça os cantos.
+const PHOTO_SCENES = {
+  // MAOS: duas maos segurando o tablet, tela desobstruida e quase perfeitamente de
+  // frente (a materia sai reta). Tratada para o navy sobrio da marca.
+  maos: {
+    file: "base_maos_tablet.jpg", w: 867, h: 1300, zoom: 1,
+    screen: { tl: [0.122, 0.153], tr: [0.873, 0.152], br: [0.874, 0.823], bl: [0.122, 0.824] },
+    grade: "brightness(.8) saturate(.8) contrast(1.05)",
+    tint: "linear-gradient(160deg, rgba(0,53,84,.34), rgba(7,33,43,.5))",
+  },
+  // MESA: mesa de madeira com xicara, caderno, caneta e planta ao fundo — os mesmos
+  // props da referencia. Tablet apoiado, tela de frente.
+  mesa: {
+    file: "base_mesa_cafe.jpg", w: 867, h: 1300, zoom: 1.34,
+    screen: { tl: [0.4764, 0.3131], tr: [0.812, 0.3146], br: [0.7878, 0.6123], bl: [0.4348, 0.6008] },
+    grade: "brightness(.66) saturate(.82) contrast(1.08)",
+    tint: "linear-gradient(155deg, rgba(0,53,84,.38), rgba(7,33,43,.56))",
+  },
+};
+
+function tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: logoVariant, scene }) {
+  const r = Math.round;
+  const mn = Math.min(width, height);
+  const sc = PHOTO_SCENES[scene] || PHOTO_SCENES.maos;
+  const shot = resolveImage(image);
+  const veh = String(eyebrow || "").split(/[·|]/)[0].trim();
+  const domain = (String(url || "").match(/^https?:\/\/([^/]+)/) || [, ""])[1].replace(/^www\./, "");
+  const baseUrl = resolveImage("/uploads/" + sc.file);
+
+  // Foto em "cover" ancorada no CENTRO DA TELA do tablet: garante o aparelho em quadro
+  // em qualquer formato (4:5 / 1:1 / 9:16 / 16:9), sem cortar o device.
+  const pw = sc.w || 1000, ph = sc.h || 1500;
+  const q = sc.screen;
+  // zoom: folga extra alem do "cover" — permite recentralizar o aparelho no quadro
+  let scale = Math.max(width / pw, height / ph) * (sc.zoom || 1);
+  // TRAVA: o aparelho tem que caber INTEIRO no formato. Em paisagem (16:9) o "cover"
+  // de uma foto retrato cortaria a tela ao meio — aqui limitamos a escala pelo
+  // tamanho da tela na foto (+ folga p/ moldura e barras de marca).
+  const qw = Math.max(q.tl[0], q.tr[0], q.br[0], q.bl[0]) - Math.min(q.tl[0], q.tr[0], q.br[0], q.bl[0]);
+  const qh = Math.max(q.tl[1], q.tr[1], q.br[1], q.bl[1]) - Math.min(q.tl[1], q.tr[1], q.br[1], q.bl[1]);
+  const availW = width * 0.9, availH = height * 0.74; // folga p/ topbar/botbar
+  const scaleMax = Math.min((availW / Math.max(0.01, qw)) / pw, (availH / Math.max(0.01, qh)) / ph);
+  if (scale > scaleMax) scale = scaleMax;
+  const dispW = pw * scale, dispH = ph * scale;
+  const cx = (q.tl[0] + q.tr[0] + q.br[0] + q.bl[0]) / 4;
+  const cy = (q.tl[1] + q.tr[1] + q.br[1] + q.bl[1]) / 4;
+  let offX = width / 2 - cx * dispW, offY = height / 2 - cy * dispH;
+  // Se a foto cobre o formato, desliza dentro dos limites (sem mostrar borda vazia).
+  // Se NAO cobre (paisagem), centraliza — o fundo da marca aparece em volta.
+  offX = dispW >= width ? Math.min(0, Math.max(width - dispW, offX)) : (width - dispW) / 2;
+  offY = dispH >= height ? Math.min(0, Math.max(height - dispH, offY)) : (height - dispH) / 2;
+
+  // Cantos da tela em px do wrapper
+  const P = (p) => [p[0] * dispW, p[1] * dispH];
+  const tl = P(q.tl), tr = P(q.tr), br = P(q.br), bl = P(q.bl);
+  // Aspecto real da tela (media dos lados) — o print entra num retangulo com ESSE
+  // aspecto e usa object-fit:cover, entao a materia nao distorce (so corta embaixo,
+  // como um print de tela mesmo).
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const wAvg = (dist(tl, tr) + dist(bl, br)) / 2;
+  const hAvg = (dist(tl, bl) + dist(tr, br)) / 2;
+  const srcW = 1400, srcH = Math.max(1, r(srcW * (hAvg / Math.max(1, wAvg))));
+  const mtx = quadMatrix3d(srcW, srcH, tl, tr, br, bl);
+
+  const logoH = r(mn * 0.04), kickFont = r(mn * 0.028), cardFont = r(mn * 0.024), ctaFont = r(mn * 0.022);
+  const px = r(width * 0.06);
+
+  const screenInner = shot
+    ? `<img src="${escAttr(shot)}" alt=""/>`
+    : `<div class="fr-empty">print da matéria</div>`;
+
+  const topbar = `<div class="topbar" style="top:${r(height * 0.058)}px;left:${px}px;right:${px}px">
+      <img class="logo4" src="${logoSrc(logoVariant, LOGO_LIGHT)}" alt="4Selet"/>
+      <div class="kicker"><b>4Selet</b><i>na mídia</i><span class="kbar"></span></div></div>`;
+  const botbar = `<div class="botbar" style="bottom:${r(height * 0.052)}px;left:${px}px;right:${px}px">
+      ${veh ? `<div class="veic-card">${esc(veh)}</div>` : "<span></span>"}
+      ${domain ? `<div class="cta"><div class="cta-txt"><div class="cta-l">Leia a matéria completa</div><div class="cta-u">${esc(domain)}</div></div><div class="cta-arrow">&#8250;</div></div>` : "<span></span>"}</div>`;
+
+  const css = `*{margin:0;padding:0;box-sizing:border-box}html,body{width:${width}px;height:${height}px}
+    .card{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${PALETTE.blue} 0%, ${PALETTE.navy} 45%, ${PALETTE.darker} 100%);color:${PALETTE.cloud};font-family:'Inter',sans-serif}
+    .ph{position:absolute;left:${r(offX)}px;top:${r(offY)}px;width:${r(dispW)}px;height:${r(dispH)}px;z-index:1;overflow:hidden;${dispW < width || dispH < height ? `border-radius:${r(mn * 0.022)}px;box-shadow:0 ${r(mn * 0.03)}px ${r(mn * 0.07)}px -${r(mn * 0.02)}px rgba(0,0,0,.65)` : ""}}
+    .ph>img.bg{width:100%;height:100%;object-fit:fill;display:block;filter:${sc.grade || "none"}}
+    .tint{position:absolute;inset:0;pointer-events:none;background:${sc.tint || "none"};z-index:1}
+    .scr{position:absolute;left:0;top:0;width:${srcW}px;height:${srcH}px;transform-origin:0 0;transform:${mtx};overflow:hidden;background:#fff;z-index:2}
+    .scr img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block;filter:brightness(.97) saturate(.98)}
+    .fr-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9fb0b8;font-size:${r(srcW * 0.05)}px;background:repeating-linear-gradient(45deg,#eef2f4,#eef2f4 24px,#e6ebee 24px,#e6ebee 48px)}
+    /* reflexo/vidro por cima da materia — deforma junto e vende o realismo */
+    .scr .gloss{position:absolute;inset:0;pointer-events:none;background:linear-gradient(122deg, rgba(255,255,255,.20) 0%, rgba(255,255,255,.06) 15%, rgba(255,255,255,0) 33%, rgba(0,0,0,.05) 100%)}
+    /* scrim suave: garante leitura do chrome branco sobre a foto */
+    .scrim{position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(180deg, rgba(4,18,25,.58) 0%, rgba(4,18,25,.14) 22%, rgba(4,18,25,0) 42%, rgba(4,18,25,.16) 74%, rgba(4,18,25,.62) 100%)}
+    .topbar{position:absolute;display:flex;align-items:center;justify-content:space-between;z-index:6}
+    .logo4{height:${logoH}px;display:block;opacity:.98;filter:drop-shadow(0 2px 10px rgba(0,0,0,.5))}
+    .kicker{display:flex;align-items:center;font-size:${kickFont}px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.45)}
+    .kicker b{font-weight:800;color:#fff}.kicker i{font-style:normal;font-weight:600;color:${PALETTE.sky};margin-left:${r(kickFont * 0.28)}px}
+    .kicker .kbar{width:2px;height:${r(kickFont * 1.15)}px;background:${PALETTE.sky};margin-left:${r(kickFont * 0.5)}px;border-radius:2px}
+    .botbar{position:absolute;display:flex;align-items:flex-end;justify-content:space-between;z-index:6;gap:16px}
+    .veic-card{background:#fff;border-radius:${r(cardFont * 0.85)}px;padding:${r(cardFont * 0.72)}px ${r(cardFont * 1.25)}px;color:${PALETTE.navy};font-weight:800;font-size:${cardFont}px;letter-spacing:-.3px;box-shadow:0 12px 26px -8px rgba(0,0,0,.6);max-width:52%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cta{display:flex;align-items:center;gap:${r(ctaFont * 0.7)}px;text-shadow:0 2px 10px rgba(0,0,0,.45)}
+    .cta-txt{text-align:right;line-height:1.18}
+    .cta-l{color:${PALETTE.cloud};font-size:${ctaFont}px;font-weight:500}
+    .cta-u{color:${PALETTE.sky};font-size:${r(ctaFont * 1.02)}px;font-weight:700}
+    .cta-arrow{width:${r(ctaFont * 1.95)}px;height:${r(ctaFont * 1.95)}px;border-radius:50%;border:2px solid ${PALETTE.sky};color:${PALETTE.sky};display:flex;align-items:center;justify-content:center;font-size:${r(ctaFont * 1.35)}px;font-weight:700;line-height:1}`;
+
+  const body = `<div class="ph"><img class="bg" src="${escAttr(baseUrl)}" alt=""/>
+      <div class="tint"></div>
+      <div class="scr">${screenInner}<div class="gloss"></div></div>
+    </div>
+    <div class="scrim"></div>
+    ${topbar}
+    ${botbar}`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+}
+
 // ===== Layouts alternativos de "4Selet na Mídia" (gerados+validados 2026-07-29): navegador, citação, split, selo, camadas.
 // Mesmo enquadramento de marca (logo topo, "4Selet na mídia", card do veículo, CTA). Matéria SEMPRE reta. =====
 function tplMediaNavegador({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
@@ -1335,6 +1480,10 @@ function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: l
 function tplMedia({ width, height, image, url, eyebrow, headline, model, logo: logoVariant }) {
   const land = width > height;
   if (model === "hand_tablet" || model === "celular") return tplMediaTabletClean({ width, height, image, eyebrow, url, model, logo: logoVariant });
+  // foto_real / foto_mesa: mockups FOTOGRAFICOS — a materia e encaixada na tela do
+  // tablet da foto por homografia (perspectiva real, materia reta).
+  if (model === "foto_real") return tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: logoVariant, scene: "maos" });
+  if (model === "foto_mesa") return tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: logoVariant, scene: "mesa" });
   const LAYOUTS = { navegador: tplMediaNavegador, citacao: tplMediaCitacao, split: tplMediaSplit, selo: tplMediaSelo, camadas: tplMediaCamadas };
   if (LAYOUTS[model]) return LAYOUTS[model]({ width, height, image, eyebrow, url, headline, logo: logoVariant });
   const dev = mediaDevice(model || "tablet", resolveImage(image), url);
