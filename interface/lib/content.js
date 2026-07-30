@@ -412,7 +412,7 @@ function setMediaMeta(folder, meta) {
   const p = path.join(loc.path, "status.json");
   const status = readJsonSafe(p);
   if (!status) return false;
-  const models = ["hand_tablet", "celular", "navegador", "citacao", "split", "selo", "camadas", "foto_real", "foto_mesa", "tablet", "notebook", "janela"];
+  const models = ["hand_tablet", "celular", "navegador", "citacao", "split", "selo", "camadas", "foto_real", "foto_mesa", "foto_maos_mesa", "tablet", "notebook", "janela"];
   const validSizes = ["4x5", "1x1", "9x16", "16x9"];
   let sizes = (Array.isArray(meta && meta.sizes) ? meta.sizes : []).filter((s) => validSizes.indexOf(s) !== -1);
   if (!sizes.length) sizes = ["4x5", "16x9"];

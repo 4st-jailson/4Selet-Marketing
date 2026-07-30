@@ -611,6 +611,15 @@ const PHOTO_SCENES = {
     grade: "brightness(.8) saturate(.8) contrast(1.05)",
     tint: "linear-gradient(160deg, rgba(0,53,84,.34), rgba(7,33,43,.5))",
   },
+  // MAOS + MESA ESCURA: o cenario mais proximo da referencia — duas maos segurando
+  // o tablet sobre mesa de madeira ESCURA, com cafe preto, caneta e caderno.
+  // Tela em paisagem: o print retrato entra por "cover" (mostra o topo da materia).
+  maos_mesa: {
+    file: "base_maos_mesa_escura.jpg", w: 1880, h: 1255, zoom: 1, safeW: 0.94, safeH: 0.8,
+    screen: { tl: [0.245, 0.472], tr: [0.711, 0.314], br: [0.741, 0.655], bl: [0.306, 0.808] },
+    grade: "brightness(.92) saturate(.9) contrast(1.04)",
+    tint: "linear-gradient(155deg, rgba(0,53,84,.26), rgba(7,33,43,.44))",
+  },
   // MESA: mesa de madeira com xicara, caderno, caneta e planta ao fundo — os mesmos
   // props da referencia. Tablet apoiado, tela de frente.
   mesa: {
@@ -641,7 +650,7 @@ function tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: 
   // tamanho da tela na foto (+ folga p/ moldura e barras de marca).
   const qw = Math.max(q.tl[0], q.tr[0], q.br[0], q.bl[0]) - Math.min(q.tl[0], q.tr[0], q.br[0], q.bl[0]);
   const qh = Math.max(q.tl[1], q.tr[1], q.br[1], q.bl[1]) - Math.min(q.tl[1], q.tr[1], q.br[1], q.bl[1]);
-  const availW = width * 0.9, availH = height * 0.74; // folga p/ topbar/botbar
+  const availW = width * (sc.safeW || 0.9), availH = height * (sc.safeH || 0.74); // folga p/ topbar/botbar
   const scaleMax = Math.min((availW / Math.max(0.01, qw)) / pw, (availH / Math.max(0.01, qh)) / ph);
   if (scale > scaleMax) scale = scaleMax;
   const dispW = pw * scale, dispH = ph * scale;
@@ -1484,6 +1493,7 @@ function tplMedia({ width, height, image, url, eyebrow, headline, model, logo: l
   // tablet da foto por homografia (perspectiva real, materia reta).
   if (model === "foto_real") return tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: logoVariant, scene: "maos" });
   if (model === "foto_mesa") return tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: logoVariant, scene: "mesa" });
+  if (model === "foto_maos_mesa") return tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: logoVariant, scene: "maos_mesa" });
   const LAYOUTS = { navegador: tplMediaNavegador, citacao: tplMediaCitacao, split: tplMediaSplit, selo: tplMediaSelo, camadas: tplMediaCamadas };
   if (LAYOUTS[model]) return LAYOUTS[model]({ width, height, image, eyebrow, url, headline, logo: logoVariant });
   const dev = mediaDevice(model || "tablet", resolveImage(image), url);
