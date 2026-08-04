@@ -34,3 +34,9 @@ Thumbs.db
 
 # Claude Code (dados de sessao locais) — nunca versionar
 .claude/
+
+# Certificado de origem do Cloudflare (fica só no servidor).
+# A chave privada estava fora do git E fora daqui: um `git add -A` distraído
+# commitaria caddy/origin/key.pem no repositório. Nunca versionar.
+caddy/origin/
+*.pem
