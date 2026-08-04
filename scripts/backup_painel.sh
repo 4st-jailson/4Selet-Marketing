@@ -49,7 +49,7 @@ salvar_volume() {
     -v "$vol":/origem:ro \
     -v "$PASTA":/destino \
     alpine:3 \
-    sh -c "tar -czf /destino/$saida -C /origem . 2>/dev/null || true"
+    sh -c "tar -czf /destino/$saida -C /origem . 2>/dev/null || true; chmod 600 /destino/$saida 2>/dev/null || true"
   log "$saida  ($(du -h "$PASTA/$saida" 2>/dev/null | cut -f1))"
 }
 
@@ -67,7 +67,7 @@ salvar_pasta_do_host() {
     -v "$origem":/origem:ro \
     -v "$PASTA":/destino \
     alpine:3 \
-    sh -c "tar -czf /destino/$saida -C /origem . 2>/dev/null || true"
+    sh -c "tar -czf /destino/$saida -C /origem . 2>/dev/null || true; chmod 600 /destino/$saida 2>/dev/null || true"
   log "$saida  ($(du -h "$PASTA/$saida" 2>/dev/null | cut -f1))"
 }
 salvar_pasta_do_host "$RAIZ/interface/data" "data.tar.gz"
@@ -83,6 +83,8 @@ for arq in "$PASTA"/*.tar.gz; do
   if [ "$tamanho" -lt 200 ]; then log "ATENÇÃO: $(basename "$arq") saiu praticamente vazio ($tamanho bytes) — confira as permissões"; fi
 done
 
+# Os arquivos gerados pelo contêiner pertencem a root (o chmod acontece lá dentro, logo após o
+# tar). Aqui cobrimos os que o próprio script criou.
 chmod 600 "$PASTA"/*.tar.gz 2>/dev/null || true
 
 # Um resumo legível junto do backup, para saber o que tem ali sem descompactar.
