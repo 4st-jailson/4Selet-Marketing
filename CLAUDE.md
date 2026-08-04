@@ -30,10 +30,32 @@ O **Orchestrator** skill coordena todos os agentes via filas de job **BullMQ** b
 
 Cada agente usa uma combinação de **custom skills, knowledge files e APIs** para executar suas tarefas.
 
-> **Estado de implementação (2026-06-12):**
+## Tipos de conteúdo e pilares (o vocabulário real do produto)
+
+Fonte de verdade: `interface/lib/config.js`. **É por aqui que a operação pensa hoje** — os "5 agentes" são papéis conceituais; o eixo de execução é o **tipo de conteúdo**.
+
+| Tipo (`id`) | Rótulo | Arquivo de conteúdo | Arte |
+|---|---|---|---|
+| `instagram_caption` | Feed Instagram | `copy/instagram_caption.txt` | `ads/feed.png` (1080×1350) |
+| `instagram_carousel` | Carrossel | `copy/instagram_carousel.json` | `slides/slide_N.png` |
+| `ad_creative` | Imagem / Anúncio | `ads/concept.json` | `ads/ad.png` (1080×1080) |
+| `media_mention` | **4Selet na Mídia** | `copy/instagram_caption.txt` | `ads/{feed,square,story,media_16x9}.png` |
+| `video_idea` | Vídeo (short-form) | `video/concept.json` | `video/video.mp4` (9:16) |
+| `linkedin_post` | LinkedIn | `copy/linkedin_post.txt` | — |
+| `threads_post` | Threads/X | `copy/threads_post.txt` | — |
+
+**6 pilares de conteúdo** (eixo temático de toda peça, distinto das 5 colunas estratégicas da marca): `taxa_zero`, `educacional`, `curiosidade_mercado`, `prova_plataforma`, `novidade`, `motivacional`. Regra dura injetada no prompt: *"NEM toda peça é sobre Taxa Zero."*
+
+**"4Selet na Mídia"** é o tipo para aparição na imprensa: o print da matéria montado num de **10 modelos** de dispositivo/cena (`hand_tablet`, `foto_real`, `foto_mesa`, `foto_maos_mesa`, `celular`, `navegador`, `citacao`, `split`, `selo`, `camadas`), em até 4 formatos. Renderizado por `renderMedia`/`tplMedia` a partir de `status.media`.
+
+> **O prompt de geração vive em `interface/lib/prompts.js`.** O bloco `GOVERNANCE` (regras duras) vem primeiro e **os knowledge files são injetados literalmente** logo depois (`interface/lib/knowledge.js` → `brandContext()`). Editar `knowledge/*.md` **muda o comportamento da geração em produção**. Regra dura em vigor: **nunca assinar peça com a frase-tag** *"Para quem sabe que é Selet."*
+
+> **Atualização 2026-07-30 (auditoria dos agentes):** este arquivo estava congelado em 12/jun. Foram corrigidos os contratos de arquivo (ad, vídeo), a descrição da distribuição/publicação, a árvore de output e o status das chaves. Novidades que faltavam aqui: o **tipo nativo "4Selet na Mídia"** (`media_mention`), os **6 pilares de conteúdo**, a **busca de imagens Pexels**, o **editor visual** e o fato de que o prompt de geração vive em `interface/lib/prompts.js` e injeta os knowledge files **literalmente**. Relatório completo dos achados: `AUDITORIA_AGENTES_2026-07-30.md`.
+
+> **Estado de implementação (2026-06-12, com correções de 2026-07-30):**
 > **Interface principal:** o **Painel web** em `interface/` (`npm start` → `http://localhost:4500`) é o **caminho principal** de operação — gerência de campanhas, geração de conteúdo com IA e workflow de aprovação visual. A **extensão Claude Code no VSCode** é o caminho **secundário/avançado** (chat direto com os agentes, pipeline e scripts). Ver `GUIA_DE_USO.md` (Seções 4 e 8) e `interface/README.md`.
 > **PRONTO ✅** — **Painel web** (`interface/`: Express + SPA, geração/refino/aprovação, governança de marca); **pipeline executável** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`, sequencial + BullMQ, entregue commit e787dc7); knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (compositions `AdVideo` + `CampanhaDemo` + `BrandStory`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados. **Pesquisa de mercado ao vivo (Tavily)** ENTREGUE no painel (`interface/lib/research.js`; opt-in por geração, chave gravada em `interface/data/tavily.json`; degrada para simulado sem a chave). **Publicação real no Instagram feed** ENTREGUE (`interface/lib/publish.js` + `interface/routes/publish.js` via **Graph API v21.0** — imagem única + carrossel — atrás do **gate de aprovação R5**, com **agendamento** em `interface/lib/schedule.js`). **Autenticação multi-usuário do painel** ENTREGUE (`interface/lib/auth.js`: login por pessoa, hash scrypt, sessão por cookie assinado HMAC, perfis **admin** e **membro**, convite por magic-link). **Suporte multi-provedor de IA** ENTREGUE (`interface/lib/ai.js`: dispatcher **Claude (Anthropic)** + **ChatGPT (OpenAI)**, escolha por chamada ou padrão em Configurações). **Painel em PRODUÇÃO** em **`https://mkt.4st.co`** (Docker Compose, Linux .63).
-> **PENDENTE ⏳** — chaves/contas externas ainda não configuradas: **chave de IA no painel** (Anthropic e/ou OpenAI em `interface/.env`; sem ela a geração roda simulada), `@supabase/supabase-js` + Supabase, **`REDIS_URL`** para ativar a fila BullMQ (a pasta `pipeline/` já existe; sem Redis roda **sequencial**), **OAuth YouTube** (publicação no YouTube **não existe** no painel). Sem essas chaves, hosting/YouTube rodam **simulados**. (Tavily e Instagram feed já ENTREGUES — ver linha PRONTO.)
+> **PENDENTE ⏳** — `@supabase/supabase-js` + Supabase (**não é pré-requisito de publicação** — ver Distribution Agent), **`REDIS_URL`** para ativar a fila BullMQ (a pasta `pipeline/` já existe; sem Redis roda **sequencial**), **OAuth YouTube** (publicação no YouTube **não existe** no painel — não há publisher). ⚠️ **Corrigido em 2026-07-30:** a **chave de IA está configurada** (`ANTHROPIC_API_KEY` em `interface/.env`; produção mostra "IA conectada") e a **chave Tavily também** (`TAVILY_API_KEY`) — a geração **não** roda simulada. A chave do **Pexels** fica em `interface/data/pexels.json` (Configurações do painel).
 > **Documentação de referência** (ordem de leitura): 1) `STATUS_PROJETO.md` — estado atual · 2) `GUIA_DE_USO.md` — passo a passo (§23 Workflow) · 3) `SPEC_WORKFLOW_APROVACAO.md` — contrato v1.1 · 4) `skills/<nome>/SKILL.md` — comportamento por agente.
 > ⚠️ **Regra CRITICAL Re-aprovação** ativa nas 4 skills de conteúdo: NÃO editar `outputs/approved/<task>/` diretamente — rework via `node scripts/promote_task.js --to in_review`.
 
@@ -46,17 +68,21 @@ O Orchestrator não é um agente — é uma skill de coordenação que gerencia 
 Skill File: `skills/orchestrator/SKILL.md`
 
 Responsabilidades:
-- Aceitar um Job Payload (JSON) com `task_name`, `task_date`, `platform_targets` e skip flags opcionais
+- Aceitar um Job Payload (JSON) com `task_name`, `task_date`, **`brief`** (obrigatório, mín. 8 chars), `platforms` (**não** `platform_targets`), `content_types` e flags opcionais
 - Validar o payload e enforçar a ordering de dependências
-- Enqueue todos os agent jobs na fila BullMQ `marketing-pipeline` via `pipeline/orchestrator.js`
-- Iniciar o BullMQ worker (`pipeline/worker.js`) para processar jobs enfileirados
-- Rastrear status dos jobs via log files em `outputs/<task_name>_<date>/logs/`
-- Reportar conclusão do pipeline e surfacear o Publish MD file gerado
+- Rodar **um job por tipo de conteúdo** (o job leva o id do tipo — não existem jobs `ad_creative_designer`/`video_ad_specialist`/`copywriter_agent` no executável)
+- Enqueue na fila BullMQ `marketing-pipeline` via `pipeline/orchestrator.js` quando `REDIS_URL` existir; sem Redis, roda sequencial
+- Rastrear status com os estados reais (`done`/`skipped`/`blocked`/`error`) — **não há log por job em disco**; o resumo vai para `pipeline_run.json`
+- Rodar o job `preview_generator` ao fim (gera `preview.html` e promove `draft → in_review`)
+- Reportar a conclusão apontando `distribution/plan.md` e `pipeline_run.json`
+
+> ⚠️ **`media_mention` (4Selet na Mídia) NÃO está na lista default do pipeline** — para gerar peça de imprensa, passe o tipo explicitamente em `content_types`. E **`dry_run` não tem efeito** no executável: para não renderizar, use `--no-render`.
 
 ### Comandos do Pipeline
 
 ```bash
-npm run pipeline:run                     # rodar com payload padrão
+# argumentos são OBRIGATÓRIOS — sem eles o script sai com exit 2
+npm run pipeline:run -- --task <t> --date <YYYY-MM-DD> --brief "<brief>"
 npm run pipeline:run:payload '<json>'    # rodar com JSON payload inline
 node pipeline/worker.js                  # iniciar o BullMQ worker (terminal separado)
 ```
@@ -87,10 +113,12 @@ Responsabilidades:
 - Sintetizar achados em categorias de inteligência de marketing
 - Gerar três deliverables: JSON estruturado, brief em Markdown com diagramas Mermaid, e um report HTML interativo com Chart.js
 
-Output Típico (salvo em `outputs/<task_name>_<date>/`):
-- `research_results.json` — dados estruturados machine-readable consumidos por agentes downstream
-- `research_brief.md` — report Markdown human-readable com gráficos Mermaid
-- `interactive_report.html` — dashboard interativo estilizado com a marca usando Chart.js
+Output Típico — **depende do caminho** (três comportamentos diferentes):
+- **Skill/CLI** (5 buscas Tavily): `research_raw.json` + `research_results.json` (contrato machine-readable) + `research_brief.md` (Mermaid) + `interactive_report.html` (Chart.js)
+- **Painel** (3 buscas Tavily, opt-in por geração): **nenhum arquivo** — os achados entram direto no prompt e as fontes ficam em `status.json.research_sources`
+- **Pipeline** (job `research_agent`): advisory determinístico **sem Tavily** → `research/insights.md`
+
+> A chave Tavily tem **duas casas** que não se enxergam: `TAVILY_API_KEY` (ambiente/`interface/.env`, lida pelo script e pelo painel) e `interface/data/tavily.json` (gravada pelas Configurações do painel; o script **não** lê). Conferir as duas antes de concluir "sem chave".
 
 ---
 
@@ -102,16 +130,18 @@ Gerar **criativos de anúncio estáticos** como design JSON estruturado, depois 
 Skill File: `skills/ad-creative-designer/SKILL.md`
 
 Responsabilidades:
-- Selecionar tipo de layout do ad (Product Focus, Split ou Lifestyle) baseado na plataforma e objetivo da campanha
-- Gerar copy de marketing (headline ≤4 palavras, subtext, CTA)
-- Gerar um design JSON spec
-- Gerar `ad.html` + `styles.css` a partir do layout spec
-- Renderizar o HTML para PNG screenshot 1080×1080 usando Playwright (`chromium.launch()`)
+- Escolher o **pilar de conteúdo** e um dos **4 templates reais** de arte: `editorial`, `bold` (Destaque), `split` (Dividido), `photo` (Foto)
+- Gerar copy de marketing (headline ≤4 palavras, subtext, CTA opcional)
+- Gerar o **concept JSON** (schema plano: `eyebrow`, `headline`, `subtext`, `cta`, `badge`, `image`)
+- Gerar `ad.html` com **CSS inline** (não existe `styles.css` no fluxo atual)
+- Renderizar o HTML para PNG 1080×1080 via Playwright, com `scale 2` (`scripts/render_ad.js`)
 
 Output Típico (salvo em `outputs/<task_name>_<date>/ads/`):
-- `layout.json` — especificação de design
-- `ad.html` + `styles.css` — HTML ad gerado
-- `instagram_ad.png` — screenshot renderizado via Playwright a 1080×1080
+- `concept.json` — especificação de design (blueprint)
+- `ad.html` — arte em HTML, CSS inline, com `html,body{width/height}` e container `.card`
+- `ad.png` — screenshot Playwright 1080×1080 @2x, mais os sidecars `ad.editable.json` + `ad.bg.png`
+
+> Foto de fundo (acervo `/uploads/` ou busca **Pexels**) entra pelo campo `concept.image` com o template `photo`. Variantes de logo/marca d'água por peça ficam em `render.json` na raiz da task.
 
 ---
 
@@ -129,8 +159,12 @@ Responsabilidades:
 - Renderização real via o projeto Remotion em `src/` (React + SVG, `useCurrentFrame()`/`interpolate()`, fontes via `@remotion/google-fonts`). O **painel** (`interface/lib/render.js`) renderiza a composition **`BrandStory`** e grava `video/video.mp4`; o CLI `npm run render` está fixo na composition `AdVideo` (referência estática) — para renderizar `BrandStory`/`CampanhaDemo` use o Remotion Studio (`npm run studio`) ou `remotion render src/index.ts <Composition> <saida>`. *(Não existe skill `remotion-best-practices`; o mecanismo de render é o projeto Remotion em `src/`.)*
 
 Output Típico (salvo em `outputs/<task_name>_<date>/video/`):
-- `scenes.json` — scene JSON no schema `composition` / `props`. A composition de produção é **`BrandStory`** (`src/BrandStory.tsx`; `AdVideo` é estática de referência). O renderer **consome** `props.concept`, `props.cta` e `props.scenes[]` com `type` + `text` (headline) + `subtitle` (subtexto on-screen). Os campos `props.style` / `duration` / `platform` e `scenes[].visual` (direção de arte) / `transition` / `animation` são **metadados de estratégia** — guiam pacing/arte mas não são desenhados literalmente.
-- Schema detalhado e regras de marca: `skills/video-ad-specialist/SKILL.md` (fonte de verdade).
+- **`concept.json`** — o arquivo canônico, com schema **plano** (`concept`, `hook`, `emotional_arc`, `visual_style`, `scenes[]`, `cta`, `notes`). É o que o painel e o pipeline leem.
+- `scenes.json` — **arquivo de SAÍDA**, gerado pelo render como props do Remotion. Não escrever à mão.
+- `video.mp4` — render da composition **`BrandStory`** (`src/BrandStory.tsx`; `AdVideo` é estática de referência), sempre **1080×1920 (9:16)**.
+- Na tela aparecem só `scenes[].type` (eyebrow), `scenes[].text` (headline) e o subtexto. `concept`, `cta` e os demais campos são metadados. Duração real = nº de cenas × 2,6s + 0,4s.
+- ⚠️ Bug aberto: o card final do `BrandStory` estampa a frase-tag fixa em vez de usar `props.cta` — contraria a regra dura de marca.
+- Schema detalhado e regras: `skills/video-ad-specialist/SKILL.md` (fonte de verdade).
 
 ---
 
@@ -147,37 +181,42 @@ Responsabilidades:
 - Gerar JSON estruturado e arquivos de texto individuais por plataforma
 
 Output Típico (salvo em `outputs/<task_name>_<date>/copy/`):
-- `instagram_caption.txt` — hook factual com número + benefício + CTA + 3–5 hashtags
+- `instagram_caption.txt` — hook factual com número + benefício + CTA (opcional) + 3–5 hashtags. **Também é o arquivo da peça "4Selet na Mídia"** (legenda de prova social)
+- `instagram_carousel.json` — roteiro de 4–7 slides + caption (eyebrow, slides[] com title/body/layout, hashtags, cta)
 - `threads_post.txt` — provocação controlada com dado, ≤500 characters, 0–1 hashtag
-- `youtube_metadata.json` — title (60–70 chars), description e keyword tags
 - `linkedin_post.txt` — editorial premium (1.200–1.500 chars) com tese, dados e CTA suave
+- `youtube_metadata.json` — **legado**: nenhum tipo do painel ou do pipeline gera isso, e não há publicação no YouTube
+
+> No painel, **uma peça = um tipo = um arquivo** (não existe pacote `copy.json`). O texto passa por um gate de governança em runtime que **bloqueia a gravação com HTTP 422** se violar regra de marca (emoji banido, concorrente, CTA proibido).
 
 ---
 
 ## 5. Distribution Agent
 
 Propósito:
-Hospedar mídia no **Supabase**, montar metadata publish-ready, gerar recomendações de agendamento e gate-protect a publicação real.
+Conferir o que é publicável, montar metadata publish-ready, recomendar agendamento e **descrever o gate** que protege a publicação real.
 
 Skill File: `skills/distribution-agent/SKILL.md`
 
 Responsabilidades:
-- Fazer upload de todos os media files da campanha para o bucket de storage `campaign-uploads` do Supabase
-- Gerar public URLs e salvar em `media_urls.json`
-- Montar metadata final por plataforma a partir dos outputs do Copywriter Agent
-- Gerar recomendações de agendamento baseadas no sequenciamento de distribuição (LinkedIn 2ªf → Instagram 3ªf → YouTube 4ªf → Reels/Threads 5ªf — ver `platform_guidelines.md`)
-- Escrever um arquivo advisory `Publish <task_name> <date>.md`
-- Executar posting real via API **somente** quando o usuário referenciar explicitamente o Publish MD file pelo nome
+- Localizar a arte publicável (`ads/feed.png` 4:5 ou `slides/slide_N.png`) e a legenda (`copy/instagram_caption.txt`)
+- Montar metadata final por plataforma
+- Gerar recomendações de agendamento (LinkedIn 2ªf → Instagram 3ªf → Reels/Threads 5ªf — ver `platform_guidelines.md`)
+- Escrever `distribution/plan.md` (é o que o pipeline grava)
+- **Nunca publicar** — reportar o status do gate
 
-Plataformas:
-- **Instagram** — Graph API (`/media` + `/media_publish`)
-- **YouTube** — YouTube Data API (requer OAuth `YOUTUBE_REFRESH_TOKEN`)
-- **Threads / X** — Sem API pública estável; texto do post é incluído no Publish MD para posting manual
-- **LinkedIn** — texto incluído no Publish MD para posting manual
+Como a publicação real funciona hoje (**no painel**, `interface/lib/publish.js` + `interface/routes/publish.js`):
+- **Instagram feed** via Graph API v21.0 — **imagem única e carrossel**. Vídeo/Reels/Stories **não são publicáveis** (fase 1)
+- A mídia chega na Meta por um **link público temporário** `/m/:token` (TTL 20 min, base em `public_base_url`) — **não** por Supabase
+- Token do Instagram é colado em **Configurações > Publicação Instagram** (admin) e gravado em `interface/data/publish.json`; o `ig_user_id` é descoberto pelo botão "Testar". A variável `IG_ACCESS_TOKEN` **não é lida**
+- **Gate R5:** peça em `outputs/approved/` + `status.status === "approved"` + `content_hashes` conferidos em runtime (exclui `status.json` e `preview.html`) + confirmação humana + `dryRun: false` + Instagram conectado + peça não publicada antes
+- **Agendamento executável** (`interface/lib/schedule.js`), histórico de publicados (`interface/lib/publications.js`) e travas anti-duplicidade (`E_ALREADY_SCHEDULED`, `E_ALREADY_PUBLISHED`, `publishingNow`, "Marcar como já publicada")
+- **YouTube:** não existe publisher — estado permanente de manual/mock. **Threads/X e LinkedIn:** post manual
+- ⚠️ **Não existe mais "Publish MD":** nenhum script gera `Publish <task> <date>.md`, e o gate não depende de citá-lo. Supabase e `media_urls.json` são caminho legado (arquivo de campanha), não pré-requisito de publicação
 
 Output Típico (salvo em `outputs/<task_name>_<date>/`):
-- `media_urls.json` — URLs públicas do Supabase para toda mídia uploaded
-- `Publish <task_name> <date>.md` — advisory completo com captions, metadata, agendamento e instruções de publicação
+- `distribution/plan.md` — metadata por plataforma, agendamento recomendado e status do gate
+- `pipeline_run.json` — resumo da run (quando veio do pipeline)
 
 ---
 
@@ -228,16 +267,19 @@ node scripts/promote_task.js --task <name> --date <date> --to in_review
 
 Isso move a pasta de volta para `outputs/<task>_<date>/`. Reaprovação obrigatória antes de publicar. Contracheque automático via `check_approved_integrity.js --auto-revert` detecta edições silenciosas e reverte (preservando `previous_approval`).
 
-## Gate de publicação (4 invariantes)
+## Gate de publicação
 
-Antes de qualquer post real (IG Graph, YouTube Data API), TODAS as 4:
+**No painel (caminho real de publicação — Instagram feed):** todas estas invariantes, em `interface/lib/publish.js` + `interface/routes/publish.js`:
 
-1. ✅ Usuário referencia o Publish MD **pelo nome** (Step 5).
-2. ✅ `dry_run: false`.
-3. ✅ Tokens presentes (IG, YouTube OAuth).
-4. ⚠️ **R5 (Step 5a):** `assertPublishApproved({ taskName, date })` retorna sucesso → `status.status === "approved"` E `content_hashes` batem em runtime.
+1. ⚠️ **R5:** peça em `outputs/approved/` **e** `status.status === "approved"` **e** `content_hashes` conferidos em runtime (`assertApproved`; exclui `status.json` e `preview.html`).
+2. ✅ Confirmação humana no painel ("Publicar ou agendar").
+3. ✅ `dryRun: false`.
+4. ✅ Instagram conectado (token em `interface/data/publish.json`, via Configurações — a env `IG_ACCESS_TOKEN` **não é lida**).
+5. ✅ Peça ainda não publicada (`E_ALREADY_PUBLISHED`) e nenhuma publicação em voo (`publishingNow`).
 
-Falha em qualquer = não publicar essa task (não bloqueia outras).
+**No caminho CLI/agente:** `node scripts/check_approval_gate.js` (ou `assertPublishApproved({taskName, date})`) — mesma invariante, implementação separada, erros `E_TASK_NOT_FOUND`/`E_INVALID_STATE`/`E_GATE_NO_HASHES`/`E_HASH_MISMATCH`.
+
+Falha em qualquer = não publicar essa task (não bloqueia outras). **Vídeo, Stories e YouTube não são publicáveis hoje.**
 
 ## Comandos diários
 
@@ -279,18 +321,22 @@ Detalhes operacionais em `GUIA_DE_USO.md` §23.
 
 Todos os agentes devem referenciar os seguintes knowledge files localizados no diretório **knowledge/**. São a fonte de verdade da marca 4Selet e devem ser lidos **antes** de qualquer geração.
 
+> ⚠️ **Estes arquivos NÃO são documentação passiva.** `interface/lib/knowledge.js` (`brandContext()`) injeta `brand_identity.md` + `product_campaign.md` + `platform_guidelines.md` **literalmente** no system prompt de toda geração do painel (`interface/lib/prompts.js`), precedidos de *"Use EXCLUSIVAMENTE os knowledge files oficiais abaixo como fonte de verdade da marca"*. **Editar um deles muda a geração em produção agora.** Qualquer divergência em relação ao bloco `GOVERNANCE` do mesmo arquivo chega ao modelo como ordem contraditória.
+
 ### brand_identity.md
-*4Selet — Brand Identity Guide (v1.1 · Maio/2026)*
+*4Selet — Brand Identity Guide (v1.2 · Julho/2026)*
 
 Define:
 - posicionamento e essência da marca (*"Para quem sabe que é Selet."*) e o DNA de exclusividade (acesso por convite)
 - as 5 colunas estratégicas (Experiência, Lucratividade, Sabedoria, Exclusividade, Segurança), público-alvo primário/secundário e personalidade de marca (*Sóbrio. Estruturado. Estrategista*)
 - identidade visual: **paleta oficial** (Selet Darker `#07212B`, Navy `#003554`, Blue `#006494`, Sky `#5499B5`, Mist `#AFBCC9`, Cloud `#D9DCD6`) e tipografia (**Inter** para tudo; **JetBrains Mono** só para snippets técnicos)
 - voice & tone, regras de emoji (máx 1 funcional em captions), CTAs aprovados/proibidos e estratégia de hashtags
-- as 3 **frases-tag oficiais** (*"Produtor não é número. É parceiro. E parceiro vende junto."* / *"Para quem sabe que é Selet."* / *"A escolha de quem já performa."*)
-- o **brand governance checklist** (7 perguntas) e a seção *What 4Selet Is Not* (lista fechada de concorrentes proibidos em criativos abertos)
+- as 3 **frases-tag oficiais** — com a **regra dura**: *"Para quem sabe que é Selet."* **não assina peça** (não é rodapé, fecho, headline nem legenda); só entra se o brief pedir
+- os **6 pilares de conteúdo** (eixo temático da peça) e a seção **4Selet na Mídia** (prova social de imprensa)
+- regra de fotografia atualizada: **foto de banco (Pexels) é permitida** desde que tratada na marca e usada como fundo
+- o **brand governance checklist** (7 perguntas + a 8ª sobre a frase-tag) e a seção *What 4Selet Is Not* (lista fechada de concorrentes proibidos em criativos abertos)
 
-Usado por: **todos os cinco agentes**
+Usado por: **o painel (injetado no prompt de todos os 7 tipos)** e pelas skills dos cinco agentes
 
 ---
 
@@ -311,13 +357,13 @@ Usado por: Marketing Research Agent · Ad Creative Designer · Video Ad Speciali
 ---
 
 ### platform_guidelines.md
-*Platform Guidelines: 4Selet (v1.1 · Maio/2026)*
+*Platform Guidelines: 4Selet (v1.2 · Julho/2026)*
 
 Define best practices, specs de formatação e calibração de tom por plataforma:
 
-- **Instagram** (feed 4:5 / story 9:16 / square 1:1) — design rules de paleta/tipografia/Selet Dots, estrutura de caption, hashtags 3–5 obrigatórias, regras de carrossel
+- **Instagram** — **feed 4:5 (1080×1350, o publicável)**, imagem/anúncio 1:1, story 9:16, site 16:9; design rules de paleta/tipografia/Selet Dots, margem segura **88–104px**, estrutura de caption, hashtags 3–5 (só `#4Selet` obrigatória), regras de carrossel e a seção **2.6 — 4Selet na Mídia** (formatos, 10 modelos, regras de conteúdo)
 - **Threads / X** — provocação controlada com dado, máx 1 hashtag, sem auto-depreciação, números específicos obrigatórios
-- **YouTube** — titles 60–70 chars informativos, descriptions, thumbnails de alto contraste Navy/Darker, hook nos primeiros 5s
+- **YouTube** — titles 60–70 chars, descriptions, thumbnails Navy/Darker, hook nos primeiros 5s. **Referência editorial apenas:** não há tipo de conteúdo, render nem publicação de YouTube no sistema
 - **LinkedIn** — posts editoriais premium 1.200–1.500 chars, autoridade técnica, 3–5 hashtags, sem auto-depreciação
 - quick reference cheat sheet, tom & voz por plataforma e o **sequenciamento de distribuição** (LinkedIn 2ªf → Instagram 3ªf → YouTube 4ªf → Reels/Threads 5ªf → Story 6ªf)
 
@@ -380,33 +426,33 @@ Vídeos da campanha de Abril/2026 para **referência de tom/estilo** (não para 
 
 ```
 outputs/<task_name>_<date>/
-├── research_results.json         ← Research Agent
-├── research_brief.md             ← Research Agent
-├── interactive_report.html       ← Research Agent
-├── media_urls.json               ← Distribution Agent
+├── status.json                   ← fonte da verdade do workflow (estado, hashes, pilar, mídia)
+├── render.json                   ← variantes de marca da peça (logo, marca d'água, template)
+├── research/insights.md          ← Research (advisory do pipeline; NÃO usa Tavily)
 ├── ads/
-│   ├── layout.json               ← Ad Creative Designer
-│   ├── ad.html                   ← Ad Creative Designer
-│   ├── styles.css                ← Ad Creative Designer
-│   └── instagram_ad.png          ← Ad Creative Designer (Playwright render)
+│   ├── concept.json              ← Ad Creative Designer (blueprint, schema plano)
+│   ├── ad.html                   ← arte em HTML (CSS inline)
+│   ├── ad.png                    ← Playwright 1080×1080 @2x (+ ad.editable.json · ad.bg.png)
+│   ├── feed.png                  ← 1080×1350 (peça de feed · o publicável no Instagram)
+│   └── square.png · story.png · media_16x9.png   ← formatos da peça "4Selet na Mídia"
+├── slides/slide_N.png            ← carrossel (1080×1350 por slide)
 ├── video/
-│   ├── scenes.json               ← Video Ad Specialist (JSON composition/props)
-│   └── video.mp4                 ← Remotion (composition BrandStory em src/ · render via painel interface/lib/render.js)
+│   ├── concept.json              ← Video Ad Specialist (schema PLANO — o arquivo canônico)
+│   ├── scenes.json               ← derivado (props do Remotion, escrito pelo render)
+│   └── video.mp4                 ← Remotion, composition BrandStory, 1080×1920
 ├── copy/
-│   ├── instagram_caption.txt     ← Copywriter Agent
-│   ├── threads_post.txt          ← Copywriter Agent
-│   ├── linkedin_post.txt         ← Copywriter Agent
-│   └── youtube_metadata.json     ← Copywriter Agent
-├── logs/
-│   ├── research_agent.log
-│   ├── ad_creative_designer.log
-│   ├── video_ad_specialist.log
-│   ├── copywriter_agent.log
-│   └── distribution_agent.log
-└── Publish <task_name> <date>.md ← Distribution Agent
+│   ├── instagram_caption.txt     ← feed OU "4Selet na Mídia"
+│   ├── instagram_carousel.json   ← roteiro do carrossel
+│   ├── threads_post.txt
+│   └── linkedin_post.txt
+├── distribution/plan.md          ← Distribution (advisory; nunca publica)
+├── pipeline_run.json             ← resumo consolidado da run
+└── preview.html                  ← gerado por scripts/generate_preview.js (draft → in_review)
 ```
 
-> A pasta `outputs/` **já contém artefatos**: tasks de validação end-to-end como `outputs/e2e_video_2026-06-10/` (vídeo Remotion renderizado), `outputs/e2e_carousel_2026-06-10/` e `outputs/e2e_feed_2026-06-10/` (ads estáticos), além das tasks aprovadas em `outputs/approved/` (ex.: `e2e_image_2026-06-10`). A árvore acima é o **layout-alvo** de uma run completa — nem todo arquivo existe em toda task (ex.: `research_brief.md` / `interactive_report.html` e `logs/` só quando efetivamente gerados).
+> **Não existem mais** (eram do contrato antigo): `research_results.json` (legado do CLI), `media_urls.json`, `ads/layout.json`, `ads/styles.css`, `ads/instagram_ad.png`, `copy/copy.json`, `Publish <task> <date>.md` e a pasta `logs/` — o pipeline executável escreve no console e consolida em `pipeline_run.json`.
+
+> A pasta `outputs/` **já contém artefatos**: tasks de validação end-to-end, dezenas de peças "4Selet na Mídia" (`outputs/midia_*`), além das tasks aprovadas em `outputs/approved/`. A árvore acima é o **layout-alvo** — cada peça tem só os arquivos do seu tipo. Zonas: `outputs/` (draft/in_review), `outputs/approved/`, `outputs/archive/` (rejeitadas) e `outputs/_archived/` (descartadas pelo painel — o `promote_task.js` não enxerga essa zona).
 
 ---
 
@@ -419,10 +465,11 @@ outputs/<task_name>_<date>/
 | Playwright (`chromium`) | Rendering HTML-to-PNG de ads | ✅ Instalado |
 | BullMQ + Upstash Redis | Job queuing e worker orchestration | ✅ `pipeline/` entregue · ⏳ falta `REDIS_URL` (roda sequencial sem ele) |
 | Tavily AI SDK (`@tavily/core`) | Pesquisa de mercado ao vivo no painel (`interface/lib/research.js`) | ✅ Ativo/Configurado (opt-in; chave em `interface/data/tavily.json`) |
-| Claude (Anthropic) + ChatGPT (OpenAI) | Geração de conteúdo — multi-provedor (`interface/lib/ai.js`) | ✅ Ativo (dispatcher; falta chave em `interface/.env` p/ sair do simulado) |
+| Claude (Anthropic) + ChatGPT (OpenAI) | Geração de conteúdo — multi-provedor (`interface/lib/ai.js`) | ✅ Ativo/Configurado (`ANTHROPIC_API_KEY` em `interface/.env`; produção mostra "IA conectada") |
 | Autenticação do painel (`interface/lib/auth.js`) | Login multi-usuário, perfis admin/membro, sessão HMAC | ✅ Ativo (em produção) |
-| Supabase (`@supabase/supabase-js`) | Hosting de mídia e geração de public URLs | ⏳ Pendente (SDK + chaves) |
-| Instagram Graph API (v21.0) | Publicação no Instagram (`interface/lib/publish.js`) | ✅ Ativo/Configurado (feed: imagem + carrossel, gate R5 + agendamento) |
-| YouTube Data API | Publicação no YouTube (requer OAuth) | ⏳ Pendente (OAuth; não existe no painel) |
+| Supabase (`@supabase/supabase-js`) | Hosting de mídia (caminho legado — **não** é usado na publicação) | ⏳ Pendente (SDK + chaves) |
+| Pexels (`interface/lib/pexels.js`) | Busca de fotos para arte e fundo de slide | ✅ Ativo (chave em `interface/data/pexels.json`, via Configurações) |
+| Instagram Graph API (v21.0) | Publicação no Instagram (`interface/lib/publish.js`) | ✅ Ativo/Configurado (feed: imagem + carrossel, gate R5 + agendamento). Vídeo/Reels/Stories **não publicáveis** |
+| YouTube Data API | Publicação no YouTube | ❌ **Não implementada** — não existe publisher (não é só OAuth pendente) |
 
 > **Status do stack (2026-06-12):** o **painel web** (`interface/`) está **em PRODUÇÃO** em `https://mkt.4st.co` (Docker Compose), com **autenticação multi-usuário** (`lib/auth.js`), **geração multi-provedor Claude + ChatGPT** (`lib/ai.js`), **pesquisa Tavily ao vivo** (`lib/research.js`) e **publicação real no Instagram feed** via Graph API v21.0 com agendamento (`lib/publish.js` + `lib/schedule.js`, atrás do gate R5). A pasta **`pipeline/`** (BullMQ + worker), `package.json`, `skills/` (7 skills), `src/` (Remotion) e as deps **Remotion + React** e **Playwright + Chromium** já estão criados/instalados. Faltam apenas **chaves/contas externas**: chave de IA no painel (Anthropic e/ou OpenAI), `REDIS_URL` (ativa a fila; sem ele roda sequencial), `@supabase/supabase-js` + Supabase, e **OAuth YouTube** (publicação no YouTube **não existe** no painel). Sem elas, hosting/YouTube rodam em **modo simulado**. Fonte de verdade do progresso: `STATUS_PROJETO.md`.

@@ -2,44 +2,60 @@
 name: orchestrator
 description: >
   Skill de COORDENACAO (nao e um agente) do pipeline de marketing 4Selet. Recebe um Job Payload
-  (task_name, task_date, platform_targets, user_flags skip_research/skip_image/skip_video,
-  source_folder) e roda os 5 agentes como um workflow unico, respeitando dependencias: research
-  primeiro, depois ad-creative-designer + video-ad-specialist + copywriter (paralelizaveis), e
-  distribution por ultimo. Valida o payload, aplica skips, rastreia status por job + logs, e
-  reporta a conclusao surfaceando o Publish MD. Modo de execucao: SEQUENCIAL por padrao (sem Redis)
-  ou enfileirado BullMQ+Redis quando configurado. Use quando o usuario submeter um job payload,
-  pedir "rodar o pipeline", "pipeline:run", "orquestrar a campanha" ou "rodar todos os agentes".
-  NUNCA publica conteudo (a publicacao e manual via distribution-agent + Publish MD).
+  (task_name, task_date, brief, platforms, content_types, flags skip_research/skip_video/
+  skip_distribution/skip_render) e roda o pipeline respeitando dependencias: research primeiro,
+  depois UM job criativo por tipo de conteudo, depois distribution e o preview_generator (que
+  promove draft -> in_review). Valida o payload, aplica skips, rastreia o status de cada job e
+  reporta a conclusao apontando distribution/plan.md e pipeline_run.json. Modo de execucao:
+  SEQUENCIAL por padrao (sem Redis) ou enfileirado BullMQ+Redis quando configurado. Use quando o
+  usuario submeter um job payload, pedir "rodar o pipeline", "pipeline:run", "orquestrar a
+  campanha" ou "rodar todos os agentes". NUNCA publica conteudo — a publicacao real acontece no
+  painel, atras do gate de aprovacao.
 license: MIT
 metadata:
   author: Marketing 4Selet
-  version: 1.0.0
+  version: 2.0.0
   category: marketing
   tags: [orchestration, pipeline, bullmq, redis, 4selet]
 ---
 
 # Orchestrator
 
-Coordena o pipeline de conteudo 4Selet a partir de **um Job Payload**: valida, resolve dependencias e skips, dispara os 5 agentes na ordem certa, rastreia status + logs, e reporta — **sem publicar** (publicacao e gated no distribution-agent).
+Coordena o pipeline de conteudo 4Selet a partir de **um Job Payload**: valida, resolve dependencias e skips, dispara os jobs na ordem certa, rastreia status e reporta — **sem publicar**.
+
+## Onde isto se encaixa
+
+Existem **dois caminhos** de operacao, e eles compartilham os mesmos scripts de estado:
+
+| Caminho | O que e | Quando usar |
+|---|---|---|
+| **Painel web** (`interface/`, producao em `https://mkt.4st.co`) | **Caminho principal.** O usuario cria uma peca por vez pela interface; o painel garante a task chamando o mesmo `scripts/orchestrator.js`, e faz preview/promote pelos mesmos `generate_preview.js` e `promote_task.js` | Operacao do dia a dia |
+| **Pipeline** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`) | Via **em lote/CLI**: gera varias pecas de uma vez a partir de um brief | Campanha inteira de uma vez, automacao |
+
+**Os 7 tipos de conteudo atuais** (`interface/lib/config.js`): `instagram_caption`, `instagram_carousel`, `ad_creative`, `media_mention` ("4Selet na Midia"), `video_idea`, `linkedin_post`, `threads_post`.
+
+> **Atencao:** o default do pipeline (`ALL_CONTENT_TYPES`, em `pipeline/agents.js`) tem **6 tipos e nao inclui `media_mention`**. Uma run default **nunca** gera peca "4Selet na Midia" — para incluir, passe o tipo explicitamente em `content_types`. (Alternativa: corrigir a lista no codigo.)
 
 ## When to Use This Skill
 
 - Usuario submete um Job Payload (JSON) ou pede "rodar o pipeline", "pipeline:run", "orquestrar a campanha".
-- Precisa coordenar os 5 agentes de ponta a ponta para uma task.
+- Precisa coordenar a geracao de varias pecas de ponta a ponta para uma task.
 
-**NAO use para** executar um unico agente isolado (chame a skill do agente direto) nem para publicar (distribution-agent).
+**NAO use para** gerar uma unica peca (chame a skill do agente, ou use o painel) nem para publicar.
 
-## CRITICAL: modos de execucao (realidade do projeto)
+## CRITICAL: modos de execucao
 
-- **Sequencial (padrao, atual):** sem Redis/BullMQ instalados, o orchestrator dispara as skills dos agentes **em ordem de dependencia**, uma a uma (foi assim que o dry-run rodou). Os agentes sao **skills executadas pelo Claude** — nao servicos de codigo.
-- **Enfileirado (BullMQ + Upstash Redis):** modo de producao. Requer `REDIS_URL` + `npm i bullmq`. Os scripts `pipeline/orchestrator.js` (enqueue na fila `marketing-pipeline`) e `pipeline/worker.js` (worker) **ja estao entregues e executaveis** (commit e787dc7); sem `REDIS_URL` o pipeline degrada para sequencial automaticamente.
-- O script empacotado `scripts/orchestrate.js` **valida o payload e gera o plano de execucao + logs** em ambos os modos; ele NAO roda os agentes (isso e o Claude seguindo o plano, ou o worker BullMQ no futuro).
+- **Sequencial (padrao):** sem `REDIS_URL`, `pipeline/orchestrator.js` roda os jobs aqui mesmo, em ordem.
+- **Enfileirado (BullMQ + Redis):** com `REDIS_URL` + `bullmq`, faz enqueue na fila `marketing-pipeline`; `pipeline/worker.js` (ja entregue e executavel, commit e787dc7) processa.
+- O script empacotado `skills/orchestrator/scripts/orchestrate.js` e o **caminho historico**: valida o payload e gera o **plano** (`pipeline_plan.json` + `logs/`), mas **nao roda** os agentes.
 
 ## CRITICAL: reconciliacoes com o contrato real
 
-- **Pasta canonica:** `outputs/<task_name>_<date>/` (underscore) + subpasta `logs/`. (As key details citam `outputs/<task>/<date>/`.)
-- **Os 5 agentes existem como skills:** `marketing-research-agent`, `ad-creative-designer`, `video-ad-specialist`, `copywriter-agent`, `distribution-agent`.
-- **Pipeline NUNCA publica** automaticamente — distribution-agent so posta com referencia explicita ao Publish MD (gate).
+- **Pasta canonica:** `outputs/<task_name>_<date>/` (underscore, dir unico).
+- **O eixo de execucao e `content_types`, nao "os 5 agentes".** No executavel nao existem jobs chamados `ad_creative_designer`, `video_ad_specialist` ou `copywriter_agent` — ha **um job por tipo de conteudo**, nomeado com o **id do tipo**.
+- **`platforms`, nao `platform_targets`:** o pipeline executavel le **`payload.platforms`** e cai para `["instagram"]` se ausente. `platform_targets` so e lido pelo `orchestrate.js` legado — **nao e alias**. Um payload com `platform_targets` passado ao pipeline perde as plataformas em silencio.
+- **`dry_run` nao tem efeito** no pipeline executavel: ele chama a IA de verdade e renderiza. O unico modo "sem chamada real" e nao haver chave de IA configurada (o resultado volta com `simulated: true`). Para pular o render, use `--no-render` / `skip_render`.
+- **Pipeline NUNCA publica** automaticamente.
 
 ## Inputs — Job Payload
 
@@ -48,160 +64,190 @@ Coordena o pipeline de conteudo 4Selet a partir de **um Job Payload**: valida, r
   "task_name": "taxa_zero_maio",
   "task_date": "2026-05-26",
   "brief": "Anunciar a Taxa Zero para produtores estabelecidos (50k+/mes)",
-  "platform_targets": ["instagram", "youtube"],
-  "user_flags": { "skip_research": false, "skip_image": false, "skip_video": false },
-  "source_folder": null,
-  "dry_run": false
+  "platforms": ["instagram", "linkedin"],
+  "content_types": ["instagram_caption", "instagram_carousel", "ad_creative"],
+  "user_flags": { "skip_research": false, "skip_video": false, "skip_distribution": false, "skip_render": false },
+  "angle": null,
+  "campaign_id": null
 }
 ```
 
-(Aceita tambem skip flags no topo do payload. `source_folder`/`assets/<task>/` so e exigido se `skip_research: true`.)
+**Obrigatorios no pipeline executavel:** `task_name`, `task_date` **e `brief`** (min. 8 caracteres) — sem `brief`, sai com exit 2.
 
-> **Pipeline executavel (`pipeline/orchestrator.js`):** exige `task_name`, `task_date` **e `brief`** (min. 8 chars) — sem `brief` sai com exit 2. Aceita `platforms` (alias de `platform_targets`) e `content_types`. As skip flags do pipeline real sao `--skip-research`, `--skip-distribution`, `--no-render`, `--skip-video` (nao ha `--skip-image` no executavel; `skip_image` so existe no caminho historico `orchestrate.js`).
+`content_types` escolhe quais pecas gerar; ausente, usa a lista default de 6 (sem `media_mention`).
 
 ## Step 1: Intake + validacao
 
-Valide o payload com o script empacotado (cria `outputs/<task>_<date>/logs/` e `pipeline_plan.json`):
+Pelo pipeline executavel (argumentos sao obrigatorios — `npm run pipeline:run` sozinho falha com *"[pipeline] obrigatorios: --task, --date e --brief"*):
+
+```bash
+npm run pipeline:run -- --task <task> --date <YYYY-MM-DD> --brief "<brief>"
+```
+
+Pelo caminho historico (so planeja):
 
 ```bash
 node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
-# ou: node skills/orchestrator/scripts/orchestrate.js --payload '<json inline>'
 ```
-
-Obrigatorios: `task_name`, `task_date`. Sem eles -> erro (exit 2).
 
 ## Step 1.5: Inicializar status.json (Workflow de Aprovacao)
 
-Apos validar o payload e ANTES de disparar o `research_agent`, criar
-`outputs/<task_name>_<task_date>/status.json` com o estado inicial do
-workflow de aprovacao (Niveis 1/2):
+Antes de qualquer job, a task precisa existir com `status.json` em `draft`:
+
+```bash
+node scripts/orchestrator.js --task <task_name> --date <task_date> [--platforms <csv>]
+```
+
+(O pipeline ja faz isso sozinho, de forma idempotente, via `content.createTask`.)
 
 ```json
 {
-  "task_name": "<payload.task_name>",
-  "task_date": "<payload.task_date>",
+  "task_name": "<task_name>",
+  "task_date": "<task_date>",
   "status": "draft",
   "created_at": "<ISO now com timezone>",
   "last_updated_at": "<ISO now>",
   "approved_by": null,
   "approved_at": null,
   "campaign_angle": null,
-  "platforms": <payload.platform_targets>,
+  "platforms": ["instagram"],
   "history": [
-    { "from": null, "to": "draft", "at": "<ISO now>",
-      "by": "orchestrator", "event_type": "first_creation" }
+    { "from": null, "to": "draft", "at": "<ISO now>", "by": "orchestrator", "event_type": "first_creation" }
   ]
 }
 ```
 
-Bootstrap pratico:
-
-```bash
-node scripts/orchestrator.js --task <task_name> --date <task_date> [--platforms <csv>]
-```
-
 Regras:
 - Timestamp ISO 8601 **com timezone** (ex.: `2026-06-02T09:14:22-03:00`).
-- Se `status.json` ja existir: NAO sobrescrever; apenas anexar entrada em
-  `history` e atualizar `last_updated_at`. **NUNCA rebaixar `approved` ou
-  `rejected`** automaticamente — nesse caso, parar e avisar que a task
-  precisa ser promovida manualmente via `task-promoter`.
-- `campaign_angle` permanece `null`; o `copywriter-agent` preenchera depois.
-- O `distribution-agent` promovera `draft -> in_review` ao gerar o preview
-  (`scripts/generate_preview.js`).
+- Se `status.json` ja existir: NAO sobrescrever; apenas anexar em `history` e atualizar `last_updated_at`. **NUNCA rebaixar `approved` ou `rejected`** automaticamente — pare e avise que a task precisa ser promovida pelo `task-promoter`.
+- `campaign_angle` permanece `null`.
+- Quem promove `draft -> in_review` e o job **`preview_generator`** (etapa 5), nao o distribution.
 
-## Step 2: Resolucao de dependencias + skips
+## Step 2: Jobs, dependencias e skips
 
-| Job | Depende de | Skip | Regra |
-|-----|-----------|------|-------|
-| `research_agent` | — | `skip_research` | Roda 1o. Se skip -> **exige `assets/<task>/`**; se ausente, **bloqueia** o pipeline com nota |
-| `ad_creative_designer` | research | `skip_image` | Apos research/skip. Se skip -> marcado complete sem rodar |
-| `video_ad_specialist` | research | `skip_video` | Apos research/skip. Se skip -> marcado complete sem rodar |
-| `copywriter_agent` | research | — | Apos research/skip |
-| `distribution_agent` | ad + video + copy | — | **Por ultimo**, com todos os outputs prontos |
+| Job | Nome no resultado | Depende de | Skip | Regra |
+|-----|---|-----------|------|-------|
+| Research (advisory) | `research_agent` | — | `skip_research` | Roda 1o. **Advisory deterministico — nao usa Tavily.** Grava `research/insights.md` |
+| Criativo (1 por tipo) | **o id do tipo** (`instagram_caption`, `ad_creative`, …) | research | `skip_video` remove `video_idea`; `content_types` escolhe o resto | Gera o arquivo do tipo + render (salvo `skip_render`) |
+| Distribution (advisory) | `distribution_agent` | pecas | `skip_distribution` | Grava `distribution/plan.md`. **Nunca publica** |
+| Preview | `preview_generator` | distribution | — | Gera `preview.html` e promove `draft -> in_review` |
 
-Bloqueio (skip_research sem assets): retorne *"Task nao pode prosseguir ate a source folder ser uploaded."* e pare.
+> **`skip_research` nao bloqueia nada no executavel.** Em `pipeline/agents.js` ele simplesmente pula o estagio (`status: "skipped"`). A regra "exige `assets/<task>/`, senao bloqueia" existe **apenas** no caminho legado `orchestrate.js` — e hoje `assets/` nem tem subpastas por task. Nao apresente esse bloqueio como protecao do pipeline.
 
 ## Step 3: Executar o plano
 
-- **Sequencial:** dispare as skills nesta ordem — `research` -> (`ad` , `video`, `copy`) -> `distribution`. Os 3 do meio sao independentes (paralelizaveis conceitualmente; em modo Claude, rode em sequencia). Cada agente le/escreve em `outputs/<task>_<date>/` conforme seu contrato. Skips: marque o job `complete (skipped)` sem invocar a skill.
-- **Enfileirado (entregue):** com `REDIS_URL` + `bullmq`, `pipeline/orchestrator.js` faz enqueue na fila `marketing-pipeline`; `pipeline/worker.js` processa. Comandos: `npm run pipeline:run`, `npm run pipeline:run:payload '<json inline>'`, `npm run pipeline:worker` (= `node pipeline/worker.js`).
+- **Sequencial:** `research` -> N jobs criativos (um por `content_type`) -> `distribution` -> `preview_generator`. Cada job le/escreve em `outputs/<task>_<date>/` conforme o contrato de arquivos.
+- **Enfileirado:** com `REDIS_URL` + `bullmq`, enqueue na fila `marketing-pipeline`; `node pipeline/worker.js` processa.
 
-Passagem de dados entre estagios = o **contrato de arquivos** em `outputs/<task>_<date>/` (research_results.json -> ad/video/copy; midia + copy -> distribution).
+Comandos:
 
-## Step 4: Job tracking + logs
-
-- Estados: `queued`, `running`, `complete`, `skipped`, `failed`, `blocked`.
-- Um log por job em `outputs/<task>_<date>/logs/<job_name>.log`.
-- Output por job (formato):
-
-```json
-{ "job_name": "video_ad_specialist", "status": "complete", "dependencies": ["research_agent"], "notes": "" }
+```bash
+npm run pipeline:run -- --task <t> --date <YYYY-MM-DD> --brief "<...>"
+npm run pipeline:run:payload '<json inline>'
+node pipeline/worker.js        # worker BullMQ, quando REDIS_URL estiver configurado
 ```
 
-Se um job falha: logue, **notifique qual job falhou**, e ofereca recovery (re-rodar so aquele estagio). Nao prossiga para dependentes de um job falho.
+## Step 4: Job tracking
+
+- **Estados reais:** `done`, `skipped`, `blocked`, `error` (no executavel); `queued`/`skipped`/`blocked` no plano do `orchestrate.js`. **Nao existem** `complete`, `running` nem `failed`.
+- A chave do resultado e **`job`** (nao `job_name`):
+
+```json
+{ "job": "ad_creative", "status": "done", "file": "ads/concept.json", "rendered": true }
+```
+
+- **Nao ha log por job em disco.** O executavel escreve no console e consolida tudo em **`outputs/<task>_<date>/pipeline_run.json`** (task, plataformas, content_types, flags, `preview_ok` e a lista de jobs). A pasta `logs/<job>.log` so existe se o `orchestrate.js` legado for usado.
+
+Se um job falha: ele vira `error` no resumo, o pipeline **segue** com os demais tipos, e voce deve **notificar qual peca falhou** e oferecer re-rodar so aquele tipo (`content_types: ["<tipo>"]`).
 
 ## Step 5: Report final
 
-- Resumo do pipeline (status de cada job).
-- **Surface o Publish MD** gerado pelo distribution-agent (`outputs/<task>_<date>/Publish <task> <date>.md`).
-- Lembrete: **nada foi publicado** — publicacao e manual via referencia ao Publish MD.
-- Se `dry_run`/simulado: rotular o report como TESTE.
+- Resumo da run: status de cada job, lido de `pipeline_run.json`.
+- Apontar **`outputs/<task>_<date>/distribution/plan.md`** e **`pipeline_run.json`**.
+- Dizer o proximo passo real: as pecas estao em **`in_review`** e seguem para revisao no painel (`in_review -> approved`). **A publicacao real no Instagram e feita pelo painel** (`interface/lib/publish.js`), atras do gate R5 (status `approved` + `content_hashes` conferidos em runtime), com agendamento opcional.
+- Se algum job voltou `simulated: true` (sem chave de IA), rotular o report como TESTE/simulado.
 
-## Skip Flags
+## Flags
 
 | Flag | Efeito |
 |------|--------|
-| `skip_research: true` | Pula research; **exige** `assets/<task_name>/`; senao bloqueia |
-| `skip_image: true` | Pula ad-creative-designer (job complete, sem geracao) |
-| `skip_video: true` | Pula video-ad-specialist (job complete, sem geracao) |
+| `skip_research: true` | Pula o research advisory (nao bloqueia nada) |
+| `skip_video: true` | Remove `video_idea` da lista de tipos |
+| `skip_distribution: true` | Pula o plano de distribuicao |
+| `skip_render: true` / `--no-render` | Gera o JSON/texto das pecas sem renderizar arte |
+| `content_types: [...]` | Escolhe exatamente quais pecas gerar (inclua `media_mention` se quiser peca de imprensa) |
+
+*(`skip_image` so existe no caminho historico `orchestrate.js`.)*
 
 ## Examples
 
-### Example 1: Pipeline completo (sem skips)
-**Payload:** task taxa_zero_maio, IG+YT, skips false. -> research -> ad+video+copy -> distribution -> report + Publish MD. Nada publicado.
+### Example 1: Campanha completa
+**Payload:** task `taxa_zero_maio`, brief da campanha, `platforms: ["instagram","linkedin"]`, sem `content_types`. -> research -> 6 jobs criativos (um por tipo default) -> distribution -> preview. Report aponta `pipeline_run.json`; pecas em `in_review`. Nada publicado.
 
-### Example 2: Skip research com assets
-**Payload:** `skip_research: true`, `assets/taxa_zero_maio/` existe. -> research `skipped`; demais rodam usando os assets. Sem assets -> **blocked**.
+### Example 2: So as pecas de imagem
+**Payload:** `content_types: ["ad_creative","instagram_caption"]`. -> 2 jobs criativos; os outros tipos nem sao tentados.
 
-### Example 3: Skip video
-**Payload:** `skip_video: true`. -> video_ad_specialist `complete (skipped)`; ad + copy rodam; distribution segue sem o video.
+### Example 3: Incluir "4Selet na Midia"
+**Payload:** `content_types: ["media_mention"]` (explicito — nao entra por default). Lembrar que a peca de imprensa precisa do print da materia e dos metadados do veiculo.
+
+### Example 4: Sem render
+**Payload:** `user_flags: { skip_render: true }`. -> gera os JSONs/textos; a arte fica para depois ("Gerar arte final" no painel).
 
 ## Troubleshooting
 
+### `npm run pipeline:run` sai com erro de obrigatorios
+**Cause:** o script exige argumentos. **Solution:** `npm run pipeline:run -- --task <t> --date <d> --brief "<...>"`.
+
+### As plataformas sumiram (task nasceu so com instagram)
+**Cause:** o payload usou `platform_targets`. **Solution:** no pipeline executavel o campo e **`platforms`**.
+
+### Passei `dry_run: true` e mesmo assim gerou peca de verdade
+**Cause:** `dry_run` nao existe no executavel. **Solution:** para nao gerar arte, use `--no-render`; para nao consumir IA, rode sem chave configurada (as pecas voltam com `simulated: true`).
+
+### A run nao gerou peca de "4Selet na Midia"
+**Cause:** `media_mention` nao esta no default. **Solution:** passar em `content_types`.
+
+### Procurei `logs/<job>.log` e nao existe
+**Cause:** o executavel nao escreve log em disco. **Solution:** ler `pipeline_run.json` (e o console da run).
+
 ### Sem Redis / "Cannot find module 'bullmq'"
-**Solution:** modo **sequencial** (padrao) — `pipeline/orchestrator.js` roda os estagios aqui mesmo (ou orchestrate.js planeja e o Claude dispara as skills em ordem). Para enfileirado: `npm i bullmq` + `REDIS_URL` (a pasta `pipeline/` ja existe).
-
-### skip_research sem `assets/<task>/`
-**Solution:** pipeline **bloqueado**; peca o upload da source folder. Nao prossiga.
-
-### Um agente falhou
-**Solution:** logue, notifique o job, nao rode dependentes; ofereca re-rodar so o estagio.
+**Solution:** modo **sequencial** (padrao). Para enfileirado: `npm i bullmq` + `REDIS_URL`.
 
 ## Quality Checklist
 
-- [ ] Payload validado (task_name, task_date, platform_targets, flags)
-- [ ] Dependencias respeitadas (research 1o; distribution por ultimo)
-- [ ] skip_research sem assets -> bloqueado; skip_image/skip_video -> complete sem rodar
-- [ ] Logs por job em `outputs/<task>_<date>/logs/`; status rastreado
-- [ ] Report final + Publish MD surfaceado
-- [ ] **Nada publicado** automaticamente (gate do distribution-agent)
-- [ ] dry_run rotulado TESTE
+- [ ] Payload validado (`task_name`, `task_date`, **`brief`**, `platforms`, `content_types`)
+- [ ] Campo `platforms` usado (nao `platform_targets`)
+- [ ] `media_mention` incluido explicitamente, se a campanha precisar
+- [ ] Ordem respeitada: research -> criativos -> distribution -> preview_generator
+- [ ] Status lido com os estados reais (`done`/`skipped`/`blocked`/`error`), chave `job`
+- [ ] Report aponta `distribution/plan.md` + `pipeline_run.json` e diz que as pecas estao em `in_review`
+- [ ] **Nada publicado** automaticamente; publicacao e no painel, atras do gate R5
+- [ ] Peca `simulated: true` rotulada como TESTE
 
 ## Pipeline (contrato entre estagios)
 
 ```
 Job Payload → orchestrator (esta skill)
-  research_agent → research_results.json
-     ├─► ad_creative_designer → ads/{layout.json, ad.html, styles.css, instagram_ad.png}
-     ├─► video_ad_specialist  → video/{scenes.json, video.mp4}
-     └─► copywriter_agent     → copy/{copy.json + .txt/.json}
-              ↓ (todos prontos)
-  distribution_agent → media_urls.json + Publish <task> <date>.md  (gate: nao publica sozinho)
+  research_agent → research/insights.md            (advisory; sem Tavily)
+     └─► N jobs criativos, um por content_type → o arquivo do tipo:
+             instagram_caption / media_mention → copy/instagram_caption.txt
+             instagram_carousel                → copy/instagram_carousel.json
+             ad_creative                       → ads/concept.json      (+ ads/ad.png)
+             video_idea                        → video/concept.json    (+ video/video.mp4)
+             linkedin_post                     → copy/linkedin_post.txt
+             threads_post                      → copy/threads_post.txt
+              ↓
+  distribution_agent → distribution/plan.md        (gate: nao publica)
+              ↓
+  preview_generator  → preview.html + draft → in_review
+              ↓
+  resumo da run      → pipeline_run.json
 ```
+
+Artes renderizadas: `ads/ad.png` (1:1), `ads/feed.png` (4:5), `slides/slide_N.png` (carrossel), `ads/{square,story,media_16x9}.png` (4Selet na Midia), `video/video.mp4`.
 
 ## Performance Notes
 
-- Respeite a ordem de dependencia — nunca rode um agente antes do upstream existir (ou skip confirmado).
-- Em duvida sobre publicar: o orchestrator **nunca** publica; so o distribution-agent, com aprovacao explicita.
-- Em modo simulado/dry-run, rotule tudo como TESTE e nao use chaves externas.
+- Respeite a ordem de dependencia — nunca rode um job criativo antes de a task existir.
+- Em duvida sobre publicar: o orchestrator **nunca** publica.
+- Sem chave de IA, as pecas voltam `simulated: true` — rotule o report e nao trate como entregavel final.

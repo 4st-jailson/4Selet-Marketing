@@ -13,27 +13,31 @@ Exemplo completo (1 por estágio) da execução end-to-end do pipeline de market
 ```
 examples/
 ├── job_payload.json                         ← input do Orchestrator (dry-run)
-├── research_results.json                    ← Marketing Research Agent (simulado)
-├── ads/
-│   ├── layout.json                          ← Ad Creative Designer (design spec)
-│   ├── ad.html · styles.css                 ← layout em HTML/CSS
-│   └── instagram_ad.png                     ← render Playwright 1080x1080
+├── research_results.json                    ← Marketing Research Agent (simulado; formato LEGADO do caminho CLI)
+├── ads/                                     ← CONTRATO ATUAL
+│   ├── concept.json                         ← Ad Creative Designer (blueprint, schema plano)
+│   ├── ad.html                              ← arte em HTML com CSS INLINE (html,body com dimensoes · .card · span.cta)
+│   ├── ad.png                               ← render Playwright 1080x1080 @2x
+│   └── ad.editable.json · ad.bg.png         ← sidecars de edicao (gerados pelo render_ad.js)
 ├── video/
-│   ├── scenes.json                          ← Video Ad Specialist (composition="BrandStory" + props)
+│   ├── scenes.json                          ← saida DERIVADA (props do Remotion). O contrato do autor e video/concept.json (schema plano)
 │   └── ad.mp4                               ← render Remotion legado (selo TESTE); o contrato atual gera video/video.mp4 via BrandStory
 ├── copy/
 │   ├── instagram_caption.txt
-│   ├── youtube_metadata.json
-│   └── copy.json                            ← Copywriter Agent (estruturado, 4 plataformas: IG/Threads/YouTube/LinkedIn)
-├── media_urls.json                          ← Distribution (URLs Supabase placeholder)
-└── Publish test_job_payload_1 2026-03-31.md ← Distribution (advisory + gate)
+│   ├── youtube_metadata.json                ← LEGADO: nenhum tipo do painel/pipeline gera YouTube hoje
+│   └── copy.json                            ← Copywriter Agent (estruturado; caminho manual — o painel grava 1 arquivo por peca)
+├── media_urls.json                          ← LEGADO (Supabase); a publicacao real usa link temporario /m/:token
+├── Publish test_job_payload_1 2026-03-31.md ← LEGADO (advisory); nenhum script gera Publish MD hoje
+└── _legacy/ads/                             ← contrato ANTIGO do ad (layout.json · styles.css · instagram_ad.png) — nao copiar
 ```
+
+> **Atenção (auditoria 2026-07-30):** os itens marcados como LEGADO existem só como histórico do caminho CLI. O que o painel e o pipeline leem hoje está em `interface/lib/config.js` (`CONTENT_TYPES`): `ads/concept.json`, `video/concept.json`, `copy/instagram_carousel.json`, `copy/instagram_caption.txt`. Nenhum fixture aqui pode trazer a frase-tag *"Para quem sabe que é Selet."* como assinatura — regra dura em vigor.
 
 ## Como regenerar os renders
 
 ```bash
-# Ad (HTML -> PNG, Playwright):
-node scripts/render_ad.js skills/ad-creative-designer/examples/ads/ad.html skills/ad-creative-designer/examples/ads/instagram_ad.png 1080 1080
+# Ad (HTML -> PNG, Playwright) — scale 2 e o padrao das artes finais:
+node scripts/render_ad.js skills/ad-creative-designer/examples/ads/ad.html skills/ad-creative-designer/examples/ads/ad.png 1080 1080 2
 
 # Video: a composition de produção é BrandStory. O caminho real é o painel
 # (interface/lib/render.js, kind "video"), que lê video/concept.json, deriva os

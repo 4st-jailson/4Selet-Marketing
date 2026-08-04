@@ -332,18 +332,42 @@ A tela de Configurações reúne, em cartões, tudo que liga o painel ao mundo e
 
 ## 7. Tipos de conteúdo
 
-O painel gera seis tipos, cada um com formato e mídia final próprios:
+O painel gera sete tipos, cada um com formato e mídia final próprios:
 
 | Tipo | Plataforma | Saída | Mídia final |
 | --- | --- | --- | --- |
 | Feed Instagram | Instagram | Imagem + legenda (hashtags) | PNG 1080×1350 + texto |
 | Carrossel Instagram | Instagram | Estruturado (slides) | PNG por slide |
 | Imagem / Anúncio | Instagram | Estruturado (layout) | PNG 2160×2160 (alta resolução) |
-| Vídeo (short-form) | Instagram | Estruturado (cenas) | MP4 |
+| **4Selet na Mídia** | Instagram | Print da matéria + legenda de prova social | PNG em até 4 formatos (4:5, 1:1, 9:16, 16:9) |
+| Vídeo (short-form) | Instagram | Estruturado (cenas) | MP4 vertical 9:16 |
 | Post LinkedIn | LinkedIn | Texto editorial | Texto |
 | Post Threads / X | Threads / X | Texto curto | Texto |
 
 Cada tipo segue as regras de formatação da sua plataforma (tamanho, hashtags, tom), definidas nos knowledge files (Seção 9).
+
+### O pilar da peça (o assunto)
+
+Além do tipo, toda peça tem um **pilar de conteúdo** — o assunto que ela trata. São seis, e existem para que o feed não vire só campanha:
+
+| Pilar | Do que a peça fala |
+| --- | --- |
+| Campanha Taxa Zero | A oferta ativa: 0% por 3 meses, R$ 1,99 por transação, PIX D+10 |
+| Educacional | Ensina algo de valor ao produtor, sem empurrar oferta |
+| Curiosidade de mercado | Um dado pouco óbvio sobre plataformas, checkout, juros |
+| Prova da plataforma | Diferenciais verificáveis (95% de aprovação, prazos, gestor de conta) |
+| Novidade | Lançamento, atualização ou movimento do mercado |
+| Motivacional / estratégico | Mentalidade e decisão de longo prazo, sem motivação vazia |
+
+**Taxa Zero é um pilar entre seis, não o padrão.** Se você não escolher, a peça pode sair genérica — escolher o pilar é o que dá variedade ao feed.
+
+### 4Selet na Mídia — como funciona
+
+É o tipo para quando a 4Selet aparece na imprensa. Você envia o **print da matéria**, informa o **veículo** (e o link, se tiver), escolhe um dos **10 modelos** de arte (Tablet, Celular, Navegador, Citação, Split, Selo, Camadas e três variações de foto real) e marca os formatos que quer gerar — o padrão é Feed 4:5 + Site 16:9.
+
+Regras que a peça respeita sozinha: tom sóbrio de reconhecimento externo, **nada inventado sobre o conteúdo da matéria**, hashtags com `#NaMidia` e chamada suave ou nenhuma. Print vertical fica melhor em Tablet e Celular; print largo, em Navegador.
+
+> Só o formato **4:5** é publicável no feed do Instagram. O 16:9 é ativo de site/apresentação.
 
 ---
 

@@ -1,0 +1,16 @@
+{
+  "_test": true,
+  "_label": "TESTE - concept do Ad Creative Designer (dry-run)",
+  "task_name": "test_job_payload_1",
+  "pillar": "taxa_zero",
+  "source_angle": "Migracao sem perder margem: 0% por 3 meses ou ate R$ 300 mil em vendas",
+  "eyebrow": "CAMPANHA TAXA ZERO",
+  "headline": "==0%== de taxa.",
+  "subtext": "Por 3 meses ou ate R$ 300 mil em vendas. R$ 1,99 por transacao. PIX em D+10.",
+  "cta": "Solicitar convite",
+  "badge": "TESTE · DRY-RUN",
+  "image": "",
+  "layout_type": "editorial",
+  "visual_direction": "Gradiente radial azul com Selet Dots 6%, logo light no topo, headline a esquerda com numero-ancora realcado, CTA em pilula Selet Blue no rodape",
+  "notes": "Pilar taxa_zero: numero-ancora na headline e regra completa no subtext. Sem assinatura com frase-tag."
+}

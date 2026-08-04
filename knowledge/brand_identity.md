@@ -1,10 +1,14 @@
 # **4Selet — Brand Identity Guide**
 
-*Versão 1.1 · Maio/2026 · Knowledge file consumido por todos os 5 agentes (Research, Ad Creative, Video Ad, Copywriter, Distribution)*
+*Versão 1.2 · Julho/2026 · Knowledge file consumido pelo **painel web** (`interface/lib/knowledge.js` → `interface/lib/prompts.js`, injetado no system prompt de TODOS os 7 tipos de conteúdo) e pelas **skills dos 5 agentes** (Research, Ad Creative, Video Ad, Copywriter, Distribution)*
 
 > **Propósito:** Este documento define a identidade da marca 4Selet para ser usada em **toda peça gerada pelos agentes** — texto, imagem, vídeo, e-mail e metadata de publicação. Sempre referenciar antes de qualquer geração.
 
-> **O que mudou na v1.1:** três **frases-tag estrela** destacadas no Sample Copy (*"Produtor não é número. É parceiro."* · *"Para quem sabe que é Selet."* · *"A escolha de quem já performa."*), nova *Social caption institucional*, e **regra explícita com a lista fechada de concorrentes proibidos** em criativos abertos (Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay).
+> **Atenção — este arquivo entra literalmente no prompt de produção.** O painel (`https://mkt.4st.co`) concatena este documento no system prompt de cada geração. Qualquer regra escrita aqui vira instrução direta para a IA, e qualquer divergência em relação ao bloco GOVERNANCE de `interface/lib/prompts.js` chega ao modelo como ordem contraditória. Ao editar, conferir os dois lados.
+
+> **O que mudou na v1.2 (Julho/2026):** a frase-tag *"Para quem sabe que é Selet."* deixou de ser assinatura automática de peça (regra dura — ver Sample Copy); nova seção **Pilares de conteúdo** (o eixo temático real das peças, distinto das 5 colunas estratégicas); nova seção **4Selet na Mídia** (prova social de aparição na imprensa); fotografia de banco (Pexels) passou a ser **permitida com tratamento de marca**; regra de branco puro reescrita por escopo (texto x fundo); `#TaxaZero` virou hashtag **condicional ao pilar**.
+>
+> **O que veio da v1.1:** três frases-tag no Sample Copy, *Social caption institucional* e a lista fechada de concorrentes proibidos em criativos abertos (Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay).
 
 ---
 
@@ -53,6 +57,25 @@ A 4Selet se sustenta em cinco colunas estratégicas oficiais — extraídas do b
 | **Sabedoria — Plataforma estratégica** | Ajudamos o produtor a entender o digital, a plataforma e a lógica do negócio. **Educamos enquanto entregamos**. |
 | **Exclusividade — Não é pra todo mundo** | Construímos com quem está pronto para crescer. O **convite é parte da promessa**. |
 | **Segurança Inegociável** | Confiabilidade, previsibilidade e proteção são a base de todo relacionamento. **Não negociamos isso por marketing, por preço ou por velocidade.** |
+
+---
+
+## **Pilares de Conteúdo (eixo temático da peça)**
+
+As 5 colunas acima são o que a marca **é**. Os pilares abaixo são o que cada peça **fala** — o eixo temático escolhido a cada geração. São coisas diferentes e convivem: uma peça do pilar *Educacional* continua ancorada na coluna *Sabedoria*.
+
+Fonte de verdade em código: `interface/lib/config.js` (`CONTENT_PILLARS`). O pilar escolhido é gravado no `status.json` da peça e o ângulo correspondente é injetado no prompt de geração (`interface/lib/prompts.js`). Vale para **todos os formatos** — feed, carrossel, imagem/anúncio, 4Selet na Mídia, vídeo, LinkedIn, Threads/X.
+
+| Pilar (`id`) | Ângulo |
+| ----- | ----- |
+| **Campanha Taxa Zero** (`taxa_zero`) | A oferta ativa como assunto central: 0% de taxa da plataforma por 3 meses ou até R$ 300 mil em vendas, R$ 1,99 fixo por transação, PIX D+10, cartão D+30. Exclusividade por convite e transparência total sobre as condições. |
+| **Educacional** (`educacional`) | Ensina algo de valor real ao produtor estabelecido (estratégia, gestão, finanças do negócio digital, recomendação de livro/playbook). A marca aparece como autoridade que educa. **Sem empurrar oferta** — CTA suave de relacionamento ou nenhum. |
+| **Curiosidade de mercado** (`curiosidade_mercado`) | Dado ou curiosidade pouco óbvia sobre plataformas, checkout e juros do parcelamento. Provoca reflexão com número específico. Mercado sempre em abstrato — nunca citar concorrente. |
+| **Prova da plataforma** (`prova_plataforma`) | Diferenciais concretos e verificáveis: 95%+ de aprovação no cartão, prazos, gestor de conta dedicado, checkout, redundância. Tom de quem mostra resultado, não de quem promete. |
+| **Novidade** (`novidade`) | Lançamento/atualização da plataforma ou movimento do mercado que afeta o produtor. Foco no que muda na prática para a operação. |
+| **Motivacional / estratégico** (`motivacional`) | Mentalidade e decisão de longo prazo do produtor sério. Sóbrio e estruturado — a inspiração vem de um raciocínio concreto, nunca de motivação vazia. |
+
+**Regra de variedade (dura, aplicada no prompt):** *"Mantenha a variedade real do feed 4Selet: NEM toda peça é sobre Taxa Zero. Respeite o pilar como eixo temático, ainda que a campanha ativa exista."* Taxa Zero é **um** pilar entre seis, não o padrão universal. A campanha ativa não sobrepõe o pilar escolhido.
 
 ---
 
@@ -123,7 +146,11 @@ Inspiração visual:
 * **Primary lockup:** Símbolo + wordmark lado a lado
 * **Light variant** (`logo-4selet-light.png`): Para fundos escuros — símbolo e texto em tons claros
 * **Dark variant** (`logo-4selet.png`): Para fundos claros — símbolo em azul oficial, texto em tom escuro
-* **Símbolo isolado** (`simbolo.svg`): Para favicons, avatars, ícones de app
+* **Vetorial do lockup** (`logo-4selet.svg`): Logo completo escalável
+* **Símbolo "4" oficial** (`simbolo-selo.png`): É **o símbolo que aparece na arte** quando a peça escolhe "Só o símbolo" — recorte do símbolo do logo oficial (`interface/lib/render.js`, `SIMBOLO_SELO`)
+* **Símbolo de traço** (`simbolo.svg`): Reservado a **marca d'água**, favicon, avatar e ícone de app — não é o símbolo usado na arte
+
+> **Padrão da marca nas peças:** o logo padrão é o **wordmark completo** ("4Selet"). O símbolo isolado só entra quando a peça escolhe explicitamente "Só o símbolo" — e nesse caso é o `simbolo-selo.png`, nunca o `simbolo.svg`. Variantes por peça no painel: `logo` = `light` | `dark` | `symbol`; `watermark` = `word` | `symbol` | `outline` | `none` | `canto` | `padrao` (persistidas em `render.json` na raiz da task).
 
 **Regras de uso (CRITICAL para agents):**
 * **Nunca** esticar, rotacionar, distorcer ou aplicar efeitos ao logo
@@ -137,7 +164,7 @@ Inspiração visual:
 
 ### **Color Palette (Paleta Oficial da Marca)**
 
-A paleta oficial vem direto do brandbook v2 da 4Selet. **Todos os agentes devem usar EXCLUSIVAMENTE estas cores nos criativos.**
+A paleta oficial vem direto do brandbook v2 da 4Selet. **Toda cor de marca, de texto e de destaque sai desta lista** — não existe "cor de campanha diferente". A exceção está descrita logo abaixo, em *Neutros de interface*.
 
 | Nome | Hex | RGB | Uso |
 | ----- | ----- | ----- | ----- |
@@ -160,11 +187,17 @@ A paleta oficial vem direto do brandbook v2 da 4Selet. **Todos os agentes devem 
 
 * **Selet Blue** (`#006494`) é a cor de marca — toda peça deve conter pelo menos uma aparição
 * **Selet Navy** (`#003554`) é o tom dominante em capas, hero sections e materiais de impacto
-* Substituir `#FFFFFF` por **Selet Cloud** (`#D9DCD6`) em todos os fundos — **nunca usar branco puro**
+* **Branco puro (`#FFFFFF`), por escopo:** **permitido como TEXTO/foreground** sobre fundo Navy/Darker — é o que os templates de produção usam em headline e CTA (`interface/lib/render.js`). **Proibido como cor de FUNDO, de card ou de área chapada** — nesses casos use **Selet Cloud** (`#D9DCD6`)
 * Substituir `#000000` por **Selet Darker** (`#07212B`) em fundos escuros — **nunca usar preto puro**
 * As três cores funcionais são para **status do sistema apenas** — não usar como cor decorativa
 * **A paleta azul é o motor visual da marca** — headlines, hero sections, gráficos e acentos
 * **Sem neon, sem gradiente quente, sem cor de campanha "diferente"** — coerência > variedade
+
+**Neutros de interface (exceção autorizada):** molduras de dispositivo, chrome de navegador, sombras e os stops de gradiente do tema editorial claro podem usar neutros fora da paleta — é o que sustenta os mockups de dispositivo e o tema claro do carrossel, ambos em produção e aprovados. Valem apenas **dentro desses elementos**, nunca como cor de marca, de texto ou de destaque:
+
+* Tema claro do carrossel: `#E9ECE6` e `#CBD2CC` — derivados oficiais de Selet Cloud
+* Molduras de dispositivo: `#0a1015`, `#243039`
+* Chrome de navegador: `#e7ecef`, `#c6ced4`, `#f2f5f7`, `#6c7c84`, `#0d3244`, `#0a2a39`, e os três pontos do navegador (`#ff5f57`, `#febc2e`, `#28c840`) — citação literal de uma janela de navegador, não cor de campanha
 
 ---
 
@@ -202,24 +235,45 @@ A 4Selet usa **uma única família tipográfica** em toda comunicação: **Inter
 
 ### **Photography & Visual Content**
 
-A 4Selet **não usa fotografia genérica de banco de imagens**. Todo visual deve ser deliberado, premium e alinhado ao posicionamento sóbrio.
+Todo visual deve ser deliberado, premium e alinhado ao posicionamento sóbrio. **Fotografia de banco é permitida** — desde que tratada na marca e usada como fundo, nunca como assunto.
 
 **Use:**
 * Screenshots reais da plataforma (checkout, dashboard, área de membros) — sempre limpos, com dados fictícios ou mascarados
 * Composições tipográficas em fundo Selet Navy / Selet Darker — texto branco com hierarquia clara
-* Mockups de laptop/desktop mostrando a plataforma em uso real
+* Mockups de laptop/desktop/tablet mostrando a plataforma ou uma matéria em uso real
+* **Foto de banco (Pexels) ou do acervo** (`/uploads/...`), sempre tratada na marca: dessaturada, com tint Navy/Darker e scrim de leitura por cima. A foto é **fundo**, o texto é o assunto. Busca e download pelo próprio painel (`interface/lib/pexels.js`); creditar o fotógrafo quando o uso exigir
 * O motif de **pontos azuis** (Selet Dots) — referência ao logo — em capas e divisores
 * Fundos sólidos da paleta com gradiente radial sutil para profundidade
 * Ilustrações editoriais minimalistas em cinza-azulado, **nunca cartoonizadas**
 
 **Evite:**
-* Stock photos de "executivo sorrindo apertando mão"
+* O clichê corporativo: "executivo sorrindo apertando mão", equipe aplaudindo em sala de reunião, aperto de mão em close
+* Foto sem tratamento (colorida, saturada, sem scrim) ou foto que compete com o texto
 * Gradientes neon (rosa, verde elétrico, roxo psicodélico)
 * Estética "tech bro" com fundos pretos e cores fluorescentes
 * Emojis em materiais oficiais (exceções limitadas: WhatsApp informal, social caption casual)
 * Screenshots borrados, com dados reais expostos ou de telas obsoletas
 * Composições poluídas (mais de 3 cores por peça)
 * Mascotes, ícones tipo "flat 2.0", elementos infantilizados
+
+---
+
+### **4Selet na Mídia (prova social de imprensa)**
+
+Tipo de peça **nativo e em produção** desde julho/2026 (`media_mention` no painel — "4Selet na Mídia"). É o print de uma matéria/entrevista real sobre a 4Selet montado num dispositivo ou cena fotográfica. É o formato que mais depende de regra de marca, porque usa **conteúdo de terceiro**: texto da matéria, nome e logo do veículo.
+
+**Regras de conteúdo (duras):**
+* **Nunca inventar** trecho, citação, número ou título da matéria. Se não está no print, não entra na legenda
+* Tom **sóbrio de quem foi reconhecido** — a autoridade vem do veículo, não de nós. Sem hype, sem autopromoção, sem "somos os melhores"
+* Nomear o veículo com respeito e exatidão (nome correto, sem apelido, sem trocadilho)
+* A legenda ancora no **que o veículo representa** e no que o reconhecimento externo valida (seriedade da operação) — não no conteúdo que a matéria não disse
+* CTA **suave ou nenhum** (ex.: *Conhecer a plataforma*). Peça de prova social não é peça de conversão
+* Hashtags: `#4Selet` + `#NaMidia` + 1 a 3 complementares. **Sem `#TaxaZero`** (a menos que a matéria seja sobre a campanha)
+* Vale a mesma regra de emoji das captions: no máximo 1 funcional
+
+**Tratamento visual:** o print entra dentro de um mockup, nunca solto. São 10 modelos de arte no painel — *Tablet* (`hand_tablet`), *Foto real (mãos)*, *Foto real (mesa)*, *Foto real (mãos + mesa)*, *Celular*, *Navegador*, *Citação*, *Split*, *Selo* e *Camadas*. Os modelos foto-reais e os mockups de dispositivo são a **exceção autorizada** à regra de fotografia: a foto de banco entra como cena de contexto, sempre tratada na marca. Print vertical vai bem em Tablet e Celular; print largo vai bem em Navegador e Notebook.
+
+**Formatos gerados:** 4:5 (`feed.png`, o publicável no feed), 1:1 (`square.png`), 9:16 (`story.png`) e 16:9 (`media_16x9.png`, formato de site/apresentação — não publicável no feed). O padrão marcado é 4:5 + 16:9.
 
 ---
 
@@ -286,11 +340,13 @@ A 4Selet usa textura sutil — **nunca como decoração, sempre como reforço de
 | **Body em ad / VSL / LP** | ❌ Nunca |
 | **Caption Instagram** | Máximo 1, e só se for funcional (ex.: `→` para call-to-action, `▸` para item de lista) |
 | **Caption Threads** | Máximo 1, mesma regra |
-| **Newsletter (corpo)** | Permitido com parcimônia para sinalização (`📌` em pauta, `🔧` em release, `💡` em dica) |
-| **WhatsApp / Comunidade** | Permitido naturalmente |
+| **Legenda 4Selet na Mídia** | Máximo 1, mesma regra |
 
-**Emojis aprovados** (lista fechada para criativos): `→` `▸` `•` `📌` `🔧` `💡` `📊`
-**Banidos:** 🔥 ⚡ 🚀 💸 💰 😱 🤯 ✨ (associados a hype) e qualquer emoji infantilizado/cartoon.
+**Emojis aprovados** (lista fechada para criativos): `→` `▸` `•`
+
+**Banidos:** 🔥 ⚡ 🚀 💸 💰 😱 🤯 ✨ (associados a hype) e qualquer emoji infantilizado/cartoon. **Emoji banido é erro duro** — o painel recusa a gravação da peça (HTTP 422) em vez de apenas avisar (`interface/lib/validation.js`).
+
+**Canais não automatizados (newsletter, WhatsApp, comunidade) — fora do escopo do painel:** ali `📌` (pauta), `🔧` (release), `💡` (dica) e `📊` (dado) são permitidos com parcimônia. Não valem para peça gerada pelos agentes.
 
 ---
 
@@ -298,10 +354,10 @@ A 4Selet usa textura sutil — **nunca como decoração, sempre como reforço de
 
 CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concreta**. Sem urgência fake, sem CAPS LOCK, sem ponto de exclamação múltiplo.
 
-**CTAs aprovados (use estes ou variações próximas):**
+**CTAs aprovados (grafia canônica — use exatamente assim ou variações próximas):**
 
 * *Solicitar convite*
-* *Ver as condições*
+* *Ver as condições* — com o "as"; a grafia "Ver condições" é incorreta
 * *Conhecer a plataforma*
 * *Migrar minha operação*
 * *Calcular minha economia*
@@ -319,21 +375,29 @@ CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concre
 * ❌ *Garanta o seu antes que acabe!*
 * ❌ *Inscreva-se gratuitamente* (a 4Selet não é gratuita; é por convite)
 
+**Quando NÃO usar CTA:** o padrão do painel é **sem CTA**. Quando o brief não define uma chamada, a peça encerra com um fechamento suave de relacionamento e o campo `cta` fica vazio. CTA de conversão entra quando a peça tem intenção de conversão (pilar Taxa Zero, prova de plataforma) ou quando o brief pede — nunca colado por hábito no fim de peça educacional, motivacional ou de mídia.
+
+> **Nota de implementação:** a lista de 9 acima é a canônica (`interface/lib/config.js`, `APPROVED_CTAS`). O bloco GOVERNANCE do prompt cita 7 (sem *Acessar o material* e *Ler o playbook*) e o checklist de `scripts/generate_preview.js` reconhece 6, com a grafia antiga "Ver condições". Um CTA correto pode, portanto, não ser detectado automaticamente pelo checklist — isso é limitação da checagem, não erro da peça.
+
 ---
 
 ### **Sample Copy (referência para o Copywriter Agent)**
 
-**Frases-tag oficiais da marca** (sempre disponíveis, **prioridade alta** em peças institucionais):
+**Frases-tag oficiais da marca:**
 
-> ⭐ ***Produtor não é número. É parceiro. E parceiro vende junto.*** *(slide 03 do deck oficial de proposta — uma das melhores frases da marca; usar em LinkedIn, hero de LP, capa de carrossel)*
+> ***Produtor não é número. É parceiro. E parceiro vende junto.*** *(slide 03 do deck oficial de proposta — uma das melhores frases da marca; usar em LinkedIn, hero de LP, capa de carrossel)*
 >
-> ⭐ ***Para quem sabe que é Selet.*** *(tagline-mãe; assinatura final de toda peça quando houver espaço)*
+> ***Para quem sabe que é Selet.*** *(tagline-mãe — **essência e posicionamento interno**; ver a regra dura abaixo antes de usar em peça)*
 >
-> ⭐ ***A escolha de quem já performa.*** *(posicionamento; ideal para LinkedIn, VSL, materiais com produtor estabelecido)*
+> ***A escolha de quem já performa.*** *(posicionamento; ideal para LinkedIn, VSL, materiais com produtor estabelecido)*
+
+> **REGRA DURA — a tagline não assina peça.** *"Para quem sabe que é Selet."* **NÃO** deve ser usada como rodapé, fecho, assinatura automática, headline, body de slide, legenda ou cena de vídeo. **Não assine as peças com ela.** Ela só entra se o brief pedir explicitamente. Isso vale para todas as peças novas, em todos os formatos.
+>
+> A regra está espelhada em código: bloco GOVERNANCE de `interface/lib/prompts.js` e `DEFAULT_FOOTER = ""` em `interface/lib/render.js` — **não existe mais rodapé automático nas artes**. A frase continua sendo a essência da marca; o que mudou é que ela deixou de ser carimbo.
 
 **Campaign headline (Taxa Zero):**
 
-> Zero taxa por 3 meses. Para quem sabe que é Selet.
+> Zero taxa por 3 meses.
 
 **Sub-headline:**
 
@@ -373,13 +437,16 @@ CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concre
 
 ## **Hashtags — Estratégia**
 
-### **Mix recomendado por post (3–5 hashtags em Instagram)**
+### **Mix por post (3–5 hashtags em Instagram) — o mix acompanha o pilar**
 
-1. **Marca:** `#4Selet` (obrigatório em todo post Instagram)
-2. **Campanha ativa:** `#TaxaZero` (durante a campanha atual)
-3. **Produto:** uma de — `#PlataformaDePagamentos`, `#Infoproduto`, `#NegocioDigital`, `#AreaDeMembros`
-4. **Nicho:** uma de — `#ProdutorDigital`, `#MarketingDigital`, `#EscalarNegocio`, `#DigitalSerio`
-5. **Opcional (relevante ao tema):** `#PixD10`, `#Multiadquirencia`, `#Antifraude`
+1. **Marca:** `#4Selet` — **única obrigatória** em todo post Instagram (é também a única que a validação do painel exige)
+2. **Campanha ativa:** `#TaxaZero` — **condicional**: só quando a peça for do pilar *Taxa Zero* ou falar da oferta ativa. Não force em peça educacional, de curiosidade, motivacional ou de mídia
+3. **Tipo:** `#NaMidia` nas peças *4Selet na Mídia*
+4. **Produto:** uma de — `#PlataformaDePagamentos`, `#Infoproduto`, `#NegocioDigital`, `#AreaDeMembros`
+5. **Nicho:** uma de — `#ProdutorDigital`, `#MarketingDigital`, `#EscalarNegocio`, `#DigitalSerio`
+6. **Opcional (relevante ao tema):** `#PixD10`, `#Multiadquirencia`, `#Antifraude`
+
+Sugestão por pilar quando `#TaxaZero` não se aplica: *Educacional* → produto + nicho; *Curiosidade de mercado* → `#Multiadquirencia`/`#NegocioDigital` + nicho; *Prova da plataforma* → `#Antifraude`/`#PixD10` + produto; *Novidade* → produto + nicho; *Motivacional* → nicho.
 
 ### **Hashtags banidas**
 
@@ -394,13 +461,15 @@ CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concre
 
 Antes de aprovar qualquer output, **passar pelas 7 perguntas:**
 
-1. **Cor:** A paleta está dentro dos primitivos oficiais? (Sem branco puro, sem preto puro, sem neon.)
+1. **Cor:** A paleta está dentro dos primitivos oficiais? (Sem preto puro, sem neon. Branco puro só como texto sobre fundo escuro — nunca como fundo/card. Neutros de interface valem só dentro de mockup de dispositivo e do tema claro.)
 2. **Tipografia:** Está em Inter? (JetBrains Mono é exceção para snippets técnicos.)
 3. **Logo:** Light em fundos escuros, dark em fundos claros, sem efeitos.
 4. **Tom:** Soa como gestor experiente conversando com o produtor — ou soa motivacional/genérico?
 5. **Específico:** Tem número, prazo, processo concreto — ou só promessa vaga?
 6. **Coerência:** Posiciona a 4Selet como **estrutura e parceria** — não como ferramenta barata?
 7. **Limpeza:** Tem espaço negativo? Ou tá poluído de elementos?
+
+**Pergunta 8 (regra dura acrescentada em julho/2026):** A peça está **assinada com a frase-tag** *"Para quem sabe que é Selet."*? Se sim e o brief não pediu, **tire**.
 
 ---
 
@@ -424,14 +493,28 @@ Para proteger a coerência da marca, **evite explicitamente** os seguintes terri
 
 ## **Agent Reference Quick Map**
 
+### Por agente (caminho das skills)
+
 | Agent | Seções-chave a referenciar |
 | ----- | ----- |
-| **Marketing Research Agent** | Target Audience · What 4Selet Is Not · Brand Governance |
-| **Ad Creative Designer** | Visual Identity (toda) · Color Rules · Typography · CTAs aprovados |
-| **Video Ad Specialist** | Visual Identity · Brand Personality · Sample Copy · CTAs aprovados |
-| **Copywriter Agent** | Voice & Tone · Sample Copy · CTAs aprovados · Hashtags · Tone Calibration |
+| **Marketing Research Agent** | Target Audience · Pilares de Conteúdo · What 4Selet Is Not · Brand Governance |
+| **Ad Creative Designer** | Visual Identity (toda) · Color Rules · Photography · Pilares de Conteúdo · CTAs aprovados |
+| **Video Ad Specialist** | Visual Identity · Brand Personality · Sample Copy · Pilares de Conteúdo · CTAs aprovados |
+| **Copywriter Agent** | Voice & Tone · Sample Copy · CTAs aprovados · Hashtags · Pilares de Conteúdo · Tone Calibration |
 | **Distribution Agent** | Hashtags · CTAs aprovados · Brand Governance (checklist final) |
+
+### Por tipo de conteúdo (caminho do painel — o principal hoje)
+
+| Tipo (`id`) | Seções-chave |
+| ----- | ----- |
+| **Feed Instagram** (`instagram_caption`) | Voice & Tone · Sample Copy · Hashtags · CTAs · Pilares |
+| **Carrossel** (`instagram_carousel`) | Visual Identity · Color Rules · Typography · Pilares · Hashtags |
+| **Imagem / Anúncio** (`ad_creative`) | Visual Identity (toda) · Color Rules · Photography · CTAs |
+| **4Selet na Mídia** (`media_mention`) | **4Selet na Mídia** · Photography · Hashtags · Emojis · Voice & Tone |
+| **Vídeo** (`video_idea`) | Brand Personality · Sample Copy · Visual Identity · CTAs |
+| **LinkedIn** (`linkedin_post`) | Voice & Tone · Tone Calibration · Sample Copy · Hashtags |
+| **Threads/X** (`threads_post`) | Tone Calibration (Threads) · What 4Selet Is Not · Hashtags |
 
 ---
 
-*Última atualização: Maio 2026 · Mantido por: Marketing 4Selet · Doc de referência viva — atualizações são versionadas e distribuídas para os agentes*
+*Última atualização: Julho 2026 (v1.2 — auditoria dos agentes) · Mantido por: Marketing 4Selet · Doc de referência viva — atualizações são versionadas e distribuídas para os agentes e para o painel*

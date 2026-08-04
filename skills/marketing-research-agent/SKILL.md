@@ -9,12 +9,13 @@ description: >
   Produz 3 deliverables: research_results.json (o contrato), research_brief.md (Mermaid) e
   interactive_report.html (Chart.js). Use quando o usuario pedir "pesquisa de mercado", "research",
   "insights de campanha", "inteligencia de marketing", "tendencias", ou quando o Orchestrator
-  acionar o Research Agent. Requer TAVILY_API_KEY para busca real; sem chave, opera em modo
-  SIMULADO (dry-run) ancorado nos knowledge files. NAO gera ad/video/copy (use as skills proprias).
+  acionar o Research Agent. A chave Tavily JA esta configurada (interface/.env) — o padrao e busca
+  REAL; sem chave no ambiente, opera em modo SIMULADO (dry-run) ancorado nos knowledge files.
+  NAO gera ad/video/copy (use as skills proprias).
 license: MIT
 metadata:
   author: Marketing 4Selet
-  version: 1.0.0
+  version: 2.0.0
   category: marketing
   tags: [research, tavily, marketing-intelligence, strategy, 4selet]
 ---
@@ -58,11 +59,23 @@ Inegociavel. Sem excecao para "edicao minima" ou "fix rapido".
 
 ## CRITICAL: chave Tavily e modo simulado
 
-- **Busca real** requer `TAVILY_API_KEY` no ambiente **e** o SDK instalado (`npm i @tavily/core`).
-- **Sem a chave** (estado atual do projeto): a skill opera em **modo SIMULADO (dry-run)** — o agente sintetiza a inteligencia a partir dos knowledge files, **rotulando o output como simulado** (`_simulated: true`, `_label`). Nao invente dados de mercado como se fossem reais; deixe claro que sao simulados.
+- **Estado atual: a chave ESTA configurada.** `TAVILY_API_KEY` esta em `interface/.env` e o SDK `@tavily/core` **ja e dependencia do projeto** (`package.json`) e esta instalado. **O caminho padrao e busca REAL** — o modo simulado e a excecao (ambiente sem a chave exportada no shell).
+- **Duas casas da chave, e elas nao se enxergam:**
+  - `TAVILY_API_KEY` no ambiente / `interface/.env` — usada pelo **script desta skill** e tambem pelo painel;
+  - `interface/data/tavily.json` — gravada pela tela de **Configuracoes** do painel; **o script empacotado NAO le esse arquivo**.
+  - Antes de concluir "o projeto nao tem chave", **confira os dois**. Uma chave colada so no painel faz o script imprimir "TAVILY_API_KEY ausente" mesmo com a busca real disponivel.
+- **Sem chave em lugar nenhum:** a skill opera em **modo SIMULADO (dry-run)** — sintetiza a inteligencia a partir dos knowledge files, **rotulando o output** (`_simulated: true`, `_label`). Nao invente dados de mercado como se fossem reais.
 - O script empacotado `scripts/research.js` detecta a chave: com chave, roda as 5 buscas e grava `research_raw.json`; sem chave, avisa e sai (o agente segue em simulacao).
 
-> **Dois caminhos de execucao (importante):** este SKILL descreve o **fluxo agente-skill** (Claude roda a skill e produz os 3 deliverables, sendo `research_results.json` o contrato machine-readable). O **pipeline executavel** (`pipeline/agents.js`) e o **painel** (`interface/lib/research.js`) seguem um caminho mais enxuto: gravam um advisory `research/insights.md` e o painel roda **3 buscas** (nao 5) para enriquecer o prompt de geracao. Ambos respeitam os mesmos knowledge files e guardrails; o schema completo de `research_results.json` e o alvo do fluxo agente-skill.
+> **Tres caminhos de execucao — nao os confunda:**
+>
+> | Caminho | Usa Tavily? | O que produz |
+> |---|---|---|
+> | **Esta skill** (agente/CLI) | **Sim** — 5 buscas via `scripts/research.js` | `research_raw.json` + os 3 deliverables, sendo `research_results.json` o contrato machine-readable |
+> | **Painel** (`interface/lib/research.js`) | **Sim** — **3 buscas** (tendencias, mercado, ad_hooks), opt-in por geracao | **Nenhum arquivo.** Os achados entram direto no prompt e as fontes voltam na resposta da API (`research_used`, `research_sources`, gravados no `status.json`) |
+> | **Pipeline** (`pipeline/agents.js`, job `research_agent`) | **Nao** — advisory deterministico | `research/insights.md` (o proprio arquivo se declara "sem Tavily/fontes externas") |
+>
+> Ou seja: **nao procure `research/insights.md` gerado pelo painel** (ele nao grava arquivo) nem espere pesquisa ao vivo do pipeline (ele nao faz). O painel ainda **mascara nomes de concorrentes** de forma deterministica antes de mandar os achados ao prompt.
 
 ## CRITICAL: antes de pesquisar/sintetizar
 
@@ -189,14 +202,25 @@ outputs/<task_name>_<date>/
 - **Audiencia:** produtor estabelecido (R$ 50k+/mes) — nao iniciante. Ver `brand_identity.md` (quem NAO e o publico).
 - **Tom dos insights:** sobrio, ancorado em dado/prazo/processo; sem promessa magica.
 - **Modo simulado:** sempre rotular (`_simulated: true`) — nao apresentar dados inventados como pesquisa real.
+- **Frase-tag:** *"Para quem sabe que e Selet."* **NAO** entra em `ad_hooks`, `marketing_angles`, `content_topics` nem `selected_campaign_angle` — regra dura vigente (GOVERNANCE em `interface/lib/prompts.js`). Esses campos descem para ad/video/copy; um hook carregando a tagline reintroduz, pela porta dos fundos, a assinatura que o painel bloqueia. So aparece se o brief pedir explicitamente.
+- **Prioridade absoluta dos knowledge files:** dados numericos sobre a 4Selet (taxa, prazo, % de aprovacao) vem **exclusivamente** dos knowledge files. Pesquisa externa nunca sobrescreve numero oficial da marca nem introduz dado/nome de concorrente.
+
+### Mapeamento para o vocabulario do painel
+
+O painel (caminho principal de operacao) consome por **TIPO** e por **PILAR**:
+
+- **Tipos:** `instagram_caption`, `instagram_carousel`, `ad_creative`, `media_mention` (4Selet na Midia), `video_idea`, `linkedin_post`, `threads_post`.
+- **Pilares:** `taxa_zero`, `educacional`, `curiosidade_mercado`, `prova_plataforma`, `novidade`, `motivacional` (`interface/lib/config.js`).
+
+**Etiquete cada `content_topic` com o pilar correspondente** e inclua angulos de **prova externa/imprensa** — sao eles que alimentam o tipo `media_mention`. Sem essa etiqueta, o operador precisa traduzir a inteligencia na mao.
 
 ## Examples
 
 ### Example 1: Pipeline Taxa Zero (com chave)
 **Orchestrator:** job `research_agent`, topico "plataforma de pagamentos / produtor estabelecido". -> roda 5 buscas Tavily -> `research_raw.json` -> sintetiza -> 3 deliverables. `selected_campaign_angle` propaga para ad/video/copy.
 
-### Example 2: Sem chave (dry-run)
-**Usuario:** "Gera a pesquisa do test_job_payload_1." -> sem `TAVILY_API_KEY` -> simula a partir dos knowledge files, `research_results.json` com `_simulated: true`, rotulado TESTE.
+### Example 2: Fallback sem chave (excecao, nao o padrao)
+**Usuario:** "Gera a pesquisa do test_job_payload_1." -> **primeiro** conferir `interface/.env` E `interface/data/tavily.json`. So se a chave nao estiver em nenhum dos dois: simula a partir dos knowledge files, `research_results.json` com `_simulated: true`, rotulado TESTE — e avisa que a busca real estava indisponivel por falta de chave exportada.
 
 ### Example 3: Inputs faltando
 **Usuario:** "Faz a research da 4Selet." -> defaults (nicho = posicionamento 4Selet / Taxa Zero), **declara** os defaults, gera os deliverables.
@@ -204,10 +228,10 @@ outputs/<task_name>_<date>/
 ## Troubleshooting
 
 ### "TAVILY_API_KEY ausente"
-**Cause:** sem chave/SDK. **Solution:** modo simulado (rotulado) OU `npm i @tavily/core` + setar `TAVILY_API_KEY` para busca real.
+**Cause:** a chave nao esta exportada no shell. Ela pode existir em `interface/.env` (lida pelo painel e pelo script) ou em `interface/data/tavily.json` (gravada pelas Configuracoes do painel — **o script nao le esse arquivo**). **Solution:** conferir os dois antes de cair para simulado; exportar a chave para rodar a busca real.
 
 ### Cannot find module '@tavily/core'
-**Cause:** SDK nao instalado. **Solution:** `npm i @tavily/core` (o script so faz require quando a chave existe).
+**Cause:** dependencias nao instaladas. **Solution:** o SDK **ja e dependencia do `package.json`** — rode `npm install` na raiz (nao e preciso `npm i @tavily/core`).
 
 ### Insights genericos / fora da marca
 **Solution:** re-ancorar nos knowledge files; aplicar os guardrails; garantir `campaign_facts` corretos.
@@ -215,7 +239,7 @@ outputs/<task_name>_<date>/
 ## Quality Checklist
 
 - [ ] Knowledge files carregados (brand_identity, product_campaign, platform_guidelines)
-- [ ] 5 buscas rodadas (com chave) OU modo simulado claramente rotulado (`_simulated: true`)
+- [ ] Chave conferida nas DUAS casas antes de decidir o modo; 5 buscas rodadas OU simulado claramente rotulado (`_simulated: true`)
 - [ ] `research_results.json` com o schema/contrato (ad_hooks, marketing_angles, keywords, video_concepts, selected_campaign_angle, campaign_facts)
 - [ ] Nenhum concorrente nominal nos campos de criativo; mercado em abstrato; numeros Taxa Zero corretos
 - [ ] 3 deliverables gerados (JSON + brief.md Mermaid + interactive_report.html Chart.js)
@@ -226,8 +250,8 @@ outputs/<task_name>_<date>/
 ```
 marketing-research-agent (esta skill)
   research_results.json
-    ├─ ad_hooks, selected_campaign_angle ─► ad-creative-designer (layout.json/headline)
-    ├─ ad_hooks, marketing_angles, keywords, video_concepts ─► video-ad-specialist (scenes.json)
+    ├─ ad_hooks, selected_campaign_angle ─► ad-creative-designer (ads/concept.json)
+    ├─ ad_hooks, marketing_angles, keywords, video_concepts ─► video-ad-specialist (video/concept.json)
     ├─ selected_campaign_angle, keywords ─► copywriter-agent (caption/title/tags)
     └─ campaign_facts ─► todos (0% · R$1,99 · D+10 · D+30 · 95%)
 ```

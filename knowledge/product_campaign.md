@@ -156,7 +156,7 @@ A campanha **não é uma promoção de aquisição em massa** — é um corredor
 ### **CTAs oficiais da campanha**
 
 * *Ativar campanha agora*
-* *Ver condições*
+* *Ver as condições*
 * *Acessar link de convite*
 * *Solicitar convite*
 
@@ -164,7 +164,7 @@ A campanha **não é uma promoção de aquisição em massa** — é um corredor
 
 #### **Taxa Zero — específicas da campanha**
 
-* *Zero taxa por 3 meses. Para quem sabe que é Selet.*
+* *Zero taxa por 3 meses.*
 * *Migre sua operação. Não pague para entrar.*
 * *0% pela plataforma. R$ 1,99 por transação. Sem letra miúda.*
 * *3 meses para você medir a diferença.*
@@ -173,7 +173,7 @@ A campanha **não é uma promoção de aquisição em massa** — é um corredor
 #### **Institucionais (sempre disponíveis, dentro ou fora de campanha)**
 
 * *Produtor não é número. **É parceiro.** E parceiro vende junto.* — ⭐ **frase-tag oficial da marca** (slide 03 do deck oficial). Funciona como headline editorial em LinkedIn, hero de LP, capa de carrossel, fechamento de vídeo institucional. Quase intocável — só usar em peças com espaço editorial real, não em ads de performance espremidos.
-* *Para quem sabe que é Selet.* — Tagline-mãe. Sempre que possível como assinatura final.
+* *Para quem sabe que é Selet.* — Tagline-mãe. **REGRA DURA (jul/2026): não usar como rodapé, fecho, assinatura, headline ou legenda de peça nova.** Ela é a essência da marca, não um carimbo — só entra se o brief pedir explicitamente. Ver `brand_identity.md` → Sample Copy.
 * *A escolha de quem já performa.* — Posicionamento. Excelente para LinkedIn e VSL.
 * *95% de aprovação no cartão. Para quem opera com seriedade.* — Prova-âncora + público-alvo em uma linha.
 

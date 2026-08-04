@@ -1,23 +1,29 @@
 # **Platform Guidelines: 4Selet**
 
-*Versão 1.1 · Maio/2026*
+*Versão 1.2 · Julho/2026*
 
 > **Propósito:** Garantir que todo conteúdo seja **corretamente formatado e estilizado por plataforma** antes de publicar. Referenciar **antes de finalizar** qualquer post, vídeo ou caption. Cobre specs, ajustes de tom e regras de formatação para cada plataforma ativa. Sempre usar **junto** ao `brand_identity.md` e `product_campaign.md`.
 
-> **O que mudou na v1.1:** ajuste editorial na regra de tom do Threads/X (auto-depreciação explicitamente vetada). Versão alinhada com `brand_identity.md` e `product_campaign.md` v1.1.
+> **Atenção — este arquivo entra literalmente no prompt de produção.** O painel injeta este documento no system prompt de cada geração (`interface/lib/knowledge.js` → `interface/lib/prompts.js`). Spec errada aqui vira instrução errada para a IA.
+
+> **O que mudou na v1.2 (Julho/2026):** specs do Instagram corrigidas (feed é **4:5**, o quadrado 1:1 é a peça de anúncio); nova seção **2.6 — 4Selet na Mídia**; matriz de formatos completa (4:5 · 1:1 · 9:16 · 16:9) substituindo "feed/vertical dimensions"; margem segura corrigida para a faixa real dos templates (88–104px); CTA passou a ser **condicional** (padrão: sem CTA); mix de hashtags agora acompanha o **pilar de conteúdo**; coluna "onde se produz" na visão geral.
+
+> **O que veio da v1.1:** ajuste editorial na regra de tom do Threads/X (auto-depreciação explicitamente vetada).
 
 ---
 
 ## **1. Visão Geral das Plataformas**
 
-| Plataforma | Tipo de Conteúdo | Tom Primário | Hashtags |
-| ----- | ----- | ----- | ----- |
-| **Instagram** | Image posts, Stories, Reels, Carrosséis | Editorial, sóbrio, premium | Obrigatórias (3–5) |
-| **Threads / X** | Short text posts | Provocativo controlado, com dado | Opcional (0–1) |
-| **YouTube** | Long & short-form video | Didático, técnico-acessível | Via tags/description |
-| **LinkedIn** | Posts editoriais, vídeos | Editorial premium, autoridade | Opcional (3–5) |
+| Plataforma | Tipo de Conteúdo | Tom Primário | Hashtags | Onde se produz hoje |
+| ----- | ----- | ----- | ----- | ----- |
+| **Instagram** | Feed 4:5, Carrossel, Imagem/Anúncio 1:1, **4Selet na Mídia**, Stories, Reels | Editorial, sóbrio, premium | Obrigatórias (3–5) | **Painel** (5 tipos) · publicação real de feed e carrossel |
+| **Threads / X** | Short text posts | Provocativo controlado, com dado | Opcional (0–1) | **Painel** (`threads_post`) · publicação manual |
+| **LinkedIn** | Posts editoriais, vídeos | Editorial premium, autoridade | Opcional (3–5) | **Painel** (`linkedin_post`) · publicação manual |
+| **YouTube** | Long & short-form video | Didático, técnico-acessível | Via tags/description | **Fora do painel** — só pela skill `copywriter-agent` (`youtube_metadata.json`); sem geração de arte e **sem publicação** |
 
 > **Pensar B2B:** o público da 4Selet é **decisor estabelecido**. LinkedIn é especialmente relevante e deve aparecer no mix de distribuição. Instagram é volumoso mas tem espaço para conteúdo sério se feito com cuidado editorial.
+
+> **Onde cada coisa é operável:** o painel (`https://mkt.4st.co`) gera 7 tipos de conteúdo e publica de verdade **apenas no feed do Instagram** (imagem única e carrossel, via Graph API). LinkedIn e Threads/X saem como texto para publicação manual. YouTube permanece como referência editorial — a Seção 4 continua válida como guia de redação, mas nada do YouTube é gerado ou publicado pelo sistema.
 
 ---
 
@@ -25,12 +31,15 @@
 
 ### **Specs**
 
-| Formato | Dimensões | Aspect Ratio |
-| ----- | ----- | ----- |
-| **Feed Post** | 1080 × 1080 px | 1:1 |
-| **Carrossel** | 1080 × 1350 px | 4:5 |
-| **Story / Reel** | 1080 × 1920 px | 9:16 |
-| **Reel Cover** | 1080 × 1920 px | 9:16 |
+| Formato (tipo no painel) | Dimensões | Aspect Ratio | Arquivo gerado |
+| ----- | ----- | ----- | ----- |
+| **Feed (post principal)** — `instagram_caption` | 1080 × 1350 px | **4:5** | `ads/feed.png` |
+| **Carrossel** — `instagram_carousel` | 1080 × 1350 px | 4:5 | `slides/slide_N.png` |
+| **Imagem / Anúncio (quadrado)** — `ad_creative` | 1080 × 1080 px | 1:1 | `ads/ad.png` |
+| **4Selet na Mídia** — `media_mention` | 4 formatos (ver 2.6) | 4:5 · 1:1 · 9:16 · 16:9 | `ads/feed.png`, `square.png`, `story.png`, `media_16x9.png` |
+| **Story / Reel** | 1080 × 1920 px | 9:16 | vídeo: `video/video.mp4` |
+
+> **4:5 é o formato-padrão publicável no feed.** O quadrado 1:1 é o criativo estático de anúncio (tipo "Imagem / Anúncio"), não o post de feed. Essa distinção vale para toda a composição: headline, hierarquia e quebra de linha são pensadas para retrato, não para quadrado.
 
 ### **Design Rules**
 
@@ -40,8 +49,8 @@
 * **Labels e tags:** **Inter Medium ALL CAPS**, letter-spacing +0.4px, cor **Selet Mist** (`#AFBCC9`) em slides escuros ou **Selet Blue** (`#006494`) em slides claros
 * **Accent:** **Selet Blue** (`#006494`) para blocos de destaque, números-âncora e CTAs
 * **Selet Dots:** padrão de pontos azuis 6–10% opacity em slides escuros para profundidade
-* **Margem segura:** 64px em todos os lados (Inter pede mais respiro)
-* **Nunca:** branco puro (`#FFFFFF`), preto puro (`#000000`), gradientes neon, drop shadows, emojis em hero
+* **Margem segura:** **88–104px** (referência ~96px em 1080×1080). É o que os templates de produção usam — editorial `96px 92px`, bold `104px 96px`, split `0 104px`, photo `80px 88px`. Em 1080×1350 o respiro vertical no topo/base é maior
+* **Nunca:** preto puro (`#000000`), gradientes neon, drop shadows, emojis em hero. **Branco puro (`#FFFFFF`) é permitido como texto** sobre fundo Navy/Darker (é o que os templates fazem em headline e CTA) e proibido como cor de fundo/card — ali use Selet Cloud
 
 ### **Caption Guidelines**
 
@@ -49,7 +58,7 @@
 * **Estrutura:** Hook factual com número/dado → Valor/Benefício específico → CTA claro → Quebra de linha → Hashtags
 * **Tom:** **Sóbrio e direto, com números reais.** Como gestor experiente comentando uma decisão estratégica.
 * **Emojis:** Máximo 1, **funcional** (`→` para CTA). Nunca em hero/headlines.
-* **CTA:** Sempre incluir; antes das hashtags. Tom de **convite/condução**, nunca de súplica ou urgência fake.
+* **CTA: opcional — o padrão é sem CTA.** Inclua quando a peça tem intenção de conversão (pilar Taxa Zero, prova de plataforma) ou quando o brief define a chamada; nesse caso vem antes das hashtags, em tom de **convite/condução**, nunca de súplica ou urgência fake. Em peça de relacionamento/autoridade (educacional, motivacional, 4Selet na Mídia) encerre com um fechamento suave e deixe o campo `cta` vazio.
 
 **Exemplo de estrutura de caption (Taxa Zero):**
 
@@ -66,8 +75,11 @@ Solicitar convite no link da bio. →
 ### **Regras de Hashtags**
 
 * Use **3–5 hashtags** por post
-* Coloque hashtags **depois do CTA**, separadas por uma quebra de linha
-* Mix obrigatório: **marca** (`#4Selet`) + **campanha ativa** (`#TaxaZero`) + **produto/categoria** + **nicho**
+* Coloque hashtags **no fim da caption**, separadas por uma quebra de linha
+* **Obrigatória: só `#4Selet`.** O resto do mix acompanha o **pilar de conteúdo** da peça
+* `#TaxaZero` é **condicional** — só quando a peça for do pilar *Taxa Zero* ou falar da oferta ativa. Não force em peça educacional, de curiosidade de mercado, motivacional ou de mídia
+* `#NaMidia` nas peças *4Selet na Mídia*; nos demais pilares complete com produto/categoria + nicho
+* **Existem 6 pilares de conteúdo e o feed não é monotemático** — ver `brand_identity.md` → "Pilares de Conteúdo"
 * Lista de hashtags aprovadas: ver `brand_identity.md` → seção "Hashtags"
 * **Banidas:** `#Sucesso`, `#DinheiroFacil`, `#MentorDoSucesso`, hashtags em CAPS no meio da caption
 
@@ -87,6 +99,32 @@ Solicitar convite no link da bio. →
 * Para Stories: manter texto na **zona segura central** (evitar top/bottom 250px)
 * O **símbolo "4"** (do logo) pode ser usado como elemento decorativo sutil em opacidade reduzida (10–15%)
 * Mockups de laptop mostrando a plataforma em uso real são bem-vindos — sempre com UI atualizada e dados fictícios
+
+### **2.6 — 4Selet na Mídia (`media_mention`)**
+
+Tipo de peça nativo do painel desde julho/2026: a aparição da 4Selet na imprensa, com o **print da matéria** montado num dispositivo ou cena fotográfica. Prova social de terceiro — não é anúncio.
+
+**Formatos gerados (uma peça produz vários de uma vez):**
+
+| Formato | Dimensões | Arquivo | Onde entra |
+| ----- | ----- | ----- | ----- |
+| **4:5** | 1080 × 1350 | `ads/feed.png` | Feed do Instagram — **o único publicável no feed** |
+| **1:1** | 1080 × 1080 | `ads/square.png` | Grade, anúncio, avatar de campanha |
+| **9:16** | 1080 × 1920 | `ads/story.png` | Story / Reel cover |
+| **16:9** | 1920 × 1080 | `ads/media_16x9.png` | **Site e apresentação — não publicável no feed** |
+
+Padrão marcado no painel: **4:5 + 16:9**.
+
+**Modelos de arte (10):** *Tablet* (`hand_tablet`), *Foto real (mãos)*, *Foto real (mesa)*, *Foto real (mãos + mesa)*, *Celular*, *Navegador*, *Citação*, *Split*, *Selo*, *Camadas*.
+
+* Print **vertical** (tela em pé) → Tablet, Celular, Camadas
+* Print **horizontal** (página de site) → Navegador, Split
+* Sem print utilizável ou matéria só em texto → Citação, Selo
+* Os modelos foto-reais são a exceção autorizada à regra de fotografia — a foto é cena de contexto, tratada na marca
+
+**Composição em paisagem (16:9):** o layout muda de empilhado para lado a lado — dispositivo de um lado, texto e marca do outro. Mantenha a mesma margem segura (88–104px), a hierarquia (veículo → título → marca) e o logo no canto oposto ao dispositivo. Não é o mesmo layout do 4:5 esticado.
+
+**Regras de conteúdo:** tom sóbrio de reconhecimento externo, **proibido inventar trecho, citação ou número da matéria**, veículo nomeado com exatidão, CTA suave ou nenhum. Hashtags: `#4Selet` + `#NaMidia` + 1 a 3 complementares, sem `#TaxaZero`. Detalhe completo em `brand_identity.md` → "4Selet na Mídia".
 
 ---
 
@@ -126,6 +164,8 @@ Solicitar convite no link da bio. →
 ---
 
 ## **4. YouTube**
+
+> **Escopo:** referência **editorial** apenas. Não existe tipo de conteúdo de YouTube no painel, não há render de thumbnail no fluxo de produção e **não há publicação** (o publisher só cobre o feed do Instagram). O único produtor de material de YouTube é a skill `copywriter-agent`, que escreve `youtube_metadata.json` no caminho manual/CLI. Use esta seção para redigir título e descrição — não espere que o sistema gere ou publique.
 
 ### **Specs**
 
@@ -247,12 +287,21 @@ Por isso a Taxa Zero da 4Selet não é só sobre 0%. É sobre dar ao produtor 3 
 
 ## **6. Quick Reference Cheat Sheet**
 
+### Matriz de formatos (o que existe, onde entra)
+
+| Formato | Instagram | Threads/X | YouTube | LinkedIn |
+| ----- | ----- | ----- | ----- | ----- |
+| **4:5 — 1080×1350** | **Publicável no feed** (post principal, carrossel, 4Selet na Mídia) | Anexo opcional | N/A | Aceito no post |
+| **1:1 — 1080×1080** | Imagem/Anúncio; grade | Anexo opcional | N/A | 1200×1200 no post |
+| **9:16 — 1080×1920** | Story / Reel | N/A | Shorts | N/A |
+| **16:9 — 1920×1080** | **Não publicável no feed** — ativo de site/apresentação (4Selet na Mídia) | N/A | Vídeo e thumbnail (1280×720) | Vídeo |
+
+### Redação e formatação
+
 |  | Instagram | Threads/X | YouTube | LinkedIn |
 | ----- | ----- | ----- | ----- | ----- |
-| **Feed dimensions** | 1080×1350 (4:5) | N/A | 1920×1080 | 1200×1200 (1:1) |
-| **Vertical dimensions** | 1080×1920 | N/A | 1080×1920 | N/A |
 | **Caption length** | 1–3 frases | 1–3 frases curtas | 2–4 frases | 1.200–1.500 chars |
-| **CTA obrigatório** | ✅ Sim | ❌ Opcional | ✅ Sim | ✅ Sim (suave) |
+| **CTA** | Condicional (padrão: sem CTA) | ❌ Opcional | ✅ Sim | ✅ Sim (suave) |
 | **Hashtags** | 3–5, obrigatórias | 0–1, opcional | Na description/tags | 3–5 |
 | **Emojis** | Máx 1, funcional | Máx 1 | ❌ Evitar em títulos | Máx 1, funcional |
 | **Tom** | Editorial, sóbrio | Provocativo controlado | Didático, profissional | Editorial premium |
@@ -296,10 +345,10 @@ Quando uma campanha tem múltiplos formatos prontos, **ordem sugerida de publica
 
 | Agent | Seções-chave a referenciar |
 | ----- | ----- |
-| **Ad Creative Designer** | Specs por plataforma · Design Rules · Carrossel rules · Quick Reference |
-| **Copywriter Agent** | Caption Guidelines (todas) · Hashtags · Tom por plataforma · Estrutura de post LinkedIn |
-| **Distribution Agent** | Quick Reference · Sequenciamento de Distribuição · CTAs por plataforma |
+| **Ad Creative Designer** | Specs por plataforma · Design Rules · Carrossel rules · **2.6 4Selet na Mídia** · Matriz de formatos |
+| **Copywriter Agent** | Caption Guidelines (todas) · Hashtags · Tom por plataforma · Estrutura de post LinkedIn · **2.6 4Selet na Mídia** |
+| **Distribution Agent** | Matriz de formatos (o que é publicável) · Sequenciamento de Distribuição · CTAs por plataforma |
 
 ---
 
-*Última atualização: Maio 2026 · Mantido por: Marketing 4Selet · Knowledge file consumido pelos agentes Ad Creative, Copywriter e Distribution*
+*Última atualização: Julho 2026 (v1.2 — auditoria dos agentes) · Mantido por: Marketing 4Selet · Knowledge file consumido pelo painel web (injetado no prompt de geração) e pelos agentes Ad Creative, Copywriter e Distribution*

@@ -1,6 +1,6 @@
 # Status do Projeto — Sistema de Marketing com IA (4Selet)
 
-*Atualizado em 2026-07-13 · Marca: 4Selet · Painel web (interface principal, em produção) + Pipeline executável + 7 skills + Workflow de Aprovação Níveis 1/2*
+*Atualizado em 2026-07-30 (auditoria dos agentes) · Marca: 4Selet · Painel web (interface principal, em produção) + Pipeline executável + 7 skills + Workflow de Aprovação Níveis 1/2*
 
 > **Resumo:** O **Painel web** (`interface/`, `http://localhost:4500` local · **`https://mkt.4st.co` em produção**) é a **interface principal** de operação — campanhas, geração de conteúdo com IA (Claude e ChatGPT), refino, editor visual de arte, prévia no celular, coleções e workflow de aprovação visual; a extensão Claude Code no VSCode é o caminho **secundário/avançado**. O sistema de skills está **funcionalmente completo** (7 skills); o **pipeline executável** (`pipeline/`, sequencial + BullMQ) foi **entregue** (commit e787dc7); e o **Workflow de Aprovação Níveis 1+2 está implementado (v1.1)**, com 7 scripts em `scripts/` (+ módulos em `scripts/lib/`), `content_hash` para integridade pós-aprovação, `status.json` versionado em git como fonte da verdade, e bateria de testes 10/10 felizes + 7/7 adversariais validada. O **render real funciona** para ad estático (Playwright) e vídeo (Remotion). A geração usa **chave Anthropic e/ou OpenAI** configuradas no painel (multi-provedor). A **pesquisa ao vivo via Tavily** está integrada ao painel (chave inserida em *Configurações*), e a **publicação no Instagram feed** é real (Graph API, atrás do gate de aprovação, com agendamento). Hosting de mídia em Supabase e publicação no YouTube seguem pendentes. **Persistência resolvida** — git instalado e `outputs/approved/` + `outputs/archive/` versionados. **Deploy em produção ATIVO** — `https://mkt.4st.co` (Docker Compose: painel + Caddy, HTTPS, login único).
 
@@ -18,12 +18,13 @@
 | `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore` | ✅ Presentes |
 | **`pipeline/` (orchestrator + worker + agents)** | ✅ **Entregue** (sequencial + BullMQ, commit e787dc7) |
 | **Deploy em produção** | ✅ **Ativo** — `https://mkt.4st.co` (Docker Compose: painel + Caddy, HTTPS, login único) |
-| **Chave de IA no painel (multi-provedor)** | ⚠️ Configurar em *Configurações* (Claude/Anthropic e/ou ChatGPT/OpenAI) — sem ela, geração simulada |
+| **Chave de IA no painel (multi-provedor)** | ✅ **Configurada** (`ANTHROPIC_API_KEY` em `interface/.env`; produção mostra "IA conectada") — sem chave, a geração cairia em simulada |
 | **Tavily (pesquisa ao vivo no painel)** | ✅ **Integrado** — chave inserida em *Configurações* (grava em `interface/data/tavily.json`); opt-in por geração |
 | **Publicação no Instagram feed** | ✅ **Real** (Graph API, atrás do gate + agendamento); token/ID configurados em *Configurações* (admin) |
 | Supabase (`@supabase/supabase-js`) | ⏳ Não instalado / sem `SUPABASE_URL`+`KEY` |
 | BullMQ + Redis | ✅ `pipeline/` pronto · ⏳ falta `REDIS_URL` (roda sequencial sem ele) |
-| OAuth YouTube | ⏳ Não configurado (publicação no YouTube não existe no painel) |
+| OAuth YouTube | ❌ **Publicação no YouTube não implementada** — não existe publisher (não é só OAuth pendente) |
+| **Pexels (busca de imagens)** | ✅ Integrado — chave em *Configurações* (`interface/data/pexels.json`) |
 
 ---
 
@@ -33,11 +34,11 @@
 
 | Skill | Arquivos | Engine / script | Estado real |
 |---|---|---|---|
-| **marketing-research-agent** | `SKILL.md` + `scripts/research.js` | Tavily (lazy require) | Simulado sem `TAVILY_API_KEY` |
+| **marketing-research-agent** | `SKILL.md` + `scripts/research.js` | Tavily (lazy require) | ✅ Busca REAL (chave configurada); simulado só sem `TAVILY_API_KEY` |
 | **ad-creative-designer** | `SKILL.md` + `scripts/render_ad.js` + `examples/` | Playwright HTML→PNG | ✅ Funcional |
-| **video-ad-specialist** | `SKILL.md` | Remotion (composition/props) | ✅ Funcional |
+| **video-ad-specialist** | `SKILL.md` | Remotion (`video/concept.json` → BrandStory) | ✅ Funcional (só 9:16) |
 | **copywriter-agent** | `SKILL.md` | Texto (sem script) | ✅ Funcional |
-| **distribution-agent** | `SKILL.md` + `scripts/upload_supabase.js` | Supabase (lazy require) | Simulado; posting **gated** |
+| **distribution-agent** | `SKILL.md` + `scripts/upload_supabase.js` (legado) | Publicação real no painel (IG Graph v21.0) | Posting **gated** (R5); Supabase não participa |
 | **orchestrator** | `SKILL.md` + `scripts/orchestrate.js` | BullMQ (alvo) / sequencial | Sequencial; valida payload + plano; bootstraps `status.json` (Workflow) |
 | **task-promoter** *(nova)* | `SKILL.md` | Transições do Workflow | ✅ Funcional via `scripts/promote_task.js` |
 
@@ -122,6 +123,17 @@ Publicação **real** no Instagram feed via **Graph API v21.0** — **imagem ún
 
 Painel **em produção e ATIVO** em `https://mkt.4st.co` — **Docker Compose** (serviços: painel + **Caddy** como proxy reverso, HTTPS). **Login único** pelo próprio painel (a portaria externa `basic_auth` do Caddy foi removida; a autenticação é a do §2.8). O painel expõe `/api/health` para monitoramento/auto-restart e trata encerramento limpo (SIGTERM/SIGINT) para rodar sob supervisor.
 
+### 2.14 Tipo nativo "4Selet na Mídia", pilares de conteúdo e busca de imagens (julho/2026)
+
+- **"4Selet na Mídia"** (`media_mention`, `interface/lib/config.js`) — tipo de peça para **aparição na imprensa**: o print da matéria montado num de **10 modelos** (`hand_tablet`, `foto_real`, `foto_mesa`, `foto_maos_mesa`, `celular`, `navegador`, `citacao`, `split`, `selo`, `camadas`), em até 4 formatos (4:5 → `feed.png` · 1:1 → `square.png` · 9:16 → `story.png` · 16:9 → `media_16x9.png`; padrão 4:5 + 16:9). Render por `renderMedia`/`tplMedia`, schema de legenda próprio no prompt. Só o 4:5 é publicável no feed.
+- **6 pilares de conteúdo** (`CONTENT_PILLARS`) — eixo temático de **toda** peça (`taxa_zero`, `educacional`, `curiosidade_mercado`, `prova_plataforma`, `novidade`, `motivacional`), com o ângulo injetado no prompt e a regra dura *"NEM toda peça é sobre Taxa Zero"*. Distinto das 5 colunas estratégicas da marca.
+- **Busca de imagens (Pexels)** — `interface/lib/pexels.js` + `interface/routes/pexels.js`: busca/aplica foto na arte (template `photo`) e como **fundo por slide** do carrossel, com página completa de resultados (filtros, paginação, crédito do autor). Chave em Configurações (`interface/data/pexels.json`).
+- **Regra dura de marca em vigor:** nenhuma peça nova é assinada com a frase-tag *"Para quem sabe que é Selet."* (bloco `GOVERNANCE` em `interface/lib/prompts.js`; `DEFAULT_FOOTER = ""` no render).
+
+### 2.15 Auditoria dos agentes e da documentação (2026-07-30)
+
+Auditoria de 9 documentos (7 skills + 2 knowledge files) conferindo cada afirmação contra o código real: **8 de 9 estavam gravemente desatualizados** (24 achados de gravidade alta). Achado central: os knowledge files **não são documentação passiva** — são injetados literalmente no prompt de geração, então a defasagem afetava a produção. **Todos os achados foram corrigidos**; relatório em `AUDITORIA_AGENTES_2026-07-30.md`.
+
 ---
 
 ## 3. Pendente / Level-up
@@ -138,7 +150,7 @@ Painel **em produção e ATIVO** em `https://mkt.4st.co` — **Docker Compose** 
 | 6 | **Lock multi-usuário concorrente em `status.json`** | Race em execuções simultâneas de `promote_task.js` na mesma task | `proper-lockfile` por task_dir |
 | 7 | **Skills não empacotadas p/ distribuição** | Arquivos no repo, não `.zip` instaláveis | Zipar cada pasta de skill se for distribuir |
 
-> **Segurança (por design):** pipeline **nunca publica sozinho**. Posting real exige (i) referência explícita ao Publish MD pelo nome, (ii) `dry_run: false`, (iii) tokens presentes (gate no distribution-agent).
+> **Segurança (por design):** o pipeline **nunca publica sozinho**. A publicação real acontece **no painel** (`interface/lib/publish.js`, Instagram feed — imagem única e carrossel) e exige: peça em `outputs/approved/` com `status approved` e `content_hashes` conferidos em runtime (**gate R5**), confirmação humana no botão "Publicar ou agendar", `dryRun: false`, Instagram conectado (token em `interface/data/publish.json`) e peça ainda não publicada. *(Correção 2026-07-30: não existe mais "Publish MD" — nenhum script gera esse arquivo e o gate não depende dele.)*
 
 ---
 
@@ -236,4 +248,4 @@ node skills/orchestrator/scripts/orchestrate.js --file <payload.json>
 5. Subir o worker num processo separado: `node pipeline/worker.js`
 6. **Testar:** ao rodar `npm run pipeline:run`, o log deve dizer `queued (BullMQ+Redis)` em vez de `sequential (sem Redis)`.
 
-> **Itens fora do escopo atual (adiados):** Supabase (§3 item 3) e OAuth YouTube (§3 item 4b) permanecem documentados na tabela, mas **não** serão configurados neste momento. **Instagram feed já foi entregue** (§2.11 / §3 item 4a). A trava de segurança permanece válida: a publicação **nunca ocorre sozinha fora do gate** — a peça precisa estar `approved` com `content_hashes` íntegros em runtime (gate R5), e o Publish MD do pipeline continua exigindo referência explícita, `dry_run:false` e tokens presentes.
+> **Itens fora do escopo atual (adiados):** Supabase (§3 item 3) e OAuth YouTube (§3 item 4b) permanecem documentados na tabela, mas **não** serão configurados neste momento. **Instagram feed já foi entregue** (§2.11 / §3 item 4a). A trava de segurança permanece válida: a publicação **nunca ocorre sozinha fora do gate** — a peça precisa estar `approved` com `content_hashes` íntegros em runtime (gate R5), e a publicação em si só sai pelo painel, com confirmação humana. *(Correção 2026-07-30: o "Publish MD" não é mais gerado por nenhum script — a trava real são as invariantes do gate.)*
