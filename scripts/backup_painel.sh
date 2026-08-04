@@ -57,10 +57,31 @@ log "backup para $PASTA"
 salvar_volume "${PROJETO}_panel_uploads" "uploads.tar.gz"
 salvar_volume "${PROJETO}_panel_outputs" "outputs.tar.gz"
 
-# Dados no disco do host (bind mounts / pastas do repo)
-tar -czf "$PASTA/data.tar.gz" -C "$RAIZ/interface" data 2>/dev/null || log "interface/data não encontrado"
+# interface/data pelo contêiner: o painel roda como root e grava esses arquivos com 0600 de
+# root, então um tar rodando como o usuário comum falha em silêncio — justamente na parte mais
+# importante (usuários, segredo de sessão, token do Instagram). De dentro do contêiner, lê.
+salvar_pasta_do_host() {
+  local origem="$1" saida="$2"
+  if [ ! -d "$origem" ]; then log "$origem não existe — pulando"; return 0; fi
+  docker run --rm \
+    -v "$origem":/origem:ro \
+    -v "$PASTA":/destino \
+    alpine:3 \
+    sh -c "tar -czf /destino/$saida -C /origem . 2>/dev/null || true"
+  log "$saida  ($(du -h "$PASTA/$saida" 2>/dev/null | cut -f1))"
+}
+salvar_pasta_do_host "$RAIZ/interface/data" "data.tar.gz"
+
 tar -czf "$PASTA/organizacao.tar.gz" -C "$RAIZ" campaigns collections 2>/dev/null || log "campaigns/collections não encontrados"
-log "data.tar.gz + organizacao.tar.gz"
+log "organizacao.tar.gz"
+
+# Confere que o backup não saiu vazio: um .tar.gz de poucos bytes significa que a leitura
+# falhou (permissão, pasta errada) — melhor gritar agora do que descobrir na hora do resgate.
+for arq in "$PASTA"/*.tar.gz; do
+  [ -f "$arq" ] || continue
+  tamanho=$(stat -c%s "$arq" 2>/dev/null || echo 0)
+  if [ "$tamanho" -lt 200 ]; then log "ATENÇÃO: $(basename "$arq") saiu praticamente vazio ($tamanho bytes) — confira as permissões"; fi
+done
 
 chmod 600 "$PASTA"/*.tar.gz 2>/dev/null || true
 
