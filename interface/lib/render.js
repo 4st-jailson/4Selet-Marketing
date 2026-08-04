@@ -116,6 +116,9 @@ function requireActive(folder) {
   return loc;
 }
 
+// Teto de tempo de um render de PNG (Playwright). Tunavel por env: PNG_RENDER_TIMEOUT_MS.
+const PNG_RENDER_TIMEOUT_MS = Number(process.env.PNG_RENDER_TIMEOUT_MS || 4 * 60 * 1000) || 4 * 60 * 1000;
+
 // Executa o render_ad.js oficial (Playwright) — HTML -> PNG. Assincrono (spawn).
 // `scale` = deviceScaleFactor: 1 = base; 2 = ALTA RESOLUCAO (ex.: 2160px) p/ download.
 async function htmlToPng(htmlPath, outPng, width, height, scale, opts) {
@@ -123,8 +126,15 @@ async function htmlToPng(htmlPath, outPng, width, height, scale, opts) {
   const args = [script, htmlPath, outPng, String(width), String(height)];
   if (scale && scale !== 1) args.push(String(scale));
   // strictNet: bloqueia rede externa no render (usado p/ HTML do editor, nao confiavel).
-  const spawnOpts = (opts && opts.strictNet) ? { env: { RENDER_STRICT_NET: "1" } } : undefined;
+  // timeout OBRIGATORIO: a fila de render e serializada (um por vez). Sem teto, um Chromium
+  // travado deixava a promise pendurada e TODOS os renders seguintes (de todos os usuarios)
+  // esperavam para sempre, ate reiniciar o painel. 4 min e folga larga p/ um PNG.
+  const spawnOpts = { timeout: PNG_RENDER_TIMEOUT_MS };
+  if (opts && opts.strictNet) spawnOpts.env = { RENDER_STRICT_NET: "1" };
   const r = await spawnAsync(args, spawnOpts);
+  if (r.timedOut) {
+    return { code: r.code, stdout: r.stdout, stderr: "O render da imagem passou de " + Math.round(PNG_RENDER_TIMEOUT_MS / 60000) + " minutos e foi interrompido. Tente de novo.", ok: false };
+  }
   return { code: r.code, stdout: r.stdout, stderr: r.stderr || r.error, ok: r.ok };
 }
 
@@ -2327,18 +2337,45 @@ async function renderForDownload(folder, rel, scale) {
 // Remove scripts, handlers on*, tags perigosas, javascript: e <link> externos que nao
 // sejam de fontes. E a defesa PRIMARIA; a secundaria e o bloqueio de rede no render
 // (RENDER_STRICT_NET), que impede SSRF/exfiltracao mesmo se algo escapar daqui.
+// Decodifica entidades HTML dos casos que interessam aqui (&#106;avascript:, &#x6a;..., &colon;)
+// ANTES de procurar esquema perigoso — senao `href="&#106;avascript:alert(1)"` passava batido,
+// porque o literal "javascript:" nao aparece no texto cru.
+function decodeEntitiesForCheck(s) {
+  return String(s)
+    .replace(/&#x([0-9a-f]+);?/gi, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch (e) { return m; } })
+    .replace(/&#(\d+);?/g, (m, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch (e) { return m; } })
+    .replace(/&colon;/gi, ":")
+    .replace(/&Tab;|&NewLine;/gi, "");
+}
+// Esquema de URL perigoso? (javascript:, vbscript:, data:text/html — tolerando espacos,
+// quebras de linha e maiusculas no meio, que os navegadores ignoram ao resolver o esquema.)
+function isDangerousUrl(v) {
+  const plain = decodeEntitiesForCheck(v).replace(/[\s -]/g, "").toLowerCase();
+  return /^(javascript|vbscript|livescript):/.test(plain) || /^data:text\/html/.test(plain);
+}
+
 function sanitizeArtHtml(html) {
   let s = String(html);
-  s = s.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");   // <script>...</script>
-  s = s.replace(/<script\b[^>]*>/gi, "");                     // <script ...> solto
-  s = s.replace(/<\/?(iframe|object|embed|base|form|meta|noscript|template|applet)\b[^>]*>/gi, "");
-  s = s.replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "");           // onload="..."
-  s = s.replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "");           // onload='...'
-  s = s.replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "");           // onload=x
-  s = s.replace(/(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, "$1=$2#$2");
-  // neutraliza src/href http(s) EXTERNOS (exceto fontes do Google) — defesa extra alem do bloqueio de rede
-  s = s.replace(/(src|href|xlink:href)\s*=\s*(["'])\s*https?:\/\/(?!fonts\.(?:googleapis|gstatic)\.com\/)[^"']*\2/gi, "$1=$2$2");
-  s = s.replace(/<link\b[^>]*>/gi, (m) => /fonts\.googleapis\.com/i.test(m) ? m : ""); // so <link> de fonte
+  // Uma passada so nao basta: `<scr<script>ipt>` vira `<script>` DEPOIS da primeira remocao.
+  // Repetimos ate o texto parar de mudar (com teto, para nao girar em falso).
+  for (let pass = 0; pass < 5; pass++) {
+    const before = s;
+    s = s.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");   // <script>...</script>
+    s = s.replace(/<script\b[^>]*>/gi, "");                     // <script ...> solto
+    s = s.replace(/<\/?(iframe|object|embed|base|form|meta|noscript|template|applet|svg:script)\b[^>]*>/gi, "");
+    // Handlers on*: o separador antes do atributo pode ser espaco OU "/" — `<img/onerror=x>` e
+    // HTML valido e escapava das regras antigas (que exigiam \s), sobrevivendo ao saneamento.
+    s = s.replace(/[\s/]on[a-z]+\s*=\s*"[^"]*"/gi, " ");        // onload="..."
+    s = s.replace(/[\s/]on[a-z]+\s*=\s*'[^']*'/gi, " ");        // onload='...'
+    s = s.replace(/[\s/]on[a-z]+\s*=\s*[^\s>]+/gi, " ");        // onload=x (sem aspas)
+    // URLs perigosas — agora tambem sem aspas e com entidades decodificadas na checagem.
+    s = s.replace(/(href|src|xlink:href|action|formaction)\s*=\s*(["'])([^"']*)\2/gi, (m, attr, q, val) => isDangerousUrl(val) ? (attr + "=" + q + "#" + q) : m);
+    s = s.replace(/(href|src|xlink:href|action|formaction)\s*=\s*([^\s>"']+)/gi, (m, attr, val) => isDangerousUrl(val) ? (attr + '="#"') : m);
+    // neutraliza src/href http(s) EXTERNOS (exceto fontes do Google) — defesa extra alem do bloqueio de rede
+    s = s.replace(/(src|href|xlink:href)\s*=\s*(["'])\s*https?:\/\/(?!fonts\.(?:googleapis|gstatic)\.com\/)[^"']*\2/gi, "$1=$2$2");
+    s = s.replace(/<link\b[^>]*>/gi, (m) => /fonts\.googleapis\.com/i.test(m) ? m : ""); // so <link> de fonte
+    if (s === before) break;
+  }
   return s;
 }
 

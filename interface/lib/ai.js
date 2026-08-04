@@ -34,7 +34,8 @@ function writeEnvVar(key, value) {
     return l;
   });
   if (!found) lines.push(key + "=" + value);
-  fs.writeFileSync(PATHS.ENV_FILE, lines.filter((l, i) => !(l === "" && i === lines.length - 1)).join("\n") + "\n", "utf8");
+  // mode 0600: o .env guarda chave de API (mesmo padrao dos outros arquivos de segredo).
+  fs.writeFileSync(PATHS.ENV_FILE, lines.filter((l, i) => !(l === "" && i === lines.length - 1)).join("\n") + "\n", { encoding: "utf8", mode: 0o600 });
 }
 
 function defaultProvider() {

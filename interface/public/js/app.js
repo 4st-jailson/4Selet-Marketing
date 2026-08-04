@@ -3248,9 +3248,12 @@ async function openPublishModal(task) {
   </div>`;
   document.body.appendChild(ov); document.body.classList.add("no-scroll");
   requestAnimationFrame(() => ov.classList.add("open"));
-  const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  // Trava enquanto a publicação está em voo: fechar no meio faz o usuário perder a confirmação
+  // (e achar que não publicou — o caminho mais comum para alguém publicar duas vezes).
+  let inFlight = false;
+  const close = () => { if (inFlight) return; ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
   ov.querySelector("[data-x='close']").onclick = close;
-  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); }); // close() ignora o clique durante a publicação
   wireIgPreview(ov, imgs);
   const capEl = ov.querySelector("#pub-caption");
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
@@ -3267,6 +3270,8 @@ async function openPublishModal(task) {
     const cap = capEl.value.trim();
     if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora" }))) return;
     const btn = ov.querySelector("#pub-now"), sBtn = ov.querySelector("#pub-schedule"), xBtn = ov.querySelector("[data-x='close']");
+    if (inFlight) return; // segundo clique enquanto o primeiro ainda está indo
+    inFlight = true;
     [btn, sBtn, xBtn].forEach((b) => { if (b) b.disabled = true; });
     const tt = publishing.querySelector(".pub-prog-t"); if (tt) tt.textContent = connected ? "Publicando no Instagram…" : "Simulando publicação…";
     publishing.hidden = false; // overlay com spinner grande + mensagem (mais intuitivo que só o texto do botão)
@@ -3277,11 +3282,22 @@ async function openPublishModal(task) {
       if (tt) tt.textContent = r.dry_run ? "Simulação concluída" : "Publicado no Instagram!";
       const hh = publishing.querySelector(".pub-prog-h"); if (hh) hh.textContent = r.dry_run ? (r.reason || "Nada foi postado (modo simulado).") : ("A peça está no ar em @" + esc(uname) + ".");
       toast(r.dry_run ? ("Simulado (" + r.type + ")") : "Publicado no Instagram!", r.dry_run ? "info" : "ok");
-      setTimeout(close, 1200);
+      // Avisos do servidor (ex.: publicou mas não conseguiu registrar; agendamento cancelado).
+      if (Array.isArray(r.warnings)) r.warnings.forEach((w, i) => setTimeout(() => toast(w, "info"), 400 + i * 200));
+      // A peça publicada precisa refletir na tela ANTES de fechar: sem isso o detalhe continuava
+      // mostrando "Publicar ou agendar" com o estado antigo em memória, e um segundo clique
+      // honesto passava por todas as guardas do front.
+      if (!r.dry_run) { if (task.status) task.status.published_at = new Date().toISOString(); }
+      inFlight = false;
+      setTimeout(() => { close(); if (!r.dry_run && typeof router === "function") router(); }, 1200);
     } catch (e) {
+      inFlight = false;
       publishing.hidden = true;
       [btn, sBtn, xBtn].forEach((b) => { if (b) b.disabled = false; });
       toast((e && e.message) || "Falha ao publicar.", "error");
+      // 409 = o servidor barrou por já estar publicada / publicação em voo. A tela está velha:
+      // recarrega para o usuário ver o estado real em vez de tentar de novo.
+      if (e && (e.code === "E_ALREADY_PUBLISHED" || e.code === "E_PUBLISH_IN_FLIGHT")) { close(); if (typeof router === "function") router(); }
     }
   };
   ov.querySelector("#pub-schedule").onclick = async () => {
@@ -3289,10 +3305,19 @@ async function openPublishModal(task) {
     if (!when) { toast("Escolha a data e a hora.", "error"); return; }
     const iso = new Date(when).toISOString();
     if (new Date(iso).getTime() < Date.now() + 30000) { toast("Escolha um horário no futuro.", "error"); return; }
+    // Sem esta trava, dois cliques criavam DOIS agendamentos da mesma peça — e cada um virava
+    // um post no horário marcado. (O servidor também passou a recusar o segundo.)
+    const sBtn = ov.querySelector("#pub-schedule");
+    if (inFlight) return;
+    inFlight = true; sBtn.disabled = true;
     try {
       await API.schedulePost(task.folder, { caption: capEl.value.trim() || undefined, scheduled_at: iso, label: displayName(task) });
-      toast("Agendado. Veja em Agendados.", "ok"); close();
-    } catch (e) { toast((e && e.message) || "Falha ao agendar.", "error"); }
+      toast("Agendado. Veja em Agendados.", "ok");
+      inFlight = false; close();
+    } catch (e) {
+      inFlight = false; sBtn.disabled = false;
+      toast((e && e.message) || "Falha ao agendar.", "error");
+    }
   };
 }
 
@@ -4828,7 +4853,11 @@ async function saveGenerated() {
     // rascunho -> em revisão), pra a peça já nascer pronta pra Aprovar — elimina o clique
     // manual "Enviar para revisão". Se falhar, a peça fica em rascunho e o botão manual segue.
     showBusy("Enviando para revisão…");
-    try { await API.preview(r.folder); } catch (e) { /* melhor esforço — não bloqueia o salvar */ }
+    // Se falhar, a peça FICA EM RASCUNHO — e antes isso passava calado: o usuário via só
+    // "Peça salva", abria a peça esperando Aprovar e encontrava "Enviar para revisão" de novo,
+    // sem entender o motivo. Agora ele é avisado do estado real.
+    try { await API.preview(r.folder); }
+    catch (e) { toast('Peça salva, mas ela ficou em rascunho. Abra a peça e clique em "Enviar para revisão".', "warn"); }
     hideBusy();
     // #1 — trava o botão após sucesso (evita salvar/duplicar de novo) e mostra "✓ Salvo".
     btn.disabled = true; btn.textContent = "✓ Salvo";

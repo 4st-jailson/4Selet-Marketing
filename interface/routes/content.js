@@ -77,6 +77,10 @@ router.post("/import", async (req, res, next) => {
       }
       content.writeContentFile(folder, "copy/instagram_caption.txt", String(b.caption || "").trim() + "\n", "importação");
     } catch (e) {
+      // A peça já foi criada acima. Se a gravação falhou (disco cheio, permissão), deixá-la de
+      // pé criava uma casca vazia na biblioteca E travava o identificador: a tentativa seguinte
+      // batia em 409 "já existe" e o usuário tinha que descartar à mão algo que nunca pediu.
+      try { content.discardTask(folder); } catch (e2) { console.error("[import] falha ao descartar a peça incompleta:", folder, e2 && e2.message); }
       return res.status(500).json({ error: "falha ao gravar os arquivos da peça: " + e.message, code: e.code || null });
     }
 

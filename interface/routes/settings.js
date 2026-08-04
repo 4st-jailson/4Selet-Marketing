@@ -117,7 +117,9 @@ router.post("/model", adminOnly, (req, res) => {
   res.json({ ok: true, model });
 });
 
-router.post("/test", async (req, res) => {
+// Os testes de chave GASTAM cota das contas pagas e confirmam quais integracoes estao ativas.
+// Ficam com o admin, junto com o salvar (a UI de membro ja nao mostra esta secao).
+router.post("/test", adminOnly, async (req, res) => {
   const r = await ai.testKey();
   res.status(r.ok ? 200 : 400).json(r);
 });
@@ -127,7 +129,7 @@ router.post("/tavily-key", adminOnly, (req, res) => {
   try { research.saveKey(req.body && req.body.key); res.json({ ok: true, configured: research.isConfigured() }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.post("/tavily-test", async (req, res) => {
+router.post("/tavily-test", adminOnly, async (req, res) => {
   const r = await research.testKey();
   res.status(r.ok ? 200 : 400).json(r);
 });
@@ -136,7 +138,7 @@ router.post("/pexels-key", adminOnly, (req, res) => {
   try { pexels.saveKey(req.body && req.body.key); res.json({ ok: true, configured: pexels.isConfigured() }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.post("/pexels-test", async (req, res) => {
+router.post("/pexels-test", adminOnly, async (req, res) => {
   const r = await pexels.testKey();
   res.status(r.ok ? 200 : 400).json(r);
 });
@@ -173,7 +175,7 @@ router.post("/provider/model", adminOnly, (req, res) => {
     res.json({ ok: true, model: m, providers: aihub.providers() });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.post("/provider/test", async (req, res) => {
+router.post("/provider/test", adminOnly, async (req, res) => {
   const r = await aihub.testKey((req.body || {}).provider);
   res.status(r.ok ? 200 : 400).json(r);
 });

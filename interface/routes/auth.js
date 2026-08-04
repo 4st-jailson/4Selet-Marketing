@@ -47,6 +47,14 @@ router.post("/login", (req, res) => {
   const k = keyOf(req, username), gk = gkeyOf(req);
   const wait = lockedFor(k) || lockedFor(gk);
   if (wait) return res.status(429).json({ error: "Muitas tentativas. Aguarde " + wait + "s e tente de novo." });
+  // Recusa ANTES do scrypt: verificar a senha e caro de proposito (scrypt sincrono) e o
+  // painel roda num processo so. Sem este corte, um POST com uma "senha" de megabytes (o
+  // limite global de corpo e 16 MB) travava o event loop inteiro a cada tentativa. Senha
+  // legitima ja e limitada a 200 caracteres na criacao.
+  if (typeof password !== "string" || password.length > 200 || String(username || "").length > 64) {
+    registerFail(k); registerFail(gk, GMAX);
+    return res.status(401).json({ error: "Usuário ou senha inválidos." });
+  }
   const user = auth.authenticate(username, password);
   if (!user) { registerFail(k); registerFail(gk, GMAX); return res.status(401).json({ error: "Usuário ou senha inválidos." }); }
   attempts.delete(k);

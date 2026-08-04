@@ -49,12 +49,15 @@ router.post("/", express.json({ limit: "14mb" }), (req, res) => {
   res.json({ ok: true, name: file, url: "/uploads/" + file });
 });
 
-// DELETE /api/uploads/:name — remove do acervo
+// DELETE /api/uploads/:name — remove do acervo.
+// O acervo e compartilhado (qualquer pessoa logada usa as fotos), mas apagar e irreversivel:
+// o volume e a unica copia. Registramos QUEM apagou o QUE — antes nao havia nenhum rastro.
 router.delete("/:name", (req, res) => {
   const f = path.basename(String(req.params.name || ""));
   const target = path.join(UP_DIR, f);
   if (!target.startsWith(UP_DIR + path.sep)) return res.status(400).json({ error: "nome invalido" });
-  try { fs.unlinkSync(target); res.json({ ok: true }); }
+  const who = (req.user && (req.user.username || req.user.name)) || "?";
+  try { fs.unlinkSync(target); console.log("[uploads] " + who + " apagou a foto " + f); res.json({ ok: true }); }
   catch (e) { res.status(404).json({ error: "imagem nao encontrada" }); }
 });
 

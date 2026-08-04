@@ -67,17 +67,44 @@ function setInstagram({ access_token, ig_user_id, public_base_url }) {
 }
 
 // ---- Graph API ----
-async function graphGet(p, params) {
-  const qs = new URLSearchParams(params || {});
-  const r = await fetch(GRAPH + p + "?" + qs.toString());
+// Teto de tempo por chamada. Sem isso, uma instabilidade da Meta segurava a requisição do
+// usuário por minutos (o padrão do fetch do Node é longuíssimo): a tela ficava em "publicando",
+// ele reenviava e saía post duplicado; no agendador, o tick inteiro travava naquele item.
+const GRAPH_TIMEOUT_MS = Number(process.env.GRAPH_TIMEOUT_MS || 30000) || 30000;
+function graphTimeoutError(step) {
+  const e = new Error("O Instagram não respondeu a tempo ao " + step + ". Confira no Instagram se o post saiu antes de tentar de novo.");
+  e.code = "E_GRAPH_TIMEOUT";
+  return e;
+}
+// GET: o access_token vai no header Authorization, NÃO na query string — token em URL vaza em
+// log de proxy, de APM e em mensagens de erro que incluem a URL. (A Graph API aceita Bearer.)
+async function graphGet(p, params, step) {
+  const params2 = Object.assign({}, params || {});
+  const token = String(params2.access_token == null ? "" : params2.access_token).replace(/\s+/g, "");
+  delete params2.access_token;
+  const qs = new URLSearchParams(params2);
+  const headers = token ? { Authorization: "Bearer " + token } : {};
+  let r;
+  try {
+    r = await fetch(GRAPH + p + (qs.toString() ? "?" + qs.toString() : ""), { headers, signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS) });
+  } catch (e) {
+    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) throw graphTimeoutError(step || "consultar a conta");
+    throw e;
+  }
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, body: j };
 }
-async function graphPost(p, params, token) {
+async function graphPost(p, params, token, step) {
   token = String(token == null ? "" : token).replace(/\s+/g, "");
   if (!token) { const e = new Error("Instagram não conectado — cole o token em Configurações › Publicação Instagram."); e.code = "E_NO_TOKEN"; throw e; }
   const body = new URLSearchParams(Object.assign({}, params, { access_token: token }));
-  const r = await fetch(GRAPH + p, { method: "POST", body });
+  let r;
+  try {
+    r = await fetch(GRAPH + p, { method: "POST", body, signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS) });
+  } catch (e) {
+    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) throw graphTimeoutError(step || "publicar");
+    throw e;
+  }
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, body: j };
 }
@@ -89,7 +116,7 @@ async function testConnection() {
   if (!c.access_token) return { ok: false, configured: false, error: "Cole o token de acesso primeiro." };
   // Sem ig_user_id ainda: acha a conta IG Business ligada a uma Página do Facebook.
   if (!c.ig_user_id) {
-    const disc = await graphGet("/me/accounts", { fields: "name,instagram_business_account{id,username}", access_token: c.access_token });
+    const disc = await graphGet("/me/accounts", { fields: "name,instagram_business_account{id,username}", access_token: c.access_token }, "listar as Páginas");
     if (!disc.ok || disc.body.error) return { ok: false, configured: false, error: (disc.body.error && disc.body.error.message) || "Não consegui listar as Páginas com esse token." };
     const pg = (Array.isArray(disc.body.data) ? disc.body.data : []).find((p) => p.instagram_business_account && p.instagram_business_account.id);
     if (!pg) return { ok: false, configured: false, error: "Token ok, mas não achei uma conta Instagram Business ligada a uma Página. Confirme que @4selet é Profissional e está vinculada a uma Página do Facebook." };
@@ -101,7 +128,7 @@ async function testConnection() {
     return { ok: true, configured: true, username: cfg.instagram.username, ig_user_id: cfg.instagram.ig_user_id, page: pg.name };
   }
   // Já temos o ID: valida.
-  const r = await graphGet("/" + c.ig_user_id, { fields: "username,name", access_token: c.access_token });
+  const r = await graphGet("/" + c.ig_user_id, { fields: "username,name", access_token: c.access_token }, "conferir a conta");
   if (!r.ok || r.body.error) return { ok: false, configured: true, error: (r.body.error && r.body.error.message) || ("HTTP " + r.status) };
   const cfg = loadConfig(); cfg.instagram.username = r.body.username || cfg.instagram.username; saveConfig(cfg);
   return { ok: true, configured: true, username: r.body.username, ig_user_id: c.ig_user_id };
@@ -144,22 +171,22 @@ function readCaption(dir) {
 }
 
 async function publishImage(igUserId, token, imageUrl, caption) {
-  const c = await graphPost("/" + igUserId + "/media", { image_url: imageUrl, caption: caption || "" }, token);
+  const c = await graphPost("/" + igUserId + "/media", { image_url: imageUrl, caption: caption || "" }, token, "preparar a imagem");
   if (!c.ok || !c.body.id) throw gerr("criar o contêiner da imagem", c);
-  const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: c.body.id }, token);
+  const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: c.body.id }, token, "publicar a imagem");
   if (!p.ok || !p.body.id) throw gerr("publicar a imagem", p);
   return { post_id: p.body.id, creation_id: c.body.id };
 }
 async function publishCarousel(igUserId, token, imageUrls, caption) {
   const children = [];
   for (const url of imageUrls) {
-    const c = await graphPost("/" + igUserId + "/media", { image_url: url, is_carousel_item: "true" }, token);
+    const c = await graphPost("/" + igUserId + "/media", { image_url: url, is_carousel_item: "true" }, token, "preparar um slide do carrossel");
     if (!c.ok || !c.body.id) throw gerr("criar um slide do carrossel", c);
     children.push(c.body.id);
   }
-  const car = await graphPost("/" + igUserId + "/media", { media_type: "CAROUSEL", children: children.join(","), caption: caption || "" }, token);
+  const car = await graphPost("/" + igUserId + "/media", { media_type: "CAROUSEL", children: children.join(","), caption: caption || "" }, token, "montar o carrossel");
   if (!car.ok || !car.body.id) throw gerr("montar o carrossel", car);
-  const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: car.body.id }, token);
+  const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: car.body.id }, token, "publicar o carrossel");
   if (!p.ok || !p.body.id) throw gerr("publicar o carrossel", p);
   return { post_id: p.body.id, creation_id: car.body.id };
 }
@@ -198,7 +225,7 @@ async function publishTask(folder, opts) {
     : await publishImage(c.ig_user_id, c.access_token, urls[0], caption);
   // Busca o link público do post (pra "ver no Instagram" no histórico). Best-effort.
   let permalink = "";
-  try { const pl = await graphGet("/" + res.post_id, { fields: "permalink", access_token: c.access_token }); if (pl.ok && pl.body && pl.body.permalink) permalink = pl.body.permalink; } catch (e) { /* segue sem link */ }
+  try { const pl = await graphGet("/" + res.post_id, { fields: "permalink", access_token: c.access_token }, "buscar o link do post"); if (pl.ok && pl.body && pl.body.permalink) permalink = pl.body.permalink; } catch (e) { /* segue sem link: o post ja saiu */ }
   return { ok: true, dry_run: false, type: images.length > 1 ? "carrossel" : "imagem", post_id: res.post_id, permalink };
 }
 

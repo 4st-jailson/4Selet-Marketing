@@ -7,3 +7,15 @@ outputs
 .env
 **/.env
 deploy.env
+# dados de acesso e credenciais gravadas pelo painel: users.json (hashes de senha),
+# .session_secret (assina os cookies), pexels.json, tavily.json, publish.json (token do
+# Instagram), credentials.json. O diretorio e montado por VOLUME em runtime — se entrar no
+# COPY do build, os arquivos ficam gravados nas CAMADAS da imagem e continuam la mesmo depois
+# de trocar as chaves. Quem tiver acesso a imagem le tudo.
+interface/data
+# acervo de fotos: tambem vem de volume; nao precisa (nem deve) ser assado na imagem
+interface/public/uploads
+# certificado de origem do Cloudflare (montado no Caddy em runtime)
+caddy
+# prototipos do mockup de midia (15 MB de HTML/PNG descartaveis, nada em runtime usa)
+interface/_mediatest

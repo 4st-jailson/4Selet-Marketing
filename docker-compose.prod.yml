@@ -23,6 +23,25 @@ services:
       - ./outputs/approved:/app/outputs/approved  # conteudo APROVADO (fonte de verdade versionada em git)
       - ./outputs/archive:/app/outputs/archive    # conteudo arquivado (versionado em git)
     restart: unless-stopped
+    # Sinal de vida: o painel pode ficar "vivo mas travado" (ex.: fila de render presa) — nesse
+    # estado o processo nao morre, entao o restart sozinho nunca agia e o painel ficava fora do ar
+    # ate alguem reclamar. Com healthcheck, da pra ver `unhealthy` no docker ps e automatizar.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4500/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Teto de memoria: um render do Remotion sem limite podia consumir a VPS inteira e derrubar
+    # o Caddy junto (OOM do host). Assim so o painel e reiniciado.
+    mem_limit: 3g
+    # Rotacao de log: o driver padrao do Docker cresce sem limite e os renders escrevem bastante
+    # em stdout/stderr — disco cheio derruba painel e Caddy de uma vez.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     # sem 'ports:' -> so o Caddy alcança (nada exposto direto)
 
   caddy:
@@ -36,6 +55,11 @@ services:
       - caddy_data:/data      # certificados (persistente — nao re-emitir a cada deploy)
       - caddy_config:/config
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     depends_on:
       - panel
 

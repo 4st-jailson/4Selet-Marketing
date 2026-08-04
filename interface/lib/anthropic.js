@@ -28,7 +28,10 @@ function writeEnvVar(key, value) {
     return l;
   });
   if (!found) lines.push(key + "=" + value);
-  fs.writeFileSync(PATHS.ENV_FILE, lines.filter((l, i) => !(l === "" && i === lines.length - 1)).join("\n") + "\n", "utf8");
+  // mode 0600: o .env guarda chave de API. Sem isso ficava 0644 (legivel por qualquer usuario
+  // da maquina) — os outros arquivos de segredo do painel (pexels.json, publish.json,
+  // credentials.json) ja gravam com 0600; aqui era a exceção.
+  fs.writeFileSync(PATHS.ENV_FILE, lines.filter((l, i) => !(l === "" && i === lines.length - 1)).join("\n") + "\n", { encoding: "utf8", mode: 0o600 });
 }
 
 function getApiKey() {

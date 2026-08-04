@@ -27,13 +27,15 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; " +
     "script-src 'self' 'unsafe-inline'; frame-src 'self' blob:; connect-src 'self'; " +
     "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
-  // anti-CSRF: rejeita mutacoes cujo Origin nao bate com o host (quando o header existe)
+  // anti-CSRF: rejeita mutacoes cujo Origin nao bate com o host. Se nao veio Origin, cai no
+  // Referer; sem NENHUM dos dois a mutacao e recusada (antes ela passava direto — o "if (origin)"
+  // sem else deixava um furo para qualquer cliente que simplesmente omitisse o header).
   if (req.method === "POST" || req.method === "PUT" || req.method === "DELETE" || req.method === "PATCH") {
-    const origin = req.headers.origin;
-    if (origin) {
-      try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: "origem inválida", code: "E_BAD_ORIGIN" }); }
-      catch (e) { return res.status(403).json({ error: "origem inválida", code: "E_BAD_ORIGIN" }); }
-    }
+    const bad = () => res.status(403).json({ error: "origem inválida", code: "E_BAD_ORIGIN" });
+    const src = req.headers.origin || req.headers.referer;
+    if (!src) return bad();
+    try { if (new URL(src).host !== req.headers.host) return bad(); }
+    catch (e) { return bad(); }
   }
   next();
 });
@@ -101,7 +103,12 @@ app.use("/api/pexels", require("./routes/pexels"));
 app.use("/api/publish", require("./routes/publish"));
 
 // Disparador de agendamentos: publica as peças agendadas no horário (passando pelo gate).
-require("./lib/schedule").startWorker(require("./lib/publish").publishTask);
+// O 2o argumento responde "esta peça já foi publicada?" — o worker pula quem já foi ao ar na
+// mão depois de agendada, para não sair o mesmo post duas vezes.
+require("./lib/schedule").startWorker(
+  require("./lib/publish").publishTask,
+  (folder) => { const t = require("./lib/content").getTask(folder); return !!(t && t.status && t.status.published_at); }
+);
 
 // Servir assets de marca (logos) read-only. Filtro de extensao (B6): so mídia/fontes/css
 // — nunca serve .env/.json/.md/etc. que por acaso caiam em assets/. Publico (fora do gate).
@@ -134,6 +141,17 @@ function serveIndex(req, res) {
   res.type("html").send(html);
 }
 app.get(["/", "/index.html"], serveIndex);
+
+// Conteudo de TRABALHO dentro de public/ exige login. O gate de sessao cobria so /api, entao
+// as fotos do acervo (/uploads) e os artefatos em /outputs e /propostas ficavam abertos na
+// internet — bastava acertar o nome do arquivo (que e previsivel: nome + timestamp em base36).
+// Material de marca nao publicado nao pode sair por ai. O canal publico de midia continua
+// sendo so o /m/:token (link temporario que a Meta usa na hora de publicar), e o render nao
+// depende destas URLs (resolve para file:// local).
+app.use(["/uploads", "/outputs", "/propostas"], (req, res, next) => {
+  if (auth.userFromRequest(req)) return next();
+  res.status(401).type("text").send("Faça login no painel para ver este arquivo.");
+});
 
 // Front. HTML/JS/CSS com "no-cache" (revalida sempre): o navegador guarda, mas
 // confere antes de usar — 304 quando nada mudou (rapido), 200 com o novo quando

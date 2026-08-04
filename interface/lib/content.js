@@ -16,6 +16,25 @@ function readJsonSafe(p) {
   try { return JSON.parse(fs.readFileSync(p, "utf8").replace(/^﻿/, "")); } catch (e) { return null; }
 }
 
+// Escrita ATOMICA de JSON (tmp + rename no mesmo diretorio). Sem isto, um crash/restart no
+// meio de um writeFileSync deixava o status.json truncado — e como readJsonSafe devolve null
+// em JSON invalido, a peca SUMIA da biblioteca e toda mutacao passava a falhar em silencio.
+// O rename e atomico no mesmo filesystem, entao o arquivo final nunca fica pela metade.
+// (Mesmo padrao ja usado em campaigns.js / collections.js / publications.js.)
+function writeJsonAtomic(p, obj) {
+  const tmp = p + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8");
+  fs.renameSync(tmp, p);
+}
+
+// Escrita ATOMICA de arquivo comum (texto ou binario) — mesma ideia do writeJsonAtomic.
+function writeFileAtomic(target, data, encoding) {
+  const tmp = target + ".tmp";
+  if (encoding) fs.writeFileSync(tmp, data, encoding);
+  else fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, target);
+}
+
 // Roda um script de scripts/ (transicao de workflow) com cwd = raiz do projeto.
 // ASSINCRONO: antes usava spawnSync, que BLOQUEIA o event loop — cada Aprovar/Rejeitar/
 // Reabrir/Previa subia um processo Node sincrono e CONGELAVA o painel inteiro (health,
@@ -289,7 +308,8 @@ function writeContentFile(folder, rel, content, note) {
   // Rede de seguranca p/ "desfazer": snapshot do estado ATUAL antes de sobrescrever. Nao-critico.
   try { snapshotContentFile(loc, folder, rel, note); } catch (e) { console.warn("[history] snapshot falhou:", e && e.message); }
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, content, "utf8");
+  writeFileAtomic(target, content, "utf8");
+  invalidateTasksCache();
   return path.relative(loc.path, target).split(path.sep).join("/");
 }
 
@@ -303,7 +323,8 @@ function writeMediaFile(folder, rel, buffer) {
   const target = path.normalize(path.join(loc.path, rel));
   if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, buffer);
+  writeFileAtomic(target, buffer);
+  invalidateTasksCache();
   return path.relative(loc.path, target).split(path.sep).join("/");
 }
 
@@ -343,7 +364,8 @@ function setCampaignId(folder, campaignId) {
   const status = readJsonSafe(p);
   if (!status) return false;
   status.campaign_id = campaignId;
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -355,7 +377,8 @@ function setTitle(folder, title) {
   const status = readJsonSafe(p);
   if (!status) return false;
   status.title = String(title || "").slice(0, 120);
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -369,7 +392,8 @@ function setTemplate(folder, template) {
   const p = path.join(loc.path, "render.json");
   const cur = readJsonSafe(p) || {};
   cur.template = String(template);
-  fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, cur);
+  invalidateTasksCache();
   return true;
 }
 // Grava a variante de LOGO e o estilo de MARCA D'ÁGUA por peça no mesmo render.json (MERGE —
@@ -385,7 +409,8 @@ function setRenderPref(folder, patch) {
   else if (VALID_LOGOS.includes(String(patch.logo))) cur.logo = String(patch.logo);
   if (patch.watermark === "auto") delete cur.watermark;
   else if (VALID_WATERMARKS.includes(String(patch.watermark))) cur.watermark = String(patch.watermark);
-  fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, cur);
+  invalidateTasksCache();
   return true;
 }
 
@@ -400,7 +425,8 @@ function setPillar(folder, pillar) {
   const status = readJsonSafe(p);
   if (!status) return false;
   status.pillar = String(pillar);
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -427,7 +453,8 @@ function setMediaMeta(folder, meta) {
   // Ancora o tipo no status: hint de maxima prioridade p/ o classifyKind (sobrevive a edicoes
   // que porventura removam status.media) — a peca Midia nunca mais se classifica como feed/image.
   status.content_type = "media_mention";
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -442,7 +469,8 @@ function setPublished(folder, meta) {
   status.published_at = (meta && meta.at) || new Date().toISOString(); // `at` = data informada (marcação manual de publicação antiga); senão agora
   if (meta && meta.by) status.published_by = String(meta.by).slice(0, 120);
   if (meta && meta.post_id) status.last_post_id = String(meta.post_id).slice(0, 120);
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -455,7 +483,8 @@ function setImported(folder) {
   const status = readJsonSafe(p);
   if (!status) return false;
   status.imported = true;
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -486,7 +515,8 @@ function setTags(folder, tags) {
   if (!status) return null;
   const norm = normalizeTags(tags);
   status.tags = norm;
-  fs.writeFileSync(p, JSON.stringify(status, null, 2) + "\n", "utf8");
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return norm;
 }
 
@@ -500,9 +530,13 @@ function markViewed(folder) {
   const status = readJsonSafe(p);
   if (!status || status.first_viewed_at) return false;
   status.first_viewed_at = new Date().toISOString();
-  // Fire-and-forget: é chamado dentro de um GET (abrir a peça). Escrita assíncrona pra
-  // não bloquear o event loop do painel no carimbo "Novo" da 1ª visualização.
-  fs.writeFile(p, JSON.stringify(status, null, 2) + "\n", "utf8", () => {});
+  // SINCRONO de proposito. Antes era fire-and-forget (fs.writeFile assincrono) a partir de uma
+  // copia lida ANTES: se outra escrita (setTags, setPublished, promote) acontecesse no meio, a
+  // gravacao atrasada aterrissava por ultimo e RESTAURAVA o status.json antigo — tags e marcas
+  // de publicado "sumiam" sem explicacao. Como o Node e single-thread, ler+gravar no mesmo tick
+  // nao intercala com outra requisicao. O custo e um write pequeno no GET de abrir a peca.
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
   return true;
 }
 
@@ -529,7 +563,14 @@ function moveDirRobust(src, dst) {
       tryRename(); return;
     }
     if (e.code === "EXDEV") { // cross-device (bind-mount vs volume) → copia + apaga
-      fs.cpSync(src, dst, { recursive: true });
+      // Copia para um destino PROVISORIO e so entao renomeia para o nome final. Sem isso, um
+      // crash no meio do cpSync deixava a peca pela metade JA no nome definitivo (a zona de
+      // destino listava uma peca incompleta) ou duplicada nas duas zonas. Com o .part, o nome
+      // final so passa a existir quando a copia terminou — e o rename e no mesmo device.
+      const part = dst + ".part";
+      fs.rmSync(part, { recursive: true, force: true }); // sobra de tentativa anterior
+      fs.cpSync(src, part, { recursive: true });
+      fs.renameSync(part, dst);
       fs.rmSync(src, { recursive: true, force: true });
       return;
     }
@@ -554,6 +595,7 @@ function discardTask(folder) {
     dest = path.join(archivedRoot, folder + "__" + stamp);
   }
   moveDirRobust(loc.path, dest);
+  invalidateTasksCache(); // senao a peca descartada ainda aparecia na lista por ate 2s
   return { from: loc.path, to: dest };
 }
 

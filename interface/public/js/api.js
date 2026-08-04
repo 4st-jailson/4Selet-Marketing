@@ -14,6 +14,7 @@ const API = (() => {
         : ((data && data.error) || ("HTTP " + r.status));
       const err = new Error(msg);
       err.status = r.status; err.data = data;
+      err.code = (data && data.code) || null; // código do erro à mão (E_ALREADY_PUBLISHED, etc.)
       // Sessao ausente/expirada: avisa o app para reabrir o login (menos nas rotas de auth).
       if (r.status === 401 && data && data.code === "E_AUTH" && !/\/api\/auth\//.test(url)) {
         try { window.dispatchEvent(new CustomEvent("auth:expired")); } catch (_) { /* fora do browser */ }
