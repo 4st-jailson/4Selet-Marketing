@@ -92,14 +92,30 @@ app.get("/api/meta", (req, res) => {
   });
 });
 
+// Freio nas rotas CARAS. Cada chamada de geração é dinheiro na conta da Anthropic/OpenAI e cada
+// render sobe um Chromium na fila serializada — uma rajada (laço com bug no front, F5 repetido,
+// sessão vazada) sairia cara e derrubaria a fila para todo mundo. Os limites são folgados para
+// o uso normal de uma equipe pequena: quem trabalha nunca esbarra.
+const { limitar } = require("./lib/ratelimit");
+const limiteIA = limitar({ nome: "ia", max: 30, janelaMs: 5 * 60 * 1000, mensagem: "Muitas gerações seguidas." });
+const limiteRender = limitar({ nome: "render", max: 40, janelaMs: 5 * 60 * 1000, mensagem: "Muitos pedidos de arte seguidos." });
+const limitePexels = limitar({ nome: "pexels", max: 60, janelaMs: 5 * 60 * 1000, mensagem: "Muitas buscas de imagem seguidas." });
+
 app.use("/api/users", require("./routes/users"));
 app.use("/api/settings", require("./routes/settings"));
 app.use("/api/campaigns", require("./routes/campaigns"));
 app.use("/api/collections", require("./routes/collections"));
+// só o que renderiza/gera entra no freio; ler a biblioteca, abrir peça e baixar seguem livres
+app.use("/api/content/:folder/render", limiteRender);
+app.use("/api/content/:folder/edit-html", limiteRender);
 app.use("/api/content", require("./routes/content"));
+// O freio de IA vale só para as rotas que REALMENTE chamam o modelo. SALVAR e mandar para
+// revisão não gastam IA — se entrassem na mesma cota, alguém que gerasse muito ficaria sem
+// conseguir gravar o trabalho, que é exatamente o pior desfecho possível.
+app.post(["/api/generate", "/api/generate/refine", "/api/generate/assistant", "/api/generate/slide", "/api/generate/slide-mem"], limiteIA);
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
-app.use("/api/pexels", require("./routes/pexels"));
+app.use("/api/pexels", limitePexels, require("./routes/pexels"));
 app.use("/api/publish", require("./routes/publish"));
 
 // Disparador de agendamentos: publica as peças agendadas no horário (passando pelo gate).

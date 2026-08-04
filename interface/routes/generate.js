@@ -229,6 +229,19 @@ router.post("/save", async (req, res, next) => {
       return res.status(422).json({ error: "conteudo viola regras de marca", governance: gov });
     }
 
+    // 0) já existe peça com esse identificador + data? Antes o save seguia em frente e
+    // SOBRESCREVIA o conteúdo, o título, o template e o pilar da peça antiga sem avisar — dava
+    // para perder trabalho em rascunho só porque o slug bateu (o /import já barrava isso).
+    // Quem realmente quer regravar por cima manda `overwrite: true`.
+    const folderAlvo = body.task_name + "_" + body.task_date;
+    if (!body.overwrite && content.findTask(folderAlvo)) {
+      return res.status(409).json({
+        error: "Já existe uma peça com esse identificador nesta data. Mude o identificador ou a data para não substituir a peça que já está salva.",
+        code: "E_EXISTS",
+        folder: folderAlvo,
+      });
+    }
+
     // 1) garante a task (orchestrator.js — idempotente)
     const angle = body.campaign_id ? (campaigns.get(body.campaign_id) || {}).angle : (body.angle || null);
     const create = await content.createTask({

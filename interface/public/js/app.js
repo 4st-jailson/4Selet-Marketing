@@ -1992,15 +1992,27 @@ async function openHtmlEditor(folder, task, rel, opts) {
       const k = Array.from(el.children);
       return k.length > 0 && k.every((c) => isImg(c) || isSvg(c));
     };
+    // O elemento está dentro de algo deformado por perspectiva (matrix3d)? Sobe a árvore até o
+    // card. Usado para travar o print encaixado na tela do device nas peças de Mídia.
+    const dentroDeWarp = (el, cardEl, docEl) => {
+      for (let n = el; n && n !== cardEl && n.nodeType === 1; n = n.parentElement) {
+        const tf = docEl.defaultView.getComputedStyle(n).transform || "";
+        if (tf.indexOf("matrix3d") === 0) return true;
+      }
+      return false;
+    };
     // NÃO converte pra absoluto (quebrava o layout flex). Mantém o layout EXATO da arte
     // e move/redimensiona via transform (translate + scale) — pixel-perfect no re-render.
     Array.from(doc.querySelectorAll("body *")).forEach((el) => {
       if (el === card) return;
-      // Mockup de mídia (4Selet na Mídia): a foto do device + o print deformado por matrix3d +
-      // o vidro (.ht-stage) são o "quadro" da peça — travados. Sem isto, arrastar o print
-      // sobrescreveria o matrix3d (getTf só entende translate/rotate/scale) e destruiria o warp.
-      // O título, o veículo e o logo (fora do .ht-stage) seguem editáveis normalmente.
-      if (el.closest(".ht-stage")) return;
+      // Peça "4Selet na Mídia": o print é ENCAIXADO na tela do device por uma deformação de
+      // perspectiva (transform: matrix3d). Arrastar esse elemento sobrescreveria o matrix3d —
+      // o getTf só entende translate/rotate/scale — e a matéria sairia TORTA, que é justamente
+      // o que o Hugo reprovou. Então tudo que está dentro de um warp fica travado; o título, o
+      // veículo e o logo (fora dele) seguem editáveis. Detectamos pelo transform em vez de por
+      // uma classe fixa: assim vale para os modelos de hoje (foto_real/foto_mesa/foto_maos_mesa,
+      // que deformam a `.scr`) e para qualquer modelo novo que use a mesma técnica.
+      if (dentroDeWarp(el, card, doc)) return;
       // Já dentro de algo editável (ex.: o <svg> de uma caixa de ícone já marcada)? ignora,
       // pra não empilhar seleção. (querySelectorAll dá ordem de documento: pai antes do filho.)
       if (el.parentElement && el.parentElement.closest("[data-he]")) return;
@@ -4864,6 +4876,13 @@ async function saveGenerated() {
     showSaveBanner(r.folder);
   } catch (e) {
     if (e.status === 422 && e.data && e.data.governance) { $("#g-gov").innerHTML = govHtml(e.data.governance); toast("Bloqueado por regra de marca — corrija o conteúdo.", "error"); }
+    // Identificador já usado: o conteúdo gerado continua na tela, então basta trocar o nome e
+    // salvar de novo. Levamos o foco para o campo do identificador para deixar isso óbvio.
+    else if (e.status === 409 && e.code === "E_EXISTS") {
+      toast(e.message, "error");
+      const campo = $("#g-task") || $("#g-name") || $("#g-slug");
+      if (campo) { campo.focus(); if (campo.select) campo.select(); }
+    }
     else if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); }
     else toast(e.message, "error");
   } finally { hideBusy(); if (!saved) { btn.disabled = false; btn.textContent = "Salvar peça"; } }

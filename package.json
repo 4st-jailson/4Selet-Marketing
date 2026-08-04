@@ -15,13 +15,15 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@remotion/cli": "^4.0.469",
-    "@remotion/google-fonts": "^4.0.469",
+    "@remotion/cli": "^4.0.506",
+    "@remotion/google-fonts": "^4.0.506",
     "@tavily/core": "^0.7.6",
+    "bullmq": "^6.0.7",
+    "ioredis": "^6.0.0",
     "playwright": "^1.60.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "remotion": "^4.0.469"
+    "remotion": "^4.0.506"
   },
   "devDependencies": {
     "@types/react": "^19.2.15",
