@@ -21,6 +21,11 @@ function hashDirectory(dir, exclude) {
       if (ent.isDirectory()) { walk(full); continue; }
       const rel = path.relative(dir, full).replace(/\\/g, "/");
       if (excludeSet.has(rel)) continue;
+      // Sobra de escrita atômica (grava em .tmp e renomeia). Se o processo morrer nessa
+      // janela — justamente o caso que a escrita atômica existe para tratar — o .tmp fica
+      // na pasta e entraria no hash como arquivo "added", derrubando o gate R5 com
+      // E_HASH_MISMATCH e deixando a peça impublicável até alguém apagar na mão.
+      if (/\.tmp$/i.test(rel)) continue;
       out[rel] = hashFile(full);
     }
   }

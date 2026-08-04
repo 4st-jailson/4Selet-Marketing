@@ -2275,11 +2275,16 @@ function sanitizeArtHtml(html) {
     s = s.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");   // <script>...</script>
     s = s.replace(/<script\b[^>]*>/gi, "");                     // <script ...> solto
     s = s.replace(/<\/?(iframe|object|embed|base|form|meta|noscript|template|applet|svg:script)\b[^>]*>/gi, "");
-    // Handlers on*: o separador antes do atributo pode ser espaco OU "/" — `<img/onerror=x>` e
-    // HTML valido e escapava das regras antigas (que exigiam \s), sobrevivendo ao saneamento.
-    s = s.replace(/[\s/]on[a-z]+\s*=\s*"[^"]*"/gi, " ");        // onload="..."
-    s = s.replace(/[\s/]on[a-z]+\s*=\s*'[^']*'/gi, " ");        // onload='...'
-    s = s.replace(/[\s/]on[a-z]+\s*=\s*[^\s>]+/gi, " ");        // onload=x (sem aspas)
+    // Handlers on*: o separador antes do atributo pode ser espaco, "/" OU a ASPA que fecha o
+    // atributo anterior — `<img/onerror=x>` e `<img src="x"onerror="alert(1)">` sao os dois
+    // HTML valido. A regra antiga exigia [\s/] e deixava o segundo caso passar INTACTO, porque
+    // a regra de URL abaixo casa `src="x"` primeiro e devolve o trecho inteiro sem tocar.
+    // Confirmado disparando de verdade no Chromium antes do fix.
+    // O separador e CAPTURADO e devolvido: se ele for a aspa de fechamento do atributo
+    // anterior, engoli-la deixaria `src="x >` (aspa aberta) e quebraria a arte legitima.
+    s = s.replace(/([\s/"'])on[a-z]+\s*=\s*"[^"]*"/gi, "$1 ");  // onload="..."
+    s = s.replace(/([\s/"'])on[a-z]+\s*=\s*'[^']*'/gi, "$1 ");  // onload='...'
+    s = s.replace(/([\s/"'])on[a-z]+\s*=\s*[^\s>]+/gi, "$1 ");  // onload=x (sem aspas)
     // URLs perigosas — agora tambem sem aspas e com entidades decodificadas na checagem.
     s = s.replace(/(href|src|xlink:href|action|formaction)\s*=\s*(["'])([^"']*)\2/gi, (m, attr, q, val) => isDangerousUrl(val) ? (attr + "=" + q + "#" + q) : m);
     s = s.replace(/(href|src|xlink:href|action|formaction)\s*=\s*([^\s>"']+)/gi, (m, attr, val) => isDangerousUrl(val) ? (attr + '="#"') : m);

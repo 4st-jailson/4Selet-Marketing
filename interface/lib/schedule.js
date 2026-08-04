@@ -113,8 +113,17 @@ function startWorker(publishFn, isPublishedFn) {
       try {
         const r = await publishFn(it.folder, { kind: it.kind, caption: it.caption });
         update(it.id, { status: r && r.dry_run ? "simulado" : "published", post_id: (r && r.post_id) || null, published_at: new Date().toISOString() });
-        // registra no histórico de publicações (aba "Publicados") quando saiu de verdade
-        if (r && r.ok && !r.dry_run) { try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); } catch (e) { console.error("[schedule] post publicado mas falhou ao registrar no histórico:", it.folder, e && e.message); } }
+        if (r && r.ok && !r.dry_run) {
+          // MARCA A PEÇA como publicada — sem isto, o post agendado não deixa rastro no
+          // status.json e o guard de post duplicado (409 E_ALREADY_PUBLISHED na rota) NÃO
+          // dispara: um "Publicar agora" depois do agendado sairia como SEGUNDO post na conta
+          // real. A rota já fazia isto; o disparador do agendamento não fazia.
+          try { require("./content").setPublished(it.folder, { by: it.by, post_id: r.post_id }); }
+          catch (e) { console.error("[schedule] post publicado mas falhou ao marcar a peça:", it.folder, e && e.message); }
+          // registra no histórico de publicações (aba "Publicados") quando saiu de verdade
+          try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); }
+          catch (e) { console.error("[schedule] post publicado mas falhou ao registrar no histórico:", it.folder, e && e.message); }
+        }
       } catch (e) {
         update(it.id, { status: "failed", error: (e && e.message ? e.message : String(e)).slice(0, 300), failed_at: new Date().toISOString() });
       }
