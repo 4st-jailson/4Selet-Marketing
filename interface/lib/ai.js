@@ -76,6 +76,6 @@ function testKey(provider) { return adapterFor(provider).testKey(); }
 function maskKey(provider) { return adapterFor(provider).maskKey(); }
 
 module.exports = {
-  complete, providers, defaultProvider, setDefaultProvider,
+  complete, hasKey, providers, defaultProvider, setDefaultProvider,
   saveKey, saveModel, testKey,
 };

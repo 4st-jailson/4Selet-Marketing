@@ -116,6 +116,8 @@ const API = (() => {
     regenerateSlideMem: (payload) => req("POST", "/api/generate/slide-mem", payload || {}),
     save: (payload) => req("POST", "/api/generate/save", payload),
     assistant: (question, context) => req("POST", "/api/generate/assistant", { question, context }),
+    // le o tema escrito em linguagem natural e diz o que entendeu (NAO gera nada)
+    interpretBrief: (texto, provider) => req("POST", "/api/generate/interpret", { texto, provider }),
     // auth
     me: () => req("GET", "/api/auth/me"),
     login: (username, password) => req("POST", "/api/auth/login", { username, password }),

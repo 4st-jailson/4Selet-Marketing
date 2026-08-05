@@ -3830,7 +3830,7 @@ async function viewCreate(arg, query) {
 
         <div class="form-section">
           <div class="form-section-head"><span class="fs-num">1</span><h4>Sobre a peça</h4></div>
-          <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: Anunciar a Taxa Zero para produtores que faturam 50k+ e estão insatisfeitos com prazos" aria-describedby="e-brief"></textarea><div class="hint" style="margin-top:4px">Descreva em uma frase o que você quer comunicar — é daqui que a IA parte.</div><div class="field-error" id="e-brief" role="alert"></div></div>
+          <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: carrossel sobre a Taxa Zero para produtores que faturam 50k+, tom editorial, com chamada para falar com o time" aria-describedby="e-brief"></textarea><div class="hint" style="margin-top:4px">Descreva a peça do seu jeito: assunto, formato, para quem, se quer chamada. Eu leio e preencho o que der.</div><div class="field-error" id="e-brief" role="alert"></div><div class="leitura" id="g-leitura" style="display:none"></div></div>
           <div class="field"><label>Título da peça <span class="hint">(nome só pra você achar depois — sugerimos a partir do tema)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
           <div class="field"><label>Assunto da peça <span class="hint">(o tema editorial — ex.: Taxa Zero, Educacional, Prova. Deixe em branco que a IA decide)</span></label>
             <select id="g-pillar">${pillarOpts}</select>
@@ -4192,10 +4192,122 @@ function ctaDirective() {
   const inp = $("#g-cta"); if (!inp) return undefined;
   return inp.value.trim() || undefined;
 }
+// ===== Ler o tema e preencher o que dá (o "prompt principal") =====
+//
+// Você escreve a peça em uma frase e o sistema lê: que formato é, qual o assunto e se você pediu
+// alguma chamada. Não há campo novo, nem pergunta de "manual ou automático" — o campo de tema
+// JÁ é o prompt. Três regras que vêm das suas decisões:
+//   - nunca sobrescreve o que você digitou (14/07): campo que você mexeu vira sugestão, não troca;
+//   - a faixa mostra o que foi entendido, item a item, com desfazer individual (sem "aceitar tudo");
+//   - se o FORMATO mudar, a geração para e espera você confirmar — trocar o formato troca o
+//     modelo, o renderizador e o editor, e não dá para corrigir na tela de resultado sem gerar
+//     de novo. Nos outros casos não custa nenhum clique a mais.
+let ultimoTemaLido = "";      // evita reinterpretar o mesmo texto
+let leituraAplicada = null;   // { campo: {antes, depois, rotulo} } para o desfazer
+
+const ROTULO_CAMPO = { content_type: "Formato", pillar: "Assunto", cta: "Chamada" };
+function nomeDoValor(campo, valor) {
+  if (campo === "content_type") { const t = metaType(valor); return t ? t.label : valor; }
+  if (campo === "pillar") { const p = (State.meta.content_pillars || []).find((x) => x.id === valor); return p ? p.label : valor; }
+  return valor;
+}
+// Escreve no campo SEM disparar os eventos que ligariam as travas de "o usuário mexeu aqui".
+// Disparar `change` no pilar marcaria pillarTouched e mataria o "Pilar sugerido pela campanha",
+// que está no ar. Então atualizamos o valor e só o que depende dele.
+function aplicaCampoLido(campo, valor) {
+  if (campo === "content_type") {
+    const card = document.querySelector('#g-type-pick [data-type="' + valor + '"]');
+    if (card) card.click();           // usa o MESMO caminho do clique real (plataformas, seções, prévia)
+    return !!card;
+  }
+  if (campo === "pillar") {
+    const sel = $("#g-pillar"); if (!sel) return false;
+    sel.value = valor;
+    const d = $("#g-pillar-desc"); const p = (State.meta.content_pillars || []).find((x) => x.id === valor);
+    if (d && p) d.textContent = p.description;
+    return true;
+  }
+  if (campo === "cta") { const el = $("#g-cta"); if (!el) return false; el.value = valor; return true; }
+  return false;
+}
+function pintaFaixaLeitura(itens, faltou) {
+  const alvo = $("#g-leitura"); if (!alvo) return;
+  if (!itens.length && !(faltou || []).length) { alvo.innerHTML = ""; alvo.style.display = "none"; return; }
+  const chip = (i) => `<span class="lt-chip${i.sugerido ? " sug" : ""}">
+      <span class="lt-campo">${esc(i.rotulo)}</span>
+      <span class="lt-valor">${esc(i.texto)}</span>
+      ${i.sugerido
+        ? `<button type="button" class="lt-btn" data-usar="${esc(i.campo)}" title="Usar a sugestão">usar</button>`
+        : `<button type="button" class="lt-btn" data-desfazer="${esc(i.campo)}" title="Desfazer">desfazer</button>`}
+    </span>`;
+  alvo.style.display = "";
+  alvo.innerHTML = `<div class="lt-tit">${itens.some((i) => i.sugerido) ? "Li o seu texto" : "Entendi assim"}</div>
+    <div class="lt-chips">${itens.map(chip).join("")}</div>
+    ${(faltou || []).length ? `<div class="hint">Não deu para saber pelo texto: ${esc(faltou.join(", "))}. Se importar, preencha abaixo.</div>` : ""}`;
+  alvo.querySelectorAll("[data-desfazer]").forEach((b) => { b.onclick = () => desfazLeitura(b.dataset.desfazer); });
+  alvo.querySelectorAll("[data-usar]").forEach((b) => { b.onclick = () => {
+    const c = b.dataset.usar, it = (leituraAplicada && leituraAplicada[c]);
+    if (!it) return;
+    aplicaCampoLido(c, it.depois);
+    it.sugerido = false;
+    pintaFaixaLeitura(Object.values(leituraAplicada), leituraAplicada.__faltou || []);
+  }; });
+}
+function desfazLeitura(campo) {
+  const it = leituraAplicada && leituraAplicada[campo];
+  if (!it) return;
+  aplicaCampoLido(campo, it.antes || "");
+  delete leituraAplicada[campo];
+  pintaFaixaLeitura(Object.values(leituraAplicada).filter((x) => x && x.campo), leituraAplicada.__faltou || []);
+  toast(ROTULO_CAMPO[campo] + " voltou como estava.", "ok");
+}
+
+// Lê o tema e aplica. Devolve `true` se pode seguir para a geração.
+async function leTemaEAplica(brief) {
+  if (!brief || brief === ultimoTemaLido) return true;
+  let r;
+  try { r = await API.interpretBrief(brief, ($("#g-provider") && $("#g-provider").value) || undefined); }
+  catch (e) { return true; }                       // ler é ajuda, não pré-requisito: falhou, segue
+  ultimoTemaLido = brief;
+  if (!r || !r.disponivel) return true;
+
+  const campos = r.campos || {};
+  leituraAplicada = { __faltou: r.faltou || [] };
+  const itens = [];
+  let trocouFormato = false;
+
+  for (const campo of ["content_type", "pillar", "cta"]) {
+    const info = campos[campo]; if (!info) continue;
+    const valor = info.sem_cta ? "" : info.valor;
+    const atual = campo === "content_type" ? $("#g-type").value : (campo === "pillar" ? ($("#g-pillar") || {}).value : ($("#g-cta") || {}).value);
+    if (String(atual || "") === String(valor || "")) continue;   // já está assim: nada a dizer
+
+    // Campo que a pessoa mexeu à mão NÃO é sobrescrito — vira sugestão (decisão de 14/07).
+    const mexido = campo === "pillar" ? !!atual : !!atual && campo !== "content_type";
+    const texto = info.sem_cta ? "sem chamada" : nomeDoValor(campo, valor);
+    if (mexido) {
+      leituraAplicada[campo] = { campo, antes: atual, depois: valor, rotulo: ROTULO_CAMPO[campo], texto, sugerido: true };
+    } else {
+      if (!aplicaCampoLido(campo, valor)) continue;
+      if (campo === "content_type") trocouFormato = true;
+      leituraAplicada[campo] = { campo, antes: atual, depois: valor, rotulo: ROTULO_CAMPO[campo], texto, sugerido: false };
+    }
+    itens.push(leituraAplicada[campo]);
+  }
+  pintaFaixaLeitura(itens, r.faltou || []);
+  // Formato trocado interrompe UMA vez: é a única mudança que a tela de resultado não conserta.
+  if (trocouFormato) {
+    toast("Entendi que é " + nomeDoValor("content_type", campos.content_type.valor) + ". Confira e clique em Gerar de novo.", "ok");
+    return false;
+  }
+  return true;
+}
+
 async function runGenerate() {
   const brief = $("#g-brief").value.trim();
   $("#e-brief").textContent = ""; $("#g-brief").classList.remove("invalid"); $("#g-brief").removeAttribute("aria-invalid");
   if (brief.length < 8) { $("#g-brief").classList.add("invalid"); $("#g-brief").setAttribute("aria-invalid", "true"); $("#e-brief").textContent = "Descreva o tema (mín. 8 caracteres)."; return; }
+  if (!(await leTemaEAplica(brief))) return;
   const payload = {
     content_type: $("#g-type").value,
     provider: ($("#g-provider") && $("#g-provider").value) || undefined,

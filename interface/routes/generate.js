@@ -11,7 +11,7 @@ const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
 const researchLib = require("../lib/research");
 const render = require("../lib/render");
-const { contentTypeById } = require("../lib/config");
+const { contentTypeById, pillarById, APPROVED_CTAS } = require("../lib/config");
 const { runBrandGovernance, validateContentRequest } = require("../lib/validation");
 
 // Extrai o primeiro objeto JSON de um texto (tolera code fences / texto ao redor).
@@ -215,6 +215,56 @@ router.post("/preview", async (req, res, next) => {
     });
     if (!out.ok) return res.status(422).json(out);
     res.json(out);
+  } catch (e) { next(e); }
+});
+
+// POST /api/generate/interpret — LÊ o tema escrito em linguagem natural e diz o que já está
+// dito ali: formato, assunto (pilar) e chamada. NÃO gera conteúdo e NÃO salva nada.
+//
+// Três decisões que valem registro:
+// 1) Só estes três campos. Todo o resto do texto (tom, o que destacar, clima) já vai LITERAL
+//    para o modelo na hora de gerar — extrair e reinjetar no mesmo prompt não muda a saída.
+//    Estes três são os únicos que trocam caminho de código: o formato troca schema e renderer,
+//    o pilar injeta o ângulo temático, e a chamada inverte uma diretiva dura.
+// 2) `key_offer` está deliberadamente FORA. É o único campo que vira número carimbado na arte
+//    e era o vetor de invenção da versão anterior deste recurso.
+// 3) Sem chave de IA não há interpretação. A versão anterior tinha um adivinhador por padrões
+//    de texto que lia o "x" de "1080 x 1350" como a rede X e virava "Calcular minha economia"
+//    sempre que a palavra "economia" aparecia. Chutar é pior do que não responder.
+const LIMITE_TEXTO = 4000;
+router.post("/interpret", async (req, res, next) => {
+  try {
+    const texto = String((req.body && req.body.texto) || "").trim();
+    if (texto.length < 12) return res.status(400).json({ error: "Escreva um pouco mais para eu conseguir entender a peça.", code: "E_TEXTO_CURTO" });
+    if (texto.length > LIMITE_TEXTO) return res.status(413).json({ error: "Texto muito longo (máximo " + LIMITE_TEXTO + " caracteres).", code: "E_TEXTO_LONGO" });
+    if (!ai.hasKey || !ai.hasKey()) {
+      return res.json({ disponivel: false, motivo: "Sem chave de IA configurada — não dá para interpretar o texto. Preencha os campos manualmente.", campos: {} });
+    }
+
+    const result = await ai.complete({
+      system: prompts.interpretSystem(),
+      prompt: prompts.interpretPrompt({ texto }),
+      maxTokens: 700,
+      provider: (req.body && req.body.provider),
+      simulate: () => "{}",
+    });
+    const cru = extractJson(result.text) || {};
+
+    // Só entra o que existe nas taxonomias reais. O modelo não cria valor novo aqui.
+    const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+    const tipoOk = contentTypeById(cru.content_type) ? String(cru.content_type) : "";
+    const pilarOk = pillarById(cru.pillar) ? String(cru.pillar) : "";
+    const ctaOk = (APPROVED_CTAS.find((c) => norm(c) === norm(cru.cta)) || "");
+    const conf = (k) => (["alta", "media", "baixa"].indexOf(String((cru.confianca || {})[k])) >= 0 ? String(cru.confianca[k]) : "media");
+
+    const campos = {};
+    if (tipoOk) campos.content_type = { valor: tipoOk, confianca: conf("content_type"), porque: String((cru.porque || {}).content_type || "").slice(0, 200) };
+    if (pilarOk) campos.pillar = { valor: pilarOk, confianca: conf("pillar"), porque: String((cru.porque || {}).pillar || "").slice(0, 200) };
+    if (ctaOk) campos.cta = { valor: ctaOk, confianca: conf("cta"), porque: String((cru.porque || {}).cta || "").slice(0, 200) };
+    else if (cru.cta_ausente === true) campos.cta = { valor: "", sem_cta: true, confianca: conf("cta"), porque: String((cru.porque || {}).cta || "").slice(0, 200) };
+
+    const faltou = Array.isArray(cru.faltou) ? cru.faltou.map((x) => String(x).slice(0, 60)).slice(0, 6) : [];
+    res.json({ disponivel: true, simulated: !!result.simulated, model: result.model, provider: result.provider, campos, faltou });
   } catch (e) { next(e); }
 });
 

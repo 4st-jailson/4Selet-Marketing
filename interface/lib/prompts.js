@@ -3,7 +3,7 @@
 // de saida (estrutura padrao) que o back valida.
 "use strict";
 const { brandContext } = require("./knowledge");
-const { contentTypeById, pillarById, HASHTAG_RULES } = require("./config");
+const { contentTypeById, pillarById, HASHTAG_RULES, CONTENT_TYPES, CONTENT_PILLARS, APPROVED_CTAS } = require("./config");
 
 const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 - Paleta azul oficial; sem neon; NUNCA preto puro (#000000 -> use Selet Darker #07212B). Branco puro (#FFFFFF) SO como TEXTO sobre fundo Navy/Darker (headline, CTA) e dentro de mockup (tela do dispositivo, card do veiculo) — nunca como fundo da peca, card de conteudo ou area chapada de marca.
@@ -210,6 +210,67 @@ function singleSlidePrompt(req) {
 }
 
 // Assistente de ajuda (como usar a ferramenta + sugestoes de marca).
+// ===== Interpretacao do tema (o "prompt principal") =====
+//
+// O interpretador NAO escreve copy: ele so LE o texto da pessoa e diz qual formato, qual pilar
+// e qual chamada estao ali. Por isso NAO pode reusar assistantSystem()/GOVERNANCE: aquele bloco
+// carrega a mecanica da campanha ("0% por 3 meses… R$ 1,99… 95%"), e foi exatamente por ver
+// numero pronto que a versao anterior deste recurso preenchia oferta que a pessoa nunca
+// escreveu. Aqui o modelo recebe SO taxonomia — nenhum numero da marca.
+function interpretSystem() {
+  return [
+    "Voce LE um pedido de peca escrito em linguagem natural e identifica o que ja esta dito nele.",
+    "Voce NAO escreve conteudo, NAO sugere texto e NAO completa o que faltou.",
+    "",
+    "REGRAS DURAS:",
+    "- Responda APENAS com JSON valido, sem texto fora do JSON.",
+    "- So preencha um campo se a resposta estiver EXPLICITA ou claramente implicada no texto.",
+    "- Na duvida, deixe o campo vazio e liste em `faltou`. Campo vazio e a resposta certa quando o texto nao diz.",
+    "- NUNCA invente numero, oferta, prazo, percentual ou nome de campanha. Se a pessoa nao escreveu, nao existe.",
+    "- Escolha SEMPRE um valor da lista fechada correspondente. Nunca crie valor novo.",
+    "- Portugues do Brasil.",
+  ].join("\n");
+}
+
+// Monta o pedido de interpretacao. `req`: { texto }.
+function interpretPrompt(req) {
+  // As descricoes dos pilares (config.js) trazem a mecanica da campanha — "0% por 3 meses,
+  // R$ 1,99/transacao, PIX D+10" no taxa_zero e "95% de aprovacao" no prova_plataforma. Mandar
+  // isso para o interpretador seria entregar de bandeja o numero que ele nao pode inventar: foi
+  // assim que a versao anterior preencheu oferta que ninguem escreveu. Aqui vai so o ROTULO.
+  const semNumero = (s) => String(s || "").replace(/[\d]+([.,]\d+)?\s*%|R\$\s*[\d.,]+(\s*mil)?|D\s*\+\s*\d+|\b\d+\s*(meses|mes|mês|dias)\b/gi, "").replace(/\s{2,}/g, " ").trim();
+  const tipos = CONTENT_TYPES.map((t) => "  " + t.id + " = " + t.label + " (" + semNumero(t.description) + ")").join("\n");
+  const pilares = CONTENT_PILLARS.map((p) => "  " + p.id + " = " + p.label).join("\n");
+  const ctas = APPROVED_CTAS.filter((c) => /[áâãàéêíóôõúç]/i.test(c) || !APPROVED_CTAS.includes(c + " "))
+    .filter((c, i, a) => a.indexOf(c) === i);
+  return [
+    "TEXTO ESCRITO PELA PESSOA:",
+    String(req.texto || "").slice(0, 4000),
+    "",
+    "FORMATOS possiveis (escolha 1 ou deixe vazio):",
+    tipos,
+    "",
+    "ASSUNTOS possiveis (escolha 1 ou deixe vazio):",
+    pilares,
+    "",
+    "CHAMADAS possiveis (escolha 1 EXATAMENTE como escrita, ou deixe vazio):",
+    ctas.map((c) => "  " + c).join("\n"),
+    "",
+    "Se o texto disser que NAO quer chamada (ex.: 'sem CTA', 'sem chamada'), devolva cta_ausente = true.",
+    "",
+    "FORMATO DE SAIDA — responda APENAS com este JSON:",
+    `{
+  "content_type": "id do formato ou \\"\\"",
+  "pillar": "id do assunto ou \\"\\"",
+  "cta": "chamada exata ou \\"\\"",
+  "cta_ausente": false,
+  "confianca": { "content_type": "alta|media|baixa", "pillar": "alta|media|baixa", "cta": "alta|media|baixa" },
+  "porque": { "content_type": "o trecho do texto que sustenta", "pillar": "o trecho", "cta": "o trecho" },
+  "faltou": ["nome do campo que o texto nao deixa claro"]
+}`,
+  ].join("\n");
+}
+
 function assistantSystem() {
   return [
     "Voce e o assistente do Painel 4Selet — ajuda a equipe de marketing a usar a ferramenta e a criar melhores conteudos para a marca 4Selet.",
@@ -425,4 +486,5 @@ function simulate(req) {
   }
 }
 
-module.exports = { systemPrompt, generationPrompt, refinementPrompt, singleSlidePrompt, assistantSystem, simulate };
+module.exports = {
+  interpretSystem, interpretPrompt, systemPrompt, generationPrompt, refinementPrompt, singleSlidePrompt, assistantSystem, simulate };

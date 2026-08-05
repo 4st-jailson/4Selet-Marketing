@@ -98,6 +98,9 @@ app.get("/api/meta", (req, res) => {
 // o uso normal de uma equipe pequena: quem trabalha nunca esbarra.
 const { limitar } = require("./lib/ratelimit");
 const limiteIA = limitar({ nome: "ia", max: 30, janelaMs: 5 * 60 * 1000, mensagem: "Muitas gerações seguidas." });
+// Interpretar o tema e uma chamada curta e barata, disparada a cada peca — se dividisse o
+// balde com a geracao, escrever o tema comeria a cota de gerar. Balde proprio, mais folgado.
+const limiteInterpret = limitar({ nome: "interpret", max: 60, janelaMs: 5 * 60 * 1000, mensagem: "Muitas interpretações seguidas — aguarde alguns instantes." });
 const limiteRender = limitar({ nome: "render", max: 40, janelaMs: 5 * 60 * 1000, mensagem: "Muitos pedidos de arte seguidos." });
 const limitePexels = limitar({ nome: "pexels", max: 60, janelaMs: 5 * 60 * 1000, mensagem: "Muitas buscas de imagem seguidas." });
 
@@ -113,6 +116,7 @@ app.use("/api/content", require("./routes/content"));
 // revisão não gastam IA — se entrassem na mesma cota, alguém que gerasse muito ficaria sem
 // conseguir gravar o trabalho, que é exatamente o pior desfecho possível.
 app.post(["/api/generate", "/api/generate/refine", "/api/generate/assistant", "/api/generate/slide", "/api/generate/slide-mem"], limiteIA);
+app.post("/api/generate/interpret", limiteInterpret);
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/pexels", limitePexels, require("./routes/pexels"));
