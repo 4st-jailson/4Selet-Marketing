@@ -1488,10 +1488,46 @@ function writeRenderPref(loc, patch) {
   } catch (e) {}
 }
 // Decide o template efetivo: opcao da request > preferencia salva > editorial.
-function pickTemplate(loc, requested) {
-  const id = (requested && TEMPLATES[requested]) ? requested
-    : (readRenderPref(loc) || "editorial");
-  if (requested && TEMPLATES[requested]) writeRenderPref(loc, { template: requested });
+// Rotacao deterministica do estilo da arte. A tela oferece "Automático (varia por peça)" desde
+// sempre, e ate aqui isso era falso: sem preferencia salva, TODA peca caia em "editorial" — medido,
+// 24 de 43 pecas do acervo. Pior, a conta que varia existia no front e rodava so na PREVIA, entao a
+// arte aprovada na previa nao era a arte salva.
+//
+// A decisao vem para o servidor e passa a ser uma so. Ordem:
+//   1. o que a pessoa escolheu na tela (sempre vence);
+//   2. o que ja foi gravado no render.json — e por isso re-renderizar NUNCA muda a cara da peca;
+//   3. "photo", se a peca tem foto (o unico template que desenha a imagem);
+//   4. hash do nome da pasta sobre os demais.
+//
+// O `layout_type` que o modelo emite NAO entra na cascata de proposito: medido em 9 geracoes reais,
+// ele escolheu editorial 5 e bold 4, e nunca split ou photo. Como editorial e bold sao o mesmo
+// desenho com alinhamento diferente, obedecer o modelo daria cara-ou-coroa entre dois irmaos em vez
+// de rotacao. O hash cobre os tres.
+const TEMPLATES_ROTACAO = ["editorial", "bold", "split"];
+// FNV-1a com finalizador de avalanche. O hash antigo (h*31+c) NÃO servia para módulo 3: como 31 e 1
+// mod 3, o resto virava praticamente a soma dos caracteres, então nomes parecidos caíam sempre no
+// mesmo estilo e os nomes reais do acervo distribuíam 5-1-2 em vez de perto de 3-3-2. Medido.
+// Se mexer aqui, mexer TAMBÉM em autoVariant (public/js/app.js) — as duas contas têm que bater,
+// senão o rádio da tela mostra um estilo e a arte sai com outro.
+function hashDoNome(s) {
+  s = String(s || "");
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+function pickTemplate(loc, requested, extra) {
+  const pedido = (requested && TEMPLATES[requested]) ? requested : null;
+  let id = pedido || readRenderPref(loc);
+  if (!id) {
+    id = (extra && extra.temFoto && TEMPLATES.photo)
+      ? "photo"
+      : TEMPLATES_ROTACAO[hashDoNome(path.basename(loc.path)) % TEMPLATES_ROTACAO.length];
+    writeRenderPref(loc, { template: id });   // grava na PRIMEIRA vez: a peça não muda de cara depois
+  }
+  if (pedido) writeRenderPref(loc, { template: pedido });
   return { id, build: resolveTemplate(id) };
 }
 // Remove uma chave do render.json (usado pra "voltar ao padrão do estilo").
@@ -1893,10 +1929,12 @@ function slideArchetype(slide, i, total) {
 // ---- Renders por tipo -----------------------------------------------------
 async function renderImage(folder, opts) {
   const loc = requireActive(folder);
-  const tpl = pickTemplate(loc, opts && opts.template);
+  const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
+  // A peça tem foto? Então "photo" é o único template que a desenha — os outros três nem recebem
+  // o parâmetro `image` na assinatura e descartariam a imagem em silêncio.
+  const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!((opts && opts.image) || concept.image) });
   const logoV = pickLogo(loc, opts && opts.logo);
   const wmV = pickWatermark(loc, opts && opts.watermark);
-  const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
   const htmlPath = path.join(loc.path, "ads", "ad.html");
   const outPng = path.join(loc.path, "ads", "ad.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });

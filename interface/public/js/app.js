@@ -1710,20 +1710,31 @@ function renderPanel(folder, task) {
 }
 
 // Templates visuais disponiveis para pecas estaticas (image/feed/carousel).
+// "Foto" faltava aqui: numa peça salva com esse estilo, nenhum rádio ficava marcado e qualquer
+// clique trocava o estilo sem caminho de volta.
 const VISUAL_TEMPLATES = [
   { id: "editorial", name: "Editorial", desc: "Gradiente azul, dots, headline à esquerda" },
   { id: "bold", name: "Destaque", desc: "Fundo escuro centralizado, número em evidência" },
   { id: "split", name: "Dividido", desc: "Faixa clara (logo) + faixa escura (título)" },
+  { id: "photo", name: "Foto", desc: "Imagem de fundo com véu de leitura e texto por cima" },
 ];
 
-// #8 — variação visual automática: quando a peça ainda não tem template salvo,
-// escolhe uma variante por hash do slug (rotação determinística) para evitar que
-// todas as gerações fiquem visualmente idênticas. O usuário ainda pode trocar.
+// A rotação do estilo MUDOU DE LADO: hoje ela mora no servidor (pickTemplate, lib/render.js), que
+// grava a escolha no render.json na primeira renderização. Aqui ficou só o espelho para a tela
+// conseguir marcar o rádio certo ANTES de existir render.json — a conta é a mesma, e tem que
+// continuar sendo, senão o rádio mostra um estilo e a arte sai com outro.
+// Enquanto isso não era assim, a prévia usava esta conta e o salvamento mandava "", então a peça
+// aprovada na prévia não era a peça que ficava salva.
+// ESPELHO EXATO de hashDoNome/TEMPLATES_ROTACAO em lib/render.js. Mexeu lá, mexe aqui.
+const TEMPLATES_ROTACAO = ["editorial", "bold", "split"];
 function autoVariant(folder) {
   const s = String(folder || "");
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return VISUAL_TEMPLATES[h % VISUAL_TEMPLATES.length].id;
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
+  h ^= h >>> 16;
+  return TEMPLATES_ROTACAO[(h >>> 0) % TEMPLATES_ROTACAO.length];
 }
 
 function templatePicker(task) {
@@ -5235,6 +5246,9 @@ async function saveGenerated() {
     if (autoRenders(ct.kind)) {
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando a arte…'; showBusy("Gerando a arte…");
       try {
+        // Vazio de propósito quando ninguém escolheu: quem decide o "Automático" é o servidor, que
+        // grava a escolha. Antes o front mandava "" e o servidor caía em editorial — e a prévia,
+        // que usava a rotação, mostrava outra coisa. Prévia e peça salva passam a bater.
         const tpl = (LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
         const lg = (LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
         const wmk = (LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";
