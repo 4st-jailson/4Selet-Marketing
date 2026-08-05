@@ -41,19 +41,44 @@ function paletteWarn(gov, instruction) {
 }
 
 // Junta os campos textuais de um conteudo estruturado para rodar governance.
+// Junta TUDO que vai ser impresso na peça, para a governança de marca inspecionar.
+//
+// Ponto cego que isto corrige: antes o carrossel entregava só `title` e `body` de cada slide.
+// Só que o número da peça quase nunca mora ali — ele mora no `stats` (o layout stat_grid, que é
+// justamente o dos números: "95%", "R$ 1,99", "0%"), nos `items` da lista e nos `flow` das
+// etapas. O próprio schema do prompt pede `"stats": [{ "value": "95%" }]`. Resultado: um número
+// errado passava pela checagem de geração, passava pelo bloqueio do salvamento (o que devolve
+// 422) e chegava no PNG sem nunca ter sido olhado. A checagem tem que ver o que é RENDERIZADO.
 function textForGovernance(contentTypeId, parsed) {
   if (!parsed) return "";
-  if (typeof parsed.body === "string") {
-    return parsed.body + "\n" + (Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : "") + "\n" + (parsed.cta || "");
-  }
   const parts = [];
-  for (const k of ["headline", "subtext", "concept", "hook", "caption", "cta"]) {
-    if (parsed[k]) parts.push(parsed[k]);
+  const push = (v) => { if (typeof v === "string" && v.trim()) parts.push(v); };
+  const lista = (v) => { if (Array.isArray(v)) v.forEach((x) => push(typeof x === "string" ? x : "")); };
+
+  if (typeof parsed.body === "string") {
+    push(parsed.body);
+    if (Array.isArray(parsed.hashtags)) push(parsed.hashtags.join(" "));
+    push(parsed.cta);
+    return parts.join("\n");
   }
-  if (Array.isArray(parsed.slides)) parsed.slides.forEach((s) => parts.push((s.title || "") + " " + (s.body || "")));
-  if (Array.isArray(parsed.scenes)) parsed.scenes.forEach((s) => parts.push(s.text || ""));
-  if (Array.isArray(parsed.hashtags)) parts.push(parsed.hashtags.join(" "));
+  for (const k of ["headline", "subtext", "concept", "hook", "caption", "cta", "eyebrow", "badge", "notes"]) push(parsed[k]);
+  if (Array.isArray(parsed.slides)) {
+    parsed.slides.forEach((s) => {
+      if (!s) return;
+      push(s.title); push(s.body); push(s.note); push(s.eyebrow); push(s.watermark);
+      lista(s.items);
+      if (Array.isArray(s.stats)) s.stats.forEach((e) => { if (e) { push(e.value); push(e.label); } });
+      if (Array.isArray(s.flow)) s.flow.forEach((e) => { if (e) { push(e.label); push(e.sub); } });
+    });
+  }
+  if (Array.isArray(parsed.scenes)) parsed.scenes.forEach((s) => { if (s) { push(s.text); push(s.subtitle); } });
+  if (Array.isArray(parsed.hashtags)) push(parsed.hashtags.join(" "));
   return parts.join("\n");
+}
+
+// Mesma ideia para UM slide (usado ao regerar um slide isolado): tudo que aparece nele.
+function textForGovernanceSlide(slide) {
+  return textForGovernance("instagram_carousel", { slides: [slide || {}] });
 }
 
 // Formata o conteudo final que sera gravado no arquivo da task.
@@ -323,7 +348,7 @@ router.post("/slide", async (req, res, next) => {
     if (!newSlide.image && slides[index] && slides[index].image) newSlide.image = slides[index].image;
 
     // governança sobre o texto do slide novo
-    const gov = runBrandGovernance((newSlide.title || "") + "\n" + (newSlide.body || ""), { type: "instagram_carousel" });
+    const gov = runBrandGovernance(textForGovernanceSlide(newSlide), { type: "instagram_carousel" });
     if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
 
     paletteWarn(gov, body.instruction); // alerta de marca se pediram cor fora da paleta (branco puro/neon)
@@ -372,7 +397,7 @@ router.post("/slide-mem", async (req, res, next) => {
     // preserva a foto de fundo do slide se a IA não devolver uma
     if (!newSlide.image && slides[index] && slides[index].image) newSlide.image = slides[index].image;
 
-    const gov = runBrandGovernance((newSlide.title || "") + "\n" + (newSlide.body || ""), { type: "instagram_carousel" });
+    const gov = runBrandGovernance(textForGovernanceSlide(newSlide), { type: "instagram_carousel" });
     if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
     paletteWarn(gov, body.instruction);
     // MERGE só com instrução pontual (preserva omitidos); sem instrução = versão nova direta.

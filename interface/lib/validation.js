@@ -90,6 +90,21 @@ function validateContentRequest(obj) {
 
 // ---- Brand governance sobre texto gerado/editado -------------------------
 // Retorna { errors[], warnings[] }. errors bloqueiam aprovacao; warnings sinalizam.
+// Mecanica oficial da campanha, com o padrao que identifica a peca DECLARANDO cada numero.
+// Fonte: knowledge/product_campaign.md secao 3 (e o bloco GOVERNANCE de lib/prompts.js).
+// Cada regra e deliberadamente estreita — precisa do contexto ao redor — porque o objetivo e
+// pegar a contradicao, nao qualquer digito que apareca no texto.
+const NUMEROS_OFICIAIS = [
+  { oq: "a duracao da Taxa Zero", oficial: 3,
+    re: /(?:0\s*%|taxa zero)[^.!?\n]{0,70}?\b(\d{1,2})\s*(?:meses|mes|mês)\b/i },
+  { oq: "o teto de vendas da Taxa Zero", oficial: 300,
+    re: /(?:0\s*%|taxa zero)[^.!?\n]{0,70}?\bR\$\s*(\d{2,4})\s*mil\b/i },
+  { oq: "o custo fixo por transacao", oficial: 1.99,
+    re: /R\$\s*(\d{1,2}[,.]\d{2})\s*(?:fixos?\s*)?(?:por|\/)\s*transa/i },
+  { oq: "o prazo do PIX", oficial: 10, re: /\bPIX\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
+  { oq: "o prazo do cartao", oficial: 30, re: /\bcart[ãa]o\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
+];
+
 function runBrandGovernance(text, opts) {
   opts = opts || {};
   const type = opts.type || "";
@@ -107,6 +122,24 @@ function runBrandGovernance(text, opts) {
   // 2) Emojis banidos (hype) (ERRO)
   for (const e of BANNED_EMOJIS) {
     if (String(text).includes(e)) errors.push("usa emoji banido (hype): " + e);
+  }
+
+  // 2.5) Numeros da campanha CONTRADITORIOS (ERRO)
+  //
+  // Numero errado sobre a propria oferta e o pior defeito possivel: vira alegacao falsa numa
+  // peca publicada, e ninguem percebe olhando a arte — "0% por 6 meses" parece tao plausivel
+  // quanto "0% por 3 meses". As regras abaixo so disparam quando o texto esta DECLARANDO a
+  // mecanica da campanha, para nao atropelar copy legitima: "taxa de mercado em torno de 7,9%"
+  // e "seu cartao ta aprovando 78% em vez de 95%" continuam passando.
+  for (const { re, oficial, oq } of NUMEROS_OFICIAIS) {
+    let m;
+    const rex = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+    while ((m = rex.exec(String(text))) !== null) {
+      const achado = String(m[m.length - 1]).replace(",", ".");
+      if (parseFloat(achado) !== oficial) {
+        errors.push(oq + ' esta errado: a peca diz "' + m[0].trim() + '", e o oficial e ' + oficial + ".");
+      }
+    }
   }
 
   // 3) CTAs de urgencia fake / proibidos (AVISO)

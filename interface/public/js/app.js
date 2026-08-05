@@ -918,6 +918,17 @@ function suggestTitleFromBrief(brief) {
   let s = String(brief || "").trim();
   if (!s) return "";
   s = s.split(/[.!?\n]/)[0].trim();
+  // Tira o PEDIDO e deixa o ASSUNTO. Quem escreve o tema com naturalidade começa dizendo o que
+  // quer ("Quero um carrossel para o Instagram sobre a Taxa Zero...") — e isso virava o título
+  // da peça E o nome da pasta em disco, que ficava `quero_um_carrossel_para_o_instagram_sobr`.
+  // O tema de verdade é o que vem depois de "sobre" / "a respeito de" / "falando de".
+  const pedido = /^(?:eu\s+)?(?:quero|queria|gostaria(?:\s+de)?|preciso(?:\s+de)?|me\s+(?:faz|faça)|faz|faça|fazer|montar|monta|elaborar|elabora|desenvolver|desenvolve)\b/i;
+  if (pedido.test(s)) {
+    const m = s.match(/\b(?:sobre|a\s+respeito\s+de|falando\s+(?:de|sobre)|que\s+fale\s+(?:de|sobre)|abordando|tratando\s+de)\s+(.+)$/i);
+    if (m && m[1] && m[1].trim().length >= 8) s = m[1].trim();
+    else s = s.replace(pedido, "").replace(/^\s*(?:um|uma|o|a|de|do|da)\s+/i, "").trim();
+  }
+  if (!s) return "";
   // Remove o verbo imperativo inicial + artigo/preposição. O artigo exige espaço
   // depois (e vem do mais longo p/ o mais curto) para NÃO comer o "o" de "os" etc.
   s = s.replace(/^(anunciar|divulgar|comunicar|promover|apresentar|mostrar|explicar|ensinar|criar|fazer|gerar|postar|publicar|destacar|refor[cç]ar|lembrar|avisar(?:\s+sobre)?|falar\s+(?:sobre|de))\s+(?:(?:as|os|uma|um|sobre|da|do|de|a|o)\s+)?/i, "");
@@ -4059,7 +4070,10 @@ async function viewCreate(arg, query) {
   });
   // Buscar foto de banco (Pexels) para a arte "Foto": abre o modal, baixa SÓ a escolhida pro acervo e a seleciona.
   if ($("#g-photo-search")) $("#g-photo-search").onclick = async () => {
-    const seed = (($("#g-brief") && $("#g-brief").value) || ($("#g-title") && $("#g-title").value) || "").trim().slice(0, 60);
+    // Semente da busca de imagem: o ASSUNTO, não o pedido. Com o tema virando prompt, mandar o
+    // texto cru buscaria foto de "quero um carrossel para o instagram sobre…".
+    const bruto = (($("#g-brief") && $("#g-brief").value) || "").trim();
+    const seed = (suggestTitleFromBrief(bruto) || ($("#g-title") && $("#g-title").value) || bruto).trim().slice(0, 60);
     const url = await pexelsSearchModal({ query: seed, target: artSizeForType($("#g-type") && $("#g-type").value) });
     if (url) { $("#g-image").value = url; await loadPhotoGallery(url); const hint = $("#g-photo-hint"); if (hint) hint.textContent = "foto da Pexels adicionada"; toast("Foto da Pexels adicionada ao acervo", "success"); }
   };
