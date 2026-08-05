@@ -62,20 +62,23 @@ services:
         max-file: "5"
     depends_on:
       - panel
-    # Este Caddy também atende squad.4st.co (serviço radar-web, de OUTRO projeto, na rede
-    # radar-net). Essa ligação estava sendo feita À MÃO com `docker network connect`, fora do
-    # compose: qualquer `up -d` recriava o contêiner sem a rede e derrubava o squad.4st.co com
-    # 502, sem ninguém entender por quê. Declarada aqui para o deploy parar de ser destrutivo.
+    # O Caddy fica em DUAS redes: a 'default' deste compose (pra alcancar o panel) e a
+    # 'radar-net' EXTERNA (pra alcancar o radar-web do AI-SQUAD em squad.4st.co).
+    # Sem isto, todo redeploy deste stack recriava o Caddy so na rede default e derrubava
+    # o squad.4st.co ("bad address radar-web"). Adicionado por Claude 2026-08-04.
     networks:
       - default
       - radar-net
-
-networks:
-  radar-net:
-    external: true   # criada pelo projeto do radar; aqui só nos conectamos a ela
 
 volumes:
   panel_outputs:
   panel_uploads:
   caddy_data:
   caddy_config:
+
+# 'radar-net' e criada pelo compose do AI-SQUAD (~/ai-squad/compose). Aqui ela e referenciada
+# como EXTERNA — este stack nao a cria nem a remove, so se conecta a ela.
+networks:
+  radar-net:
+    external: true
+    name: radar-net

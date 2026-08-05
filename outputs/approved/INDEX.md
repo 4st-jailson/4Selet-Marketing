@@ -1,10 +1,7 @@
 # Campanhas Aprovadas
 
-*Atualizado em 2026-07-23T18:17:24-03:00*
+*Atualizado em 2026-07-17T18:36:55+00:00*
 
 | Task | Data | Ângulo | Plataformas | Aprovado em | Por | Preview |
 |---|---|---|---|---|---|---|
-| `onde_seu_dinheiro_fica` | 2026-07-08 | — | instagram | 17/07 17:46 | Suporte 4Selet | [ver](./onde_seu_dinheiro_fica_2026-07-08/preview.html) |
-| `qa_feed_taxa_zero_novos_produtores` | 2026-06-15 | Taxa Zero - 0% por 3 meses | instagram, linkedin | 15/06 11:32 | QA Tester | [ver](./qa_feed_taxa_zero_novos_produtores_2026-06-15/preview.html) |
-| `promover_desconto_de_30_de_ver` | 2026-06-12 | Aproveite o verão com condições exclusivas - até 30% de desconto | instagram | 12/06 16:09 | Jailson Junior | [ver](./promover_desconto_de_30_de_ver_2026-06-12/preview.html) |
-| `e2e_image` | 2026-06-10 | — | instagram | 10/06 18:09 | Hugo (teste E2E) | [ver](./e2e_image_2026-06-10/preview.html) |
+| `onde_seu_dinheiro_fica` | 2026-07-08 | — | instagram | 17/07 18:36 | Flavio Del Lima | [ver](./onde_seu_dinheiro_fica_2026-07-08/preview.html) |
