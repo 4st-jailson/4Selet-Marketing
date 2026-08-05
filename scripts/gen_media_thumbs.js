@@ -15,9 +15,10 @@ const { chromium } = require("playwright");
 const { tplMedia } = require("../interface/lib/render");
 
 const SAIDA = path.join(__dirname, "..", "interface", "public", "img", "media-models");
+// Os tres foto-reais sairam da lista: foram reprovados e nao aparecem mais no seletor.
+// O render deles continua existindo para as pecas antigas, mas nao ha mais o que pre-visualizar.
 const MODELOS = [
   "hand_tablet", "celular", "navegador",
-  "foto_real", "foto_mesa", "foto_maos_mesa",
   "citacao", "selo", "split", "camadas",
 ];
 
