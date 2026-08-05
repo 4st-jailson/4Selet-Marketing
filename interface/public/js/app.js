@@ -4998,10 +4998,38 @@ async function viewSettings() {
   const tagRows = tagNames.length
     ? tagNames.map((tg) => `<div class="tagman-row"><span class="cc-tag">${esc(tg)}</span><span class="hint">${plural(tagCounts[tg], "peça", "peças")}</span><button class="btn btn-sm btn-danger" data-deltag="${esc(tg)}">Excluir</button></div>`).join("")
     : '<p class="muted">Nenhuma tag criada ainda.</p>';
+  // Uma linha por conexão: fechada mostra só nome, para que serve e o status; aberta mostra o
+  // cartão inteiro. Antes eram seis cartões empilhados e abertos, com campos de token à mostra
+  // o tempo todo — muito rolar para achar uma coisa, e a sensação de que o painel está pedindo
+  // dados que ninguém pediu. Fechada, nenhuma linha pede nada.
+  const conexao = (o) => `
+    <div class="conn-item${o.open ? " open" : ""}" data-conn="${esc(o.id)}">
+      <button type="button" class="conn-head" aria-expanded="${o.open ? "true" : "false"}" aria-controls="conn-body-${esc(o.id)}">
+        <span class="conn-dot ${esc(o.dot)}"></span>
+        <span class="conn-txt">
+          <span class="conn-name">${esc(o.name)}</span>
+          <span class="conn-purpose">${esc(o.purpose)}</span>
+        </span>
+        <span class="conn-state">${o.badge}</span>
+        <svg class="conn-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="conn-body" id="conn-body-${esc(o.id)}"><div class="conn-inner">${o.body}</div></div>
+    </div>`;
+  const igSt = igConnLabel(ig);
+  const provLabel = (provs.find((p) => p.id === defProv) || {}).label || defProv;
+
   setView(`
     <div class="card" style="max-width:660px">
-      <h3>Inteligência Artificial (Claude)</h3>
-      <p class="muted mt">Cole sua chave da Anthropic. Ela fica guardada só neste servidor (no arquivo <span class="codeblock">interface/.env</span>, fora do controle de versão) e nunca é enviada para o navegador.</p>
+      <h3>Conexões</h3>
+      <p class="muted mt">Os serviços que o painel usa. Clique em um para abrir e configurar — nada é pedido antes disso. Chaves e tokens ficam só no servidor e nunca vão para o navegador.</p>
+      <div class="conn-list mt">
+      ${conexao({
+        id: "anthropic",
+        name: "Claude (Anthropic)",
+        purpose: "Escreve o texto e o conceito das peças",
+        dot: s.has_key ? "on" : "req",
+        badge: s.has_key ? '<span class="badge ok">conectada</span>' : '<span class="badge warn">sem chave</span>',
+        body: `
       <div class="field mt"><label>Chave Anthropic (ANTHROPIC_API_KEY)</label>
         ${s.has_key ? `
         <div id="s-key-locked" class="key-locked">
@@ -5023,35 +5051,44 @@ async function viewSettings() {
       <div class="flex"><button class="btn" id="s-test">Testar conexão</button><span id="s-test-out" class="muted"></span></div>
       <hr class="sep" />
       <div class="field"><label>Modelo</label><select id="s-model">${models.map((m) => `<option value="${m.id}" ${s.model === m.id ? "selected" : ""}>${esc(m.label)}</option>`).join("")}</select></div>
-      <button class="btn" id="s-save-model">Salvar modelo</button>
-      <hr class="sep" />
-      <div class="kv">
-        <div class="k">Status</div><div>${s.has_key ? '<span class="badge approved">conectada</span>' : '<span class="badge paused">não configurada</span>'}</div>
-        <div class="k">Modelo atual</div><div>${esc(s.model)}</div>
-      </div>
-    </div>
-    <div class="card mt" style="max-width:660px">
-      <h3>ChatGPT (OpenAI)</h3>
-      <p class="muted mt">Adicione a chave da OpenAI para poder gerar com o ChatGPT. Ela fica só neste servidor (<span class="codeblock">interface/.env</span>) e nunca vai para o navegador.</p>
+      <div class="flex"><button class="btn" id="s-save-model">Salvar modelo</button><span class="hint">Modelo atual: ${esc(s.model)}</span></div>`,
+      })}
+      ${conexao({
+        id: "openai",
+        name: "ChatGPT (OpenAI)",
+        purpose: "Alternativa ao Claude na hora de gerar",
+        dot: oai.configured ? "on" : "off",
+        badge: oai.configured ? '<span class="badge ok">conectada</span>' : '<span class="badge paused">opcional</span>',
+        body: `
+      <p class="muted">A chave fica só neste servidor (<span class="codeblock">interface/.env</span>) e nunca vai para o navegador.</p>
       <div class="field mt"><label>Chave OpenAI (OPENAI_API_KEY)</label>
         ${oai.configured ? `<div class="key-locked"><svg class="key-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span class="key-mask">${esc(oai.masked_key)}</span> <span class="badge ok">Ativa</span></div>` : ""}
         <div class="key-edit ${oai.configured ? "mt" : ""}"><input id="oai-key" type="password" placeholder="${oai.configured ? "Cole uma nova chave para trocar..." : "sk-..."}" /><div class="flex mt"><button class="btn btn-primary" id="oai-save-key" disabled>${oai.configured ? "Trocar chave" : "Salvar chave"}</button></div></div>
       </div>
       <div class="field"><label>Modelo OpenAI <span class="hint">(ex.: gpt-4o, gpt-4.1, gpt-4o-mini — o que sua conta tiver)</span></label><input id="oai-model" value="${esc(oai.model || "gpt-4o")}" style="max-width:320px" /></div>
-      <div class="flex"><button class="btn" id="oai-save-model">Salvar modelo</button><button class="btn" id="oai-test">Testar conexão</button><span id="oai-test-out" class="muted"></span></div>
-    </div>
-    <div class="card mt" style="max-width:660px">
-      <h3>IA padrão</h3>
-      <p class="muted mt">Qual IA o painel usa quando você não escolhe outra na hora de gerar. Na tela de criação dá para trocar por peça.</p>
-      <div class="field mt"><select id="def-provider" style="max-width:320px">${provs.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === defProv ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("")}</select></div>
-    </div>
-    <div class="card mt" style="max-width:660px">
-      <h3>Publicação no Instagram</h3>
-      <p class="muted mt">Conecte a conta (Graph API da Meta) para publicar peças <strong>aprovadas</strong> direto do painel. O token e o ID ficam só no servidor (em <span class="codeblock">interface/data</span>, fora do git) e nunca vão para o navegador. Enquanto não conectar, a publicação roda em <strong>modo simulado</strong>.</p>
-      ${(() => { const st = igConnLabel(ig); return st.pode
-        ? `<div class="ig-connected mt"><span class="badge ok">${esc(st.texto)}</span> <strong>@${esc(ig.username || "conta")}</strong><div class="hint">${esc(st.detalhe)}</div></div>`
-        : `<div class="kv mt"><div class="k">Status</div><div><span class="badge ${esc(st.badge)}">${esc(st.texto)}</span>${ig.username ? " <strong>@" + esc(ig.username) + "</strong>" : ""}<div class="hint">${esc(st.detalhe)}</div></div></div>`; })()}
+      <div class="flex"><button class="btn" id="oai-save-model">Salvar modelo</button><button class="btn" id="oai-test">Testar conexão</button><span id="oai-test-out" class="muted"></span></div>`,
+      })}
+      ${conexao({
+        id: "default",
+        name: "IA padrão",
+        purpose: "Qual das duas o painel usa quando você não escolhe",
+        dot: "on",
+        badge: `<span class="badge plain">${esc(provLabel)}</span>`,
+        body: `
+      <p class="muted">Vale quando você não escolhe outra na hora de gerar. Na tela de criação dá para trocar por peça.</p>
+      <div class="field mt"><select id="def-provider" style="max-width:320px">${provs.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === defProv ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("")}</select></div>`,
+      })}
+      ${conexao({
+        id: "instagram",
+        name: "Instagram",
+        purpose: "Publica e agenda as peças aprovadas",
+        dot: igSt.pode ? "on" : (igSt.badge === "err" ? "req" : "off"),
+        badge: `<span class="badge ${esc(igSt.badge)}">${esc(igSt.texto)}</span>`,
+        body: `
+      <p class="muted">Conecte a conta (Graph API da Meta) para publicar peças <strong>aprovadas</strong> direto do painel. Enquanto não conectar, a publicação roda em <strong>modo simulado</strong>.</p>
+      <div class="conn-note mt">${esc(igSt.detalhe)}</div>
       <div class="kv mt">
+        ${ig.username ? `<div class="k">Conta</div><div><strong>@${esc(ig.username)}</strong></div>` : ""}
         ${ig.ig_user_id ? `<div class="k">Conta (ID)</div><div class="muted">${esc(ig.ig_user_id)}</div>` : ""}
         ${ig.token_hint ? `<div class="k">Token</div><div>termina em <span class="codeblock">${esc(ig.token_hint)}</span></div>` : ""}
       </div>
@@ -5060,29 +5097,37 @@ async function viewSettings() {
       <div class="field"><label>ID da conta do Instagram <span class="hint">(opcional — deixe vazio que o painel descobre pelo token)</span></label><input id="ig-id" value="${esc(ig.ig_user_id || "")}" placeholder="descoberto automaticamente ao testar" /></div>
       <div class="field"><label>Endereço público do painel <span class="hint">(a Meta busca a imagem por aqui)</span></label><input id="ig-base" value="${esc(ig.public_base_url || "https://mkt.4st.co")}" style="max-width:340px" /></div>
       <div class="flex"><button class="btn btn-primary" id="ig-save">Salvar conexão</button><button class="btn" id="ig-test">Testar conexão</button><span id="ig-out" class="muted"></span></div>
-      <p class="hint mt">Só administradores configuram. O token e o ID você gera na Meta (te passo o passo a passo).</p>
-    </div>
-    <div class="card mt" style="max-width:660px">
-      <h3>Pesquisa de mercado (Tavily)</h3>
-      <p class="muted mt">Adicione a chave da Tavily para que a IA possa fazer <strong>pesquisa de mercado ao vivo</strong> ao gerar conteúdo (opt-in pelo toggle na hora de gerar). A chave fica só no servidor (em <span class="codeblock">interface/.env</span>, fora do git) e nunca vai para o navegador.</p>
-      <div class="kv mt"><div class="k">Status</div><div>${tav.configured ? '<span class="badge ok">Conectada</span> <span class="hint">— marque “Pesquisar mercado” ao gerar</span>' : '<span class="badge paused">Não configurada</span>'}</div></div>
-      <hr class="sep" />
-      <div class="field"><label>Chave Tavily <span class="hint">(tvly-…)</span></label><input id="tav-key" type="password" placeholder="${tav.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui (tvly-…)"}" /></div>
+      <p class="hint mt">Só administradores configuram. Prefira um token de longa duração (60 dias) ou de usuário do sistema, que não vence.</p>`,
+      })}
+      ${conexao({
+        id: "tavily",
+        name: "Pesquisa de mercado (Tavily)",
+        purpose: "Dados de mercado ao vivo na hora de gerar",
+        dot: tav.configured ? "on" : "off",
+        badge: tav.configured ? '<span class="badge ok">conectada</span>' : '<span class="badge paused">opcional</span>',
+        body: `
+      <p class="muted">Com a chave, a IA pode fazer <strong>pesquisa ao vivo</strong> ao gerar conteúdo — você liga peça a peça, marcando “Pesquisar mercado”. A chave fica só no servidor.</p>
+      <div class="field mt"><label>Chave Tavily <span class="hint">(tvly-…)</span></label><input id="tav-key" type="password" placeholder="${tav.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui (tvly-…)"}" /></div>
       <div class="flex"><button class="btn btn-primary" id="tav-save">Salvar chave</button><button class="btn" id="tav-test">Testar</button><span id="tav-out" class="muted"></span></div>
-      <p class="hint mt">A chave você pega em tavily.com (painel da conta). Só administradores configuram.</p>
-    </div>
-    <div class="card mt" style="max-width:660px">
-      <h3>Banco de imagens (Pexels)</h3>
-      <p class="muted mt">Adicione a chave da Pexels para <strong>buscar fotos de banco</strong> e inserir nas artes (na edição). Só a foto que você escolher é baixada. A chave fica só no servidor e nunca vai para o navegador.</p>
-      <div class="kv mt"><div class="k">Status</div><div>${pex.configured ? '<span class="badge ok">Conectada</span> <span class="hint">— use “Buscar imagem” no editor de arte</span>' : '<span class="badge paused">Não configurada</span>'}</div></div>
-      <hr class="sep" />
-      <div class="field"><label>Chave Pexels</label><input id="pex-key" type="password" placeholder="${pex.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui"}" /></div>
+      <p class="hint mt">A chave você pega em tavily.com (painel da conta). Só administradores configuram.</p>`,
+      })}
+      ${conexao({
+        id: "pexels",
+        name: "Banco de imagens (Pexels)",
+        purpose: "Busca fotos para o fundo das artes",
+        dot: pex.configured ? "on" : "off",
+        badge: pex.configured ? '<span class="badge ok">conectada</span>' : '<span class="badge paused">opcional</span>',
+        body: `
+      <p class="muted">Com a chave, o botão <strong>Buscar imagem</strong> do editor procura fotos de banco. Só a foto que você escolher é baixada. A chave fica só no servidor.</p>
+      <div class="field mt"><label>Chave Pexels</label><input id="pex-key" type="password" placeholder="${pex.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui"}" /></div>
       <div class="flex"><button class="btn btn-primary" id="pex-save">Salvar chave</button><button class="btn" id="pex-test">Testar</button><span id="pex-out" class="muted"></span></div>
-      <p class="hint mt">A chave é grátis: crie em pexels.com/api. Só administradores configuram.</p>
+      <p class="hint mt">A chave é grátis: crie em pexels.com/api. Só administradores configuram.</p>`,
+      })}
+      </div>
     </div>
     <div class="card mt" style="max-width:660px">
       <div class="flex-between"><h3>Outras integrações</h3><button class="btn btn-sm" id="cred-add">Inserir credenciais</button></div>
-      <p class="muted mt">Serviços que ainda se configuram no servidor. Se quiser <strong>conectar um deles pelo painel</strong>, clique em “Inserir credenciais”. Claude, ChatGPT, Instagram e Tavily têm cartões próprios acima, com o token/chave de cada um. Aqui aparece só o status, nunca os valores.</p>
+      <p class="muted mt">Serviços que ainda se configuram no servidor. Se quiser <strong>conectar um deles pelo painel</strong>, clique em “Inserir credenciais”. Aqui aparece só o status, nunca os valores.</p>
       ${(() => {
         const rest = integ.filter((it) => !["anthropic", "openai", "tavily", "pexels", "instagram"].includes(it.id));
         if (!rest.length) return '<p class="muted mt">Nenhuma outra integração no momento.</p>';
@@ -5174,6 +5219,26 @@ async function viewSettings() {
     catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
   };
   if ($("#cred-add")) $("#cred-add").onclick = openCredentialsModal;
+  // Abre/fecha uma conexão. Uma de cada vez: com duas abertas a página volta a ser a pilha de
+  // campos que estamos justamente saindo. A altura é animada por CSS (grid 0fr -> 1fr), então
+  // não há cálculo de pixel aqui — e o conteúdo continua no DOM mesmo fechado, para que os
+  // handlers de cada campo (que buscam por id logo abaixo) sigam encontrando tudo.
+  document.querySelectorAll(".conn-head").forEach((h) => {
+    h.onclick = () => {
+      const item = h.closest(".conn-item");
+      const abrindo = !item.classList.contains("open");
+      document.querySelectorAll(".conn-item.open").forEach((o) => {
+        o.classList.remove("open");
+        const b = o.querySelector(".conn-head"); if (b) b.setAttribute("aria-expanded", "false");
+      });
+      if (abrindo) {
+        item.classList.add("open");
+        h.setAttribute("aria-expanded", "true");
+        // Se a linha aberta ficou fora da tela (as de baixo empurram), traz para a vista.
+        setTimeout(() => { const r = item.getBoundingClientRect(); if (r.top < 8 || r.bottom > window.innerHeight) item.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 300);
+      }
+    };
+  });
   // #6 — habilita "Salvar" só com conteúdo válido; alterna leitura/edição da chave.
   const keyInput = $("#s-key");
   const saveKeyBtn = $("#s-save-key");
