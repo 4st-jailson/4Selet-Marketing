@@ -1,4 +1,4 @@
-# **📦 Product & Campaign Knowledge: 4Selet**
+# **Product & Campaign Knowledge: 4Selet**
 
 *Versão 1.2 · Maio/2026*
 
@@ -37,7 +37,7 @@ Toda peça gerada precisa apontar o produtor para o destino certo. **Os CTAs ("S
 | `termometro.4selet.com.br` | Produto Termômetro (público de trade) |
 | `blog.4selet.com.br` | Blog |
 
-> ⚠️ Use sempre `app.4st.com.br` (domínio atual). `app.4selet.com.br` é da versão antiga — não usar em criativo novo.
+> Use sempre `app.4st.com.br` (domínio atual). `app.4selet.com.br` é da versão antiga — não usar em criativo novo.
 
 **Contato comercial (destino de "Solicitar convite" / "Falar com o time"):**
 
@@ -58,7 +58,7 @@ Toda peça gerada precisa apontar o produtor para o destino certo. **Os CTAs ("S
 
 ## **2. Portfólio de Produtos**
 
-### **🏛️ Plataforma 4Selet (core)**
+### **Plataforma 4Selet (core)**
 
 Toda a infraestrutura de pagamentos, checkout, área de membros e gestão de vendas para o produtor digital.
 
@@ -74,7 +74,7 @@ Toda a infraestrutura de pagamentos, checkout, área de membros e gestão de ven
 | **Suporte próximo** | Atendimento de pessoa para pessoa via WhatsApp + wiki pública |
 | **Apps mobile** | iOS e Android para gestão fora do escritório |
 
-### **🌡️ Termômetro 4Selet (produto próprio)**
+### **Termômetro 4Selet (produto próprio)**
 
 Ferramenta de mercado financeiro em tempo real para traders e day traders. Cotações, índices globais, moedas, commodities, notícias.
 
@@ -85,7 +85,7 @@ Ferramenta de mercado financeiro em tempo real para traders e day traders. Cota�
 
 **Domínio:** `termometro.4selet.com.br`
 
-### **🖥️ VPS 4Selet (produto próprio)**
+### **VPS 4Selet (produto próprio)**
 
 Servidor virtual dedicado para rodar **robôs de trade, MetaTrader, BTG, Profit** e outros sistemas de operação automatizada 24/7 com baixa latência. Combinado tipicamente com Termômetro.
 
@@ -93,18 +93,18 @@ Servidor virtual dedicado para rodar **robôs de trade, MetaTrader, BTG, Profit*
 
 ### **2.1 Métodos de Pagamento (status atual)**
 
-> ⚠️ **Crítico para precisão:** não alegar em criativo um método que não está ativo. Conferir o status antes de citar.
+> **Crítico para precisão:** não alegar em criativo um método que não está ativo. Conferir o status antes de citar.
 
 | Método | Status | Observação |
 | ----- | ----- | ----- |
-| **PIX** (à vista) | ✅ Ativo | Aprovação em segundos |
-| **Cartão de crédito** (parcelado) | ✅ Ativo | Parcelamento definido pelo produtor (até 12x) |
-| **PayPal** | ✅ Ativo | — |
-| **Gratuito** (lançamento/cortesia) | ✅ Ativo | — |
-| **Pix + cartão** (combinação) | 🛠 Em desenvolvimento | **Não anunciar como disponível ainda** |
-| **2 cartões** (split do valor) | 🛠 Em desenvolvimento | **Não anunciar como disponível ainda** |
-| **Boleto bancário** | 🚫 Não ativo | Já modelado, pode ser ativado no futuro — **não citar** |
-| **Débito** | 🚫 Não ativo | Mesma situação do boleto — **não citar** |
+| **PIX** (à vista) | **Ativo** | Aprovação em segundos |
+| **Cartão de crédito** (parcelado) | **Ativo** | Parcelamento definido pelo produtor (até 12x) |
+| **PayPal** | **Ativo** | — |
+| **Gratuito** (lançamento/cortesia) | **Ativo** | — |
+| **Pix + cartão** (combinação) | Em desenvolvimento | **Não anunciar como disponível ainda** |
+| **2 cartões** (split do valor) | Em desenvolvimento | **Não anunciar como disponível ainda** |
+| **Boleto bancário** | **Não ativo** | Já modelado, pode ser ativado no futuro — **não citar** |
+| **Débito** | **Não ativo** | Mesma situação do boleto — **não citar** |
 
 ### **2.2 Processo de Migração (5 etapas)**
 
@@ -122,7 +122,7 @@ Base do diferencial **"Migração Facilitada"** (#9) e do conceito de vídeo "Mi
 
 ## **3. Campanha Ativa: Taxa Zero**
 
-> **⚠️ Esta é a campanha em vigor agora. Toda produção de ad, vídeo e copy deve referenciar esta seção primeiro.**
+> **Esta é a campanha em vigor agora. Toda produção de ad, vídeo e copy deve referenciar esta seção primeiro.**
 
 ### **Tese da campanha**
 
@@ -172,7 +172,7 @@ A campanha **não é uma promoção de aquisição em massa** — é um corredor
 
 #### **Institucionais (sempre disponíveis, dentro ou fora de campanha)**
 
-* *Produtor não é número. **É parceiro.** E parceiro vende junto.* — ⭐ **frase-tag oficial da marca** (slide 03 do deck oficial). Funciona como headline editorial em LinkedIn, hero de LP, capa de carrossel, fechamento de vídeo institucional. Quase intocável — só usar em peças com espaço editorial real, não em ads de performance espremidos.
+* *Produtor não é número. **É parceiro.** E parceiro vende junto.* — **frase-tag oficial da marca** (slide 03 do deck oficial). Funciona como headline editorial em LinkedIn, hero de LP, capa de carrossel, fechamento de vídeo institucional. Quase intocável — só usar em peças com espaço editorial real, não em ads de performance espremidos.
 * *Para quem sabe que é Selet.* — Tagline-mãe. **REGRA DURA (jul/2026): não usar como rodapé, fecho, assinatura, headline ou legenda de peça nova.** Ela é a essência da marca, não um carimbo — só entra se o brief pedir explicitamente. Ver `brand_identity.md` → Sample Copy.
 * *A escolha de quem já performa.* — Posicionamento. Excelente para LinkedIn e VSL.
 * *95% de aprovação no cartão. Para quem opera com seriedade.* — Prova-âncora + público-alvo em uma linha.
@@ -183,17 +183,17 @@ A campanha **não é uma promoção de aquisição em massa** — é um corredor
 * *Vendeu R$ 1.000 em 12x? Recebe R$ 1.000,70.*
 * *Participação nos juros: você ganha junto com a 4Selet.*
 
-> ⚠️ Ver Seção 5.3 deste documento para condicionantes de uso das headlines do ângulo 12x (disponibilidade só a partir de R$ 50k/mês de faturamento).
+> Ver Seção 5.3 deste documento para condicionantes de uso das headlines do ângulo 12x (disponibilidade só a partir de R$ 50k/mês de faturamento).
 
 ### **O que evitar nesta campanha**
 
-* ❌ "0% de taxa pra sempre!" (falso — são 3 meses ou R$ 300k)
-* ❌ "Plataforma 100% gratuita!" (R$ 1,99 por transação continua)
-* ❌ "Última chance!" / countdown timer falso
-* ❌ Comparar nominalmente com Hotmart/Kiwify/Eduzz/Ticto
-* ❌ Sugerir que o saque cai no mesmo dia (não cai — D+10 PIX, D+30 cartão)
+* "0% de taxa pra sempre!" (falso — são 3 meses ou R$ 300k)
+* "Plataforma 100% gratuita!" (R$ 1,99 por transação continua)
+* "Última chance!" / countdown timer falso
+* Comparar nominalmente com Hotmart/Kiwify/Eduzz/Ticto
+* Sugerir que o saque cai no mesmo dia (não cai — D+10 PIX, D+30 cartão)
 
-### **⚠️ Material comercial restrito (NÃO usar em criativo aberto)**
+### **Material comercial restrito (NÃO usar em criativo aberto)**
 
 A 4Selet tem uma **tabela de taxas escalonada por faixa de faturamento** (de 7,9% para quem não comprova faturamento até 4,9% acima de R$ 300k/mês), com prazos, antecipação e participação nos juros variáveis por faixa. Essa tabela é usada **na proposta comercial direta** (deck oficial, reunião 1:1 com produtor qualificado), depois da curadoria.
 
@@ -265,7 +265,7 @@ Banco de argumentos oficial extraído do deck de proposta de parceria (slide 6).
 | 8 | **4Selet FlexPay** | Receba em duas formas de pagamentos |
 | 9 | **Migração Facilitada** | Nós cuidamos de tudo. Traga seus conteúdos |
 
-> ⚠️ **Importante:** estes são os 9 oficiais. Não inventar novos diferenciais, não traduzir, não "modernizar a linguagem". Se precisar reescrever para caber em um formato (ex.: caption Instagram curta), preservar o **nome + a essência da descrição oficial**.
+> **Importante:** estes são os 9 oficiais. Não inventar novos diferenciais, não traduzir, não "modernizar a linguagem". Se precisar reescrever para caber em um formato (ex.: caption Instagram curta), preservar o **nome + a essência da descrição oficial**.
 
 ---
 
@@ -294,7 +294,7 @@ Em parcelamentos em 12x, o produtor da 4Selet recebe a **participação nos juro
 | Modalidade | Valor líquido por venda |
 | ----- | ----- |
 | À vista (1x) | R$ 940,00 |
-| Parcelado em 12x | **R$ 1.000,70** ⬆️ |
+| Parcelado em 12x | **R$ 1.000,70** |
 
 > Produto vendido por R$ 1.000 em 12x = produtor recebe R$ 1.000,70 (acima do preço de tabela).
 
@@ -305,7 +305,7 @@ Em parcelamentos em 12x, o produtor da 4Selet recebe a **participação nos juro
 * *"A única plataforma onde o parcelamento aumenta o seu líquido — não diminui."*
 * *"Participação nos juros: você ganha junto com a 4Selet."*
 
-**⚠️ Condicionantes (importante para evitar propaganda enganosa):**
+**Condicionantes (importante para evitar propaganda enganosa):**
 - Disponível **apenas para produtores das faixas R$ 50k+/mês** de faturamento (ver tabela do deck oficial, slide 13)
 - O valor exato varia conforme a oferta personalizada do produtor (taxa contratada)
 - Em campanhas abertas, comunicar como **conceito** ("você participa dos juros do parcelamento"), não como promessa numérica absoluta para todos
@@ -315,7 +315,7 @@ Em parcelamentos em 12x, o produtor da 4Selet recebe a **participação nos juro
 
 ## **6. Visual Assets**
 
-> ⚠️ **Video Agent note:** Vídeos são renderizados via **Remotion** (React + SVG). Toda animação é code-driven via `useCurrentFrame()` + `interpolate()`. PNG assets abaixo entram via `staticFile()` como background layers ou logo reveal — nunca como protagonista da scene.
+> **Video Agent note:** Vídeos são renderizados via **Remotion** (React + SVG). Toda animação é code-driven via `useCurrentFrame()` + `interpolate()`. PNG assets abaixo entram via `staticFile()` como background layers ou logo reveal — nunca como protagonista da scene.
 
 ### **Static Assets oficiais (disponíveis em `assets/`)**
 
@@ -476,7 +476,7 @@ Cada conceito é um **Remotion scene brief** — pronto para o Video Ad Speciali
 
 ## **10. Campaign Do's & Don'ts**
 
-| ✅ Faça | ❌ Não Faça |
+| Faça | **Não** Faça |
 | ----- | ----- |
 | Construir scenes 100% em SVG + React components | Usar raw video footage ou live-action clips |
 | Animation curves suaves (`easeOut`, spring contido) | Animação linear ou eufórica (parece commodity) |
@@ -519,10 +519,10 @@ Use como template, mas **NÃO como receita rígida**. Adapte ao formato.
 
 **Anti-receitas (evitar):**
 
-* ❌ "URGENTE — última chance!" (sem urgência fake)
-* ❌ "Você não vai acreditar..." (não é caça-clique)
-* ❌ "O segredo das maiores plataformas..." (não é guru)
-* ❌ "Garanta sua vaga gratuita!" (não é gratuita — é por convite + R$ 1,99/transação)
+* "URGENTE — última chance!" (sem urgência fake)
+* "Você não vai acreditar..." (não é caça-clique)
+* "O segredo das maiores plataformas..." (não é guru)
+* "Garanta sua vaga gratuita!" (não é gratuita — é por convite + R$ 1,99/transação)
 
 ---
 

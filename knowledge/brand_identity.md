@@ -1,11 +1,13 @@
 # **4Selet — Brand Identity Guide**
 
-*Versão 1.2 · Julho/2026 · Knowledge file consumido pelo **painel web** (`interface/lib/knowledge.js` → `interface/lib/prompts.js`, injetado no system prompt de TODOS os 7 tipos de conteúdo) e pelas **skills dos 5 agentes** (Research, Ad Creative, Video Ad, Copywriter, Distribution)*
+*Versão 1.3 · Agosto/2026 · Knowledge file consumido pelo **painel web** (`interface/lib/knowledge.js` → `interface/lib/prompts.js`, injetado no system prompt de TODOS os 7 tipos de conteúdo) e pelas **skills dos 5 agentes** (Research, Ad Creative, Video Ad, Copywriter, Distribution)*
 
 > **Propósito:** Este documento define a identidade da marca 4Selet para ser usada em **toda peça gerada pelos agentes** — texto, imagem, vídeo, e-mail e metadata de publicação. Sempre referenciar antes de qualquer geração.
 
 > **Atenção — este arquivo entra literalmente no prompt de produção.** O painel (`https://mkt.4st.co`) concatena este documento no system prompt de cada geração. Qualquer regra escrita aqui vira instrução direta para a IA, e qualquer divergência em relação ao bloco GOVERNANCE de `interface/lib/prompts.js` chega ao modelo como ordem contraditória. Ao editar, conferir os dois lados.
 
+> **O que mudou na v1.3 (Agosto/2026) — revisão adversarial contra o código:** duas **ordens contraditórias** que chegavam juntas ao modelo foram resolvidas (branco puro; e a regra de variedade que não entrava quando ninguém escolhia pilar). Além disso: JetBrains Mono deixou de ser "exceção técnica" e assumiu o papel real de fonte dos rótulos estruturais; a tipografia ganhou **escala por meio** (os números antigos eram de tela web e a IA os copiava para artes de 1080px); "Selet Blue em toda peça" virou condicional (no template *Foto* sem CTA não existe azul); `logo-4selet.svg` foi marcado como legado (o arquivo viola três regras deste próprio documento); os neutros de mockup viraram regra **por elemento** em vez de lista fechada; e os emojis de marcação (`Sim`/`Não`) saíram do texto, já que ele entra literal num prompt que proíbe emoji.
+>
 > **O que mudou na v1.2 (Julho/2026):** a frase-tag *"Para quem sabe que é Selet."* deixou de ser assinatura automática de peça (regra dura — ver Sample Copy); nova seção **Pilares de conteúdo** (o eixo temático real das peças, distinto das 5 colunas estratégicas); nova seção **4Selet na Mídia** (prova social de aparição na imprensa); fotografia de banco (Pexels) passou a ser **permitida com tratamento de marca**; regra de branco puro reescrita por escopo (texto x fundo); `#TaxaZero` virou hashtag **condicional ao pilar**.
 >
 > **O que veio da v1.1:** três frases-tag no Sample Copy, *Social caption institucional* e a lista fechada de concorrentes proibidos em criativos abertos (Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay).
@@ -75,7 +77,9 @@ Fonte de verdade em código: `interface/lib/config.js` (`CONTENT_PILLARS`). O pi
 | **Novidade** (`novidade`) | Lançamento/atualização da plataforma ou movimento do mercado que afeta o produtor. Foco no que muda na prática para a operação. |
 | **Motivacional / estratégico** (`motivacional`) | Mentalidade e decisão de longo prazo do produtor sério. Sóbrio e estruturado — a inspiração vem de um raciocínio concreto, nunca de motivação vazia. |
 
-**Regra de variedade (dura, aplicada no prompt):** *"Mantenha a variedade real do feed 4Selet: NEM toda peça é sobre Taxa Zero. Respeite o pilar como eixo temático, ainda que a campanha ativa exista."* Taxa Zero é **um** pilar entre seis, não o padrão universal. A campanha ativa não sobrepõe o pilar escolhido.
+**Regra de variedade (dura).** *"Mantenha a variedade real do feed 4Selet: NEM toda peça é sobre Taxa Zero. Respeite o pilar como eixo temático, ainda que a campanha ativa exista."* Taxa Zero é **um** pilar entre seis, não o padrão universal.
+
+> Detalhe que já custou caro: escolher pilar é **opcional** no painel. Enquanto essa regra vivia só no bloco do pilar, quem não escolhia recebia apenas o lembrete da campanha ativa e nenhum contrapeso — era a origem mecânica do "tudo vira Taxa Zero". A regra passou para o bloco `GOVERNANCE` de `interface/lib/prompts.js`, que entra em **toda** geração, com ou sem pilar.
 
 ---
 
@@ -146,7 +150,7 @@ Inspiração visual:
 * **Primary lockup:** Símbolo + wordmark lado a lado
 * **Light variant** (`logo-4selet-light.png`): Para fundos escuros — símbolo e texto em tons claros
 * **Dark variant** (`logo-4selet.png`): Para fundos claros — símbolo em azul oficial, texto em tom escuro
-* **Vetorial do lockup** (`logo-4selet.svg`): Logo completo escalável
+* **Vetorial do lockup** (`logo-4selet.svg`): **LEGADO — não usar.** O arquivo é uma reconstrução (símbolo em Selet Sky e wordmark redesenhada com fallback Arial) e viola as regras de uso abaixo. Nenhum render o carrega. Para escala, use os PNGs oficiais.
 * **Símbolo "4" oficial** (`simbolo-selo.png`): É **o símbolo que aparece na arte** quando a peça escolhe "Só o símbolo" — recorte do símbolo do logo oficial (`interface/lib/render.js`, `SIMBOLO_SELO`)
 * **Símbolo de traço** (`simbolo.svg`): Reservado a **marca d'água**, favicon, avatar e ícone de app — não é o símbolo usado na arte
 
@@ -157,7 +161,7 @@ Inspiração visual:
 * **Espaço mínimo livre** = altura do símbolo "4" em todos os lados
 * **Nunca** sobre fundo fotográfico ocupado ou com baixo contraste
 * **Nunca** com borda, sombra ou outline
-* **Nunca** alterar as cores oficiais (Selet Navy `#003554` no símbolo)
+* **Nunca** alterar as cores dos arquivos oficiais — usar `logo-4selet.png`, `logo-4selet-light.png` e `simbolo-selo.png` como estão. O `simbolo.svg` de traço é Selet Blue `#006494` por design e só vale como marca d'água
 * **Nunca** recriar a tipografia "SELET" — usar sempre o arquivo oficial
 
 ---
@@ -185,9 +189,9 @@ A paleta oficial vem direto do brandbook v2 da 4Selet. **Toda cor de marca, de t
 
 ### **Color Rules (regras duras para todos os agents)**
 
-* **Selet Blue** (`#006494`) é a cor de marca — toda peça deve conter pelo menos uma aparição
+* **Selet Blue** (`#006494`) é a cor de marca — deve aparecer em toda peça **que tenha elemento de ação ou de acento** (CTA, realce de número, gradiente de capa). No template *Foto* sem CTA — que é o padrão — o azul entra pelo gradiente de fundo; **não force um CTA só para cumprir esta regra**
 * **Selet Navy** (`#003554`) é o tom dominante em capas, hero sections e materiais de impacto
-* **Branco puro (`#FFFFFF`), por escopo:** **permitido como TEXTO/foreground** sobre fundo Navy/Darker — é o que os templates de produção usam em headline e CTA (`interface/lib/render.js`). **Proibido como cor de FUNDO, de card ou de área chapada** — nesses casos use **Selet Cloud** (`#D9DCD6`)
+* **Branco puro (`#FFFFFF`), por escopo:** **permitido como TEXTO/foreground** sobre fundo Navy/Darker — é o que os templates de produção usam em headline e CTA (`interface/lib/render.js`). **Permitido também dentro de mockup:** a "tela" do dispositivo e o card com o nome do veículo nas peças *4Selet na Mídia* são brancos porque são citação literal de uma página de site. **Proibido como fundo da peça, card de conteúdo ou área chapada de marca** — nesses casos use **Selet Cloud** (`#D9DCD6`)
 * Substituir `#000000` por **Selet Darker** (`#07212B`) em fundos escuros — **nunca usar preto puro**
 * As três cores funcionais são para **status do sistema apenas** — não usar como cor decorativa
 * **A paleta azul é o motor visual da marca** — headlines, hero sections, gráficos e acentos
@@ -196,8 +200,10 @@ A paleta oficial vem direto do brandbook v2 da 4Selet. **Toda cor de marca, de t
 **Neutros de interface (exceção autorizada):** molduras de dispositivo, chrome de navegador, sombras e os stops de gradiente do tema editorial claro podem usar neutros fora da paleta — é o que sustenta os mockups de dispositivo e o tema claro do carrossel, ambos em produção e aprovados. Valem apenas **dentro desses elementos**, nunca como cor de marca, de texto ou de destaque:
 
 * Tema claro do carrossel: `#E9ECE6` e `#CBD2CC` — derivados oficiais de Selet Cloud
-* Molduras de dispositivo: `#0a1015`, `#243039`
-* Chrome de navegador: `#e7ecef`, `#c6ced4`, `#f2f5f7`, `#6c7c84`, `#0d3244`, `#0a2a39`, e os três pontos do navegador (`#ff5f57`, `#febc2e`, `#28c840`) — citação literal de uma janela de navegador, não cor de campanha
+* Molduras, notch e corpo de dispositivo: escala de grafite fora da paleta (`#0a1015`, `#243039`, `#12181d`, `#080b0e`, `#05090d`) — nunca `#000000` puro
+* Chrome de navegador e placeholder de tela vazia: cinzas de interface (`#e7ecef`, `#c6ced4`, `#f2f5f7`, `#6c7c84`, `#eef2f4`, `#e6ebee`, `#9fb0b8`, `#cfd7dc`, `#0d3244`, `#0a2a39`, `#0a2130`) e os três pontos do navegador (`#ff5f57`, `#febc2e`, `#28c840`) — citação literal de uma janela, não cor de campanha
+
+> A regra é **por elemento, não por lista fechada**: dentro de moldura, chrome ou placeholder vale o neutro que o mockup exigir; fora deles, só a paleta oficial.
 
 ---
 
@@ -208,17 +214,17 @@ A 4Selet usa **uma única família tipográfica** em toda comunicação: **Inter
 **Display / Headlines**
 * Typeface: *Inter* — weight 700–800 (Bold–Black)
 * Use: Headlines de campanha, títulos editoriais, hero text, capas
-* Style: Generosamente espaçado, letter-spacing negativo (-0.5 a -1.5px), contraste alto com corpo
+* Style (arte, canvas 1080): 84–168px · line-height 0.96–1.0 · letter-spacing **-2px a -3px**. Em e-mail/web, divida por ~2,5
 
 **Body / Editorial**
 * Typeface: *Inter* — weight 400–500 (Regular–Medium)
 * Use: Corpo de texto, descrições, e-mails
-* Style: 15–17px / line-height 1.55; alinhado à esquerda sempre; letter-spacing -0.1px
+* Style (arte, canvas 1080): **38–42px** / line-height **1.30–1.34**; alinhado à esquerda sempre. Em e-mail/web: 15–17px / 1.55
 
 **UI / Functional**
 * Typeface: *Inter* — weight 500–600 (Medium–Semibold)
 * Use: Labels, botões, metadados, navegação, badges
-* Style: Letter-spacing positivo (+0.4px) em labels uppercase; tamanho 12–14px
+* Style (arte, canvas 1080): **24–32px** UPPERCASE, letter-spacing **+1 a +4px**. Em e-mail/web: 12–14px, +0.4px
 
 **Mono / Código**
 * Typeface: *JetBrains Mono* (carregado via `@remotion/google-fonts` ou Google Fonts)
@@ -227,7 +233,7 @@ A 4Selet usa **uma única família tipográfica** em toda comunicação: **Inter
 
 **Regras:**
 * Headlines, corpo e UI **sempre em Inter** — não usar fontes alternativas
-* JetBrains Mono **apenas** em contextos técnicos (código, código de compra)
+* **JetBrains Mono** tem dois usos legítimos: (a) snippets técnicos (código de pedido `pur_XXXXX`, URL, parâmetro) e (b) **rótulos estruturais das artes** — eyebrow, badge, footer e o rótulo do CTA, em uppercase com tracking positivo. É assim que os 4 templates de produção rodam. Nunca em headline, corpo ou legenda
 * **Nunca** usar fontes genéricas (Arial, Helvetica, Times, Roboto, system fonts) em criativos oficiais
 * Texto centralizado: **apenas** em capas e títulos isolados — corpo de texto sempre à esquerda
 
@@ -253,7 +259,7 @@ Todo visual deve ser deliberado, premium e alinhado ao posicionamento sóbrio. *
 * Estética "tech bro" com fundos pretos e cores fluorescentes
 * Emojis em materiais oficiais (exceções limitadas: WhatsApp informal, social caption casual)
 * Screenshots borrados, com dados reais expostos ou de telas obsoletas
-* Composições poluídas (mais de 3 cores por peça)
+* Composições poluídas: **mais de um acento além da base azul**. A base (Navy/Darker/Blue em gradiente + Sky nos rótulos + branco/Mist no texto) é o sistema e não conta como "cores" — o que não pode é entrar uma cor de fora dele
 * Mascotes, ícones tipo "flat 2.0", elementos infantilizados
 
 ---
@@ -271,7 +277,7 @@ Tipo de peça **nativo e em produção** desde julho/2026 (`media_mention` no pa
 * Hashtags: `#4Selet` + `#NaMidia` + 1 a 3 complementares. **Sem `#TaxaZero`** (a menos que a matéria seja sobre a campanha)
 * Vale a mesma regra de emoji das captions: no máximo 1 funcional
 
-**Tratamento visual:** o print entra dentro de um mockup, nunca solto. São 10 modelos de arte no painel — *Tablet* (`hand_tablet`), *Foto real (mãos)*, *Foto real (mesa)*, *Foto real (mãos + mesa)*, *Celular*, *Navegador*, *Citação*, *Split*, *Selo* e *Camadas*. Os modelos foto-reais e os mockups de dispositivo são a **exceção autorizada** à regra de fotografia: a foto de banco entra como cena de contexto, sempre tratada na marca. Print vertical vai bem em Tablet e Celular; print largo vai bem em Navegador e Notebook.
+**Tratamento visual:** o print entra dentro de um mockup, nunca solto. São 10 modelos de arte no painel — *Tablet* (`hand_tablet`), *Foto real (mãos)*, *Foto real (mesa)*, *Foto real (mãos + mesa)*, *Celular*, *Navegador*, *Citação*, *Split*, *Selo* e *Camadas*. Os modelos foto-reais e os mockups de dispositivo são a **exceção autorizada** à regra de fotografia: a foto de banco entra como cena de contexto, sempre tratada na marca. Print vertical vai bem em Tablet e Celular; print largo vai bem em Navegador, Split e Camadas. (Não existe modelo "Notebook" — a lista acima é fechada.)
 
 **Formatos gerados:** 4:5 (`feed.png`, o publicável no feed), 1:1 (`square.png`), 9:16 (`story.png`) e 16:9 (`media_16x9.png`, formato de site/apresentação — não publicável no feed). O padrão marcado é 4:5 + 16:9.
 
@@ -318,7 +324,7 @@ A 4Selet usa textura sutil — **nunca como decoração, sempre como reforço de
 
 ### **Como a 4Selet fala — e como NÃO fala**
 
-| ✅ Sim | ❌ Não |
+| **Sim** | **Não** |
 | ----- | ----- |
 | Claro | Infantil ou caricato |
 | Maduro | Complexo / técnico demais |
@@ -336,15 +342,15 @@ A 4Selet usa textura sutil — **nunca como decoração, sempre como reforço de
 
 | Contexto | Política |
 | ----- | ----- |
-| **Headlines / hero text** | ❌ Nunca |
-| **Body em ad / VSL / LP** | ❌ Nunca |
+| **Headlines / hero text** | Nunca |
+| **Body em ad / VSL / LP** | Nunca |
 | **Caption Instagram** | Máximo 1, e só se for funcional (ex.: `→` para call-to-action, `▸` para item de lista) |
 | **Caption Threads** | Máximo 1, mesma regra |
 | **Legenda 4Selet na Mídia** | Máximo 1, mesma regra |
 
 **Emojis aprovados** (lista fechada para criativos): `→` `▸` `•`
 
-**Banidos:** 🔥 ⚡ 🚀 💸 💰 😱 🤯 ✨ (associados a hype) e qualquer emoji infantilizado/cartoon. **Emoji banido é erro duro** — o painel recusa a gravação da peça (HTTP 422) em vez de apenas avisar (`interface/lib/validation.js`).
+**Banidos:** 🔥 ⚡ 🚀 💸 💰 😱 🤯 ✨ (associados a hype) e qualquer emoji infantilizado/cartoon. **Emoji banido é erro duro** — o painel devolve HTTP 422 e recusa a gravação, salvo quando um admin força explicitamente. Já o teto de "1 emoji funcional" **não é contado pelo painel** para `→ ▸ •` (não são pictográficos): vale como disciplina de escrita, não como trava.
 
 **Canais não automatizados (newsletter, WhatsApp, comunidade) — fora do escopo do painel:** ali `📌` (pauta), `🔧` (release), `💡` (dica) e `📊` (dado) são permitidos com parcimônia. Não valem para peça gerada pelos agentes.
 
@@ -368,12 +374,12 @@ CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concre
 
 **CTAs proibidos:**
 
-* ❌ *Compre já!*
-* ❌ *Não perca essa chance única!*
-* ❌ *Clica aqui agora!*
-* ❌ *URGENTE — vaga limitada!*
-* ❌ *Garanta o seu antes que acabe!*
-* ❌ *Inscreva-se gratuitamente* (a 4Selet não é gratuita; é por convite)
+* - *Compre já!*
+* - *Não perca essa chance única!*
+* - *Clica aqui agora!*
+* - *URGENTE — vaga limitada!*
+* - *Garanta o seu antes que acabe!*
+* - *Inscreva-se gratuitamente* (a 4Selet não é gratuita; é por convite)
 
 **Quando NÃO usar CTA:** o padrão do painel é **sem CTA**. Quando o brief não define uma chamada, a peça encerra com um fechamento suave de relacionamento e o campo `cta` fica vazio. CTA de conversão entra quando a peça tem intenção de conversão (pilar Taxa Zero, prova de plataforma) ou quando o brief pede — nunca colado por hábito no fim de peça educacional, motivacional ou de mídia.
 
@@ -439,7 +445,7 @@ CTAs sempre **claros, factuais, com baixa fricção e ancorados em ação concre
 
 ### **Mix por post (3–5 hashtags em Instagram) — o mix acompanha o pilar**
 
-1. **Marca:** `#4Selet` — **única obrigatória** em todo post Instagram (é também a única que a validação do painel exige)
+1. **Marca:** `#4Selet` — **única obrigatória** em todo post Instagram. Atenção: no painel isso é **aviso, não bloqueio**, e a checagem só roda no tipo *Feed Instagram* — em *4Selet na Mídia* nenhuma regra de hashtag é verificada automaticamente. Cumprir por disciplina de escrita, sem contar com o gate
 2. **Campanha ativa:** `#TaxaZero` — **condicional**: só quando a peça for do pilar *Taxa Zero* ou falar da oferta ativa. Não force em peça educacional, de curiosidade, motivacional ou de mídia
 3. **Tipo:** `#NaMidia` nas peças *4Selet na Mídia*
 4. **Produto:** uma de — `#PlataformaDePagamentos`, `#Infoproduto`, `#NegocioDigital`, `#AreaDeMembros`
@@ -450,10 +456,10 @@ Sugestão por pilar quando `#TaxaZero` não se aplica: *Educacional* → produto
 
 ### **Hashtags banidas**
 
-* ❌ `#Sucesso #DinheiroFacil #FiqueRico` (promessa mágica)
-* ❌ `#EmpreendedorDigital #MentorDoSucesso` (associados a guru)
-* ❌ Mais de 5 hashtags por post (parece spam)
-* ❌ Hashtags em CAPS LOCK no meio da caption
+* `#Sucesso #DinheiroFacil #FiqueRico` (promessa mágica)
+* `#EmpreendedorDigital #MentorDoSucesso` (associados a guru)
+* Mais de 5 hashtags por post (parece spam)
+* Hashtags em CAPS LOCK no meio da caption
 
 ---
 
@@ -483,9 +489,9 @@ Para proteger a coerência da marca, **evite explicitamente** os seguintes terri
 * **Tom motivacional vazio:** Sem "vamos juntos!", "o céu é o limite!", "acredite!".
 * **Comparação direta com concorrentes:** Mencionamos o mercado em abstrato ("taxas de mercado em torno de 7,9%"); **não atacamos nomes** em criativos institucionais.
 
-  > 🚫 **Lista fechada de nomes proibidos em criativos abertos** (ads pagos, posts orgânicos, vídeos públicos, carrosséis, captions): **Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay** e qualquer outra plataforma concorrente. Não citar nem por nome direto, nem por sigla/abreviação, nem por logo, nem por descrição reconhecível ("a do verde", "a do limão", "a da chama vermelha"). **Material com esses nomes só é permitido em proposta comercial direta** (deck `4selet-proposta-parceria-oficial`, reunião 1:1 com produtor qualificado) — nunca em campanha pública.
+  > **Lista fechada de nomes proibidos em criativos abertos** (ads pagos, posts orgânicos, vídeos públicos, carrosséis, captions): **Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay** e qualquer outra plataforma concorrente. Não citar nem por nome direto, nem por sigla/abreviação, nem por logo, nem por descrição reconhecível ("a do verde", "a do limão", "a da chama vermelha"). **Material com esses nomes só é permitido em proposta comercial direta** (deck `4selet-proposta-parceria-oficial`, reunião 1:1 com produtor qualificado) — nunca em campanha pública.
   >
-  > ✅ **Como falar do mercado quando precisar contextualizar:** *"taxas de mercado em torno de 7,9%"*, *"prazos de mercado entre 15 e 30 dias"*, *"plataformas tradicionais"*, *"a oferta atual do mercado"*. O comparativo se faz pelo **que a 4Selet oferece** — o leitor faz a conta sozinho.
+  > **Como falar do mercado quando precisar contextualizar:** *"taxas de mercado em torno de 7,9%"*, *"prazos de mercado entre 15 e 30 dias"*, *"plataformas tradicionais"*, *"a oferta atual do mercado"*. O comparativo se faz pelo **que a 4Selet oferece** — o leitor faz a conta sozinho.
 * **Pressão de urgência fake:** Sem countdown timer falso, sem "última chance!!!". Quando há prazo real (encerramento de Taxa Zero), comunicamos com clareza e antecedência.
 * **Estética "guru":** Sem fotos de mansão, carro de luxo, "fórmula secreta". Profissionalismo sóbrio, sempre.
 

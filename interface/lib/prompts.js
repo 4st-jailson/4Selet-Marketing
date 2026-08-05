@@ -6,8 +6,9 @@ const { brandContext } = require("./knowledge");
 const { contentTypeById, pillarById, HASHTAG_RULES } = require("./config");
 
 const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
-- Paleta azul oficial; nunca branco puro nem preto puro; sem neon.
-- Tipografia Inter (JetBrains Mono so para snippets tecnicos).
+- Paleta azul oficial; sem neon; NUNCA preto puro (#000000 -> use Selet Darker #07212B). Branco puro (#FFFFFF) SO como TEXTO sobre fundo Navy/Darker (headline, CTA) e dentro de mockup (tela do dispositivo, card do veiculo) — nunca como fundo da peca, card de conteudo ou area chapada de marca.
+- Tipografia Inter em headline e corpo; JetBrains Mono nos ROTULOS estruturais (eyebrow, badge, footer, rotulo do CTA) e em snippets tecnicos. Nenhuma outra familia.
+- Variedade tematica: NEM toda peca e sobre Taxa Zero. A campanha ativa existe, mas so vira assunto central quando o brief ou o pilar pedirem.
 - Tom: socio experiente e sobrio. Estruturado, factual, com numeros/prazos concretos. Nunca motivacional vazio nem promessa magica.
 - NUNCA cite concorrentes por nome (Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay). Fale do "mercado" em abstrato.
 - Emojis: no maximo 1 funcional em captions/threads (-> ▸ • permitidos); proibido em headline/body de ad. Banidos: fogo, raio, foguete, dinheiro, etc.
@@ -48,7 +49,7 @@ const SCHEMAS = {
   "headline": "headline <=4 palavras",
   "subtext": "subtexto de apoio (1-2 linhas)",
   "cta": "CTA aprovado",
-  "layout_type": "Product Focus | Split | Lifestyle",
+  "layout_type": "editorial | bold | split | photo",  // os 4 templates REAIS do render
   "visual_direction": "direcao visual concreta (fundo, cor da paleta, uso de Selet Dots, hierarquia)",
   "notes": "1-2 frases de racional de marca"
 }`,
@@ -371,7 +372,7 @@ function simulate(req) {
         headline: p.headline,
         subtext: p.subtext,
         cta: p.cta,
-        layout_type: "Split",
+        layout_type: "split",
         badge: p.badge,
         visual_direction: "Fundo Selet Navy com gradiente radial; headline Inter Black branco; Selet Dots; numero/dado em destaque Selet Blue.",
         notes: p.notes + tag,
@@ -380,7 +381,7 @@ function simulate(req) {
         headline: "Zero taxa. Tres meses.",
         subtext: "Migre sua operacao para quem trata pagamento como operacao seria.",
         cta: "Ver as condicoes",
-        layout_type: "Split",
+        layout_type: "split",
         visual_direction: "Fundo Selet Navy com gradiente radial sutil; headline em Inter Black branco; Selet Dots no canto; numero 0% em destaque Selet Blue.",
         notes: "Headline <=4 palavras, paleta azul, CTA aprovado." + tag,
       }, null, 2);

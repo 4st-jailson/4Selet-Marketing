@@ -87,7 +87,7 @@ Solicitar convite no link da bio. →
 
 * **Slide 1 (capa):** Background Selet Navy ou Darker; headline em Inter Black; hook factual ou pergunta de decisão
 * **Slides de conteúdo:** Alternar Navy (escuro) e Cloud (claro) — máximo 5 slides preferencialmente, máximo absoluto 7
-* **Slides escuros:** Texto em Cloud ou Mist — nunca branco puro
+* **Slides escuros:** Texto em branco ou Cloud, apoio em Mist. (O tema escuro do carrossel usa branco no texto principal — ver `THEME_DARK` em `interface/lib/render.js`. Branco é proibido como FUNDO, não como texto.)
 * **Bullets/destaques em slides escuros:** Blocos de background Selet Blue (`#006494`) com texto Cloud
 * **Slide de CTA:** Background Selet Navy; texto Inter Black grande em Cloud; CTA claro
 * **Selet Dots como background pattern:** 8% opacity em slides escuros
@@ -301,9 +301,9 @@ Por isso a Taxa Zero da 4Selet não é só sobre 0%. É sobre dar ao produtor 3 
 |  | Instagram | Threads/X | YouTube | LinkedIn |
 | ----- | ----- | ----- | ----- | ----- |
 | **Caption length** | 1–3 frases | 1–3 frases curtas | 2–4 frases | 1.200–1.500 chars |
-| **CTA** | Condicional (padrão: sem CTA) | ❌ Opcional | ✅ Sim | ✅ Sim (suave) |
+| **CTA** | Condicional (padrão: sem CTA) | Opcional | **Sim** | **Sim** (suave) |
 | **Hashtags** | 3–5, obrigatórias | 0–1, opcional | Na description/tags | 3–5 |
-| **Emojis** | Máx 1, funcional | Máx 1 | ❌ Evitar em títulos | Máx 1, funcional |
+| **Emojis** | Máx 1, funcional | Máx 1 | Evitar em títulos | Máx 1, funcional |
 | **Tom** | Editorial, sóbrio | Provocativo controlado | Didático, profissional | Editorial premium |
 | **Headline font** | Inter 700–800 | N/A | Inter 700–800 | Inter 700–800 |
 | **Body font** | Inter 400–500 | N/A | Inter 400–500 | Inter 400–500 |
