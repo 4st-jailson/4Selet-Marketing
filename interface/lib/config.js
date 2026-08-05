@@ -120,6 +120,13 @@ const APPROVED_CTAS = [
   "Falar com o time", "Acessar o material", "Ler o playbook", "Ver como funciona",
 ];
 
+// Teto do texto que a leitura do tema aceita. Vive aqui porque tinha DUAS casas que nao se
+// enxergavam — a rota devolvia 413 acima de 4000 e o prompt ainda cortava em 4000 por dentro,
+// entao subir so a rota deixaria o corte escondido. Um briefing de diretor de arte passa
+// tranquilamente de 8 mil caracteres; medido, o modelo nao degrada com muito mais que isso.
+// Acima deste teto o texto ja e um documento, e documento pede leitura por secao — outro assunto.
+const BRIEF_MAX_CHARS = 32000;
+
 // Padroes de CTA tipicamente proibidos (urgencia fake / hype)
 const BANNED_CTA_PATTERNS = [
   /compre j[aá]/i, /n[aã]o perca/i, /clica aqui/i, /urgente/i, /garanta o seu/i,
@@ -255,6 +262,7 @@ module.exports = {
   BANNED_COMPETITORS,
   BANNED_EMOJIS,
   APPROVED_CTAS,
+  BRIEF_MAX_CHARS,
   BANNED_CTA_PATTERNS,
   HASHTAG_RULES,
   CONTENT_TYPES,

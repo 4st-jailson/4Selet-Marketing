@@ -121,8 +121,14 @@ async function complete(opts) {
   }
   const text = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "").trim();
   const usage = data.usage || {};
-  console.log("[ai] res (openai) model=" + (data.model || model) + " out=" + (usage.completion_tokens != null ? usage.completion_tokens : "?"));
-  return { text, simulated: false, model: data.model || model, usage };
+  // A OpenAI chama de "finish_reason" o que a Anthropic chama de "stop_reason", e usa "length"
+  // onde a outra usa "max_tokens". Sem traduzir aqui, quem chama não tem como saber que a
+  // resposta foi cortada no meio — e uma resposta cortada vira JSON inválido, que é fácil de
+  // confundir com "o texto não dizia nada". Quem depende disso: a leitura do tema (/interpret).
+  const fim = (data.choices && data.choices[0] && data.choices[0].finish_reason) || null;
+  const stop_reason = fim === "length" ? "max_tokens" : fim;
+  console.log("[ai] res (openai) model=" + (data.model || model) + " out=" + (usage.completion_tokens != null ? usage.completion_tokens : "?") + " stop=" + (stop_reason || "?"));
+  return { text, simulated: false, model: data.model || model, stop_reason, usage };
 }
 
 module.exports = { DEFAULT_MODEL, getApiKey, getModel, hasKey, saveApiKey, saveModel, testKey, complete, maskKey };

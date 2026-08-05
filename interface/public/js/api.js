@@ -9,7 +9,12 @@ const API = (() => {
     if (ct.includes("application/json")) data = await r.json();
     else data = await r.text();
     if (!r.ok) {
-      const msg = r.status === 413
+      // O 413 tem duas origens muito diferentes: o body-parser do Express (imagens grandes demais,
+      // sem `code`) e as rotas que recusam texto por tamanho (com `code` próprio). Discriminar pelo
+      // CÓDIGO, não pela presença de `data.error` — o 413 do body-parser também traz `error`
+      // ("request entity too large"), então testar por `error` desligaria a mensagem em português
+      // em todos os casos e devolveria inglês de biblioteca a quem só anexou fotos demais.
+      const msg = (r.status === 413 && !(data && data.code))
         ? "Arquivos grandes demais para enviar de uma vez — reduza o número ou o tamanho das imagens."
         : ((data && data.error) || ("HTTP " + r.status));
       const err = new Error(msg);

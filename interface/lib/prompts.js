@@ -3,7 +3,7 @@
 // de saida (estrutura padrao) que o back valida.
 "use strict";
 const { brandContext } = require("./knowledge");
-const { contentTypeById, pillarById, HASHTAG_RULES, CONTENT_TYPES, CONTENT_PILLARS, APPROVED_CTAS } = require("./config");
+const { contentTypeById, pillarById, HASHTAG_RULES, CONTENT_TYPES, CONTENT_PILLARS, APPROVED_CTAS, BRIEF_MAX_CHARS } = require("./config");
 
 const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 - Paleta azul oficial; sem neon; NUNCA preto puro (#000000 -> use Selet Darker #07212B). Branco puro (#FFFFFF) SO como TEXTO sobre fundo Navy/Darker (headline, CTA) e dentro de mockup (tela do dispositivo, card do veiculo) — nunca como fundo da peca, card de conteudo ou area chapada de marca.
@@ -245,7 +245,11 @@ function interpretPrompt(req) {
     .filter((c, i, a) => a.indexOf(c) === i);
   return [
     "TEXTO ESCRITO PELA PESSOA:",
-    String(req.texto || "").slice(0, 4000),
+    // Mesmo teto da rota (config.BRIEF_MAX_CHARS). Antes eram dois 4000 independentes: a rota
+    // recusava acima de 4000 e AQUI o texto ainda era cortado por dentro — subir só a rota
+    // teria deixado o corte silencioso de pé. Um briefing longo perde justamente o fim, que é
+    // onde costuma estar a chamada ("Criar um botão com o texto: Conheça a plataforma").
+    String(req.texto || "").slice(0, BRIEF_MAX_CHARS),
     "",
     "FORMATOS possiveis (escolha 1 ou deixe vazio):",
     tipos,
