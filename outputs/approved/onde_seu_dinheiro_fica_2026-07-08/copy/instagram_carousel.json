@@ -1,0 +1,107 @@
+{
+  "eyebrow": "",
+  "slides": [
+    {
+      "layout": "cover",
+      "title": "Você sabe onde o seu ==dinheiro== fica enquanto espera o ==repasse?==",
+      "image": "/uploads/pexels-olga-volkovitskaia-131638009-1358_mrcf8u5n.jpeg",
+      "titleOffsetY": -50
+    },
+    {
+      "layout": "flow",
+      "orient": "row",
+      "tone": "muted",
+      "eyebrow": "O PROBLEMA",
+      "title": "No modelo comum, o seu dinheiro ==não vai direto== pra você.",
+      "flow": [
+        {
+          "label": "Venda aprovada",
+          "icon": "cart"
+        },
+        {
+          "label": "Conta da plataforma",
+          "sub": "em nome dela",
+          "icon": "bank",
+          "mark": true
+        },
+        {
+          "label": "Só depois chega a você",
+          "icon": "person"
+        }
+      ],
+      "note": "Seu dinheiro fica retido na plataforma até o momento do repasse."
+    },
+    {
+      "layout": "text",
+      "theme": "light",
+      "eyebrow": "O RISCO",
+      "title": "Se algo dá errado lá dentro, ==o problema vira seu.=="
+    },
+    {
+      "layout": "flow",
+      "orient": "row",
+      "tone": "accent",
+      "eyebrow": "A VIRADA 4SELET",
+      "title": "Aqui, o dinheiro entra ==direto na sua conta.==",
+      "flow": [
+        {
+          "label": "Venda aprovada",
+          "icon": "cart"
+        },
+        {
+          "label": "Sua conta, seu CNPJ",
+          "sub": "split na adquirente",
+          "icon": "shield",
+          "mark": true
+        },
+        {
+          "label": "O dinheiro é seu",
+          "sub": "desde a aprovação",
+          "icon": "check"
+        }
+      ],
+      "note": "Split direto na adquirente: nenhuma retenção pela plataforma."
+    },
+    {
+      "layout": "text",
+      "eyebrow": "SEM INTERMEDIÁRIO",
+      "title": "Sem retenção pela plataforma. Em momento ==nenhum.=="
+    },
+    {
+      "layout": "cta",
+      "theme": "light",
+      "title": "Quer ter o seu dinheiro ==no seu nome== desde a primeira venda?",
+      "body": "Venha para a 4Selet — o convite está no link da bio.",
+      "inline_question": {
+        "prefix": "Como produtor digital, você já tem um nicho claro, ou ainda está",
+        "highlight": "tentando falar com todo mundo?",
+        "highlight_color": "#006494",
+        "style": "large_editorial",
+        "font_weight": 800,
+        "font_family": "Inter",
+        "layout_variant": "left_aligned_question",
+        "background": "#D9DCD6",
+        "text_color": "#07212B",
+        "watermark": {
+          "text": "SELET",
+          "font_family": "Inter",
+          "font_weight": 800,
+          "color": "#AFBCC9",
+          "opacity": 0.18,
+          "position": "right_overflow",
+          "size": "display_xl"
+        }
+      }
+    }
+  ],
+  "caption": "Você sabe onde fica o seu dinheiro enquanto a plataforma processa o repasse?\n\nNa 4Selet, o split acontece direto na adquirente — sem retenção, sem intermediário, sem o seu caixa na conta de outra empresa.\n\nSolicitar convite no link da bio. →",
+  "hashtags": [
+    "#4Selet",
+    "#PlataformaDePagamentos",
+    "#ProdutorDigital",
+    "#NegocioDigital",
+    "#DigitalSerio"
+  ],
+  "cta": "Solicitar convite",
+  "notes": "Slide 6 (CTA) recebeu estilo editorial da imagem de referência: frase em Inter Black tamanho display, alinhada à esquerda, fundo Selet Cloud (#D9DCD6), texto primário em Selet Darker (#07212B) e trecho de destaque em Selet Blue (#006494) — idêntico ao tratamento cromático da referência. Marca d'água tipográfica 'SELET' em Selet Mist (18% opacity) transborda à direita, reproduzindo o motif da imagem. Logo 4Selet no canto superior esquerdo. Todos os demais slides e campos preservados integralmente."
+}

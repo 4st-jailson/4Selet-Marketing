@@ -1,0 +1,99 @@
+{
+  "task_name": "onde_seu_dinheiro_fica",
+  "task_date": "2026-07-08",
+  "status": "approved",
+  "created_at": "2026-07-08T15:52:37-03:00",
+  "last_updated_at": "2026-07-17T17:46:22-03:00",
+  "approved_by": "Suporte 4Selet",
+  "approved_at": "2026-07-17T17:46:22-03:00",
+  "campaign_angle": null,
+  "platforms": [
+    "instagram"
+  ],
+  "history": [
+    {
+      "from": null,
+      "to": "draft",
+      "at": "2026-07-08T15:52:37-03:00",
+      "by": "orchestrator",
+      "event_type": "first_creation"
+    },
+    {
+      "from": "draft",
+      "to": "draft",
+      "at": "2026-07-08T15:54:26-03:00",
+      "by": "orchestrator",
+      "event_type": "transition",
+      "reason": "re-bootstrap (pasta ja existia em estado 'draft')"
+    },
+    {
+      "from": "draft",
+      "to": "draft",
+      "at": "2026-07-08T16:45:27-03:00",
+      "by": "orchestrator",
+      "event_type": "transition",
+      "reason": "re-bootstrap (pasta ja existia em estado 'draft')"
+    },
+    {
+      "from": "draft",
+      "to": "draft",
+      "at": "2026-07-08T17:11:38-03:00",
+      "by": "orchestrator",
+      "event_type": "transition",
+      "reason": "re-bootstrap (pasta ja existia em estado 'draft')"
+    },
+    {
+      "from": "draft",
+      "to": "in_review",
+      "at": "2026-07-09T09:00:58-03:00",
+      "by": "distribution-agent",
+      "event_type": "transition"
+    },
+    {
+      "from": "in_review",
+      "to": "approved",
+      "at": "2026-07-09T09:01:20-03:00",
+      "by": "Junior",
+      "event_type": "promoted"
+    },
+    {
+      "from": "approved",
+      "to": "in_review",
+      "at": "2026-07-16T09:36:09-03:00",
+      "by": "promote_task",
+      "event_type": "promoted"
+    },
+    {
+      "from": "in_review",
+      "to": "approved",
+      "at": "2026-07-17T17:46:22-03:00",
+      "by": "Suporte 4Selet",
+      "event_type": "promoted"
+    }
+  ],
+  "title": "Onde seu dinheiro fica durante o repasse",
+  "first_viewed_at": "2026-07-08T18:57:45.083Z",
+  "content_hashes": {
+    "copy/instagram_carousel.json": "780175bc21eb424d26f79bb94416936962b4335c3713805d2f85ffeae4e0d285",
+    "render.json": "5d7ec260b6cd77a795b2cb8d1b3bfaa0812742465092f5c13f0b11033256e19f",
+    "slides/slide_1.bg.png": "666b04855d633f4a8e00063758aeadf70cc3aeb447fc236b4089929cf9c7294b",
+    "slides/slide_1.editable.json": "db3742ffb4537d0429f5b4a627f61901f05e7d71fdccf7ac7dc3f7fe08ce9138",
+    "slides/slide_1.html": "5d8e4e23ef3cd97abd4a7f422f67df47fcb2377b7b1575f89d4a50441d2588a1",
+    "slides/slide_1.png": "3e87f3516d44c17bfeddd33287c70ba5711674c795840c10a40c7bde3671437b",
+    "slides/slide_2.bg.png": "e187be2f6099b9ce553aa7eea15d0c4ed2d43f9cfe92203726a4e02dd63d37e4",
+    "slides/slide_2.editable.json": "ec030a262b2fdcf38d3d6215383437cee7c7c5ba43f778e4587f8580970640c5",
+    "slides/slide_2.html": "5a967368432058deb9ae6532d633ad07cbe4410e866777993c534b94393a6d50",
+    "slides/slide_2.png": "e95fc3496a630d23f11d7413d9cd7a3cee5cb3df46d5abfa85fadb08a9182984",
+    "slides/slide_3.html": "56bb9d330d0f895628f5ab992f5e15f302a7a9ff81fa5b166e60b0f8b8edbdc5",
+    "slides/slide_3.png": "6f5befe3e40cdcd0740d43cb96abf7e0bfb746a976aaa07c5366912ee4bda266",
+    "slides/slide_4.bg.png": "de9ad759bd86934dc33b1a4652b22263eead0cbce575a5fa2f6f853a243834d1",
+    "slides/slide_4.editable.json": "b52921223869c7eb3a64b3fd4d5c104d5f2834585289129da23208e6bb2ee2b1",
+    "slides/slide_4.html": "1d9dc42ab3869809c7b6d6e29da9f093d029891b35ec65e521112cb7eca745f4",
+    "slides/slide_4.png": "86e7f1787ef21b0e6a883ae72544b43c33bf2b64459dec87bf9c9c5c8278d289",
+    "slides/slide_5.html": "3976cacf7e4a0f021bc8e4eae2c47c6c10a271caef02b14613433b7ddde40ccc",
+    "slides/slide_5.png": "3bb6f5d284d3b4f5b017dec9a9869edaad3334d14cf10dc8dc078bee69f4a05f",
+    "slides/slide_6.html": "72b870d8aa45329236d083165271e670bf8bde789f9d7b7fe310c16417d46b9b",
+    "slides/slide_6.png": "fd6cf26338efce063d16050b87aa73f91140a624180b1e1a1e82ad839965f92b"
+  },
+  "preview_hash": "1e6bbe8b20edffbd44ad005cc66e7f97e007613f4b45e7152b2979e0468d5398"
+}
