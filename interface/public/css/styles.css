@@ -472,14 +472,19 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .model-grupo + .model-grupo { margin-top: 14px; }
 .model-grupo-tit { font-size: 12.5px; font-weight: 600; color: var(--text-2); margin-bottom: 2px; }
 .model-grupo-tit .hint { font-weight: 400; }
-.model-thumb { width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 6px; display: block; background: var(--surface-2); }
-.model-card { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 7px; padding: 8px 8px 10px; width: 116px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-mut); cursor: pointer; transition: border-color var(--tr), background var(--tr), color var(--tr); }
+/* Painel de preview: a arte do modelo selecionado, ao lado da explicacao do que ele faz. */
+.model-preview { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); }
+.model-preview-art { flex: 0 0 auto; width: 132px; height: auto; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 7px; display: block; background: var(--surface); box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); }
+.model-preview-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding-top: 2px; }
+.model-preview-nome { font-size: 13.5px; font-weight: 600; }
+.model-preview-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.model-card { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 7px; padding: 12px 10px; width: 116px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-mut); cursor: pointer; transition: border-color var(--tr), background var(--tr), color var(--tr); }
 .model-card span { text-align: center; }
 .model-card:hover { border-color: var(--accent); color: var(--text); }
 .model-card.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--text); }
 /* altura fixa do rotulo: "Foto real (maos + mesa)" quebra em duas linhas e desalinhava a fileira */
-.model-card span { font-size: 12.5px; font-weight: 600; line-height: 1.3; min-height: 2.6em; display: flex; align-items: center; justify-content: center; }
-.model-card.on .model-thumb { outline: 2px solid var(--accent); outline-offset: -2px; }
+.model-card span { font-size: 13px; font-weight: 600; line-height: 1.3; min-height: 2.6em; display: flex; align-items: center; justify-content: center; }
+
 .media-print-prev { margin-top: 10px; }
 .media-print-prev img { max-height: 170px; max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
 .size-pick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

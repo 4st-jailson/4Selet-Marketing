@@ -116,16 +116,16 @@ function isMediaKind(k) { return k === "image" || k === "feed" || k === "carouse
 // `grupo` monta os subtítulos do seletor; `svg` segue em uso no cartão de descoberta da peça;
 // a miniatura de cada modelo é a arte de verdade, gerada por scripts/gen_media_thumbs.js.
 const MEDIA_MODELS = [
-  { id: "hand_tablet", name: "Tablet", grupo: "Aparelho", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
-  { id: "celular", name: "Celular", grupo: "Aparelho", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
-  { id: "navegador", name: "Navegador", grupo: "Aparelho", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/><circle cx="9" cy="11" r=".6" fill="currentColor"/><circle cx="12.5" cy="11" r=".6" fill="currentColor"/><circle cx="16" cy="11" r=".6" fill="currentColor"/></svg>' },
-  { id: "foto_real", name: "Foto real (mãos)", grupo: "Foto real", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="6" width="14" height="24" rx="2"/><path d="M13 12c-3 0-5 2-5 5v9M27 12c3 0 5 2 5 5v9"/></svg>' },
-  { id: "foto_mesa", name: "Foto real (mesa)", grupo: "Foto real", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="15" y="9" width="13" height="18" rx="2"/><path d="M4 27h32"/><circle cx="9" cy="22" r="4"/><path d="M13 21h2"/></svg>' },
-  { id: "foto_maos_mesa", name: "Foto real (mãos + mesa)", grupo: "Foto real", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="12" width="24" height="16" rx="2"/><path d="M6 16v10M34 16v10"/><circle cx="31" cy="8" r="3"/></svg>' },
-  { id: "citacao", name: "Citação", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="currentColor"><path d="M11 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H19v9.5zM24 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H32v9.5z"/></svg>' },
-  { id: "selo", name: "Selo", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="6.5"/></svg>' },
-  { id: "split", name: "Split", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="20" y1="8" x2="20" y2="32"/></svg>' },
-  { id: "camadas", name: "Camadas", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="12" y="6" width="20" height="26" rx="2"/><path d="M8 12v20a2 2 0 002 2h16"/></svg>' },
+  { id: "hand_tablet", name: "Tablet", grupo: "Aparelho", desc: "Tablet levemente inclinado sobre o fundo azul, com a matéria ocupando a tela inteira. Vai bem com print vertical.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
+  { id: "celular", name: "Celular", grupo: "Aparelho", desc: "Tela de celular. Use um print feito no celular — um print largo encolhe demais para caber.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
+  { id: "navegador", name: "Navegador", grupo: "Aparelho", desc: "Janela de navegador, com barra de endereço e o site. Melhor com print de página aberta no computador.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/><circle cx="9" cy="11" r=".6" fill="currentColor"/><circle cx="12.5" cy="11" r=".6" fill="currentColor"/><circle cx="16" cy="11" r=".6" fill="currentColor"/></svg>' },
+  { id: "foto_real", name: "Foto real (mãos)", grupo: "Foto real", desc: "Mãos segurando o tablet numa foto real. A matéria é encaixada na tela com a perspectiva da cena.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="6" width="14" height="24" rx="2"/><path d="M13 12c-3 0-5 2-5 5v9M27 12c3 0 5 2 5 5v9"/></svg>' },
+  { id: "foto_mesa", name: "Foto real (mesa)", grupo: "Foto real", desc: "Tablet apoiado na mesa, com xícara ao lado. Clima de leitura calma.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="15" y="9" width="13" height="18" rx="2"/><path d="M4 27h32"/><circle cx="9" cy="22" r="4"/><path d="M13 21h2"/></svg>' },
+  { id: "foto_maos_mesa", name: "Foto real (mãos + mesa)", grupo: "Foto real", desc: "Mãos e caderno sobre mesa escura. É a cena mais sóbria das três.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="12" width="24" height="16" rx="2"/><path d="M6 16v10M34 16v10"/><circle cx="31" cy="8" r="3"/></svg>' },
+  { id: "citacao", name: "Citação", grupo: "Editorial", desc: "Um trecho da matéria em tipografia grande, com o print pequeno abaixo. Precisa da manchete preenchida.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="currentColor"><path d="M11 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H19v9.5zM24 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H32v9.5z"/></svg>' },
+  { id: "selo", name: "Selo", grupo: "Editorial", desc: "A matéria inteira em destaque, com o selo da marca no canto. Bom quando o print já é forte sozinho.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="6.5"/></svg>' },
+  { id: "split", name: "Split", grupo: "Editorial", desc: "Manchete de um lado, matéria do outro. Precisa da manchete preenchida.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="20" y1="8" x2="20" y2="32"/></svg>' },
+  { id: "camadas", name: "Camadas", grupo: "Editorial", desc: "A matéria dentro de uma moldura de camadas, com o painel da marca no topo.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="12" y="6" width="20" height="26" rx="2"/><path d="M8 12v20a2 2 0 002 2h16"/></svg>' },
 ];
 // O que cada família faz, em uma linha — vira a explicação do subtítulo no seletor.
 const MEDIA_GRUPOS = [
@@ -134,6 +134,23 @@ const MEDIA_GRUPOS = [
   { nome: "Editorial", desc: "A matéria como peça gráfica, sem aparelho" },
 ];
 function mediaModelName(id) { const m = MEDIA_MODELS.find((x) => x.id === id); return m ? m.name : (id || "Tablet"); }
+// Mostra a arte do modelo selecionado. A grade fica compacta (só ícone + nome) e o layout
+// aparece aqui, num painel único que troca no clique — antes o modelo era um ícone
+// esquemático e só dava para saber o que ele fazia gerando a peça.
+// A imagem é a arte de verdade, gerada por scripts/gen_media_thumbs.js com um print genérico.
+function pintaPreviewModelo(id) {
+  const alvo = document.getElementById("g-media-preview");
+  if (!alvo) return;
+  const m = MEDIA_MODELS.find((x) => x.id === id) || MEDIA_MODELS[0];
+  const g = MEDIA_GRUPOS.find((x) => x.nome === m.grupo);
+  alvo.innerHTML = `
+    <img class="model-preview-art" src="/img/media-models/${esc(m.id)}.png" alt="Exemplo do modelo ${esc(m.name)}" width="132" height="165" />
+    <div class="model-preview-txt">
+      <div class="model-preview-nome">${esc(m.name)} <span class="hint">— ${esc(g ? g.nome : "")}</span></div>
+      <div class="model-preview-desc">${esc(m.desc || "")}</div>
+      <div class="hint">O exemplo usa uma matéria genérica; a sua entra no lugar dela.</div>
+    </div>`;
+}
 // Tamanho da arte (px) por tipo de conteúdo — referência p/ escolher imagens do tamanho certo na busca.
 function artSizeForType(typeId) {
   const ct = metaType(typeId); const k = ct && ct.kind;
@@ -3836,12 +3853,13 @@ async function viewCreate(arg, query) {
               <div class="model-grupo">
                 <div class="model-grupo-tit">${esc(g.nome)} <span class="hint">— ${esc(g.desc)}</span></div>
                 <div class="model-pick">${MEDIA_MODELS.filter((m) => m.grupo === g.nome).map((m) => `
-                  <button type="button" class="model-card${m.id === MEDIA_MODELS[0].id ? " on" : ""}" data-model="${esc(m.id)}" title="${esc(m.name)}">
-                    <img class="model-thumb" src="/img/media-models/${esc(m.id)}.png" alt="" loading="lazy" width="132" height="165" />
-                    <span>${esc(m.name)}</span>
-                  </button>`).join("")}</div>
+                  <button type="button" class="model-card${m.id === MEDIA_MODELS[0].id ? " on" : ""}" data-model="${esc(m.id)}">${m.svg}<span>${esc(m.name)}</span></button>`).join("")}</div>
               </div>`).join("")}</div>
             <input type="hidden" id="g-media-model" value="${esc(MEDIA_MODELS[0].id)}" />
+            <!-- Preview do modelo escolhido: a arte de verdade, não um desenho. Fica num painel
+                 só, que troca no clique — assim a grade continua compacta e mesmo assim dá para
+                 ver o que cada modelo faz antes de gerar. -->
+            <div class="model-preview" id="g-media-preview"></div>
             <div class="hint" id="g-media-aspect" style="display:none;color:var(--warn);margin-top:2px"></div>
           </div>
           <div class="field"><label>Tamanhos a gerar <span class="hint">(marque um ou mais — Feed 4:5 é o publicável no Instagram)</span></label>
@@ -4060,9 +4078,11 @@ async function viewCreate(arg, query) {
   $$("#g-media-model-pick .model-card").forEach((b) => { b.onclick = () => {
     $$("#g-media-model-pick .model-card").forEach((x) => x.classList.toggle("on", x === b));
     if ($("#g-media-model")) $("#g-media-model").value = b.dataset.model;
+    pintaPreviewModelo(b.dataset.model); // mostra a arte do modelo escolhido
     checkMediaAspect(); // avisa se o print destoa da proporção do dispositivo
     markArtStale(); // trocar o dispositivo muda o mockup — prévia desatualizada
   }; });
+  pintaPreviewModelo(($("#g-media-model") || {}).value || MEDIA_MODELS[0].id); // estado inicial
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
   const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
   // Sugere o pilar de conteúdo a partir da campanha (ex.: campanha "Taxa Zero" -> pilar "Campanha Taxa Zero").
