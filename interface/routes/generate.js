@@ -286,7 +286,15 @@ router.post("/interpret", async (req, res, next) => {
     if (ctaOk) campos.cta = { valor: ctaOk, confianca: conf("cta"), porque: String((cru.porque || {}).cta || "").slice(0, 200) };
     else if (cru.cta_ausente === true) campos.cta = { valor: "", sem_cta: true, confianca: conf("cta"), porque: String((cru.porque || {}).cta || "").slice(0, 200) };
 
-    const faltou = Array.isArray(cru.faltou) ? cru.faltou.map((x) => String(x).slice(0, 60)).slice(0, 6) : [];
+    // `faltou` só pode citar os campos que a leitura realmente tenta preencher. Era texto livre do
+    // modelo impresso cru na tela: numa execução real ele devolveu ["cta","numero_destaque",
+    // "headline","dado_ou_percentual_de_aprovacao"], e quem lesse a tela veria nomes de variável.
+    // O que ele nomear fora desses três não é campo — é observação, e não cabe nesse aviso.
+    const CAMPOS_LIDOS = ["content_type", "pillar", "cta"];
+    const faltou = (Array.isArray(cru.faltou) ? cru.faltou : [])
+      .map((x) => String(x).trim())
+      .filter((x) => CAMPOS_LIDOS.indexOf(x) >= 0 && !campos[x])
+      .filter((x, i, a) => a.indexOf(x) === i);
     res.json({ disponivel: true, simulated: !!result.simulated, model: result.model, provider: result.provider, campos, faltou });
   } catch (e) { next(e); }
 });

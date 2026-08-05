@@ -1921,8 +1921,25 @@ async function renderFeed(folder, opts) {
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
-  const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "4Selet.";
-  const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
+  // A caption tem estrutura: 1a linha = gancho, paragrafos de desenvolvimento, hashtags no fim.
+  // A arte usava SO a primeira linha e mandava eyebrow/subtexto/CTA vazios — por isso a peca de
+  // feed saia como fundo + uma frase + logo. O texto de apoio ja estava no arquivo o tempo todo.
+  const linhas = caption.split("\n").map((s) => s.trim()).filter(Boolean);
+  const semHashtag = (s) => !/^#/.test(s);
+  const firstLine = linhas.filter(semHashtag)[0] || "4Selet.";
+  // Cortar em 57 caracteres cortava no meio da palavra ("...está olhando par…"). Agora o corte
+  // acontece no ultimo espaco antes do limite, e so quando a frase realmente nao cabe.
+  const cortaEmPalavra = (s, max) => {
+    s = String(s || "").trim();
+    if (s.length <= max) return s;
+    const pedaco = s.slice(0, max);
+    const esp = pedaco.lastIndexOf(" ");
+    return (esp > max * 0.6 ? pedaco.slice(0, esp) : pedaco).replace(/[\s,;:.\-–—]+$/, "") + "…";
+  };
+  const headline = cortaEmPalavra(firstLine, 60);
+  // Texto de apoio: o proximo paragrafo depois do gancho, sem hashtag e sem repetir o gancho.
+  const apoio = linhas.filter(semHashtag).slice(1).find((s) => s.length > 24 && s !== firstLine) || "";
+  const subtexto = cortaEmPalavra(apoio, 150);
   const logoV = pickLogo(loc, opts && opts.logo);
   const wmV = pickWatermark(loc, opts && opts.watermark);
   const htmlPath = path.join(loc.path, "ads", "feed.html");
@@ -1932,7 +1949,7 @@ async function renderFeed(folder, opts) {
     width: 1080, height: 1350,
     eyebrow: "",
     headline: highlightHeadline(headline),
-    subtext: "",
+    subtext: subtexto,
     cta: "",
     badge: "",
     image: (opts && opts.image) || "",
