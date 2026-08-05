@@ -3218,12 +3218,36 @@ function wireIgPreview(root, imgUrls) {
   root.querySelectorAll(".ig-nav").forEach((b) => { b.onclick = () => { i = (i + parseInt(b.dataset.d, 10) + imgUrls.length) % imgUrls.length; show(); }; });
 }
 
+// Estado REAL da conexão com o Instagram. A tela dizia "Conectado" só porque existia um token
+// salvo no disco — e anunciou por 18 dias uma conexão morta (o token colado era de curta duração
+// e venceu no mesmo dia). Agora o back devolve o resultado do ÚLTIMO contato com a Meta
+// (lib/publish.js → connectionState) e a tela mostra apenas o que foi de fato verificado.
+function igConnLabel(ig) {
+  const c = (ig && ig.connection) || {};
+  const quando = c.checked_at ? new Date(c.checked_at).toLocaleString("pt-BR") : null;
+  if (c.state === "conectado") {
+    return { badge: "ok", texto: "Conectado", detalhe: "Publica de verdade nesta conta. Última verificação: " + quando + ".", pode: true };
+  }
+  if (c.state === "expirado") {
+    return { badge: "err", texto: "Conexão expirada", detalhe: "O token venceu e a publicação não funciona. Cole um token novo e clique em Testar. Detectado em " + quando + ".", pode: false };
+  }
+  if (c.state === "com_erro") {
+    return { badge: "err", texto: "Com erro", detalhe: (c.message || "A última tentativa de falar com o Instagram falhou.") + " (" + quando + ")", pode: false };
+  }
+  if (c.state === "nao_testado") {
+    return { badge: "paused", texto: "Não verificado", detalhe: "Existe um token salvo, mas ninguém confirmou com o Instagram ainda. Clique em Testar para saber se funciona.", pode: false };
+  }
+  return { badge: "paused", texto: "Não conectado", detalhe: "A publicação roda em modo simulado — não posta nada.", pode: false };
+}
+
 // Modal de publicar/agendar com a PRÉVIA do Instagram. Conectado = publica de verdade
 // (confirma explícito); não conectado = simulado. Também dá pra AGENDAR (data/hora).
 async function openPublishModal(task) {
   let st = {};
   try { st = (await API.publishStatus()).instagram || {}; } catch (e) { /* segue como não-conectado */ }
-  const connected = !!st.configured;
+  // "Conectado" só quando a Meta confirmou de verdade — ter token salvo não basta.
+  const conn = igConnLabel(st);
+  const connected = conn.pode;
   const uname = st.username || "4selet";
   const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
   if (!imgs.length) { toast("Esta peça não tem imagem publicável.", "error"); return; }
@@ -3235,7 +3259,9 @@ async function openPublishModal(task) {
     <div class="pub-body">
       <div class="pub-preview">${instagramPreview(imgs, caption, uname)}</div>
       <div class="pub-form">
-        <div class="pub-status">${connected ? '<span class="badge ok">Conectado</span> @' + esc(uname) + ' — <span class="hint">publica de verdade</span>' : '<span class="badge paused">Não conectado</span> <span class="hint">— modo simulado (não posta)</span>'}</div>
+        <div class="pub-status">${connected
+          ? '<span class="badge ok">Conectado</span> @' + esc(uname) + ' — <span class="hint">publica de verdade</span>'
+          : '<span class="badge ' + esc(conn.badge) + '">' + esc(conn.texto) + '</span> <span class="hint">— ' + esc(conn.detalhe) + '</span>'}</div>
         <p class="hint">Esta peça já está <strong>aprovada</strong>. Aqui você só decide <strong>quando</strong> ela vai ao ar — publicar agora ou agendar.</p>
         <label class="layer-lab">Legenda</label>
         <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
@@ -5022,9 +5048,9 @@ async function viewSettings() {
     <div class="card mt" style="max-width:660px">
       <h3>Publicação no Instagram</h3>
       <p class="muted mt">Conecte a conta (Graph API da Meta) para publicar peças <strong>aprovadas</strong> direto do painel. O token e o ID ficam só no servidor (em <span class="codeblock">interface/data</span>, fora do git) e nunca vão para o navegador. Enquanto não conectar, a publicação roda em <strong>modo simulado</strong>.</p>
-      ${ig.configured
-        ? `<div class="ig-connected mt"><span class="badge ok">Conectado</span> <strong>@${esc(ig.username || "conta")}</strong><div class="hint">As publicações vão para esta conta <strong>de verdade</strong> (não é mais simulado).</div></div>`
-        : `<div class="kv mt"><div class="k">Status</div><div><span class="badge paused">Não conectado</span> <span class="hint">— publicação em modo simulado (não posta nada)</span></div></div>`}
+      ${(() => { const st = igConnLabel(ig); return st.pode
+        ? `<div class="ig-connected mt"><span class="badge ok">${esc(st.texto)}</span> <strong>@${esc(ig.username || "conta")}</strong><div class="hint">${esc(st.detalhe)}</div></div>`
+        : `<div class="kv mt"><div class="k">Status</div><div><span class="badge ${esc(st.badge)}">${esc(st.texto)}</span>${ig.username ? " <strong>@" + esc(ig.username) + "</strong>" : ""}<div class="hint">${esc(st.detalhe)}</div></div></div>`; })()}
       <div class="kv mt">
         ${ig.ig_user_id ? `<div class="k">Conta (ID)</div><div class="muted">${esc(ig.ig_user_id)}</div>` : ""}
         ${ig.token_hint ? `<div class="k">Token</div><div>termina em <span class="codeblock">${esc(ig.token_hint)}</span></div>` : ""}

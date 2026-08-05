@@ -126,6 +126,21 @@ require("./lib/schedule").startWorker(
   (folder) => { const t = require("./lib/content").getTask(folder); return !!(t && t.status && t.status.published_at); }
 );
 
+// Confere a conexão com o Instagram ao subir e a cada 6h, em segundo plano. Sem isto o painel
+// só descobria que o token morreu na hora de publicar — foi assim que ficou 18 dias anunciando
+// "Conectado" com uma sessão expirada. Falha aqui não derruba nada: só registra o estado.
+(function vigiaConexaoInstagram() {
+  const publish = require("./lib/publish");
+  const conferir = () => {
+    if (!publish.isConfigured()) return;
+    publish.testConnection()
+      .then((r) => { if (!r.ok) console.warn("[instagram] conexão indisponível:", r.error); })
+      .catch((e) => console.warn("[instagram] não consegui conferir a conexão:", e && e.message));
+  };
+  setTimeout(conferir, 8000).unref();                 // logo após o boot
+  setInterval(conferir, 6 * 60 * 60 * 1000).unref();  // e a cada 6 horas
+})();
+
 // Servir assets de marca (logos) read-only. Filtro de extensao (B6): so mídia/fontes/css
 // — nunca serve .env/.json/.md/etc. que por acaso caiam em assets/. Publico (fora do gate).
 app.use("/brand-assets", (req, res, next) => {

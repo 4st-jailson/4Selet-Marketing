@@ -62,6 +62,17 @@ services:
         max-file: "5"
     depends_on:
       - panel
+    # Este Caddy também atende squad.4st.co (serviço radar-web, de OUTRO projeto, na rede
+    # radar-net). Essa ligação estava sendo feita À MÃO com `docker network connect`, fora do
+    # compose: qualquer `up -d` recriava o contêiner sem a rede e derrubava o squad.4st.co com
+    # 502, sem ninguém entender por quê. Declarada aqui para o deploy parar de ser destrutivo.
+    networks:
+      - default
+      - radar-net
+
+networks:
+  radar-net:
+    external: true   # criada pelo projeto do radar; aqui só nos conectamos a ela
 
 volumes:
   panel_outputs:

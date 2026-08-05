@@ -52,6 +52,7 @@ function publicConfig() {
     public_base_url: publicBase(),
     connected_at: c.connected_at || null,
     token_hint: c.access_token ? ("…" + String(c.access_token).slice(-4)) : null,
+    connection: connectionState(),  // estado VERIFICADO com a Meta (nao apenas "tem token salvo")
   };
 }
 // Salva token/ID/base. NÃO valida com a Meta aqui (use testConnection depois).
@@ -117,7 +118,7 @@ async function testConnection() {
   // Sem ig_user_id ainda: acha a conta IG Business ligada a uma Página do Facebook.
   if (!c.ig_user_id) {
     const disc = await graphGet("/me/accounts", { fields: "name,instagram_business_account{id,username}", access_token: c.access_token }, "listar as Páginas");
-    if (!disc.ok || disc.body.error) return { ok: false, configured: false, error: (disc.body.error && disc.body.error.message) || "Não consegui listar as Páginas com esse token." };
+    if (!disc.ok || disc.body.error) { const de = disc.body && disc.body.error; const dmsg = (de && de.message) || "Não consegui listar as Páginas com esse token."; recordCheck(false, { code: (de && de.code) || null, message: dmsg }); return { ok: false, configured: false, error: dmsg }; }
     const pg = (Array.isArray(disc.body.data) ? disc.body.data : []).find((p) => p.instagram_business_account && p.instagram_business_account.id);
     if (!pg) return { ok: false, configured: false, error: "Token ok, mas não achei uma conta Instagram Business ligada a uma Página. Confirme que @4selet é Profissional e está vinculada a uma Página do Facebook." };
     const cfg = loadConfig(); cfg.instagram = cfg.instagram || {};
@@ -125,12 +126,22 @@ async function testConnection() {
     cfg.instagram.username = pg.instagram_business_account.username || cfg.instagram.username;
     cfg.instagram.page_id = pg.id; cfg.instagram.page_name = pg.name; // guardado p/ o cross-post no Facebook (fase 2)
     saveConfig(cfg);
+    recordCheck(true);
     return { ok: true, configured: true, username: cfg.instagram.username, ig_user_id: cfg.instagram.ig_user_id, page: pg.name };
   }
   // Já temos o ID: valida.
   const r = await graphGet("/" + c.ig_user_id, { fields: "username,name", access_token: c.access_token }, "conferir a conta");
-  if (!r.ok || r.body.error) return { ok: false, configured: true, error: (r.body.error && r.body.error.message) || ("HTTP " + r.status) };
+  if (!r.ok || r.body.error) {
+    const e = r.body && r.body.error;
+    const expirou = e && (e.code === 190 || e.type === "OAuthException");
+    const msg = expirou
+      ? "A conexão com o Instagram expirou. Cole um token novo em Configurações › Publicação Instagram e clique em Testar."
+      : ((e && e.message) || ("HTTP " + r.status));
+    recordCheck(false, { code: (e && e.code) || null, message: msg });
+    return { ok: false, configured: true, error: msg };
+  }
   const cfg = loadConfig(); cfg.instagram.username = r.body.username || cfg.instagram.username; saveConfig(cfg);
+  recordCheck(true);
   return { ok: true, configured: true, username: r.body.username, ig_user_id: c.ig_user_id };
 }
 
@@ -197,8 +208,43 @@ function gerr(step, r) {
   // Meta ("Invalid OAuth access token - Cannot parse access token") por orientação clara.
   if (err && (err.code === 190 || err.type === "OAuthException")) {
     msg = "a conexão com o Instagram expirou ou o token está inválido. Reconecte em Configurações › Publicação Instagram (cole um token novo e clique em Testar).";
+    recordCheck(false, { code: 190, message: msg }); // o painel para de dizer "Conectado"
   }
   const e = new Error("Falha ao " + step + ": " + msg); e.code = "E_GRAPH"; return e;
+}
+
+// Memória do ÚLTIMO contato real com a Meta. Sem isto, o painel dizia "Conectado" só porque
+// existia um token salvo no disco — e ficou 18 dias anunciando uma conexão morta (o token
+// colado em 17/07 era de curta duração e venceu no mesmo dia). Agora todo contato com a
+// Graph API deixa registro, e a tela mostra o que foi de fato verificado.
+function recordCheck(ok, err) {
+  try {
+    const cfg = loadConfig();
+    cfg.instagram = cfg.instagram || {};
+    cfg.instagram.last_check = {
+      ok: !!ok,
+      at: new Date().toISOString(),
+      code: (err && err.code) || null,
+      message: ok ? null : String((err && err.message) || "Falha ao falar com o Instagram.").slice(0, 300),
+    };
+    saveConfig(cfg);
+  } catch (e) { /* registrar o estado nunca pode derrubar a publicação */ }
+}
+
+// Traduz o que sabemos para um estado que a tela pode mostrar sem mentir.
+//   sem_token    -> nunca foi configurado
+//   nao_testado  -> tem token, mas ninguém confirmou com a Meta ainda
+//   conectado    -> último contato com a Meta deu certo
+//   expirado     -> último contato falhou por token inválido/expirado
+//   com_erro     -> último contato falhou por outro motivo (rede, permissão)
+function connectionState() {
+  const c = ig();
+  if (!c.access_token) return { state: "sem_token", checked_at: null, message: null };
+  const lc = c.last_check;
+  if (!lc || !lc.at) return { state: "nao_testado", checked_at: null, message: null };
+  if (lc.ok) return { state: "conectado", checked_at: lc.at, message: null };
+  const expirado = lc.code === 190;
+  return { state: expirado ? "expirado" : "com_erro", checked_at: lc.at, message: lc.message || null };
 }
 
 // Orquestra a publicação de uma peça aprovada. dryRun (ou não-configurado) = simula.
@@ -230,5 +276,6 @@ async function publishTask(folder, opts) {
 }
 
 module.exports = {
+  connectionState,
   isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved,
 };

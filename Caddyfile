@@ -8,3 +8,10 @@ mkt.4st.co {
 	# (Removido em 2026-07-10 — antes havia um porteiro compartilhado "equipe".)
 	reverse_proxy panel:4500
 }
+
+# >>> AI-SQUAD (radar-web) — gerenciado pelo Claude — remover este bloco reverte
+squad.4st.co {
+	tls /etc/caddy/origin/cert.pem /etc/caddy/origin/key.pem
+	reverse_proxy radar-web:3000
+}
+# <<< AI-SQUAD
