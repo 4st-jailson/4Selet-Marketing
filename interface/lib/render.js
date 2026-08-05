@@ -393,15 +393,15 @@ const MED_BEZEL = "0 55px 130px rgba(0,0,0,.6), 0 0 0 2px rgba(84,153,181,.22)";
 function mediaDevice(model, imgSrc, url) {
   const shot = imgSrc ? `<img src="${escAttr(imgSrc)}" alt=""/>` : `<div class="scr-empty">print da matéria</div>`;
   if (model === "celular" || model === "phone") {
-    return `<div class="dev" style="width:406px;height:846px;background:#0a1015;border-radius:56px;padding:14px;box-shadow:${MED_BEZEL};position:relative;transform:rotate(.5deg)"><div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);width:116px;height:32px;background:#05090d;border-radius:18px;z-index:2"></div><div class="scr" style="width:100%;height:100%;border-radius:44px">${shot}</div></div>`;
+    return `<div class="dev" data-stage="1" style="width:406px;height:846px;background:#0a1015;border-radius:56px;padding:14px;box-shadow:${MED_BEZEL};position:relative;transform:rotate(.5deg)"><div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);width:116px;height:32px;background:#05090d;border-radius:18px;z-index:2"></div><div class="scr" style="width:100%;height:100%;border-radius:44px">${shot}</div></div>`;
   }
   if (model === "notebook") {
-    return `<div class="dev" style="display:flex;flex-direction:column;align-items:center"><div style="width:812px;height:512px;background:#0a1015;border-radius:18px 18px 5px 5px;padding:16px 16px 15px;box-shadow:${MED_BEZEL};position:relative"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:6px">${shot}</div></div><div style="width:928px;height:30px;background:linear-gradient(180deg,#cfd7dc,#9aa8b0);clip-path:polygon(2.5% 0,97.5% 0,100% 100%,0 100%);border-radius:0 0 12px 12px;box-shadow:0 24px 50px rgba(0,0,0,.45)"></div></div>`;
+    return `<div class="dev" data-stage="1" style="display:flex;flex-direction:column;align-items:center"><div style="width:812px;height:512px;background:#0a1015;border-radius:18px 18px 5px 5px;padding:16px 16px 15px;box-shadow:${MED_BEZEL};position:relative"><div style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:6px">${shot}</div></div><div style="width:928px;height:30px;background:linear-gradient(180deg,#cfd7dc,#9aa8b0);clip-path:polygon(2.5% 0,97.5% 0,100% 100%,0 100%);border-radius:0 0 12px 12px;box-shadow:0 24px 50px rgba(0,0,0,.45)"></div></div>`;
   }
   if (model === "janela" || model === "browser") {
-    return `<div class="dev" style="width:812px;border-radius:16px;overflow:hidden;box-shadow:${MED_BEZEL};border:1px solid ${PALETTE.sky}59"><div style="height:52px;background:#e7ecef;display:flex;align-items:center;gap:10px;padding:0 20px"><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span>${url ? `<span style="margin-left:14px;background:#f2f5f7;color:#6c7c84;font-family:'JetBrains Mono',monospace;font-size:20px;padding:7px 20px;border-radius:999px">${esc(url)}</span>` : ""}</div><div class="scr" style="height:620px">${shot}</div></div>`;
+    return `<div class="dev" data-stage="1" style="width:812px;border-radius:16px;overflow:hidden;box-shadow:${MED_BEZEL};border:1px solid ${PALETTE.sky}59"><div style="height:52px;background:#e7ecef;display:flex;align-items:center;gap:10px;padding:0 20px"><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span><span style="width:12px;height:12px;border-radius:50%;background:#c6ced4"></span>${url ? `<span style="margin-left:14px;background:#f2f5f7;color:#6c7c84;font-family:'JetBrains Mono',monospace;font-size:20px;padding:7px 20px;border-radius:999px">${esc(url)}</span>` : ""}</div><div class="scr" style="height:620px">${shot}</div></div>`;
   }
-  return `<div class="dev" style="perspective:2600px"><div style="width:566px;height:820px;background:#0a1015;border-radius:40px;padding:18px;box-shadow:${MED_BEZEL};transform:rotateX(4deg) rotateY(-6deg) rotate(1deg);position:relative"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:24px">${shot}</div></div></div>`;
+  return `<div class="dev" data-stage="1" style="perspective:2600px"><div style="width:566px;height:820px;background:#0a1015;border-radius:40px;padding:18px;box-shadow:${MED_BEZEL};transform:rotateX(4deg) rotateY(-6deg) rotate(1deg);position:relative"><div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:#243039"></div><div class="scr" style="width:100%;height:100%;border-radius:24px">${shot}</div></div></div>`;
 }
 
 // TABLET LIMPO "4Selet na Mídia": a matéria entra RETA (retângulo perfeito) numa moldura de tablet
@@ -446,7 +446,7 @@ function tplMediaTabletClean({ width, height, image, eyebrow, url, model, logo: 
       <circle cx="${r(width*.15)}" cy="${r(height*.66)}" r="3"/><circle cx="${r(width*.70)}" cy="${r(height*.76)}" r="3"/>
     </g></svg>`;
   const notch = phone ? `<div class="notch" style="width:${r(tbW*0.36)}px;height:${r(tbW*0.05)}px;top:${r(pad*0.42)}px"></div>` : "";
-  const device = `<div class="dev-wrap" style="transform:rotate(${rot}deg)"><div class="cast"></div>
+  const device = `<div class="dev-wrap" data-stage="1" style="transform:rotate(${rot}deg)"><div class="cast"></div>
     <div class="tablet" style="width:${tbW}px;height:${tbH}px;padding:${pad}px;border-radius:${rad}px">
       <div class="screen" style="border-radius:${srad}px">${shot}<div class="backlight"></div><div class="glass"></div></div>${notch}
     </div></div>`;
@@ -657,7 +657,7 @@ function tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: 
     .cta-u{color:${PALETTE.sky};font-size:${r(ctaFont * 1.02)}px;font-weight:700}
     .cta-arrow{width:${r(ctaFont * 1.95)}px;height:${r(ctaFont * 1.95)}px;border-radius:50%;border:2px solid ${PALETTE.sky};color:${PALETTE.sky};display:flex;align-items:center;justify-content:center;font-size:${r(ctaFont * 1.35)}px;font-weight:700;line-height:1}`;
 
-  const body = `<div class="ph"><img class="bg" src="${escAttr(baseUrl)}" alt=""/>
+  const body = `<div class="ph" data-stage="1"><img class="bg" src="${escAttr(baseUrl)}" alt=""/>
       <div class="tint"></div>
       <div class="scr">${screenInner}<div class="gloss"></div></div>
     </div>

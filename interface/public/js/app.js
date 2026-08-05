@@ -1684,7 +1684,27 @@ function autoVariant(folder) {
 }
 
 function templatePicker(task) {
-  if (task.kind === "video" || task.kind === "media") return ""; // video: BrandStory; Mídia: device escolhido na criação
+  if (task.kind === "video") return ""; // vídeo: composição BrandStory, sem escolha de estilo aqui
+  // Peça "4Selet na Mídia": aqui não havia NADA — o aparelho era escolhido na criação e depois
+  // sumia da tela. Era onde a descoberta morria: quem abria a peça não tinha como saber que dá
+  // para mexer no mockup. Agora mostra qual aparelho está em uso e leva para o editor.
+  if (task.kind === "media") {
+    const md = (task.status && task.status.media) || {};
+    const mid = md.model || "hand_tablet";
+    const mm = MEDIA_MODELS.find((x) => x.id === mid);
+    const alvo = editorTargets(task)[0];
+    return `<div class="tpl-picker mt">
+      <div class="muted" style="font-size:13px;margin-bottom:8px">Mockup da matéria</div>
+      <div class="mk-card">
+        <span class="mk-thumb" aria-hidden="true">${mm ? mm.svg : ""}</span>
+        <span class="mk-main">
+          <span class="mk-name">${esc(mediaModelName(mid))}</span>
+          <span class="mk-hint">É o aparelho onde o print da matéria aparece. No editor dá para mover e redimensionar o mockup inteiro, e trocar o print.</span>
+        </span>
+        ${alvo ? `<button class="btn btn-sm" id="mk-open" data-rel="${esc(alvo.rel)}">Montar no editor</button>` : '<span class="hint">Gere a arte para poder montar</span>'}
+      </div>
+    </div>`;
+  }
   const current = task.template || autoVariant(task.folder);
   const opts = VISUAL_TEMPLATES.map((t) => `
     <label class="tpl-opt${t.id === current ? " is-active" : ""}" data-tpl="${t.id}">
@@ -1992,6 +2012,26 @@ async function openHtmlEditor(folder, task, rel, opts) {
       const k = Array.from(el.children);
       return k.length > 0 && k.every((c) => isImg(c) || isSvg(c));
     };
+    // O invólucro do mockup nas peças de Mídia. `data-stage` é o marcador novo (posto pelo
+    // render); as classes ficam como rede de segurança para as peças que já estão em disco,
+    // renderizadas antes do marcador existir.
+    const PALCO_SEL = '[data-stage], .ph, .dev-wrap, .dev';
+    // O palco pode vir com uma rotação declarada no CSS (é assim que a cena foto-real é
+    // "endireitada" para a notícia sair reta). O editor move por transform INLINE, que
+    // sobrescreveria essa rotação e entortaria a cena no primeiro arrasto. Então, antes de
+    // deixar o palco móvel, trazemos a rotação (e a escala) do CSS para o inline.
+    const semeiaRotacaoDoCss = (el, docEl) => {
+      if (el.style.transform) return;                       // já é inline: getTf/setTf dão conta
+      const tf = docEl.defaultView.getComputedStyle(el).transform || "";
+      const m = tf.match(/^matrix\(([^)]+)\)/);             // só 2D; matrix3d não é caso de palco
+      if (!m) return;
+      const n = m[1].split(",").map((v) => parseFloat(v));
+      if (n.length < 6 || n.some((v) => !isFinite(v))) return;
+      const ang = Math.atan2(n[1], n[0]) * 180 / Math.PI;
+      const esc = Math.sqrt(n[0] * n[0] + n[1] * n[1]) || 1;
+      if (Math.abs(ang) < 0.01 && Math.abs(esc - 1) < 0.001) return;
+      el.style.transform = "translate(0px,0px) rotate(" + ang.toFixed(3) + "deg) scale(" + esc.toFixed(4) + "," + esc.toFixed(4) + ")";
+    };
     // O elemento está dentro de algo deformado por perspectiva (matrix3d)? Sobe a árvore até o
     // card. Usado para travar o print encaixado na tela do device nas peças de Mídia.
     const dentroDeWarp = (el, cardEl, docEl) => {
@@ -2013,6 +2053,19 @@ async function openHtmlEditor(folder, task, rel, opts) {
       // uma classe fixa: assim vale para os modelos de hoje (foto_real/foto_mesa/foto_maos_mesa,
       // que deformam a `.scr`) e para qualquer modelo novo que use a mesma técnica.
       if (dentroDeWarp(el, card, doc)) return;
+      // O PALCO do mockup (aparelho + cena) é UM objeto só. Antes, nas peças foto-reais, a foto
+      // de fundo era arrastável sozinha: puxar a foto deslocava a cena por baixo de um print que
+      // continuava encaixado na posição antiga — mão e tablet iam pra um lado e a matéria ficava
+      // boiando. Agora quem se move é o invólucro inteiro, e a perspectiva do print (que fica no
+      // filho) acompanha sem deformar. Como o palco é marcado ANTES dos filhos (ordem de
+      // documento), a guarda logo abaixo trava tudo que está dentro dele.
+      if (el.matches(PALCO_SEL)) {
+        semeiaRotacaoDoCss(el, doc);
+        el.setAttribute("data-he", "1");
+        el.setAttribute("data-palco", "1");
+        interactive(doc, el);
+        return;
+      }
       // Já dentro de algo editável (ex.: o <svg> de uma caixa de ícone já marcada)? ignora,
       // pra não empilhar seleção. (querySelectorAll dá ordem de documento: pai antes do filho.)
       if (el.parentElement && el.parentElement.closest("[data-he]")) return;
@@ -3050,6 +3103,7 @@ async function viewTaskDetail(folder) {
   loadTaskCollections(folder);
   if ($("#btn-phone")) $("#btn-phone").onclick = () => openPhonePreview(task);
   if ($("#bd-open")) $("#bd-open").onclick = () => openCarouselBoard(folder, task);
+  if ($("#mk-open")) $("#mk-open").onclick = () => openHtmlEditor(folder, task, $("#mk-open").dataset.rel);
   $$(".slide-regen").forEach((btn) => { btn.onclick = () => regenSlide(folder, task, parseInt(btn.dataset.n, 10)); });
   if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
