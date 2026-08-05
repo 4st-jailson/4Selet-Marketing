@@ -111,18 +111,27 @@ function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels
 function pillarLabel(id) { const p = (State.meta.content_pillars || []).find((x) => x.id === id); return p ? (p.short || p.label) : null; }
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
 function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video" || k === "media"; }
-// Modelos de dispositivo da peça "4Selet na Mídia" (miniatura schematic + nome).
+// Modelos de "4Selet na Mídia", agrupados por COMO o print aparece na arte. A ordem antiga
+// misturava as três famílias (tablet, foto real, editorial) e não dava para entender a lógica.
+// `grupo` monta os subtítulos do seletor; `svg` segue em uso no cartão de descoberta da peça;
+// a miniatura de cada modelo é a arte de verdade, gerada por scripts/gen_media_thumbs.js.
 const MEDIA_MODELS = [
-  { id: "hand_tablet", name: "Tablet", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
-  { id: "foto_real", name: "Foto real (mãos)", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="6" width="14" height="24" rx="2"/><path d="M13 12c-3 0-5 2-5 5v9M27 12c3 0 5 2 5 5v9"/></svg>' },
-  { id: "foto_mesa", name: "Foto real (mesa)", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="15" y="9" width="13" height="18" rx="2"/><path d="M4 27h32"/><circle cx="9" cy="22" r="4"/><path d="M13 21h2"/></svg>' },
-  { id: "foto_maos_mesa", name: "Foto real (mãos + mesa)", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="12" width="24" height="16" rx="2"/><path d="M6 16v10M34 16v10"/><circle cx="31" cy="8" r="3"/></svg>' },
-  { id: "celular", name: "Celular", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
-  { id: "navegador", name: "Navegador", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/><circle cx="9" cy="11" r=".6" fill="currentColor"/><circle cx="12.5" cy="11" r=".6" fill="currentColor"/><circle cx="16" cy="11" r=".6" fill="currentColor"/></svg>' },
-  { id: "citacao", name: "Citação", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="currentColor"><path d="M11 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H19v9.5zM24 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H32v9.5z"/></svg>' },
-  { id: "split", name: "Split", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="20" y1="8" x2="20" y2="32"/></svg>' },
-  { id: "selo", name: "Selo", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="6.5"/></svg>' },
-  { id: "camadas", name: "Camadas", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="12" y="6" width="20" height="26" rx="2"/><path d="M8 12v20a2 2 0 002 2h16"/></svg>' },
+  { id: "hand_tablet", name: "Tablet", grupo: "Aparelho", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
+  { id: "celular", name: "Celular", grupo: "Aparelho", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
+  { id: "navegador", name: "Navegador", grupo: "Aparelho", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/><circle cx="9" cy="11" r=".6" fill="currentColor"/><circle cx="12.5" cy="11" r=".6" fill="currentColor"/><circle cx="16" cy="11" r=".6" fill="currentColor"/></svg>' },
+  { id: "foto_real", name: "Foto real (mãos)", grupo: "Foto real", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="6" width="14" height="24" rx="2"/><path d="M13 12c-3 0-5 2-5 5v9M27 12c3 0 5 2 5 5v9"/></svg>' },
+  { id: "foto_mesa", name: "Foto real (mesa)", grupo: "Foto real", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="15" y="9" width="13" height="18" rx="2"/><path d="M4 27h32"/><circle cx="9" cy="22" r="4"/><path d="M13 21h2"/></svg>' },
+  { id: "foto_maos_mesa", name: "Foto real (mãos + mesa)", grupo: "Foto real", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="12" width="24" height="16" rx="2"/><path d="M6 16v10M34 16v10"/><circle cx="31" cy="8" r="3"/></svg>' },
+  { id: "citacao", name: "Citação", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="currentColor"><path d="M11 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H19v9.5zM24 27V18c0-4 3-6.5 7.5-6.5l.8 2.8c-2.2.2-3.3 1.2-3.3 3.2H32v9.5z"/></svg>' },
+  { id: "selo", name: "Selo", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="6.5"/></svg>' },
+  { id: "split", name: "Split", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="20" y1="8" x2="20" y2="32"/></svg>' },
+  { id: "camadas", name: "Camadas", grupo: "Editorial", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="12" y="6" width="20" height="26" rx="2"/><path d="M8 12v20a2 2 0 002 2h16"/></svg>' },
+];
+// O que cada família faz, em uma linha — vira a explicação do subtítulo no seletor.
+const MEDIA_GRUPOS = [
+  { nome: "Aparelho", desc: "O print numa tela desenhada" },
+  { nome: "Foto real", desc: "O print encaixado numa cena fotografada" },
+  { nome: "Editorial", desc: "A matéria como peça gráfica, sem aparelho" },
 ];
 function mediaModelName(id) { const m = MEDIA_MODELS.find((x) => x.id === id); return m ? m.name : (id || "Tablet"); }
 // Tamanho da arte (px) por tipo de conteúdo — referência p/ escolher imagens do tamanho certo na busca.
@@ -3823,7 +3832,15 @@ async function viewCreate(arg, query) {
           </div>
           <div class="field"><label>Manchete da matéria <span class="hint">(opcional — usada nos modelos Citação e Split)</span></label><input id="g-media-headline" placeholder="ex.: Por que o produtor digital deixou de escolher plataforma pela taxa" /></div>
           <div class="field"><label>Modelo do dispositivo <span class="hint">(como o print aparece na arte)</span></label>
-            <div class="model-pick" id="g-media-model-pick">${MEDIA_MODELS.map((m, i) => `<button type="button" class="model-card${i === 0 ? " on" : ""}" data-model="${esc(m.id)}">${m.svg}<span>${esc(m.name)}</span></button>`).join("")}</div>
+            <div id="g-media-model-pick">${MEDIA_GRUPOS.map((g) => `
+              <div class="model-grupo">
+                <div class="model-grupo-tit">${esc(g.nome)} <span class="hint">— ${esc(g.desc)}</span></div>
+                <div class="model-pick">${MEDIA_MODELS.filter((m) => m.grupo === g.nome).map((m) => `
+                  <button type="button" class="model-card${m.id === MEDIA_MODELS[0].id ? " on" : ""}" data-model="${esc(m.id)}" title="${esc(m.name)}">
+                    <img class="model-thumb" src="/img/media-models/${esc(m.id)}.png" alt="" loading="lazy" width="132" height="165" />
+                    <span>${esc(m.name)}</span>
+                  </button>`).join("")}</div>
+              </div>`).join("")}</div>
             <input type="hidden" id="g-media-model" value="${esc(MEDIA_MODELS[0].id)}" />
             <div class="hint" id="g-media-aspect" style="display:none;color:var(--warn);margin-top:2px"></div>
           </div>
