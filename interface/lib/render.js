@@ -2038,15 +2038,22 @@ function carouselSlidesHtml(concept, buildCover, opts) {
     const arch = slideArchetype(s, i, total);
     let html;
     if (arch === "cover") {
-      // A capa usa o template de arte escolhido (editorial|bold|split|photo).
-      html = buildCover({
+      // A capa usa o template de arte escolhido (editorial|bold|split|photo) — MAS a foto manda.
+      // Dos quatro templates, só o "Foto" recebe o parâmetro `image`; os outros três nem o têm na
+      // assinatura. Ou seja: anexar foto na capa e estar com Editorial/Destaque/Dividido fazia a
+      // imagem ser descartada em silêncio — a linha "Foto de fundo anexada" aparecia na tela com a
+      // miniatura, e a arte saía sem foto nenhuma. Se há foto de verdade, a capa usa o layout que
+      // sabe desenhá-la; sem foto, nada muda.
+      const capaImg = (s && s.image) || concept.image || "";
+      const desenha = (capaImg && imagemExiste(capaImg)) ? resolveTemplate("photo") : buildCover;
+      html = desenha({
         width: 1080, height: 1350,
         eyebrow: concept.eyebrow || "",
         headline: highlightHeadline(s.title || ""),
         subtext: s.body || "",
         cta: "",
         badge: "",
-        image: (s && s.image) || concept.image || "",
+        image: capaImg,
         dots: dotsBar(n, total),
         titleOffsetY: s && s.titleOffsetY, // ajuste fino de posicao do titulo (camadas)
         titleOffsetX: s && s.titleOffsetX,
