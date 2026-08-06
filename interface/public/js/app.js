@@ -3963,7 +3963,12 @@ async function viewCreate(arg, query) {
             <div class="field"><label>Logo <span class="hint">(no Automático, entra o logo que combina com o fundo da arte)</span></label>
               <select id="g-logo">${montaOpcoes(LOGO_OPCOES, "")}</select>
             </div>
-            <div class="field"><label>Marca d’água <span class="hint">(aparece bem sutil, atrás do texto; no Automático, a do estilo escolhido)</span></label>
+            <!-- O "Automático" NÃO é um padrão único: medido, ele desenha coisas diferentes conforme
+                 onde a peça é. Em peça de imagem, só o estilo Destaque põe marca d'água — Editorial,
+                 Dividido e Foto não põem nada. No carrossel, os slides de texto trazem a palavra
+                 SELET, mas a capa e o slide de fecho não. Por isso a dica manda conferir na prévia,
+                 em vez de prometer um comportamento que não existe. -->
+            <div class="field"><label>Marca d’água <span class="hint">(fica bem sutil, atrás do texto. No Automático quem decide é o estilo da arte, e isso varia — confira na prévia)</span></label>
               <select id="g-wm">${montaOpcoes(MARCA_DAGUA_OPCOES, "")}</select>
             </div>
           </div>
