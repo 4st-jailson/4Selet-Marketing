@@ -1676,7 +1676,12 @@ function carBase(width, height, theme) {
   .card { position:relative; width:${width}px; height:${height}px; overflow:hidden;
     font-family:'Inter',sans-serif; color:${t.text};
     background:${t.bg};
-    display:flex; flex-direction:column; padding:90px 86px; }
+    /* 92px, não 86. A margem segura da marca é 88-104px (platform_guidelines.md) e o carrossel era o
+     único abaixo do piso — sobrava menos respiro lateral que em qualquer outro template, e num
+     formato que o Instagram corta nas bordas. Conferido antes de mexer: os 5 layouts de slide
+     (fluxo cheio, grade de 4 números, lista de 6 itens, texto longo e fecho) cabem em 86, 88, 92,
+     96 e até 104 — então subir para dentro da faixa não aperta nada. */
+  display:flex; flex-direction:column; padding:90px 92px; }
   .dots { position:absolute; inset:0; background-image:radial-gradient(${t.dotTex} 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
   /* Foto de fundo opcional do slide (atras de tudo) + scrim de leitura acima dela. */
   .s-photo { position:absolute; inset:0; z-index:0; background-size:cover; background-position:center; }
