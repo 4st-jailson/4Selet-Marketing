@@ -270,6 +270,13 @@ function interpretSystem() {
     "- Na duvida, deixe o campo vazio e liste em `faltou`. Campo vazio e a resposta certa quando o texto nao diz.",
     "- NUNCA invente numero, oferta, prazo, percentual ou nome de campanha. Se a pessoa nao escreveu, nao existe.",
     "- Escolha SEMPRE um valor da lista fechada correspondente. Nunca crie valor novo.",
+    // Texto que se contradiz vinha com confianca ALTA — ex.: \"um video que seja um post de texto no
+    // LinkedIn\" devolvia linkedin_post [alta]. Escolher e razoavel; parecer seguro nao e, porque a
+    // confianca e o que a tela mostra para a pessoa decidir se confere.
+    "- CONFIANCA e sobre o TEXTO, nao sobre a sua escolha. Se o texto citar mais de um formato, ou se",
+    "  o pedido se contradisser (ex.: pedir video e post de texto na mesma frase), use confianca",
+    "  \"baixa\" e diga em `porque` qual e a ambiguidade. Nunca use \"alta\" quando o texto admite",
+    "  mais de uma leitura razoavel.",
     "- Portugues do Brasil.",
   ].join("\n");
 }
