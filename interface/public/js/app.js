@@ -4566,7 +4566,10 @@ function renderGenResult(r, opts) {
   const storyHtml = r.content_type === "video_idea"
     ? `<details class="art-preview-box mt" open><summary>Prévia do roteiro (storyboard)</summary>
          <div id="g-story" class="video-storyboard">${videoStoryboard(r.parsed)}</div>
-         <p class="muted" style="font-size:12px;margin-top:8px">Ilustrativo — atualiza conforme você edita as cenas. O vídeo final é renderizado ao aprovar a peça.</p>
+         <!-- Dizia "renderizado ao aprovar a peça". Não é: aprovar só muda o estado, e o render
+             automático não vale para vídeo — quem acreditava no texto aprovava uma peça SEM MP4
+             dentro. O vídeo só existe depois do botão "Gerar vídeo" na página da peça. -->
+        <p class="muted" style="font-size:12px;margin-top:8px">Ilustrativo — atualiza conforme você edita as cenas. Depois de salvar, gere o vídeo pelo botão na página da peça: aprovar sozinho não gera.</p>
        </details>`
     : "";
   $("#g-result").innerHTML = `

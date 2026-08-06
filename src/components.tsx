@@ -11,17 +11,24 @@ import { COLORS } from "./theme";
 export const SceneWrapper: React.FC<{
   children: React.ReactNode;
   slide?: boolean;
-}> = ({ children, slide }) => {
+  // A ULTIMA cena nao deve sumir: com o fade-out ligado, o video terminava num quadro
+  // praticamente vazio — e no Reels o ultimo quadro e o que muitos players congelam.
+  keepEnd?: boolean;
+}> = ({ children, slide, keepEnd }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  const fadeIn = interpolate(frame, [0, 12], [0, 1], {
+  // 8 quadros, nao 12. Como as cenas deixaram de se sobrepor, a entrada e a saida viraram tempo de
+  // tela quase vazia entre uma cena e outra: com 12 de cada lado davam 0,8s por troca — 20% de um
+  // video de 12s. Com 8, a transicao continua suave e o vazio cai para pouco mais de meio segundo.
+  const T = 8;
+  const fadeIn = interpolate(frame, [0, T], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: Easing.out(Easing.ease),
   });
-  const fadeOut = interpolate(
+  const fadeOut = keepEnd ? 1 : interpolate(
     frame,
-    [durationInFrames - 12, durationInFrames],
+    [durationInFrames - T, durationInFrames],
     [1, 0],
     {
       extrapolateLeft: "clamp",
@@ -57,9 +64,14 @@ export const WordByWord: React.FC<{
   delay?: number;
   stagger?: number;
   style?: React.CSSProperties;
-}> = ({ text, delay = 0, stagger = 3.5, style }) => {
+  // frames que a frase INTEIRA pode levar para entrar. Sem esse teto, uma headline longa so
+  // ficava completa quando o fade de saida ja tinha comecado: sobrava menos de meio segundo
+  // de leitura. Com ele, as palavras terminam de entrar na primeira metade da cena.
+  janela?: number;
+}> = ({ text, delay = 0, stagger = 3.5, style, janela }) => {
   const frame = useCurrentFrame();
   const words = text.split(" ");
+  if (janela && words.length > 1) stagger = Math.min(stagger, janela / (words.length - 1));
   return (
     <div
       style={{

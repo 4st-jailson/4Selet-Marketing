@@ -13,7 +13,6 @@ export type BrandStoryProps = {
 };
 
 const PER_SCENE = 90; // frames por cena (3s @ 30fps)
-const FADE = 12;
 
 const eyebrowFor = (type: string): string => {
   switch ((type || "").toLowerCase()) {
@@ -21,17 +20,21 @@ const eyebrowFor = (type: string): string => {
     case "problem": return "O PROBLEMA";
     case "product": return "A PLATAFORMA";
     case "benefit": return "O QUE MUDA";
-    case "cta": return "PROXIMO PASSO";
+    case "cta": return "PRÓXIMO PASSO";
     default: return "4SELET";
   }
 };
 
-const SceneCard: React.FC<{ scene: BrandScene; index: number; total: number }> = ({
-  scene, index, total,
+const SceneCard: React.FC<{ scene: BrandScene; index: number; total: number; cta?: string }> = ({
+  scene, index, total, cta,
 }) => {
-  const isCta = (scene.type || "").toLowerCase() === "cta" || index === total - 1;
+  // A pílula só existe quando HÁ chamada. Antes ela aparecia na última cena sempre — inclusive
+  // em peça sem CTA nenhum, e num vídeo de uma cena só aparecia logo na primeira.
+  const chamada = String(cta || "").trim();
+  const mostraCta = !!chamada && ((scene.type || "").toLowerCase() === "cta" || index === total - 1);
+  const ultima = index === total - 1;
   return (
-    <SceneWrapper slide>
+    <SceneWrapper slide keepEnd={ultima}>
       <div style={{ width: "100%", textAlign: "center" }}>
         <div
           style={{
@@ -46,10 +49,13 @@ const SceneCard: React.FC<{ scene: BrandScene; index: number; total: number }> =
         </div>
         <WordByWord
           text={scene.text || ""}
+          janela={PER_SCENE * 0.45}
           style={{
             fontFamily: interFamily,
             fontWeight: 900,
-            fontSize: scene.text && scene.text.length > 48 ? 86 : 116,
+            // Escala contínua em vez de dois degraus: entre 116 e 72 conforme o tamanho do texto,
+            // para headline longa não estourar nem virar bloco ilegível.
+            fontSize: Math.round(Math.max(72, Math.min(116, 116 - Math.max(0, (scene.text || "").length - 40) * 1.1))),
             lineHeight: 1.02,
             color: "#FFFFFF",
             letterSpacing: -2,
@@ -68,7 +74,7 @@ const SceneCard: React.FC<{ scene: BrandScene; index: number; total: number }> =
             {scene.visual}
           </div>
         ) : null}
-        {isCta ? (
+        {mostraCta ? (
           <div
             style={{
               display: "inline-block",
@@ -82,7 +88,7 @@ const SceneCard: React.FC<{ scene: BrandScene; index: number; total: number }> =
               borderRadius: 999,
             }}
           >
-            Para quem sabe que e Selet.
+            {chamada}
           </div>
         ) : null}
       </div>
@@ -90,10 +96,15 @@ const SceneCard: React.FC<{ scene: BrandScene; index: number; total: number }> =
   );
 };
 
-export const BrandStory: React.FC<BrandStoryProps> = ({ scenes }) => {
+// O `cta` era desestruturado fora: o render grava a chamada em video/scenes.json e a composicao
+// nunca a lia — o campo ia para o disco e era jogado no lixo. Quando a chamada aparecia na tela,
+// era por acaso, porque o modelo tinha repetido a frase dentro do subtexto da ultima cena.
+export const BrandStory: React.FC<BrandStoryProps> = ({ scenes, cta }) => {
   const list: BrandScene[] = Array.isArray(scenes) && scenes.length
     ? scenes
-    : [{ type: "hook", text: "Para quem sabe que e Selet.", visual: "" }];
+    // Sem cenas a peca nao tem conteudo — e o texto de reserva NAO pode ser a frase-tag, que e
+    // proibida como assinatura (lib/prompts.js, bloco GOVERNANCE).
+    : [{ type: "hook", text: "4Selet", visual: "" }];
   return (
     <AbsoluteFill
       style={{
@@ -101,9 +112,12 @@ export const BrandStory: React.FC<BrandStoryProps> = ({ scenes }) => {
       }}
     >
       <DotsOverlay />
+      {/* As cenas nao se sobrepoem mais. Antes cada uma comecava 12 quadros antes de a anterior
+          acabar, e nesse intervalo os DOIS textos ficavam na tela a meia opacidade — acontecia em
+          toda troca, quase 4% do video virava borrao. Agora uma sai e a outra entra. */}
       {list.map((scene, i) => (
-        <Sequence key={i} from={i * (PER_SCENE - FADE)} durationInFrames={PER_SCENE}>
-          <SceneCard scene={scene} index={i} total={list.length} />
+        <Sequence key={i} from={i * PER_SCENE} durationInFrames={PER_SCENE}>
+          <SceneCard scene={scene} index={i} total={list.length} cta={cta} />
         </Sequence>
       ))}
     </AbsoluteFill>
@@ -111,5 +125,4 @@ export const BrandStory: React.FC<BrandStoryProps> = ({ scenes }) => {
 };
 
 // Duracao total em frames para um numero de cenas (usado no Root via calculateMetadata).
-export const brandStoryDuration = (n: number): number =>
-  Math.max(1, n) * (PER_SCENE - FADE) + FADE;
+export const brandStoryDuration = (n: number): number => Math.max(1, n) * PER_SCENE;
