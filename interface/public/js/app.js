@@ -1738,6 +1738,33 @@ const VISUAL_TEMPLATES = [
 // continuar sendo, senão o rádio mostra um estilo e a arte sai com outro.
 // Enquanto isso não era assim, a prévia usava esta conta e o salvamento mandava "", então a peça
 // aprovada na prévia não era a peça que ficava salva.
+// Rótulos do logo e da marca d'água. Ficam JUNTOS porque as mesmas opções aparecem em duas telas
+// (na criação e na peça) e tinham textos DIFERENTES em cada uma — "Completo claro — fundo escuro"
+// de um lado, "Completo claro" do outro. Escritos assim, diziam o nome interno do arquivo em vez do
+// que a pessoa vê: "completo claro" não deixa claro se o claro é o logo ou o fundo, e "padrão do
+// estilo" era jargão. Pior, a lista da marca d'água usava "padrão" com dois sentidos na mesma
+// caixa — o padrão do estilo e o padrão repetido.
+// Curtos de propósito: a mesma caixa aparece numa coluna de 170px na página da peça. Medido, a
+// explicação inteira dentro da opção estourava 130px — por isso o "por quê" mora na dica do campo,
+// e a opção diz só o que a pessoa escolhe.
+const LOGO_OPCOES = [
+  ["", "Automático"],
+  ["light", "Claro (fundo escuro)"],
+  ["dark", "Escuro (fundo claro)"],
+  ["symbol", "Só o símbolo 4"],
+];
+const MARCA_DAGUA_OPCOES = [
+  ["", "Automático"],
+  ["word", "Palavra SELET"],
+  ["symbol", "Símbolo 4 grande"],
+  ["outline", "SELET contornada"],
+  ["canto", "Símbolo 4 no canto"],
+  ["padrao", "Símbolos repetidos"],
+  ["none", "Nenhuma"],
+];
+const montaOpcoes = (lista, atual) => lista
+  .map(([v, t]) => '<option value="' + v + '"' + (v === String(atual || "") ? " selected" : "") + ">" + esc(t) + "</option>").join("");
+
 // ESPELHO EXATO de hashDoNome/TEMPLATES_ROTACAO em lib/render.js. Mexeu lá, mexe aqui.
 const TEMPLATES_ROTACAO = ["editorial", "bold", "split"];
 function autoVariant(folder) {
@@ -1779,10 +1806,8 @@ function templatePicker(task) {
       <span class="tpl-name">${esc(t.name)}</span>
       <span class="tpl-desc">${esc(t.desc)}</span>
     </label>`).join("");
-  const logoOpts = [["", "Automático"], ["light", "Completo claro"], ["dark", "Completo escuro"], ["symbol", "Só o símbolo"]]
-    .map(([v, l]) => `<option value="${v}"${v === (task.logo || "") ? " selected" : ""}>${l}</option>`).join("");
-  const wmOpts = [["", "Padrão do estilo"], ["word", "Palavra SELET"], ["symbol", "Símbolo grande"], ["outline", "Contornada"], ["canto", "No canto"], ["padrao", "Padrão repetido"], ["none", "Nenhuma"]]
-    .map(([v, l]) => `<option value="${v}"${v === (task.watermark || "") ? " selected" : ""}>${l}</option>`).join("");
+  const logoOpts = montaOpcoes(LOGO_OPCOES, task.logo);
+  const wmOpts = montaOpcoes(MARCA_DAGUA_OPCOES, task.watermark);
   return `<div class="tpl-picker mt">
     <div class="muted" style="font-size:13px;margin-bottom:8px">Estilo visual da arte</div>
     <div class="tpl-grid">${opts}</div>
@@ -3935,11 +3960,11 @@ async function viewCreate(arg, query) {
             <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option><option value="photo">Foto — imagem enviada + texto por cima</option></select>
           </div>
           <div class="row art-only">
-            <div class="field"><label>Logo (opcional)</label>
-              <select id="g-logo"><option value="">Automático (padrão do estilo)</option><option value="light">Completo claro — fundo escuro</option><option value="dark">Completo escuro — fundo claro</option><option value="symbol">Só o símbolo “4”</option></select>
+            <div class="field"><label>Logo <span class="hint">(no Automático, entra o logo que combina com o fundo da arte)</span></label>
+              <select id="g-logo">${montaOpcoes(LOGO_OPCOES, "")}</select>
             </div>
-            <div class="field"><label>Marca d’água (opcional)</label>
-              <select id="g-wm" title="Aparece sutil, atrás do conteúdo da arte"><option value="">Padrão do estilo</option><option value="word">Palavra SELET</option><option value="symbol">Símbolo grande</option><option value="outline">Palavra contornada</option><option value="canto">Símbolo no canto</option><option value="padrao">Padrão repetido</option><option value="none">Nenhuma</option></select>
+            <div class="field"><label>Marca d’água <span class="hint">(aparece bem sutil, atrás do texto; no Automático, a do estilo escolhido)</span></label>
+              <select id="g-wm">${montaOpcoes(MARCA_DAGUA_OPCOES, "")}</select>
             </div>
           </div>
           <div class="field" id="g-photo-row" style="display:none">
