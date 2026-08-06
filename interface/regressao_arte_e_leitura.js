@@ -326,6 +326,40 @@ function briefingLongo() {
     checa(p1.ok && p2.ok && p1.dataUrl !== p2.dataUrl, "a prévia respeita a família escolhida (não mostra uma e salva outra)");
   }
 
+  secao("11. Cor por campanha (fora da identidade)");
+  // A cor é da CAMPANHA, não da peça: campanha sazonal ("uma de fim de ano, vermelhona") sai da
+  // paleta oficial sem que isso vire a cara da marca o ano todo, e todas as peças dela saem
+  // coerentes entre si. O padrão é e continua sendo a identidade.
+  {
+    const campanhas = require("./lib/campaigns.js");
+    const { PALETTE, PALETAS_CAMPANHA } = require("./lib/config.js");
+    const cor = PALETAS_CAMPANHA.vermelho.cores;
+    const cCor = campanhas.create({ name: "Regressão cor " + Math.random().toString(36).slice(2, 7), palette: "vermelho" });
+    const cSem = campanhas.create({ name: "Regressão sem cor " + Math.random().toString(36).slice(2, 7), palette: "" });
+    checa(cCor.palette === "vermelho", "a campanha guarda a cor escolhida");
+    const pecaCamp = (nome, campId) => {
+      const n = nome + Math.random().toString(36).slice(2, 7) + "_" + DATA;
+      peca(n, { "ads/concept.json": { eyebrow: "FIM DE ANO", headline: "Feche o ano no ==azul==", subtext: "Apoio.", cta: "Conhecer a plataforma" } });
+      if (campId) {
+        const sp = path.join(RAIZ, n, "status.json");
+        fs.writeFileSync(sp, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(sp, "utf8")), { campaign_id: campId }), null, 2));
+      }
+      return n;
+    };
+    const a = pecaCamp("regcor_com", cCor.id); await render.render(a, "image", {});
+    const ha = fs.readFileSync(path.join(RAIZ, a, "ads", "ad.html"), "utf8");
+    checa(ha.indexOf(cor.blue) >= 0, "a arte usa o acento da campanha", cor.blue);
+    checa(ha.indexOf(PALETTE.blue) < 0, "e não sobra nenhum azul da marca na arte");
+    checa(ha.indexOf(PALETTE.mist) >= 0, "os neutros ficam (senão o texto perde contraste)");
+    const b5 = pecaCamp("regcor_sem", cSem.id); await render.render(b5, "image", {});
+    checa(fs.readFileSync(path.join(RAIZ, b5, "ads", "ad.html"), "utf8").indexOf(PALETTE.blue) >= 0, "campanha sem cor escolhida sai na identidade");
+    const c5 = pecaCamp("regcor_solta", null); await render.render(c5, "image", {});
+    checa(fs.readFileSync(path.join(RAIZ, c5, "ads", "ad.html"), "utf8").indexOf(PALETTE.blue) >= 0, "peça sem campanha nenhuma sai na identidade");
+    campanhas.update(cSem.id, { palette: "#fff; } body { display:none" });
+    checa(campanhas.get(cSem.id).palette === "", "cor fora da lista volta para a identidade (sem injeção)");
+    campanhas.remove(cCor.id); campanhas.remove(cSem.id);
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

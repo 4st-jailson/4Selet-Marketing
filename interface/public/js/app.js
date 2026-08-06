@@ -814,12 +814,19 @@ function renderCampaignForm(existing) {
       </select></div>
       <div class="field"><label>Período</label><div class="row"><input type="date" id="c-start" value="${esc(c.start_date || "")}" /><input type="date" id="c-end" value="${esc(c.end_date || "")}" /></div></div>
     </div>
+    <!-- Cor da campanha: o padrão É a identidade oficial. Campanha sazonal (fim de ano, black
+         friday) pode sair dela sem que isso vire a cara da marca o ano todo — e o painel avisa
+         antes. Só as cores estruturais mudam; a logo mantém o azul da marca de propósito. -->
+    <div class="field"><label>Cor da campanha <span class="hint">(o padrão é a identidade oficial da 4Selet; escolher outra avisa antes e vale para todas as peças desta campanha)</span></label>
+      <select id="c-palette">${montaOpcoes(PALETA_OPCOES, c.palette)}</select>
+    </div>
     <div class="field"><label>Plataformas</label><div class="checks">${plats}</div></div>
     <div class="field"><label>Mensagens-chave <span class="hint">(uma por linha)</span></label><textarea id="c-msgs" rows="3">${esc((c.key_messages || []).join("\n"))}</textarea></div>
     <div class="field"><label>Notas</label><textarea id="c-notes" rows="2">${esc(c.notes || "")}</textarea></div>
     <div class="flex mt"><button class="btn btn-primary" id="c-save">${existing ? "Salvar alterações" : "Criar campanha"}</button><button class="btn btn-ghost" id="c-cancel">Cancelar</button></div>
   </div>`;
   bindCheckPills(wrap);
+  ligaConfirmacaoDeCor($("#c-palette"));   // sair da identidade pergunta antes
   $("#c-cancel").onclick = () => router();
   $("#c-save").onclick = async () => {
     const name = $("#c-name").value.trim();
@@ -832,6 +839,7 @@ function renderCampaignForm(existing) {
       platforms: collectChecks(wrap, "plat"),
       key_messages: $("#c-msgs").value.split("\n").map((s) => s.trim()).filter(Boolean),
       notes: $("#c-notes").value.trim(),
+      palette: ($("#c-palette") && $("#c-palette").value) || "",
     };
     try {
       if (existing) { await API.updateCampaign(existing.id, payload); toast("Campanha atualizada", "success"); location.hash = "#/campaign/" + existing.id; }
@@ -1778,6 +1786,36 @@ const TIPOGRAFIA_OPCOES = [
   ["spacegrotesk", "Space Grotesk"],
 ];
 const nomeDaFamilia = (id) => { const o = TIPOGRAFIA_OPCOES.find((x) => x[0] === String(id || "")); return o ? o[1] : String(id || ""); };
+// Cor da campanha — ESPELHO de PALETAS_CAMPANHA em lib/config.js. Mesma ideia da tipografia: o
+// padrão é a identidade oficial, sair dela é possível e avisado. Vale para a CAMPANHA (não para a
+// peça) porque é a campanha que é sazonal, e assim as peças dela saem coerentes entre si.
+const PALETA_OPCOES = [
+  ["", "4Selet (identidade oficial)"],
+  ["vermelho", "Vermelho de campanha"],
+  ["dourado", "Dourado"],
+  ["ambar", "Âmbar sobre preto"],
+  ["verde", "Verde profundo"],
+];
+const nomeDaPaleta = (id) => { const o = PALETA_OPCOES.find((x) => x[0] === String(id || "")); return o ? o[1] : String(id || ""); };
+async function confirmaCorForaDaIdentidade(paleta) {
+  if (!paleta) return true;   // voltar para a identidade nunca pergunta
+  return uiConfirm(
+    "A cor " + nomeDaPaleta(paleta) + " não faz parte da identidade visual definida para a 4Selet, que usa a paleta "
+    + "Selet Darker, Navy, Blue e Sky. Todas as peças desta campanha vão sair nessa cor — a logo continua na cor da marca. Deseja continuar?",
+    { title: "Cor fora da identidade", confirmText: "Sim, usar " + nomeDaPaleta(paleta), cancelText: "Não" }
+  );
+}
+function ligaConfirmacaoDeCor(sel) {
+  if (!sel || sel.dataset.confWired) return;
+  sel.dataset.confWired = "1";
+  let anterior = sel.value;
+  sel.addEventListener("change", async () => {
+    const escolhida = sel.value;
+    if (!escolhida) { anterior = escolhida; return; }
+    if (await confirmaCorForaDaIdentidade(escolhida)) anterior = escolhida;
+    else sel.value = anterior;
+  });
+}
 // O aviso que o Hugo desenhou: modal no meio da tela, fundo embaçado, Sim/Não embaixo. Não bloqueia
 // — só garante que ninguém saia da identidade da marca sem perceber que saiu.
 async function confirmaForaDaIdentidade(familia) {

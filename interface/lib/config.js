@@ -35,6 +35,22 @@ const PALETTE = {
   error: "#DC2626",
 };
 
+// Paletas alternativas POR CAMPANHA. O padrão é e continua sendo a paleta oficial acima: uma
+// campanha só sai dela se alguém escolher, e o painel avisa antes que aquilo não é a identidade.
+// Existe porque campanha sazonal pede outra cor — "uma campanha de fim de ano, algo vermelhão" —
+// sem que isso vire a cara da marca o ano inteiro. Só as quatro cores estruturais mudam; os
+// neutros (mist/cloud) e as cores de estado ficam, senão o texto perde contraste.
+// darker = fundo mais profundo · navy = fundo dos blocos · blue = acento forte (pílula, bordas)
+// sky = acento claro (rótulo, realce da headline).
+const PALETAS_CAMPANHA = {
+  "": { label: "4Selet (identidade oficial)", cores: null },
+  vermelho: { label: "Vermelho de campanha", cores: { darker: "#2B0A0C", navy: "#5A0F16", blue: "#A81D2A", sky: "#E0777F" } },
+  dourado: { label: "Dourado", cores: { darker: "#1B1508", navy: "#3D3011", blue: "#9A7A1E", sky: "#D9BC6A" } },
+  ambar: { label: "Âmbar sobre preto", cores: { darker: "#0A0A0C", navy: "#1A1A1F", blue: "#C8901A", sky: "#F0C462" } },
+  verde: { label: "Verde profundo", cores: { darker: "#07231A", navy: "#0C4032", blue: "#12775C", sky: "#5FBFA1" } },
+};
+const PALETA_IDS = Object.keys(PALETAS_CAMPANHA).filter(Boolean);
+
 // Plataformas aceitas (alinhado a scripts/orchestrator.js ALLOWED_PLAT)
 const ALLOWED_PLATFORMS = [
   "instagram", "facebook", "tiktok", "youtube", "linkedin", "x", "whatsapp", "email",
@@ -256,6 +272,8 @@ function contentTypeById(id) {
 module.exports = {
   PATHS,
   PALETTE,
+  PALETAS_CAMPANHA,
+  PALETA_IDS,
   ALLOWED_PLATFORMS,
   BRAND_PILLARS,
   CONTENT_PILLARS,

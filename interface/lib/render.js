@@ -9,7 +9,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
-const { PATHS, PALETTE, contentTypeById } = require("./config");
+const { PATHS, PALETTE, PALETAS_CAMPANHA, PALETA_IDS, contentTypeById } = require("./config");
 const { findTask } = require("./content");
 
 // --- Fila de render (assincrona + serializada) ------------------------------
@@ -141,7 +141,28 @@ const PNG_RENDER_TIMEOUT_MS = Number(process.env.PNG_RENDER_TIMEOUT_MS || 4 * 60
 
 // Executa o render_ad.js oficial (Playwright) — HTML -> PNG. Assincrono (spawn).
 // `scale` = deviceScaleFactor: 1 = base; 2 = ALTA RESOLUCAO (ex.: 2160px) p/ download.
+// Paleta da CAMPANHA aplicada no documento pronto. Ponto único de propósito: htmlToPng é por onde
+// passa TODO render (arte, feed, slides, formatos da Mídia e as prévias, via htmlStringToPngDataUrl),
+// então trocar aqui garante que a prévia e o arquivo salvo nunca discordem. A troca é sobre o hex
+// literal que os templates escrevem — as quatro cores estruturais e mais nada: os neutros e as cores
+// de estado ficam, senão o texto perde contraste. Idempotente: rodar de novo num HTML já trocado não
+// acha mais os hexes da marca e não faz nada.
+let PALETA_ATUAL = null;
+const CORES_TROCAVEIS = ["darker", "navy", "blue", "sky"];
+function aplicaPaletaDaCampanha(html) {
+  const p = PALETA_ATUAL;
+  if (!p) return html;
+  let out = String(html);
+  for (const k of CORES_TROCAVEIS) {
+    if (!p[k] || p[k] === PALETTE[k]) continue;
+    out = out.split(PALETTE[k]).join(p[k]).split(PALETTE[k].toLowerCase()).join(p[k]);
+  }
+  return out;
+}
 async function htmlToPng(htmlPath, outPng, width, height, scale, opts) {
+  if (PALETA_ATUAL) {
+    try { fs.writeFileSync(htmlPath, aplicaPaletaDaCampanha(fs.readFileSync(htmlPath, "utf8")), "utf8"); } catch (e) {}
+  }
   const script = path.join(PATHS.SCRIPTS_DIR, "render_ad.js");
   const args = [script, htmlPath, outPng, String(width), String(height)];
   if (scale && scale !== 1) args.push(String(scale));
@@ -1553,6 +1574,17 @@ function readRenderPref(loc) {
 }
 function readLogoPref(loc) { const v = readRenderJson(loc).logo; return LOGO_IDS.indexOf(v) >= 0 ? v : null; }
 function readFontPref(loc) { const v = readRenderJson(loc).font; return FAMILIA_IDS.indexOf(v) >= 0 ? v : ""; }
+// Qual paleta a peça herda da campanha à qual está vinculada. Lê o arquivo da campanha direto (e
+// não via lib/campaigns) para não criar dependência circular: campanhas não sabem de render.
+function paletaDaCampanha(loc) {
+  try {
+    const st = readJson(path.join(loc.path, "status.json")) || {};
+    if (!st.campaign_id) return null;
+    const c = readJson(path.join(PATHS.CAMPAIGNS_DIR, String(st.campaign_id) + ".json"));
+    const id = c && c.palette;
+    return (PALETA_IDS.indexOf(id) >= 0 && PALETAS_CAMPANHA[id].cores) ? PALETAS_CAMPANHA[id].cores : null;
+  } catch (e) { return null; }
+}
 // Mesma regra do logo/marca d'água: "auto" volta para a identidade; escolha válida manda e fica.
 function pickFont(loc, requested) {
   if (requested === "auto" || requested === "") { deleteRenderPref(loc, "font"); return ""; }
@@ -2682,6 +2714,9 @@ async function render(folder, kind, opts) {
   let loc = null;
   try { loc = requireActive(folder); } catch (e) { loc = null; }
   FAMILIA_ATUAL = loc ? pickFont(loc, opts && opts.font) : "";
+  // A cor vem da CAMPANHA, não da peça: é a campanha que é sazonal ("uma de fim de ano, vermelhona"),
+  // e assim todas as peças dela saem coerentes entre si sem ninguém repetir a escolha peça a peça.
+  PALETA_ATUAL = loc ? paletaDaCampanha(loc) : null;
   try {
     switch (kind) {
       case "image": return await renderImage(folder, opts);
@@ -2691,7 +2726,7 @@ async function render(folder, kind, opts) {
       case "video": return await renderVideo(folder);
       default: { const e = new Error("kind sem render de midia: " + kind); e.code = "E_NO_RENDER"; throw e; }
     }
-  } finally { FAMILIA_ATUAL = ""; }
+  } finally { FAMILIA_ATUAL = ""; PALETA_ATUAL = null; }
 }
 
 module.exports = {

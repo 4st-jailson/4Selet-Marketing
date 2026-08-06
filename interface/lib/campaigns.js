@@ -2,7 +2,7 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { PATHS, BRAND_PILLARS } = require("./config");
+const { PATHS, BRAND_PILLARS, PALETA_IDS } = require("./config");
 
 function nowIso() {
   const d = new Date();
@@ -72,6 +72,8 @@ function create(obj) {
     angle: obj.angle || "",
     status: obj.status || "active",
     pillar: BRAND_PILLARS.includes(obj.pillar) ? obj.pillar : "",
+    // Cor da campanha: "" = identidade oficial da 4Selet (o padrão). Lista fechada em config.js.
+    palette: PALETA_IDS.includes(obj.palette) ? obj.palette : "",
     platforms: Array.isArray(obj.platforms) ? obj.platforms : [],
     key_messages: Array.isArray(obj.key_messages) ? obj.key_messages : (obj.key_messages ? String(obj.key_messages).split("\n").map((s) => s.trim()).filter(Boolean) : []),
     start_date: obj.start_date || "",
@@ -88,11 +90,14 @@ function create(obj) {
 function update(id, patch) {
   const cur = get(id);
   if (!cur) { const e = new Error("E_CAMPAIGN_NOT_FOUND: " + id); e.code = "E_CAMPAIGN_NOT_FOUND"; throw e; }
-  const allowed = ["name", "objective", "angle", "status", "pillar", "platforms", "key_messages", "start_date", "end_date", "notes"];
+  const allowed = ["name", "objective", "angle", "status", "pillar", "platforms", "key_messages", "start_date", "end_date", "notes", "palette"];
   for (const k of allowed) {
     if (patch[k] === undefined) continue;
     if (k === "key_messages" && !Array.isArray(patch[k])) {
       cur[k] = String(patch[k]).split("\n").map((s) => s.trim()).filter(Boolean);
+    } else if (k === "palette") {
+      // Lista fechada: o id vira cor dentro do CSS da arte. Valor desconhecido volta à identidade.
+      cur[k] = PALETA_IDS.includes(patch[k]) ? patch[k] : "";
     } else {
       cur[k] = patch[k];
     }
