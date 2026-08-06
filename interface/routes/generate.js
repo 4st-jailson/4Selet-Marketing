@@ -28,6 +28,37 @@ function extractJson(text) {
   return null;
 }
 
+// O modelo INVENTA foto. Pedindo "foto de fundo" no tema, em 3 de 3 gerações ele escreveu caminhos
+// como "/uploads/escritorio-moderno-computador.jpg" — arquivos que não existem no acervo. Ele não tem
+// como saber o que existe lá, então preenche com um nome plausível. O efeito era silencioso: o campo
+// ia para o disco, a arte aplicava o véu de leitura por cima de nada (slide mais escuro que os
+// vizinhos, sem foto) e ninguém era avisado de que a foto pedida não saiu.
+// Aqui a foto fantasma é removida e VIRA AVISO — o pedido não é engolido em silêncio.
+function limpaFotosInventadas(parsed) {
+  const removidas = [];
+  if (!parsed || typeof parsed !== "object") return removidas;
+  const confere = (obj, slide) => {
+    if (!obj || typeof obj !== "object" || !obj.image) return;
+    if (render.imagemExiste(obj.image)) return;
+    removidas.push({ slide, caminho: String(obj.image).slice(0, 120) });
+    delete obj.image;
+  };
+  confere(parsed, 0);                                     // 0 = a peça toda (não é slide)
+  if (Array.isArray(parsed.slides)) parsed.slides.forEach((s, i) => confere(s, i + 1));
+  return removidas;
+}
+function avisaFotosInventadas(gov, removidas) {
+  if (!gov || !removidas || !removidas.length) return;
+  if (!Array.isArray(gov.warnings)) gov.warnings = [];
+  const ns = removidas.filter((r) => r.slide > 0).map((r) => r.slide);
+  const onde = !ns.length ? "nesta peça"
+    : ns.length === 1 ? "no slide " + ns[0]
+      : "nos slides " + ns.slice(0, -1).join(", ") + " e " + ns[ns.length - 1];
+  gov.warnings.push("Você pediu foto " + onde + ", e a peça vai sair sem ela. A IA não enxerga o seu acervo, "
+    + "então ela escreve o nome de um arquivo que não existe. Para colocar a foto: use \"Buscar imagem\" no "
+    + "slide, ou envie a sua em Criar Conteúdo.");
+}
+
 // Alerta de marca PRÉ-aplicação: se o pedido do usuário citou cor fora da paleta oficial
 // (branco puro / preto puro / neon), anexa um aviso explicando o impacto + a fonte (brand_identity.md).
 // Vira warning no objeto de governança que o front já exibe.
@@ -138,7 +169,9 @@ router.post("/", async (req, res, next) => {
       // Imagem do acervo (estilo "Foto"): injeta no conceito p/ o template Foto compor.
       if (body.image) parsed.image = String(body.image);
     }
+    const fotosInventadas = limpaFotosInventadas(parsed);
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
+    avisaFotosInventadas(gov, fotosInventadas);
 
     res.json({
       simulated: result.simulated,
@@ -329,8 +362,13 @@ router.post("/save", async (req, res, next) => {
     // (o generate injeta em parsed.image so p/ o render inicial; sem isto, "Gerar arte final" perdia a foto).
     if (body.image && parsed) parsed.image = String(body.image);
 
+    // Foto que não existe não vai para o disco. Vale também aqui, e não só na geração: o JSON
+    // avançado é editável, e uma peça gerada antes deste conserto pode trazer o caminho fantasma.
+    const fotosInventadasSave = limpaFotosInventadas(parsed);
+
     // Gate de governanca: bloqueia erros duros antes de gravar
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || body.raw, { type: body.content_type });
+    avisaFotosInventadas(gov, fotosInventadasSave);
     if (gov.errors.length && !body.force) {
       return res.status(422).json({ error: "conteudo viola regras de marca", governance: gov });
     }

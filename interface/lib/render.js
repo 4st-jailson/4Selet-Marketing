@@ -105,6 +105,26 @@ function resolveImage(u) {
   if (u.charAt(0) === "/") return fileUrl(path.join(__dirname, "..", "public", u.replace(/^\/+/, "")));
   return u;
 }
+// A foto existe MESMO? O modelo inventa caminho de arquivo: pedindo "foto de fundo" no tema, em 3
+// de 3 gerações ele escreveu coisas como "/uploads/escritorio-moderno-computador.jpg", que não
+// existem no acervo. O desenho então aplicava o véu de leitura por cima do nada — o slide saía mais
+// escuro que os vizinhos, sem foto e sem ninguém avisar. Aqui a foto fantasma é tratada como
+// ausência de foto, que é o que ela é.
+function imagemExiste(u) {
+  u = String(u || "");
+  if (!u) return false;
+  if (/^(https?:|data:)/i.test(u)) return true;          // externa: quem valida é a rede/CSP
+  try {
+    const publico = path.resolve(path.join(__dirname, "..", "public"));
+    const alvo = /^file:/i.test(u)
+      ? path.resolve(decodeURIComponent(u.replace(/^file:\/+/i, "")))
+      : path.resolve(path.join(publico, u.replace(/^\/+/, "")));
+    // Confinado a public/: sem isto, "/uploads/../../.env" resolveria para um arquivo real fora da
+    // pasta servida e passaria como "foto existente" — o render então tentaria desenhá-lo.
+    if (alvo !== publico && !alvo.startsWith(publico + path.sep)) return false;
+    return fs.existsSync(alvo) && fs.statSync(alvo).isFile();
+  } catch (e) { return false; }
+}
 
 function requireActive(folder) {
   const loc = findTask(folder);
@@ -1682,7 +1702,9 @@ function carDoc(ctx, extraCss, bodyInner) {
   // preserva a leitura do texto. O scrim adapta a cor ao tema (escuro -> escurece; claro ->
   // clareia) pra o texto (claro no escuro / escuro no claro) continuar legivel sobre a foto.
   let photo = "";
-  if (ctx.image) {
+  // Só desenha (e só escurece com o véu) se a foto existir de verdade — ver imagemExiste().
+  const temFoto = ctx.image && imagemExiste(ctx.image);
+  if (temFoto) {
     const scrim = ctx.theme === THEME_LIGHT
       ? "linear-gradient(180deg, rgba(224,228,222,.74) 0%, rgba(224,228,222,.56) 42%, rgba(224,228,222,.9) 100%)"
       : "linear-gradient(180deg, rgba(4,20,28,.64) 0%, rgba(4,20,28,.48) 42%, rgba(4,20,28,.88) 100%)";
@@ -1690,7 +1712,7 @@ function carDoc(ctx, extraCss, bodyInner) {
   }
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
-<body><div class="card${ctx.image ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
+<body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
 function carTop(ctx) {
   const logo = logoSrc(ctx.logo, (ctx.theme && ctx.theme.logo) || LOGO_LIGHT);
@@ -2448,5 +2470,6 @@ module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
+  imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
 };
