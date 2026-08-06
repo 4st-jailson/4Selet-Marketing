@@ -1503,7 +1503,10 @@ function writeRenderPref(loc, patch) {
   try {
     const p = path.join(loc.path, "render.json");
     const cur = readJson(p) || {};
-    ["template", "logo", "watermark"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
+    // "image" entra aqui porque a peça de FEED não tem onde guardar a foto: o arquivo dela é um
+    // .txt puro. A foto escolhida aparecia na prévia e sumia ao salvar — render.json é o lugar
+    // certo, é a mesma família de template/logo/marca d'água (preferência de arte da peça).
+    ["template", "logo", "watermark", "image"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
     fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
   } catch (e) {}
 }
@@ -1997,7 +2000,13 @@ async function renderImage(folder, opts) {
 
 async function renderFeed(folder, opts) {
   const loc = requireActive(folder);
-  const tpl = pickTemplate(loc, opts && opts.template);
+  // A foto do feed vive no render.json (o arquivo da peça é .txt e não guarda campo). Sem isto,
+  // a rota de render nunca mandava `image` e a foto escolhida na criação sumia ao salvar — ela
+  // aparecia só na prévia, que lia direto do formulário.
+  const fotoSalva = readRenderJson(loc).image;
+  const foto = (opts && opts.image) || (imagemExiste(fotoSalva) ? fotoSalva : "");
+  if (opts && opts.image) writeRenderPref(loc, { image: opts.image });
+  const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!foto });
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
@@ -2032,7 +2041,7 @@ async function renderFeed(folder, opts) {
     subtext: subtexto,
     cta: "",
     badge: "",
-    image: (opts && opts.image) || "",
+    image: foto,
     logo: logoV, watermark: wmV,
   });
   fs.writeFileSync(htmlPath, html, "utf8");

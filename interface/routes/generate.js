@@ -411,7 +411,9 @@ router.post("/save", async (req, res, next) => {
     // ignora "auto"/vazio para deixar a rotacao automatica por slug atuar).
     if (body.template_variant) content.setTemplate(folder, body.template_variant);
     // 2c.2) variante de LOGO + estilo de MARCA D'ÁGUA escolhidos no brief (render.json, merge).
-    if (body.logo || body.watermark) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark });
+    // A foto entra aqui junto: no FEED ela não cabe no arquivo de conteúdo (é .txt), então o
+    // render.json é o único lugar onde ela sobrevive ao salvamento.
+    if (body.logo || body.watermark || body.image) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark, image: body.image });
 
     // 2d) grava o pilar de conteudo (eixo tematico) escolhido no brief.
     // Validado na taxonomia fechada; pilar invalido/ausente e ignorado.

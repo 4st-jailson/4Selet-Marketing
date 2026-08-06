@@ -409,6 +409,14 @@ function setRenderPref(folder, patch) {
   else if (VALID_LOGOS.includes(String(patch.logo))) cur.logo = String(patch.logo);
   if (patch.watermark === "auto") delete cur.watermark;
   else if (VALID_WATERMARKS.includes(String(patch.watermark))) cur.watermark = String(patch.watermark);
+  // Foto da peça. Necessário porque o arquivo do FEED é um .txt e não guarda campo nenhum — sem
+  // isto a foto escolhida na criação aparecia na prévia e sumia ao salvar. Só aceita caminho do
+  // acervo servido pelo painel: nada de URL externa (o editor re-renderiza com a rede bloqueada) e
+  // nada de subir a árvore de diretórios.
+  if (patch.image === "auto" || patch.image === "") delete cur.image;
+  else if (typeof patch.image === "string" && /^\/(uploads|assets)\/[\w./-]+$/.test(patch.image) && patch.image.indexOf("..") < 0) {
+    cur.image = patch.image;
+  }
   writeJsonAtomic(p, cur);
   invalidateTasksCache();
   return true;
