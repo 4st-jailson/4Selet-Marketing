@@ -922,6 +922,19 @@ function suggestTitleFromBrief(brief) {
   let s = String(brief || "").trim();
   if (!s) return "";
   s = s.split(/[.!?\n]/)[0].trim();
+  // Briefing colado de um editor vem em markdown: "## Prompt aprimorado — Carrossel...". Sem
+  // limpar, o "##" e o "**" viravam o título da peça E o nome da pasta em disco.
+  s = s.replace(/^\s*#{1,6}\s*/, "").replace(/\*\*/g, "").replace(/^\s*[-*+]\s+/, "").trim();
+  // Um briefing longo começa com coisas que NÃO são o assunto: um cabeçalho genérico
+  // ("## Prompt aprimorado", "Briefing") e a linha de persona ("Atue como um diretor de arte").
+  // Pula essas e usa a primeira linha que descreve a peça de verdade.
+  const naoEhAssunto = (l) => /^(prompt|briefing|brief|instru[çc][õo]es?)\b/i.test(l)
+    || /^(atue|aja|voc[êe]\s+[ée]|assuma|comporte-se|imagine\s+que)\b/i.test(l);
+  if (naoEhAssunto(s)) {
+    const linhas = String(brief).split(/\n/).map((l) => l.replace(/^\s*#{1,6}\s*/, "").replace(/\*\*/g, "").replace(/^\s*[-*+]\s+/, "").trim());
+    const util = linhas.find((l) => l.length >= 25 && !naoEhAssunto(l));
+    if (util) s = util.split(/[.!?]/)[0].trim();
+  }
   // Tira o PEDIDO e deixa o ASSUNTO. Quem escreve o tema com naturalidade começa dizendo o que
   // quer ("Quero um carrossel para o Instagram sobre a Taxa Zero...") — e isso virava o título
   // da peça E o nome da pasta em disco, que ficava `quero_um_carrossel_para_o_instagram_sobr`.
@@ -935,7 +948,7 @@ function suggestTitleFromBrief(brief) {
   if (!s) return "";
   // Remove o verbo imperativo inicial + artigo/preposição. O artigo exige espaço
   // depois (e vem do mais longo p/ o mais curto) para NÃO comer o "o" de "os" etc.
-  s = s.replace(/^(anunciar|divulgar|comunicar|promover|apresentar|mostrar|explicar|ensinar|criar|fazer|gerar|postar|publicar|destacar|refor[cç]ar|lembrar|avisar(?:\s+sobre)?|falar\s+(?:sobre|de))\s+(?:(?:as|os|uma|um|sobre|da|do|de|a|o)\s+)?/i, "");
+  s = s.replace(/^(anunciar|divulgar|comunicar|promover|apresentar|mostrar|explicar|ensinar|criar|crie|cria|fazer|gerar|gere|monte|montar|elabore|postar|publicar|destacar|refor[cç]ar|lembrar|avisar(?:\s+sobre)?|falar\s+(?:sobre|de))\s+(?:(?:as|os|uma|um|sobre|da|do|de|a|o)\s+)?/i, "");
   if (!s) return "";
   // Corta numa fronteira natural (—, :, vírgula, "que", "para") p/ um título limpo,
   // desde que sobre texto suficiente — evita terminar no meio de uma oração.

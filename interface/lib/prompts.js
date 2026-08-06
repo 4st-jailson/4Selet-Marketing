@@ -87,9 +87,26 @@ function systemPrompt() {
 
 // Monta o prompt de geracao a partir do formulario + contexto de campanha.
 // req: { content_type, brief, platforms, tone?, key_offer?, extra?, campaign? }
+// Quantos slides o texto PEDIU. Enterrada num briefing de 8 mil caracteres, a frase "com 5 slides"
+// nao competia com o "4-7 slides" escrito no schema: medido, o mesmo pedido saia com 5 numa rodada e
+// 6 na seguinte. Extrair aqui, sem IA, torna a contagem estavel — e o schema passa a dizer o numero
+// exato em vez de uma faixa. Fora de 3..10 e ignorado (o Instagram aceita ate 10 no carrossel).
+function slidesPedidos(brief) {
+  const t = String(brief || "");
+  const porExtenso = { tres: 3, "três": 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10 };
+  let m = t.match(/\b(\d{1,2})\s*slides?\b/i);
+  let n = m ? parseInt(m[1], 10) : null;
+  if (n == null) {
+    m = t.match(/\b(tr[êe]s|quatro|cinco|seis|sete|oito|nove|dez)\s*slides?\b/i);
+    if (m) n = porExtenso[m[1].toLowerCase()] || null;
+  }
+  return (n && n >= 3 && n <= 10) ? n : null;
+}
 function generationPrompt(req) {
   const ct = contentTypeById(req.content_type);
-  const schema = SCHEMAS[req.content_type] || `{ "body": "...", "notes": "..." }`;
+  let schema = SCHEMAS[req.content_type] || `{ "body": "...", "notes": "..." }`;
+  const nSlides = req.content_type === "instagram_carousel" ? slidesPedidos(req.brief) : null;
+  if (nSlides) schema = schema.replace(/4-7 slides/g, "EXATAMENTE " + nSlides + " slides (foi o que a pessoa pediu)");
   const lines = [];
   lines.push("TAREFA: gerar **" + (ct ? ct.label : req.content_type) + "**.");
   if (ct) lines.push("Definicao do formato: " + ct.description);
@@ -104,11 +121,36 @@ function generationPrompt(req) {
     }
     lines.push("");
   }
+  // PRECEDENCIA. O bloco do pilar dizia "define o TEMA desta peca", e com isso ele ATROPELAVA o
+  // texto da pessoa: medido com um briefing detalhado de 8 mil caracteres, com o pilar
+  // "prova_plataforma" preenchido saíram 6 slides (ele pediu 5), ZERO dos 5 textos que ele escreveu,
+  // e uma peca inteira sobre 95% de aprovacao — assunto que o angulo do pilar traz e que ele nunca
+  // pediu. O MESMO texto, sem pilar, saiu com 5 slides e 4 dos 5 textos dele reconheciveis.
+  // O pilar continua util quando a pessoa escreve pouco; ele so nao pode vencer o que ela escreveu.
   const pillar = pillarById(req.pillar);
+  const briefDetalhado = String(req.brief || "").length >= 1200;
+  lines.push("PRECEDENCIA (nesta ordem): 1) as REGRAS DURAS de marca e os knowledge files acima — nunca cedem, "
+    + "nem se o texto pedir; 2) o TEMA/OBJETIVO escrito pela pessoa; 3) pilar, angulo e campanha ativa.");
+  lines.push("Ou seja: se o texto especificar assunto, textos de cada slide, quantidade de slides ou estrutura, "
+    + "SIGA O TEXTO — pilar e campanha valem so onde o texto nao disser. Mas o texto NAO autoriza furar marca: "
+    + "cor fora da paleta oficial, outra familia tipografica, numero de campanha diferente do oficial, concorrente "
+    + "citado ou a frase-tag assinando a peca continuam PROIBIDOS. Nao repita codigo de cor (#RRGGBB) no conteudo.");
+  lines.push("");
   if (pillar) {
-    lines.push("PILAR DE CONTEUDO: " + pillar.label + " — " + pillar.description);
-    lines.push("Angulo do pilar (define o TEMA desta peca, vale para este formato): " + pillar.angle);
-    lines.push("Mantenha a variedade real do feed 4Selet: NEM toda peca e sobre Taxa Zero. Respeite o pilar acima como eixo tematico, ainda que a campanha ativa exista.");
+    lines.push("PILAR DE CONTEUDO (eixo tematico padrao): " + pillar.label + " — " + pillar.description);
+    if (briefDetalhado) {
+      // Briefing longo ja traz o proprio eixo. Injetar o angulo aqui so cria ordem concorrente.
+      lines.push("O texto da pessoa e detalhado e vem primeiro: use o pilar apenas como enquadramento, "
+        + "NAO troque o assunto dela pelo assunto do pilar e NAO puxe numeros ou provas que ela nao pediu.");
+    } else {
+      lines.push("Angulo do pilar (use quando o tema nao especificar o contrario): " + pillar.angle);
+    }
+    lines.push("Mantenha a variedade real do feed 4Selet: NEM toda peca e sobre Taxa Zero.");
+    lines.push("");
+  }
+  if (nSlides) {
+    lines.push("QUANTIDADE DE SLIDES: o texto pede " + nSlides + ". Entregue EXATAMENTE " + nSlides
+      + " itens no array slides — nem mais, nem menos.");
     lines.push("");
   }
   lines.push("BRIEF DA PECA (campos preenchidos pelo usuario):");

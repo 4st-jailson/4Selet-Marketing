@@ -101,8 +101,13 @@ const NUMEROS_OFICIAIS = [
     re: /(?:0\s*%|taxa zero)[^.!?\n]{0,70}?\bR\$\s*(\d{2,4})\s*mil\b/i },
   { oq: "o custo fixo por transacao", oficial: 1.99,
     re: /R\$\s*(\d{1,2}[,.]\d{2})\s*(?:fixos?\s*)?(?:por|\/)\s*transa/i },
-  { oq: "o prazo do PIX", oficial: 10, re: /\bPIX\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
-  { oq: "o prazo do cartao", oficial: 30, re: /\bcart[ãa]o\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
+  // `naoNoMeio`: o outro meio de pagamento NAO pode estar entre o assunto e o prazo. Sem isso,
+  // "95% de aprovacao no cartao e PIX em D+10" era lido como "cartao em D+10" e virava erro duro
+  // numa frase correta — o prazo ali e do PIX, o cartao so aparece antes.
+  { oq: "o prazo do PIX", oficial: 10, naoNoMeio: /cart[ãa]o/i,
+    re: /\bPIX\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
+  { oq: "o prazo do cartao", oficial: 30, naoNoMeio: /\bPIX\b/i,
+    re: /\bcart[ãa]o\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
 ];
 
 function runBrandGovernance(text, opts) {
@@ -131,14 +136,29 @@ function runBrandGovernance(text, opts) {
   // quanto "0% por 3 meses". As regras abaixo so disparam quando o texto esta DECLARANDO a
   // mecanica da campanha, para nao atropelar copy legitima: "taxa de mercado em torno de 7,9%"
   // e "seu cartao ta aprovando 78% em vez de 95%" continuam passando.
-  for (const { re, oficial, oq } of NUMEROS_OFICIAIS) {
+  // A peca pode falar do MERCADO em vez de falar da 4Selet: "a media do mercado libera seu PIX em
+  // D+30. A 4Selet libera em D+10." Comparar com o mercado e argumento legitimo — e era barrado.
+  const COMPARA_MERCADO = /m[ée]dia do mercado|no mercado|do mercado|outras plataformas|a maioria das plataformas|por a[ií]|concorr[êe]nc/i;
+  for (const { re, oficial, oq, naoNoMeio } of NUMEROS_OFICIAIS) {
     let m;
     const rex = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
     while ((m = rex.exec(String(text))) !== null) {
       const achado = String(m[m.length - 1]).replace(",", ".");
-      if (parseFloat(achado) !== oficial) {
-        errors.push(oq + ' esta errado: a peca diz "' + m[0].trim() + '", e o oficial e ' + oficial + ".");
-      }
+      if (parseFloat(achado) === oficial) continue;
+      // o outro meio de pagamento entrou no meio: o prazo nao e do assunto desta regra
+      if (naoNoMeio && naoNoMeio.test(m[0])) continue;
+      // ENUMERACAO nao e contradicao. Uma frase que lista os dois prazos — "recebimento: cartao,
+      // PIX em D+10 e D+30" — casa o regex do cartao com o numero do PIX e virava erro duro,
+      // barrando copy correta. Se a MESMA frase tambem traz o numero oficial deste item, o texto
+      // esta enumerando e nao afirmando outra coisa.
+      const inicio = String(text).lastIndexOf("\n", m.index) + 1;
+      let fim = String(text).slice(m.index).search(/[.!?\n]/);
+      fim = fim < 0 ? String(text).length : m.index + fim + 1;
+      const frase = String(text).slice(inicio, fim);
+      const temOficial = new RegExp("(?:^|[^\\d.,])" + String(oficial).replace(".", "[.,]") + "(?![\\d])").test(frase);
+      if (temOficial) continue;
+      if (COMPARA_MERCADO.test(frase)) continue;
+      errors.push(oq + ' esta errado: a peca diz "' + m[0].trim() + '", e o oficial e ' + oficial + ".");
     }
   }
 
