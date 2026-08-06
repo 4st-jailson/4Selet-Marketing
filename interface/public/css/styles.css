@@ -1214,12 +1214,16 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .px-loading { display: flex; align-items: center; gap: 8px; padding: 20px; color: var(--text-mut); }
 
 /* ---- Foto de fundo por-slide (editor de carrossel) ---- */
-.se-photo { display: flex; align-items: center; gap: 10px; margin-top: var(--s3); padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--r-sm); background: var(--surface-2); }
+/* A linha da foto tem botões de PALAVRA, não de ícone: por isso usa .se-txt e não .se-mini
+   (que é uma caixa fixa de 28x28 e fazia "Trocar"/"Remover"/"+ Buscar foto" vazarem por cima
+   do vizinho). Com botão de largura própria a linha fica mais larga, então ela precisa poder
+   quebrar — senão em tela estreita o bloco de ações escapa da borda tracejada. */
+.se-photo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: var(--s3); padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--r-sm); background: var(--surface-2); }
 .se-photo.has { border-style: solid; }
 .se-photo-thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: var(--r-xs); background-size: cover; background-position: center; background-color: var(--thumb-bg); border: 1px solid var(--border); }
-.se-photo-lab { flex: 1 1 auto; font-size: 13px; color: var(--text-2); }
+.se-photo-lab { flex: 1 1 130px; min-width: 0; font-size: 13px; color: var(--text-2); }
 .se-photo-lab.muted { color: var(--text-mut); }
-.se-photo-acts { display: inline-flex; gap: 6px; }
+.se-photo-acts { display: inline-flex; flex: 0 0 auto; gap: 6px; margin-left: auto; }
 .se-photo .se-photo-x { color: var(--err); }
 
 /* ---- Página completa de busca de imagens (Pexels "Ver mais") ---- */
@@ -1557,6 +1561,19 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .se-mini:disabled { opacity: .35; cursor: not-allowed; }
 .se-mini.se-del { color: color-mix(in srgb, var(--err) 62%, var(--text-2)); }
 .se-mini.se-del:hover:not(:disabled) { border-color: #c0566a; color: #e88; }
+/* Irmão de .se-mini para botão de PALAVRA: mesma moldura, mas a largura vem do texto.
+   .se-mini é 28x28 fixo e serve só para os ícones (↻ ↑ ↓ ✕). */
+.se-txt {
+  min-height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-xs);
+  background: var(--surface-3); color: var(--text-2); cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1; white-space: nowrap;
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color var(--tr), color var(--tr);
+}
+.se-txt:hover:not(:disabled) { border-color: var(--brand-sky); color: var(--text); }
+.se-txt:disabled { opacity: .35; cursor: not-allowed; }
+.se-txt.se-photo-x { color: color-mix(in srgb, var(--err) 62%, var(--text-2)); }
+.se-txt.se-photo-x:hover:not(:disabled) { border-color: #c0566a; color: #e88; }
 .se-f {
   width: 100%; padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: var(--r-xs);
   /* background-COLOR (não o shorthand): o shorthand resetava background-repeat p/ 'repeat'
@@ -1739,13 +1756,25 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    Aparece abaixo do campo de tema depois que o sistema lê o texto. Sem ela o
    recurso seria invisível: a IA decidiria formato/assunto/chamada e a pessoa
    nunca veria o que foi decidido — que é justamente a revisão que foi pedida. */
+/* Resumo de uma linha abaixo do campo de tema. Deixou de ser a faixa com os 3 chips: o aviso de
+   cada campo agora mora no pé do próprio campo (.ai-note). Aqui fica só o que NÃO pertence a
+   campo nenhum — o que a leitura não conseguiu deduzir — e o atalho para o aviso que ficou fora
+   da tela (o da Chamada, que mora na seção avançada). */
 .leitura { margin-top: 8px; padding: 10px 11px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface-2); }
 .lt-tit { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
-.lt-chips { display: flex; flex-wrap: wrap; gap: 7px; }
-.lt-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 8px 5px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border-soft); font-size: 12.5px; }
-.lt-chip.sug { border-style: dashed; }
-.lt-campo { color: var(--text-2); }
-.lt-valor { font-weight: 600; }
-.lt-btn { border: 0; background: none; color: var(--accent); font: inherit; font-size: 11.5px; cursor: pointer; padding: 2px 4px; border-radius: 5px; }
-.lt-btn:hover { background: var(--surface-2); text-decoration: underline; }
-.leitura .hint { margin-top: 7px; }
+.lt-ver { border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0 2px; border-radius: 4px; text-decoration: underline; }
+.lt-ver:hover { background: var(--surface); }
+.leitura .hint + .hint { margin-top: 6px; }
+
+/* Aviso ancorado no pé do campo que a leitura alterou. */
+.ai-note { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-2); font-size: 12.5px; color: var(--text-2); }
+.ai-note[hidden] { display: none; }   /* obrigatório: o display:flex acima vence o [hidden] do navegador */
+.ai-note.sug { border-style: dashed; }
+.ai-note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; position: relative; top: -1px; }
+.ai-note-txt strong { color: var(--text); }
+.ai-note-act { margin-left: auto; border: 0; background: none; color: var(--accent); font: inherit; font-size: 11.5px; cursor: pointer; padding: 2px 4px; border-radius: 5px; flex: 0 0 auto; }
+.ai-note-act:hover { background: var(--surface); text-decoration: underline; }
+.ai-note.flash { animation: ai-note-flash .9s ease 1; }
+@keyframes ai-note-flash { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 2px var(--accent); } }
+/* Selo no resumo da seção avançada: sobrevive a recolher a seção, então o sinal não some junto. */
+.adv-block > summary .adv-badge { margin-left: 8px; font-weight: 600; font-size: 11.5px; color: var(--accent); }

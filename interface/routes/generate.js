@@ -11,7 +11,7 @@ const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
 const researchLib = require("../lib/research");
 const render = require("../lib/render");
-const { contentTypeById, pillarById, APPROVED_CTAS } = require("../lib/config");
+const { contentTypeById, pillarById, APPROVED_CTAS, BRIEF_MAX_CHARS } = require("../lib/config");
 const { runBrandGovernance, validateContentRequest } = require("../lib/validation");
 
 // Extrai o primeiro objeto JSON de um texto (tolera code fences / texto ao redor).
@@ -26,6 +26,37 @@ function extractJson(text) {
     try { return JSON.parse(s.slice(start, end + 1)); } catch (e) { /* nada */ }
   }
   return null;
+}
+
+// O modelo INVENTA foto. Pedindo "foto de fundo" no tema, em 3 de 3 gerações ele escreveu caminhos
+// como "/uploads/escritorio-moderno-computador.jpg" — arquivos que não existem no acervo. Ele não tem
+// como saber o que existe lá, então preenche com um nome plausível. O efeito era silencioso: o campo
+// ia para o disco, a arte aplicava o véu de leitura por cima de nada (slide mais escuro que os
+// vizinhos, sem foto) e ninguém era avisado de que a foto pedida não saiu.
+// Aqui a foto fantasma é removida e VIRA AVISO — o pedido não é engolido em silêncio.
+function limpaFotosInventadas(parsed) {
+  const removidas = [];
+  if (!parsed || typeof parsed !== "object") return removidas;
+  const confere = (obj, slide) => {
+    if (!obj || typeof obj !== "object" || !obj.image) return;
+    if (render.imagemExiste(obj.image)) return;
+    removidas.push({ slide, caminho: String(obj.image).slice(0, 120) });
+    delete obj.image;
+  };
+  confere(parsed, 0);                                     // 0 = a peça toda (não é slide)
+  if (Array.isArray(parsed.slides)) parsed.slides.forEach((s, i) => confere(s, i + 1));
+  return removidas;
+}
+function avisaFotosInventadas(gov, removidas) {
+  if (!gov || !removidas || !removidas.length) return;
+  if (!Array.isArray(gov.warnings)) gov.warnings = [];
+  const ns = removidas.filter((r) => r.slide > 0).map((r) => r.slide);
+  const onde = !ns.length ? "nesta peça"
+    : ns.length === 1 ? "no slide " + ns[0]
+      : "nos slides " + ns.slice(0, -1).join(", ") + " e " + ns[ns.length - 1];
+  gov.warnings.push("Você pediu foto " + onde + ", e a peça vai sair sem ela. A IA não enxerga o seu acervo, "
+    + "então ela escreve o nome de um arquivo que não existe. Para colocar a foto: use \"Buscar imagem\" no "
+    + "slide, ou envie a sua em Criar Conteúdo.");
 }
 
 // Alerta de marca PRÉ-aplicação: se o pedido do usuário citou cor fora da paleta oficial
@@ -138,7 +169,9 @@ router.post("/", async (req, res, next) => {
       // Imagem do acervo (estilo "Foto"): injeta no conceito p/ o template Foto compor.
       if (body.image) parsed.image = String(body.image);
     }
+    const fotosInventadas = limpaFotosInventadas(parsed);
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
+    avisaFotosInventadas(gov, fotosInventadas);
 
     res.json({
       simulated: result.simulated,
@@ -231,12 +264,18 @@ router.post("/preview", async (req, res, next) => {
 // 3) Sem chave de IA não há interpretação. A versão anterior tinha um adivinhador por padrões
 //    de texto que lia o "x" de "1080 x 1350" como a rede X e virava "Calcular minha economia"
 //    sempre que a palavra "economia" aparecia. Chutar é pior do que não responder.
-const LIMITE_TEXTO = 4000;
 router.post("/interpret", async (req, res, next) => {
   try {
     const texto = String((req.body && req.body.texto) || "").trim();
     if (texto.length < 12) return res.status(400).json({ error: "Escreva um pouco mais para eu conseguir entender a peça.", code: "E_TEXTO_CURTO" });
-    if (texto.length > LIMITE_TEXTO) return res.status(413).json({ error: "Texto muito longo (máximo " + LIMITE_TEXTO + " caracteres).", code: "E_TEXTO_LONGO" });
+    if (texto.length > BRIEF_MAX_CHARS) {
+      // Diz o tamanho REAL e o limite: "muito longo" sozinho não ajuda a decidir o que cortar.
+      return res.status(413).json({
+        error: "Seu texto tem " + texto.length.toLocaleString("pt-BR") + " caracteres e eu leio até "
+          + BRIEF_MAX_CHARS.toLocaleString("pt-BR") + ". Encurte o texto ou preencha os campos à mão.",
+        code: "E_TEXTO_LONGO", tamanho: texto.length, limite: BRIEF_MAX_CHARS,
+      });
+    }
     if (!ai.hasKey || !ai.hasKey()) {
       return res.json({ disponivel: false, motivo: "Sem chave de IA configurada — não dá para interpretar o texto. Preencha os campos manualmente.", campos: {} });
     }
@@ -248,13 +287,30 @@ router.post("/interpret", async (req, res, next) => {
       provider: (req.body && req.body.provider),
       simulate: () => "{}",
     });
-    const cru = extractJson(result.text) || {};
+    // Truncagem NÃO pode virar "não entendi nada": sem esta guarda o modelo para no meio,
+    // extractJson devolve null e a rota respondia 200 com campos vazios — igualzinho a um texto
+    // que realmente não dizia nada. Quem lê a tela não tem como distinguir os dois casos.
+    if (result.stop_reason === "max_tokens") {
+      return res.status(422).json({ error: "Não consegui terminar a leitura do seu texto desta vez. Tente de novo ou preencha os campos à mão.", code: "E_LEITURA_TRUNCADA" });
+    }
+    const cru = extractJson(result.text);
+    if (!cru) {
+      return res.status(422).json({ error: "Não consegui entender a resposta da leitura desta vez. Tente de novo ou preencha os campos à mão.", code: "E_LEITURA_INVALIDA" });
+    }
 
     // Só entra o que existe nas taxonomias reais. O modelo não cria valor novo aqui.
     const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+    // A comparação era por igualdade EXATA, e por isso perdia o caso mais comum: a pessoa escreve
+    // "Conheça a plataforma" e a lista oficial diz "Conhecer a plataforma" — mesma chamada, verbo
+    // em outra forma, resultado descartado em silêncio. Comparar pelo radical das palavras com 3+
+    // letras resolve conjugação e acento sem aproximar chamadas diferentes entre si (conferido
+    // contra a lista inteira: nenhuma colide com outra).
+    const radical = (s) => norm(s).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3).map((w) => w.slice(0, 4)).sort().join("|");
+    const ctaOk = (APPROVED_CTAS.find((c) => norm(c) === norm(cru.cta))
+      || (norm(cru.cta) ? APPROVED_CTAS.find((c) => radical(c) && radical(c) === radical(cru.cta)) : null)
+      || "");
     const tipoOk = contentTypeById(cru.content_type) ? String(cru.content_type) : "";
     const pilarOk = pillarById(cru.pillar) ? String(cru.pillar) : "";
-    const ctaOk = (APPROVED_CTAS.find((c) => norm(c) === norm(cru.cta)) || "");
     const conf = (k) => (["alta", "media", "baixa"].indexOf(String((cru.confianca || {})[k])) >= 0 ? String(cru.confianca[k]) : "media");
 
     const campos = {};
@@ -263,7 +319,15 @@ router.post("/interpret", async (req, res, next) => {
     if (ctaOk) campos.cta = { valor: ctaOk, confianca: conf("cta"), porque: String((cru.porque || {}).cta || "").slice(0, 200) };
     else if (cru.cta_ausente === true) campos.cta = { valor: "", sem_cta: true, confianca: conf("cta"), porque: String((cru.porque || {}).cta || "").slice(0, 200) };
 
-    const faltou = Array.isArray(cru.faltou) ? cru.faltou.map((x) => String(x).slice(0, 60)).slice(0, 6) : [];
+    // `faltou` só pode citar os campos que a leitura realmente tenta preencher. Era texto livre do
+    // modelo impresso cru na tela: numa execução real ele devolveu ["cta","numero_destaque",
+    // "headline","dado_ou_percentual_de_aprovacao"], e quem lesse a tela veria nomes de variável.
+    // O que ele nomear fora desses três não é campo — é observação, e não cabe nesse aviso.
+    const CAMPOS_LIDOS = ["content_type", "pillar", "cta"];
+    const faltou = (Array.isArray(cru.faltou) ? cru.faltou : [])
+      .map((x) => String(x).trim())
+      .filter((x) => CAMPOS_LIDOS.indexOf(x) >= 0 && !campos[x])
+      .filter((x, i, a) => a.indexOf(x) === i);
     res.json({ disponivel: true, simulated: !!result.simulated, model: result.model, provider: result.provider, campos, faltou });
   } catch (e) { next(e); }
 });
@@ -298,8 +362,13 @@ router.post("/save", async (req, res, next) => {
     // (o generate injeta em parsed.image so p/ o render inicial; sem isto, "Gerar arte final" perdia a foto).
     if (body.image && parsed) parsed.image = String(body.image);
 
+    // Foto que não existe não vai para o disco. Vale também aqui, e não só na geração: o JSON
+    // avançado é editável, e uma peça gerada antes deste conserto pode trazer o caminho fantasma.
+    const fotosInventadasSave = limpaFotosInventadas(parsed);
+
     // Gate de governanca: bloqueia erros duros antes de gravar
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || body.raw, { type: body.content_type });
+    avisaFotosInventadas(gov, fotosInventadasSave);
     if (gov.errors.length && !body.force) {
       return res.status(422).json({ error: "conteudo viola regras de marca", governance: gov });
     }

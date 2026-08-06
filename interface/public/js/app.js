@@ -120,6 +120,10 @@ function isMediaKind(k) { return k === "image" || k === "feed" || k === "carouse
 const MEDIA_MODELS = [
   { id: "hand_tablet", name: "Tablet", grupo: "Aparelho", desc: "Tablet levemente inclinado sobre o fundo azul, com a matéria ocupando a tela inteira. Vai bem com print vertical.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="11" y="4" width="18" height="32" rx="3"/><line x1="17" y1="32" x2="23" y2="32"/></svg>' },
   { id: "celular", name: "Celular", grupo: "Aparelho", desc: "Tela de celular. Use um print feito no celular — um print largo encolhe demais para caber.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="3" width="14" height="34" rx="3.5"/><line x1="17.5" y1="6.5" x2="22.5" y2="6.5"/></svg>' },
+  // O notebook SEMPRE existiu no render (tplMedia cai em mediaDevice, que desenha tela + base) e o
+  // salvamento já o aceitava — ele só nunca tinha sido cadastrado aqui, e por isso não aparecia
+  // para escolher. A dica de proporção dele (logo abaixo, em MEDIA_ASPECT) ficou órfã esse tempo todo.
+  { id: "notebook", name: "Notebook", grupo: "Aparelho", desc: "Tela de notebook com a base apoiada. É o que melhor mostra print HORIZONTAL, de página aberta no computador.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="9" width="24" height="17" rx="1.5"/><path d="M4 30h32" stroke-linecap="round"/><path d="M16 30l1-4h6l1 4"/></svg>' },
   { id: "navegador", name: "Navegador", grupo: "Aparelho", desc: "Janela de navegador, com barra de endereço e o site. Melhor com print de página aberta no computador.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"/><line x1="5" y1="14" x2="35" y2="14"/><circle cx="9" cy="11" r=".6" fill="currentColor"/><circle cx="12.5" cy="11" r=".6" fill="currentColor"/><circle cx="16" cy="11" r=".6" fill="currentColor"/></svg>' },
   { id: "foto_real", name: "Foto real (mãos)", grupo: "Foto real", oculto: true, desc: "Mãos segurando o tablet numa foto real. A matéria é encaixada na tela com a perspectiva da cena.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="13" y="6" width="14" height="24" rx="2"/><path d="M13 12c-3 0-5 2-5 5v9M27 12c3 0 5 2 5 5v9"/></svg>' },
   { id: "foto_mesa", name: "Foto real (mesa)", grupo: "Foto real", oculto: true, desc: "Tablet apoiado na mesa, com xícara ao lado. Clima de leitura calma.", svg: '<svg viewBox="0 0 40 40" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><rect x="15" y="9" width="13" height="18" rx="2"/><path d="M4 27h32"/><circle cx="9" cy="22" r="4"/><path d="M13 21h2"/></svg>' },
@@ -918,6 +922,19 @@ function suggestTitleFromBrief(brief) {
   let s = String(brief || "").trim();
   if (!s) return "";
   s = s.split(/[.!?\n]/)[0].trim();
+  // Briefing colado de um editor vem em markdown: "## Prompt aprimorado — Carrossel...". Sem
+  // limpar, o "##" e o "**" viravam o título da peça E o nome da pasta em disco.
+  s = s.replace(/^\s*#{1,6}\s*/, "").replace(/\*\*/g, "").replace(/^\s*[-*+]\s+/, "").trim();
+  // Um briefing longo começa com coisas que NÃO são o assunto: um cabeçalho genérico
+  // ("## Prompt aprimorado", "Briefing") e a linha de persona ("Atue como um diretor de arte").
+  // Pula essas e usa a primeira linha que descreve a peça de verdade.
+  const naoEhAssunto = (l) => /^(prompt|briefing|brief|instru[çc][õo]es?)\b/i.test(l)
+    || /^(atue|aja|voc[êe]\s+[ée]|assuma|comporte-se|imagine\s+que)\b/i.test(l);
+  if (naoEhAssunto(s)) {
+    const linhas = String(brief).split(/\n/).map((l) => l.replace(/^\s*#{1,6}\s*/, "").replace(/\*\*/g, "").replace(/^\s*[-*+]\s+/, "").trim());
+    const util = linhas.find((l) => l.length >= 25 && !naoEhAssunto(l));
+    if (util) s = util.split(/[.!?]/)[0].trim();
+  }
   // Tira o PEDIDO e deixa o ASSUNTO. Quem escreve o tema com naturalidade começa dizendo o que
   // quer ("Quero um carrossel para o Instagram sobre a Taxa Zero...") — e isso virava o título
   // da peça E o nome da pasta em disco, que ficava `quero_um_carrossel_para_o_instagram_sobr`.
@@ -931,7 +948,7 @@ function suggestTitleFromBrief(brief) {
   if (!s) return "";
   // Remove o verbo imperativo inicial + artigo/preposição. O artigo exige espaço
   // depois (e vem do mais longo p/ o mais curto) para NÃO comer o "o" de "os" etc.
-  s = s.replace(/^(anunciar|divulgar|comunicar|promover|apresentar|mostrar|explicar|ensinar|criar|fazer|gerar|postar|publicar|destacar|refor[cç]ar|lembrar|avisar(?:\s+sobre)?|falar\s+(?:sobre|de))\s+(?:(?:as|os|uma|um|sobre|da|do|de|a|o)\s+)?/i, "");
+  s = s.replace(/^(anunciar|divulgar|comunicar|promover|apresentar|mostrar|explicar|ensinar|criar|crie|cria|fazer|gerar|gere|monte|montar|elabore|postar|publicar|destacar|refor[cç]ar|lembrar|avisar(?:\s+sobre)?|falar\s+(?:sobre|de))\s+(?:(?:as|os|uma|um|sobre|da|do|de|a|o)\s+)?/i, "");
   if (!s) return "";
   // Corta numa fronteira natural (—, :, vírgula, "que", "para") p/ um título limpo,
   // desde que sobre texto suficiente — evita terminar no meio de uma oração.
@@ -1706,20 +1723,31 @@ function renderPanel(folder, task) {
 }
 
 // Templates visuais disponiveis para pecas estaticas (image/feed/carousel).
+// "Foto" faltava aqui: numa peça salva com esse estilo, nenhum rádio ficava marcado e qualquer
+// clique trocava o estilo sem caminho de volta.
 const VISUAL_TEMPLATES = [
   { id: "editorial", name: "Editorial", desc: "Gradiente azul, dots, headline à esquerda" },
   { id: "bold", name: "Destaque", desc: "Fundo escuro centralizado, número em evidência" },
   { id: "split", name: "Dividido", desc: "Faixa clara (logo) + faixa escura (título)" },
+  { id: "photo", name: "Foto", desc: "Imagem de fundo com véu de leitura e texto por cima" },
 ];
 
-// #8 — variação visual automática: quando a peça ainda não tem template salvo,
-// escolhe uma variante por hash do slug (rotação determinística) para evitar que
-// todas as gerações fiquem visualmente idênticas. O usuário ainda pode trocar.
+// A rotação do estilo MUDOU DE LADO: hoje ela mora no servidor (pickTemplate, lib/render.js), que
+// grava a escolha no render.json na primeira renderização. Aqui ficou só o espelho para a tela
+// conseguir marcar o rádio certo ANTES de existir render.json — a conta é a mesma, e tem que
+// continuar sendo, senão o rádio mostra um estilo e a arte sai com outro.
+// Enquanto isso não era assim, a prévia usava esta conta e o salvamento mandava "", então a peça
+// aprovada na prévia não era a peça que ficava salva.
+// ESPELHO EXATO de hashDoNome/TEMPLATES_ROTACAO em lib/render.js. Mexeu lá, mexe aqui.
+const TEMPLATES_ROTACAO = ["editorial", "bold", "split"];
 function autoVariant(folder) {
   const s = String(folder || "");
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return VISUAL_TEMPLATES[h % VISUAL_TEMPLATES.length].id;
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
+  h ^= h >>> 16;
+  return TEMPLATES_ROTACAO[(h >>> 0) % TEMPLATES_ROTACAO.length];
 }
 
 function templatePicker(task) {
@@ -3806,6 +3834,10 @@ window.closeLightbox = closeLightbox;
 let LAST_GEN = null;
 async function viewCreate(arg, query) {
   setTitle("Criar conteúdo");
+  // Estas duas são globais de módulo e atravessavam a remontagem da tela: sair do Criar Conteúdo e
+  // voltar deixava a leitura anterior "grudada", e digitar o MESMO tema não reinterpretava.
+  ultimoTemaLido = "";
+  leituraAplicada = null;
   const { campaigns } = await API.campaigns();
   setCampMap(campaigns);
   let providerList = [];
@@ -3835,6 +3867,7 @@ async function viewCreate(arg, query) {
           <div class="field"><label>Assunto da peça <span class="hint">(o tema editorial — ex.: Taxa Zero, Educacional, Prova. Deixe em branco que a IA decide)</span></label>
             <select id="g-pillar">${pillarOpts}</select>
             <div class="hint" id="g-pillar-desc"></div>
+            <div class="ai-note" id="g-note-pillar" hidden></div>
           </div>
         </div>
 
@@ -3844,6 +3877,9 @@ async function viewCreate(arg, query) {
             <div class="type-grid" id="g-type-grid">${typeCards}</div>
             <input type="hidden" id="g-type" value="${esc(preType)}" />
             <div class="hint" id="g-type-desc"></div>
+            <!-- IRMÃO do grid, nunca filho: dentro de #g-type-grid o aviso vira célula e encolhe
+                 ao lado dos cards (medido). Aqui a grade fica idêntica. -->
+            <div class="ai-note" id="g-note-type" hidden></div>
           </div>
           <div class="field"><label>Plataformas <span class="hint" id="g-plats-hint"></span></label><div class="checks" id="g-plats"></div></div>
           <div class="field"><label>Campanha <span class="hint">(opcional — liga a peça à campanha e já sugere o tema)</span></label><div class="camp-pick"><select id="g-camp">${campOpts}</select><button type="button" class="btn btn-sm btn-ghost" id="g-camp-new" title="Criar uma campanha sem sair desta tela">＋ Nova campanha</button></div></div>
@@ -3889,6 +3925,7 @@ async function viewCreate(arg, query) {
           <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; oriente a IA aqui — o CTA final você ajusta no resultado)</span></label>
             <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer chamada" />
             <div class="sugg-row" id="g-cta-sugg">${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<button type="button" class="sugg-chip" data-cta="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+            <div class="ai-note" id="g-note-cta" hidden></div>
           </div>
           <div class="row">
             <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
@@ -4021,7 +4058,7 @@ async function viewCreate(arg, query) {
     $$(".media-only").forEach((el) => { el.style.display = isMedia ? "" : "none"; });
   };
   $$("#g-type-grid .type-card").forEach((card) => {
-    card.onclick = () => {
+    card.onclick = (ev) => {
       $$("#g-type-grid .type-card").forEach((c) => c.classList.remove("on"));
       card.classList.add("on");
       $("#g-type").value = card.dataset.type;
@@ -4032,10 +4069,14 @@ async function viewCreate(arg, query) {
       updDesc();
       updArtFields();
       updPhotoRow();
+      // Clique de verdade apaga o aviso do formato. O clique programático de aplicaCampoLido
+      // (card.click(), isTrusted false) tem que passar por aqui sem limpar nada.
+      if (ev && ev.isTrusted) esqueceAviso("content_type");
     };
   });
   updDesc();
   updArtFields();
+  ligaAvisosLeitura();
   // ---- acervo de imagens (estilo visual "Foto") ----
   const updPhotoRow = () => {
     const ct = metaType($("#g-type").value);
@@ -4127,7 +4168,7 @@ async function viewCreate(arg, query) {
     }
   };
   if ($("#g-pillar")) {
-    $("#g-pillar").addEventListener("change", () => { pillarTouched = true; updPillarDesc(); });
+    $("#g-pillar").addEventListener("change", (ev) => { pillarTouched = true; updPillarDesc(); if (ev && ev.isTrusted) esqueceAviso("pillar"); });
     updPillarDesc();
   }
   if (preCampObj && !prePillar) applyCampPillar(preCampObj);
@@ -4155,7 +4196,11 @@ async function viewCreate(arg, query) {
   $$("#g-cta-sugg .sugg-chip").forEach((b) => {
     b.onclick = () => { const inp = $("#g-cta"); inp.value = (inp.value.trim() === b.dataset.cta) ? "" : b.dataset.cta; ctaChipSync(); inp.focus(); };
   });
-  if ($("#g-cta")) $("#g-cta").addEventListener("input", ctaChipSync);
+  // A guarda de isTrusted aqui não é detalhe: aplicaCampoLido("cta") dispara um `input` sintético
+  // para acertar o destaque dos chips. Sem a guarda, esse mesmo dispatch apagaria o aviso que
+  // acabou de ser pintado — clicar em "usar" na sugestão faria o aviso sumir em vez de virar
+  // "Preenchi pelo seu texto".
+  if ($("#g-cta")) $("#g-cta").addEventListener("input", (ev) => { ctaChipSync(); if (ev && ev.isTrusted) esqueceAviso("cta"); });
 
   $("#g-run").onclick = runGenerate;
 }
@@ -4216,7 +4261,7 @@ function nomeDoValor(campo, valor) {
 // que está no ar. Então atualizamos o valor e só o que depende dele.
 function aplicaCampoLido(campo, valor) {
   if (campo === "content_type") {
-    const card = document.querySelector('#g-type-pick [data-type="' + valor + '"]');
+    const card = document.querySelector('#g-type-grid .type-card[data-type="' + valor + '"]');
     if (card) card.click();           // usa o MESMO caminho do clique real (plataformas, seções, prévia)
     return !!card;
   }
@@ -4227,48 +4272,158 @@ function aplicaCampoLido(campo, valor) {
     if (d && p) d.textContent = p.description;
     return true;
   }
-  if (campo === "cta") { const el = $("#g-cta"); if (!el) return false; el.value = valor; return true; }
+  if (campo === "cta") {
+    const el = $("#g-cta"); if (!el) return false;
+    el.value = valor;
+    // Sincroniza o destaque dos chips de sugestão. O evento é sintético (isTrusted false), e é por
+    // isso que o listener de input do #g-cta precisa da guarda de isTrusted: sem ela, este dispatch
+    // apagaria o próprio aviso que acabamos de pintar.
+    try { el.dispatchEvent(new Event("input")); } catch (_) { /* fora do browser */ }
+    return true;
+  }
   return false;
 }
-function pintaFaixaLeitura(itens, faltou) {
-  const alvo = $("#g-leitura"); if (!alvo) return;
-  if (!itens.length && !(faltou || []).length) { alvo.innerHTML = ""; alvo.style.display = "none"; return; }
-  const chip = (i) => `<span class="lt-chip${i.sugerido ? " sug" : ""}">
-      <span class="lt-campo">${esc(i.rotulo)}</span>
-      <span class="lt-valor">${esc(i.texto)}</span>
-      ${i.sugerido
-        ? `<button type="button" class="lt-btn" data-usar="${esc(i.campo)}" title="Usar a sugestão">usar</button>`
-        : `<button type="button" class="lt-btn" data-desfazer="${esc(i.campo)}" title="Desfazer">desfazer</button>`}
-    </span>`;
-  alvo.style.display = "";
-  alvo.innerHTML = `<div class="lt-tit">${itens.some((i) => i.sugerido) ? "Li o seu texto" : "Entendi assim"}</div>
-    <div class="lt-chips">${itens.map(chip).join("")}</div>
-    ${(faltou || []).length ? `<div class="hint">Não deu para saber pelo texto: ${esc(faltou.join(", "))}. Se importar, preencha abaixo.</div>` : ""}`;
-  alvo.querySelectorAll("[data-desfazer]").forEach((b) => { b.onclick = () => desfazLeitura(b.dataset.desfazer); });
-  alvo.querySelectorAll("[data-usar]").forEach((b) => { b.onclick = () => {
-    const c = b.dataset.usar, it = (leituraAplicada && leituraAplicada[c]);
-    if (!it) return;
-    aplicaCampoLido(c, it.depois);
-    it.sugerido = false;
-    pintaFaixaLeitura(Object.values(leituraAplicada), leituraAplicada.__faltou || []);
-  }; });
+
+// ===== Onde o aviso da leitura aparece =====
+// Antes era uma faixa única embaixo do campo de tema, listando os 3 campos como chips. O pedido do
+// Hugo: cada aviso embaixo do campo que foi alterado. O problema que isso cria: a Chamada mora
+// dentro do bloco "Criação avançada", que nasce FECHADO — e conteúdo de <details> fechado não é
+// pintado. Então o aviso não some: a seção é ABERTA quando há algo para dizer ali, o resumo do
+// bloco ganha um selo que sobrevive a recolher, e o campo de tema guarda um resumo de uma linha
+// para o que ficou fora da tela.
+const ALVO_AVISO = { content_type: "#g-note-type", pillar: "#g-note-pillar", cta: "#g-note-cta" };
+// Detecção genérica, não lista fixa de ids: vale hoje para o <details> e amanhã para qualquer campo
+// escondido por .art-only/.media-only sem precisar mexer aqui de novo.
+function campoVisivel(el) {
+  if (!el) return false;
+  if (el.checkVisibility) return el.checkVisibility({ checkVisibilityCSS: true, contentVisibilityAuto: true });
+  return !el.closest("details:not([open])") && el.offsetParent !== null;
+}
+function pintaAvisosLeitura(itens, faltou) {
+  itens = (itens || []).filter((x) => x && x.campo);       // __faltou é um array e não é item
+  Object.values(ALVO_AVISO).forEach((sel) => { const h = $(sel); if (h) { h.innerHTML = ""; h.hidden = true; h.classList.remove("sug"); } });
+
+  const escondidos = [];
+  let primeiro = null;
+  for (const it of itens) {
+    const host = $(ALVO_AVISO[it.campo]); if (!host) continue;
+    // Abre a seção avançada só quando há aviso lá dentro — a IA mexeu num campo que mora ali.
+    const det = host.closest("details:not([open])");
+    if (det) det.setAttribute("open", "");
+    host.classList.toggle("sug", !!it.sugerido);
+    host.innerHTML = '<span class="ai-note-dot" aria-hidden="true"></span>'
+      + '<span class="ai-note-txt">' + (it.sugerido ? "Pelo seu texto seria " : "Preenchi pelo seu texto: ")
+      + "<strong>" + esc(it.texto) + "</strong></span>"
+      + (it.sugerido
+        ? '<button type="button" class="ai-note-act" data-usar="' + esc(it.campo) + '">usar</button>'
+        : '<button type="button" class="ai-note-act" data-desfazer="' + esc(it.campo) + '">desfazer</button>');
+    host.hidden = false;
+    if (!primeiro) primeiro = host;
+    if (!campoVisivel(host)) escondidos.push(it);
+  }
+
+  // Selo no resumo da seção avançada: sobrevive a recolher, então o sinal não some com o details.
+  const det = $("#g-cta") && $("#g-cta").closest("details");
+  if (det) {
+    const sum = det.querySelector("summary");
+    if (sum) {
+      const velho = sum.querySelector(".adv-badge"); if (velho) velho.remove();
+      if (itens.some((i) => i.campo === "cta")) {
+        const b = document.createElement("span"); b.className = "adv-badge"; b.textContent = "1 campo preenchido pela IA";
+        sum.appendChild(b);
+      }
+    }
+  }
+
+  // Resumo de uma linha no campo de tema: só quando faz falta (algo fora da tela, ou o "faltou").
+  const alvo = $("#g-leitura");
+  if (alvo) {
+    const partes = [];
+    if (escondidos.length) {
+      partes.push('<div class="hint">Preenchi ' + plural(itens.length, "campo", "campos") + " a partir do seu texto: "
+        + itens.map((i) => '<button type="button" class="lt-ver" data-ver="' + esc(i.campo) + '">' + esc((ROTULO_CAMPO[i.campo] || i.campo).toLowerCase()) + "</button>").join(", ") + ".</div>");
+    }
+    if ((faltou || []).length) {
+      partes.push('<div class="hint">Não deu para saber pelo texto: '
+        + esc(faltou.map((f) => (ROTULO_CAMPO[f] || f).toLowerCase()).join(", ")) + ". Se importar, preencha abaixo.</div>");
+    }
+    alvo.innerHTML = partes.join("");
+    alvo.style.display = partes.length ? "" : "none";
+  }
+  if (primeiro && campoVisivel(primeiro)) primeiro.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+function mostraAviso(campo) {
+  const h = $(ALVO_AVISO[campo]); if (!h) return;
+  const det = h.closest("details:not([open])"); if (det) det.setAttribute("open", "");
+  h.scrollIntoView({ block: "center", behavior: "smooth" });
+  h.classList.add("flash"); setTimeout(() => h.classList.remove("flash"), 950);
+}
+// Limpa o aviso de um campo que a PESSOA acabou de mexer à mão — ela decidiu, não precisa de aviso.
+// Só vale para clique/digitação de verdade: o preenchimento programático dispara evento sintético.
+function esqueceAviso(campo) {
+  if (!leituraAplicada || !leituraAplicada[campo]) return;
+  delete leituraAplicada[campo];
+  pintaAvisosLeitura(Object.values(leituraAplicada), leituraAplicada.__faltou || []);
+}
+// Um listener só, delegado, ligado uma vez na vida da página. Ligar dentro de viewCreate
+// registraria um handler novo a cada visita à tela (o #view sobrevive à navegação).
+function ligaAvisosLeitura() {
+  const raiz = $("#view"); if (!raiz || raiz.dataset.avisosLigados) return;
+  raiz.dataset.avisosLigados = "1";
+  raiz.addEventListener("click", (e) => {
+    const bd = e.target.closest("[data-desfazer]"); if (bd) { desfazLeitura(bd.dataset.desfazer); return; }
+    const bu = e.target.closest("[data-usar]");
+    if (bu) {
+      const c = bu.dataset.usar, it = (leituraAplicada && leituraAplicada[c]);
+      if (!it) return;
+      aplicaCampoLido(c, it.depois);
+      it.sugerido = false;
+      pintaAvisosLeitura(Object.values(leituraAplicada), leituraAplicada.__faltou || []);
+      return;
+    }
+    const bv = e.target.closest("[data-ver]"); if (bv) mostraAviso(bv.dataset.ver);
+  });
 }
 function desfazLeitura(campo) {
   const it = leituraAplicada && leituraAplicada[campo];
   if (!it) return;
   aplicaCampoLido(campo, it.antes || "");
   delete leituraAplicada[campo];
-  pintaFaixaLeitura(Object.values(leituraAplicada).filter((x) => x && x.campo), leituraAplicada.__faltou || []);
+  pintaAvisosLeitura(Object.values(leituraAplicada), leituraAplicada.__faltou || []);
   toast(ROTULO_CAMPO[campo] + " voltou como estava.", "ok");
 }
 
+// Mostra por que a leitura do tema não aconteceu — sem impedir a geração. Ler é ajuda, não
+// pré-requisito: a rota de gerar não tem limite de tamanho e funciona com o texto inteiro, então
+// travar o botão por causa do LEITOR tiraria uma capacidade que existe hoje. O que não pode é o
+// silêncio: era assim que um briefing de 8 mil caracteres não preenchia nada e não explicava nada.
+function avisaLeituraFalhou(motivo) {
+  const alvo = $("#g-leitura"); if (!alvo) return;
+  alvo.style.display = "";
+  alvo.innerHTML = '<div class="lt-tit">Não consegui ler o seu texto</div>'
+    + '<div class="hint">' + esc(motivo) + " Você pode gerar assim mesmo — só não vou preencher os campos sozinho.</div>";
+}
 // Lê o tema e aplica. Devolve `true` se pode seguir para a geração.
 async function leTemaEAplica(brief) {
   if (!brief || brief === ultimoTemaLido) return true;
+  // Limpa ANTES de tudo: se a leitura falhar ou não trouxer nada, o aviso da vez anterior não pode
+  // ficar colado num campo que a pessoa já mudou. Com a faixa única isso era só uma faixa velha no
+  // topo; ancorado no campo, vira mentira ao lado do controle.
+  leituraAplicada = null;
+  pintaAvisosLeitura([], []);
   let r;
   try { r = await API.interpretBrief(brief, ($("#g-provider") && $("#g-provider").value) || undefined); }
-  catch (e) { return true; }                       // ler é ajuda, não pré-requisito: falhou, segue
+  catch (e) {
+    // Erro de rede passa batido (não é culpa de nada que a pessoa escreveu). Recusa da rota —
+    // texto grande demais, leitura truncada, resposta inválida, freio de requisição — é dito.
+    if (e && ["E_TEXTO_LONGO", "E_LEITURA_TRUNCADA", "E_LEITURA_INVALIDA", "E_RATE_LIMIT"].indexOf(e.code) >= 0) avisaLeituraFalhou(e.message);
+    else if (e && e.status === 429) avisaLeituraFalhou("Li muitas vezes seguidas nos últimos minutos.");
+    ultimoTemaLido = brief;                        // não insiste no mesmo texto a cada clique
+    return true;
+  }
   ultimoTemaLido = brief;
+  // "Sem chave de IA" tem motivo próprio vindo do servidor: mostrar, em vez de não fazer nada.
+  if (r && r.disponivel === false && r.motivo) { avisaLeituraFalhou(r.motivo); return true; }
   if (!r || !r.disponivel) return true;
 
   const campos = r.campos || {};
@@ -4294,7 +4449,7 @@ async function leTemaEAplica(brief) {
     }
     itens.push(leituraAplicada[campo]);
   }
-  pintaFaixaLeitura(itens, r.faltou || []);
+  pintaAvisosLeitura(itens, r.faltou || []);
   // Formato trocado interrompe UMA vez: é a única mudança que a tela de resultado não conserta.
   if (trocouFormato) {
     toast("Entendi que é " + nomeDoValor("content_type", campos.content_type.valor) + ". Confira e clique em Gerar de novo.", "ok");
@@ -4411,7 +4566,10 @@ function renderGenResult(r, opts) {
   const storyHtml = r.content_type === "video_idea"
     ? `<details class="art-preview-box mt" open><summary>Prévia do roteiro (storyboard)</summary>
          <div id="g-story" class="video-storyboard">${videoStoryboard(r.parsed)}</div>
-         <p class="muted" style="font-size:12px;margin-top:8px">Ilustrativo — atualiza conforme você edita as cenas. O vídeo final é renderizado ao aprovar a peça.</p>
+         <!-- Dizia "renderizado ao aprovar a peça". Não é: aprovar só muda o estado, e o render
+             automático não vale para vídeo — quem acreditava no texto aprovava uma peça SEM MP4
+             dentro. O vídeo só existe depois do botão "Gerar vídeo" na página da peça. -->
+        <p class="muted" style="font-size:12px;margin-top:8px">Ilustrativo — atualiza conforme você edita as cenas. Depois de salvar, gere o vídeo pelo botão na página da peça: aprovar sozinho não gera.</p>
        </details>`
     : "";
   $("#g-result").innerHTML = `
@@ -4759,12 +4917,12 @@ function slidePhotoRow(img) {
     return `<div class="se-photo has" data-photo>
       <span class="se-photo-thumb" style="background-image:url('${esc(img)}')"></span>
       <span class="se-photo-lab">Foto de fundo anexada</span>
-      <span class="se-photo-acts"><button type="button" class="se-mini se-photo-btn" data-se-photo>Trocar</button><button type="button" class="se-mini se-photo-x" data-se-photo-x title="Remover a foto de fundo deste slide">Remover</button></span>
+      <span class="se-photo-acts"><button type="button" class="se-txt se-photo-btn" data-se-photo>Trocar</button><button type="button" class="se-txt se-photo-x" data-se-photo-x title="Remover a foto de fundo deste slide">Remover</button></span>
     </div>`;
   }
   return `<div class="se-photo" data-photo>
     <span class="se-photo-lab muted">Foto de fundo do slide <span class="hint">(opcional)</span></span>
-    <button type="button" class="se-mini se-photo-btn" data-se-photo>+ Buscar foto</button>
+    <button type="button" class="se-txt se-photo-btn" data-se-photo>+ Buscar foto</button>
   </div>`;
 }
 // Aplica (ou remove, url vazia) a foto de fundo de um slide na edição: atualiza o data-extra do
@@ -4779,6 +4937,15 @@ function setSlidePhoto(item, url) {
   if (row) { const tmp = document.createElement("div"); tmp.innerHTML = slidePhotoRow(url); row.replaceWith(tmp.firstElementChild); }
   syncJsonMirror(); markArtStale();
 }
+// Um <input> HTML APAGA quebra de linha do value, em silêncio: remove o \n sem pôr nada no lugar,
+// colando a última palavra de uma linha na primeira da seguinte ("sua\noperação" -> "suaoperação").
+// O modelo escreve \n nos títulos por conta própria — de forma intermitente, às vezes numa geração
+// inteira, às vezes em nenhuma. Como o espelho JSON (#g-edit) nasce da LEITURA desses campos e é ele
+// que o Salvar envia, o texto grudado ia para o disco e para a arte sem ninguém digitar nada.
+// A arte nunca honrou a quebra (o render colapsa em espaço), então trocar por espaço aqui entrega
+// exatamente o que já se esperava ver. Vale para TODO <input> do editor estruturado — o subtexto da
+// cena de vídeo e a headline do anúncio sofriam do mesmo jeito. Os <textarea> preservam \n e ficam fora.
+const esc1 = (v) => esc(String(v == null ? "" : v).replace(/[ \t]*[\r\n]+[ \t]*/g, " "));
 function slideItem(s, i, total) {
   // Preserva campos não editáveis aqui (items, stats) para não perdê-los no
   // sync do JSON. O layout é exposto no seletor abaixo.
@@ -4790,7 +4957,7 @@ function slideItem(s, i, total) {
   const richHint = layoutDataHint(cur, s);
   return `<div class="se-item" data-i="${i}"${extraAttr}>
     <div class="se-head"><span class="se-n">Slide ${i + 1}</span><div class="se-ctrls"><button class="se-mini se-regen" data-se="regen" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ${i + 1}">↻</button>${seCtrls(i, total)}</div></div>
-    <input class="se-f" data-k="title" placeholder="Título do slide" value="${esc(s.title || "")}" />
+    <input class="se-f" data-k="title" placeholder="Título do slide" value="${esc1(s.title || "")}" />
     <textarea class="se-f" data-k="body" rows="2" placeholder="Texto do slide">${esc(s.body || "")}</textarea>
     <div class="se-layout"><span class="se-layout-lab">Layout do slide</span>
       <input type="hidden" data-k="layout" value="${esc(cur)}" />
@@ -4802,7 +4969,7 @@ function slideItem(s, i, total) {
 // que a IA devolveu (parsed.hashtags). A marca pede 3-5 + #4Selet — o hint reforça, sem travar.
 function hashtagsField(p) {
   const tags = (Array.isArray(p && p.hashtags) ? p.hashtags : []).join(" ");
-  return `<div class="field mt"><label>Hashtags <span class="hint">(3–5, sempre com #4Selet — separe por espaço)</span></label><input class="se-tags" placeholder="#4Selet #TaxaZero" value="${esc(tags)}" /></div>`;
+  return `<div class="field mt"><label>Hashtags <span class="hint">(3–5, sempre com #4Selet — separe por espaço)</span></label><input class="se-tags" placeholder="#4Selet #TaxaZero" value="${esc1(tags)}" /></div>`;
 }
 // Normaliza a entrada de hashtags: separa por espaço/vírgula e garante o # inicial.
 function splitTags(v) {
@@ -4813,7 +4980,7 @@ function carouselEditor(p) {
   return `<div class="struct-ed" data-type="instagram_carousel">
     <div class="se-list">${slides.map((s, i) => slideItem(s, i, slides.length)).join("")}</div>
     <button class="btn btn-ghost btn-sm mt" data-se-add="slide" type="button">+ Adicionar slide</button>
-    <div class="field mt"><label>CTA <span class="hint">(último slide)</span></label><input class="se-cta" placeholder="ex.: Solicitar convite" value="${esc(p.cta || "")}" /></div>
+    <div class="field mt"><label>CTA <span class="hint">(último slide)</span></label><input class="se-cta" placeholder="ex.: Solicitar convite" value="${esc1(p.cta || "")}" /></div>
     ${hashtagsField(p)}
   </div>`;
 }
@@ -4821,9 +4988,9 @@ function carouselEditor(p) {
 function sceneItem(s, i, total) {
   return `<div class="se-item" data-i="${i}">
     <div class="se-head"><span class="se-n">Cena ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
-    <input class="se-f se-type" data-k="type" list="se-types" placeholder="tipo (hook, product, benefit, cta)" value="${esc(s.type || "")}" />
+    <input class="se-f se-type" data-k="type" list="se-types" placeholder="tipo (hook, product, benefit, cta)" value="${esc1(s.type || "")}" />
     <textarea class="se-f" data-k="text" rows="2" placeholder="Texto que aparece na tela (título da cena)">${esc(s.text || "")}</textarea>
-    <input class="se-f" data-k="subtitle" placeholder="Subtexto (segunda linha, opcional)" value="${esc(s.subtitle || "")}" />
+    <input class="se-f" data-k="subtitle" placeholder="Subtexto (segunda linha, opcional)" value="${esc1(s.subtitle || "")}" />
     <textarea class="se-f se-dim" data-k="visual" rows="2" placeholder="Direção de arte (não aparece na tela)">${esc(s.visual || "")}</textarea>
   </div>`;
 }
@@ -4831,16 +4998,16 @@ function videoEditor(p) {
   const scenes = (Array.isArray(p.scenes) && p.scenes.length) ? p.scenes : [{ type: "hook", text: "", subtitle: "", visual: "" }];
   return `<div class="struct-ed" data-type="video_idea">
     <datalist id="se-types"><option value="hook"></option><option value="product"></option><option value="benefit"></option><option value="cta"></option></datalist>
-    <div class="field"><label>Conceito</label><input class="se-concept" placeholder="Ideia central do vídeo" value="${esc(p.concept || "")}" /></div>
+    <div class="field"><label>Conceito</label><input class="se-concept" placeholder="Ideia central do vídeo" value="${esc1(p.concept || "")}" /></div>
     <div class="se-list">${scenes.map((s, i) => sceneItem(s, i, scenes.length)).join("")}</div>
     <button class="btn btn-ghost btn-sm mt" data-se-add="scene" type="button">+ Adicionar cena</button>
-    <div class="field mt"><label>CTA <span class="hint">(fim do vídeo)</span></label><input class="se-cta" placeholder="ex.: Conhecer a plataforma" value="${esc(p.cta || "")}" /></div>
+    <div class="field mt"><label>CTA <span class="hint">(fim do vídeo)</span></label><input class="se-cta" placeholder="ex.: Conhecer a plataforma" value="${esc1(p.cta || "")}" /></div>
     ${hashtagsField(p)}
   </div>`;
 }
 
 function adEditor(p) {
-  const f = (k, label, ph) => `<div class="field mt"><label>${label}</label><input class="se-f" data-k="${k}" placeholder="${ph}" value="${esc(p[k] || "")}" /></div>`;
+  const f = (k, label, ph) => `<div class="field mt"><label>${label}</label><input class="se-f" data-k="${k}" placeholder="${ph}" value="${esc1(p[k] || "")}" /></div>`;
   return `<div class="struct-ed" data-type="ad_creative">
     ${f("headline", "Headline", "máx. 4 palavras")}
     ${f("subtext", "Subtexto", "linha de apoio")}
@@ -5095,6 +5262,9 @@ async function saveGenerated() {
     if (autoRenders(ct.kind)) {
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando a arte…'; showBusy("Gerando a arte…");
       try {
+        // Vazio de propósito quando ninguém escolheu: quem decide o "Automático" é o servidor, que
+        // grava a escolha. Antes o front mandava "" e o servidor caía em editorial — e a prévia,
+        // que usava a rotação, mostrava outra coisa. Prévia e peça salva passam a bater.
         const tpl = (LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
         const lg = (LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
         const wmk = (LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";

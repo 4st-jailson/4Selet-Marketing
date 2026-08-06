@@ -105,6 +105,26 @@ function resolveImage(u) {
   if (u.charAt(0) === "/") return fileUrl(path.join(__dirname, "..", "public", u.replace(/^\/+/, "")));
   return u;
 }
+// A foto existe MESMO? O modelo inventa caminho de arquivo: pedindo "foto de fundo" no tema, em 3
+// de 3 gerações ele escreveu coisas como "/uploads/escritorio-moderno-computador.jpg", que não
+// existem no acervo. O desenho então aplicava o véu de leitura por cima do nada — o slide saía mais
+// escuro que os vizinhos, sem foto e sem ninguém avisar. Aqui a foto fantasma é tratada como
+// ausência de foto, que é o que ela é.
+function imagemExiste(u) {
+  u = String(u || "");
+  if (!u) return false;
+  if (/^(https?:|data:)/i.test(u)) return true;          // externa: quem valida é a rede/CSP
+  try {
+    const publico = path.resolve(path.join(__dirname, "..", "public"));
+    const alvo = /^file:/i.test(u)
+      ? path.resolve(decodeURIComponent(u.replace(/^file:\/+/i, "")))
+      : path.resolve(path.join(publico, u.replace(/^\/+/, "")));
+    // Confinado a public/: sem isto, "/uploads/../../.env" resolveria para um arquivo real fora da
+    // pasta servida e passaria como "foto existente" — o render então tentaria desenhá-lo.
+    if (alvo !== publico && !alvo.startsWith(publico + path.sep)) return false;
+    return fs.existsSync(alvo) && fs.statSync(alvo).isFile();
+  } catch (e) { return false; }
+}
 
 function requireActive(folder) {
   const loc = findTask(folder);
@@ -1488,10 +1508,46 @@ function writeRenderPref(loc, patch) {
   } catch (e) {}
 }
 // Decide o template efetivo: opcao da request > preferencia salva > editorial.
-function pickTemplate(loc, requested) {
-  const id = (requested && TEMPLATES[requested]) ? requested
-    : (readRenderPref(loc) || "editorial");
-  if (requested && TEMPLATES[requested]) writeRenderPref(loc, { template: requested });
+// Rotacao deterministica do estilo da arte. A tela oferece "Automático (varia por peça)" desde
+// sempre, e ate aqui isso era falso: sem preferencia salva, TODA peca caia em "editorial" — medido,
+// 24 de 43 pecas do acervo. Pior, a conta que varia existia no front e rodava so na PREVIA, entao a
+// arte aprovada na previa nao era a arte salva.
+//
+// A decisao vem para o servidor e passa a ser uma so. Ordem:
+//   1. o que a pessoa escolheu na tela (sempre vence);
+//   2. o que ja foi gravado no render.json — e por isso re-renderizar NUNCA muda a cara da peca;
+//   3. "photo", se a peca tem foto (o unico template que desenha a imagem);
+//   4. hash do nome da pasta sobre os demais.
+//
+// O `layout_type` que o modelo emite NAO entra na cascata de proposito: medido em 9 geracoes reais,
+// ele escolheu editorial 5 e bold 4, e nunca split ou photo. Como editorial e bold sao o mesmo
+// desenho com alinhamento diferente, obedecer o modelo daria cara-ou-coroa entre dois irmaos em vez
+// de rotacao. O hash cobre os tres.
+const TEMPLATES_ROTACAO = ["editorial", "bold", "split"];
+// FNV-1a com finalizador de avalanche. O hash antigo (h*31+c) NÃO servia para módulo 3: como 31 e 1
+// mod 3, o resto virava praticamente a soma dos caracteres, então nomes parecidos caíam sempre no
+// mesmo estilo e os nomes reais do acervo distribuíam 5-1-2 em vez de perto de 3-3-2. Medido.
+// Se mexer aqui, mexer TAMBÉM em autoVariant (public/js/app.js) — as duas contas têm que bater,
+// senão o rádio da tela mostra um estilo e a arte sai com outro.
+function hashDoNome(s) {
+  s = String(s || "");
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+function pickTemplate(loc, requested, extra) {
+  const pedido = (requested && TEMPLATES[requested]) ? requested : null;
+  let id = pedido || readRenderPref(loc);
+  if (!id) {
+    id = (extra && extra.temFoto && TEMPLATES.photo)
+      ? "photo"
+      : TEMPLATES_ROTACAO[hashDoNome(path.basename(loc.path)) % TEMPLATES_ROTACAO.length];
+    writeRenderPref(loc, { template: id });   // grava na PRIMEIRA vez: a peça não muda de cara depois
+  }
+  if (pedido) writeRenderPref(loc, { template: pedido });
   return { id, build: resolveTemplate(id) };
 }
 // Remove uma chave do render.json (usado pra "voltar ao padrão do estilo").
@@ -1646,7 +1702,9 @@ function carDoc(ctx, extraCss, bodyInner) {
   // preserva a leitura do texto. O scrim adapta a cor ao tema (escuro -> escurece; claro ->
   // clareia) pra o texto (claro no escuro / escuro no claro) continuar legivel sobre a foto.
   let photo = "";
-  if (ctx.image) {
+  // Só desenha (e só escurece com o véu) se a foto existir de verdade — ver imagemExiste().
+  const temFoto = ctx.image && imagemExiste(ctx.image);
+  if (temFoto) {
     const scrim = ctx.theme === THEME_LIGHT
       ? "linear-gradient(180deg, rgba(224,228,222,.74) 0%, rgba(224,228,222,.56) 42%, rgba(224,228,222,.9) 100%)"
       : "linear-gradient(180deg, rgba(4,20,28,.64) 0%, rgba(4,20,28,.48) 42%, rgba(4,20,28,.88) 100%)";
@@ -1654,7 +1712,7 @@ function carDoc(ctx, extraCss, bodyInner) {
   }
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
-<body><div class="card${ctx.image ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
+<body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
 function carTop(ctx) {
   const logo = logoSrc(ctx.logo, (ctx.theme && ctx.theme.logo) || LOGO_LIGHT);
@@ -1893,10 +1951,12 @@ function slideArchetype(slide, i, total) {
 // ---- Renders por tipo -----------------------------------------------------
 async function renderImage(folder, opts) {
   const loc = requireActive(folder);
-  const tpl = pickTemplate(loc, opts && opts.template);
+  const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
+  // A peça tem foto? Então "photo" é o único template que a desenha — os outros três nem recebem
+  // o parâmetro `image` na assinatura e descartariam a imagem em silêncio.
+  const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!((opts && opts.image) || concept.image) });
   const logoV = pickLogo(loc, opts && opts.logo);
   const wmV = pickWatermark(loc, opts && opts.watermark);
-  const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
   const htmlPath = path.join(loc.path, "ads", "ad.html");
   const outPng = path.join(loc.path, "ads", "ad.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
@@ -1921,8 +1981,25 @@ async function renderFeed(folder, opts) {
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
-  const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "4Selet.";
-  const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
+  // A caption tem estrutura: 1a linha = gancho, paragrafos de desenvolvimento, hashtags no fim.
+  // A arte usava SO a primeira linha e mandava eyebrow/subtexto/CTA vazios — por isso a peca de
+  // feed saia como fundo + uma frase + logo. O texto de apoio ja estava no arquivo o tempo todo.
+  const linhas = caption.split("\n").map((s) => s.trim()).filter(Boolean);
+  const semHashtag = (s) => !/^#/.test(s);
+  const firstLine = linhas.filter(semHashtag)[0] || "4Selet.";
+  // Cortar em 57 caracteres cortava no meio da palavra ("...está olhando par…"). Agora o corte
+  // acontece no ultimo espaco antes do limite, e so quando a frase realmente nao cabe.
+  const cortaEmPalavra = (s, max) => {
+    s = String(s || "").trim();
+    if (s.length <= max) return s;
+    const pedaco = s.slice(0, max);
+    const esp = pedaco.lastIndexOf(" ");
+    return (esp > max * 0.6 ? pedaco.slice(0, esp) : pedaco).replace(/[\s,;:.\-–—]+$/, "") + "…";
+  };
+  const headline = cortaEmPalavra(firstLine, 60);
+  // Texto de apoio: o proximo paragrafo depois do gancho, sem hashtag e sem repetir o gancho.
+  const apoio = linhas.filter(semHashtag).slice(1).find((s) => s.length > 24 && s !== firstLine) || "";
+  const subtexto = cortaEmPalavra(apoio, 150);
   const logoV = pickLogo(loc, opts && opts.logo);
   const wmV = pickWatermark(loc, opts && opts.watermark);
   const htmlPath = path.join(loc.path, "ads", "feed.html");
@@ -1932,7 +2009,7 @@ async function renderFeed(folder, opts) {
     width: 1080, height: 1350,
     eyebrow: "",
     headline: highlightHeadline(headline),
-    subtext: "",
+    subtext: subtexto,
     cta: "",
     badge: "",
     image: (opts && opts.image) || "",
@@ -1961,15 +2038,22 @@ function carouselSlidesHtml(concept, buildCover, opts) {
     const arch = slideArchetype(s, i, total);
     let html;
     if (arch === "cover") {
-      // A capa usa o template de arte escolhido (editorial|bold|split|photo).
-      html = buildCover({
+      // A capa usa o template de arte escolhido (editorial|bold|split|photo) — MAS a foto manda.
+      // Dos quatro templates, só o "Foto" recebe o parâmetro `image`; os outros três nem o têm na
+      // assinatura. Ou seja: anexar foto na capa e estar com Editorial/Destaque/Dividido fazia a
+      // imagem ser descartada em silêncio — a linha "Foto de fundo anexada" aparecia na tela com a
+      // miniatura, e a arte saía sem foto nenhuma. Se há foto de verdade, a capa usa o layout que
+      // sabe desenhá-la; sem foto, nada muda.
+      const capaImg = (s && s.image) || concept.image || "";
+      const desenha = (capaImg && imagemExiste(capaImg)) ? resolveTemplate("photo") : buildCover;
+      html = desenha({
         width: 1080, height: 1350,
         eyebrow: concept.eyebrow || "",
         headline: highlightHeadline(s.title || ""),
         subtext: s.body || "",
         cta: "",
         badge: "",
-        image: (s && s.image) || concept.image || "",
+        image: capaImg,
         dots: dotsBar(n, total),
         titleOffsetY: s && s.titleOffsetY, // ajuste fino de posicao do titulo (camadas)
         titleOffsetX: s && s.titleOffsetX,
@@ -2393,5 +2477,6 @@ module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
+  imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
 };

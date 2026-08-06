@@ -18,7 +18,7 @@ const SAIDA = path.join(__dirname, "..", "interface", "public", "img", "media-mo
 // Os tres foto-reais sairam da lista: foram reprovados e nao aparecem mais no seletor.
 // O render deles continua existindo para as pecas antigas, mas nao ha mais o que pre-visualizar.
 const MODELOS = [
-  "hand_tablet", "celular", "navegador",
+  "hand_tablet", "celular", "notebook", "navegador",
   "citacao", "selo", "split", "camadas",
 ];
 
