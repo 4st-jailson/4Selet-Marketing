@@ -181,8 +181,11 @@ router.post("/:folder/render", async (req, res) => {
   const logo = (render.LOGO_IDS.includes(reqLogo) || reqLogo === "auto") ? reqLogo : undefined;
   const reqWm = String((req.query.watermark || (req.body && req.body.watermark) || "").trim());
   const watermark = (render.WATERMARK_IDS.includes(reqWm) || reqWm === "auto") ? reqWm : undefined;
+  // Tipografia da peça: lista FECHADA (render.FAMILIA_IDS) + "auto" p/ voltar à identidade da marca.
+  const reqFont = String((req.query.font || (req.body && req.body.font) || "").trim());
+  const font = (render.FAMILIA_IDS.includes(reqFont) || reqFont === "auto") ? reqFont : undefined;
   try {
-    const r = await render.render(req.params.folder, kind, { template, logo, watermark });
+    const r = await render.render(req.params.folder, kind, { template, logo, watermark, font });
     const task = content.getTask(req.params.folder);
     const payload = Object.assign({ kind, task }, r);
     // Sem isto, uma falha de render (r.ok=false) chegava ao front como "HTTP 400" cru

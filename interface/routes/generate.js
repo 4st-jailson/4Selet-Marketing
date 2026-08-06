@@ -243,6 +243,7 @@ router.post("/preview", async (req, res, next) => {
       template: body.template,
       logo: body.logo,
       watermark: body.watermark,
+      font: body.font, // tipografia da peça: a prévia sai na MESMA família da arte final
       only: body.only, // renderiza só o slide desse índice (progresso "slide N de M" no carrossel)
       media: body.media, // metadados da "4Selet na Mídia" (print/modelo/veículo) p/ a prévia do mockup
     });
@@ -264,6 +265,25 @@ router.post("/preview", async (req, res, next) => {
 // 3) Sem chave de IA não há interpretação. A versão anterior tinha um adivinhador por padrões
 //    de texto que lia o "x" de "1080 x 1350" como a rede X e virava "Calcular minha economia"
 //    sempre que a palavra "economia" aparecia. Chutar é pior do que não responder.
+// A pessoa nomeou uma família tipográfica no texto? Casa pelo NOME da família (lista fechada de
+// render.FAMILIAS), sem acento e sem depender de espaço ("DM Serif", "dmserif", "Bebas Neue").
+// Devolve também o trecho que sustenta, para a tela poder mostrar de onde tirou.
+function familiaPedidaNoTexto(texto) {
+  const t = String(texto || "");
+  const chato = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const alvo = chato(t);
+  for (const id of render.FAMILIA_IDS) {
+    const nome = render.FAMILIAS[id].label;
+    const agulha = chato(nome);
+    const at = alvo.indexOf(agulha);
+    if (at < 0) continue;
+    // Trecho legível: procura o nome no texto original, tolerando espaço/acento entre as letras.
+    const re = new RegExp(nome.split(/\s+/).map((w) => w.split("").join("\\s*")).join("\\s+"), "i");
+    const m = re.exec(t);
+    return { id, nome, trecho: (m ? m[0] : nome).slice(0, 120) };
+  }
+  return null;
+}
 router.post("/interpret", async (req, res, next) => {
   try {
     const texto = String((req.body && req.body.texto) || "").trim();
@@ -323,6 +343,13 @@ router.post("/interpret", async (req, res, next) => {
     // modelo impresso cru na tela: numa execução real ele devolveu ["cta","numero_destaque",
     // "headline","dado_ou_percentual_de_aprovacao"], e quem lesse a tela veria nomes de variável.
     // O que ele nomear fora desses três não é campo — é observação, e não cabe nesse aviso.
+    // Tipografia pedida no próprio texto. Detectada AQUI, por nome, sem passar pelo modelo: a lista
+    // é fechada e os nomes são literais, então casar a string é exato e de graça — e continua
+    // funcionando quando a leitura por IA falha. A tela usa isso para abrir o aviso de "família fora
+    // da identidade" antes de aplicar; nada é trocado sozinho.
+    const familia = familiaPedidaNoTexto(texto);
+    if (familia) campos.font = { valor: familia.id, confianca: "alta", porque: familia.trecho, fora_da_identidade: true };
+
     const CAMPOS_LIDOS = ["content_type", "pillar", "cta"];
     const faltou = (Array.isArray(cru.faltou) ? cru.faltou : [])
       .map((x) => String(x).trim())
@@ -413,7 +440,7 @@ router.post("/save", async (req, res, next) => {
     // 2c.2) variante de LOGO + estilo de MARCA D'ÁGUA escolhidos no brief (render.json, merge).
     // A foto entra aqui junto: no FEED ela não cabe no arquivo de conteúdo (é .txt), então o
     // render.json é o único lugar onde ela sobrevive ao salvamento.
-    if (body.logo || body.watermark || body.image) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark, image: body.image });
+    if (body.logo || body.watermark || body.image || body.font) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark, image: body.image, font: body.font });
 
     // 2d) grava o pilar de conteudo (eixo tematico) escolhido no brief.
     // Validado na taxonomia fechada; pilar invalido/ausente e ignorado.

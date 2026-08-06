@@ -220,6 +220,7 @@ function getTask(folder) {
     })(),
     logo: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.logo === "string") ? rp.logo : null; })(),
     watermark: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.watermark === "string") ? rp.watermark : null; })(),
+    font: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.font === "string") ? rp.font : null; })(),
     pillar: (status && typeof status.pillar === "string") ? status.pillar : null,
   };
 }
@@ -400,6 +401,9 @@ function setTemplate(folder, template) {
 // não apaga o template). "" ou inválido = não mexe naquele campo (mantém o que estava).
 const VALID_LOGOS = ["light", "dark", "symbol"];
 const VALID_WATERMARKS = ["word", "symbol", "outline", "none", "canto", "padrao"];
+// Tipografia da peça — ESPELHO de FAMILIAS em lib/render.js. Lista fechada: o id vira URL do Google
+// Fonts e vira CSS lá dentro, então família livre seria injeção.
+const VALID_FONTS = ["playfair", "dmserif", "montserrat", "poppins", "oswald", "bebas", "spacegrotesk"];
 function setRenderPref(folder, patch) {
   const loc = findTask(folder);
   if (!loc || !patch) return false;
@@ -409,6 +413,8 @@ function setRenderPref(folder, patch) {
   else if (VALID_LOGOS.includes(String(patch.logo))) cur.logo = String(patch.logo);
   if (patch.watermark === "auto") delete cur.watermark;
   else if (VALID_WATERMARKS.includes(String(patch.watermark))) cur.watermark = String(patch.watermark);
+  if (patch.font === "auto" || patch.font === "") delete cur.font;
+  else if (VALID_FONTS.includes(String(patch.font))) cur.font = String(patch.font);
   // Foto da peça. Necessário porque o arquivo do FEED é um .txt e não guarda campo nenhum — sem
   // isto a foto escolhida na criação aparecia na prévia e sumia ao salvar. Só aceita caminho do
   // acervo servido pelo painel: nada de URL externa (o editor re-renderiza com a rede bloqueada) e

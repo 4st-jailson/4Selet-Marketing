@@ -267,6 +267,65 @@ function briefingLongo() {
   }
   await b.close();
 
+  secao("10. Tipografia fora da identidade (por peça)");
+  // A identidade é Inter + JetBrains Mono e continua sendo o padrão: nada muda sem alguém pedir.
+  // Quando pede, a arte sai na família escolhida, a escolha fica gravada na peça, e a peça seguinte
+  // NÃO herda nada. A lista é fechada porque o id vira URL do Google Fonts e vira CSS.
+  const pecaFonte = (nome, extra) => {
+    const n = nome + Math.random().toString(36).slice(2, 7) + "_" + DATA;
+    peca(n, { "ads/concept.json": Object.assign({ eyebrow: "TESTE", headline: "A margem ==real==", subtext: "Apoio.", cta: "Conhecer a plataforma" }, extra || {}) });
+    return n;
+  };
+  const htmlDa = (n, rel) => fs.readFileSync(path.join(RAIZ, n, rel), "utf8");
+  {
+    const n = pecaFonte("regfonte_padrao");
+    await render.render(n, "image", {});
+    const h = htmlDa(n, "ads/ad.html");
+    checa(/Inter/.test(h) && !/Playfair|Bebas|Montserrat/.test(h), "sem pedir nada, a peça continua na Inter");
+  }
+  {
+    const n = pecaFonte("regfonte_pedida");
+    await render.render(n, "image", { font: "playfair" });
+    const h = htmlDa(n, "ads/ad.html");
+    checa(/Playfair\+Display/.test(h), "carrega a família pedida do Google Fonts");
+    checa(/font-family:'Playfair Display',serif !important/.test(h), "aplica a família no cartão");
+    checa(/\.eyebrow[^}]*JetBrains Mono[^}]*!important/.test(h), "rótulos seguem em JetBrains Mono");
+    checa(JSON.parse(fs.readFileSync(path.join(RAIZ, n, "render.json"), "utf8")).font === "playfair", "a escolha fica gravada na peça");
+    await render.render(n, "image", {});
+    checa(/Playfair/.test(htmlDa(n, "ads/ad.html")), "re-renderizar mantém a família escolhida");
+    await render.render(n, "image", { font: "auto" });
+    checa(!/Playfair/.test(htmlDa(n, "ads/ad.html")), "'auto' devolve a identidade da marca");
+    checa(!("font" in JSON.parse(fs.readFileSync(path.join(RAIZ, n, "render.json"), "utf8"))), "e apaga a preferência da peça");
+  }
+  {
+    const a = pecaFonte("regfonte_a"); await render.render(a, "image", { font: "bebas" });
+    const b4 = pecaFonte("regfonte_b"); await render.render(b4, "image", {});
+    checa(!/Bebas/.test(htmlDa(b4, "ads/ad.html")), "a peça seguinte NÃO herda a família da anterior");
+  }
+  {
+    const n = pecaFonte("regfonte_injecao");
+    await render.render(n, "image", { font: "Comic Sans; } body { display:none" });
+    checa(!/Comic Sans|display:none/.test(htmlDa(n, "ads/ad.html")), "família fora da lista é ignorada (sem injeção de CSS)");
+  }
+  {
+    // Carrossel inteiro na mesma família — inclusive quando um slide é regerado sozinho depois.
+    const n = "regfonte_carrossel" + Math.random().toString(36).slice(2, 7) + "_" + DATA;
+    peca(n, { "copy/instagram_carousel.json": { eyebrow: "TESTE", cta: "Conhecer a plataforma",
+      slides: [{ title: "Capa", layout: "cover" }, { title: "Meio", body: "corpo", layout: "text" }, { title: "Fecho", layout: "cta" }] } });
+    await render.render(n, "carousel", { font: "montserrat" });
+    checa([1, 2, 3].every((i) => /Montserrat/.test(htmlDa(n, "slides/slide_" + i + ".html"))), "todos os slides saem na mesma família");
+    await render.renderCarouselSlide(n, 2);
+    checa(/Montserrat/.test(htmlDa(n, "slides/slide_2.html")), "regerar um slide sozinho não o deixa fora do conjunto");
+  }
+  {
+    // A prévia da tela de criação tem que sair na MESMA família da arte final.
+    const p1 = await render.renderPreview({ content_type: "ad_creative", template: "editorial",
+      parsed: { eyebrow: "T", headline: "A margem ==real==", subtext: "Apoio.", cta: "Conhecer a plataforma" } });
+    const p2 = await render.renderPreview({ content_type: "ad_creative", template: "editorial", font: "bebas",
+      parsed: { eyebrow: "T", headline: "A margem ==real==", subtext: "Apoio.", cta: "Conhecer a plataforma" } });
+    checa(p1.ok && p2.ok && p1.dataUrl !== p2.dataUrl, "a prévia respeita a família escolhida (não mostra uma e salva outra)");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

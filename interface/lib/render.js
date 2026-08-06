@@ -169,7 +169,41 @@ const PREVIEW_SCALE = Number(process.env.PREVIEW_SCALE || 2) || 2;
 // 3 layouts on-brand (paleta 4Selet, Inter/JetBrains Mono, logo, Selet Dots).
 // Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
 // `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
-const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
+const FONT_LINK_BASE = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
+
+// ---- Tipografia fora da identidade (por peça) -----------------------------
+// A identidade da 4Selet é Inter no texto e JetBrains Mono nos rótulos, e o prompt de geração diz
+// "nenhuma outra família". Isso continua sendo o padrão: nada muda sem alguém pedir. Mas quando a
+// pessoa pede outra família — no prompt ou no seletor da peça — o painel avisa que aquilo sai da
+// identidade, pergunta, e só troca se ela disser sim. Lista FECHADA de propósito: o nome vai para
+// dentro de uma URL do Google Fonts e para dentro de CSS, e família livre seria injeção.
+const FAMILIAS = {
+  "": { label: "Inter (identidade 4Selet)", css: null, marca: true },
+  playfair: { label: "Playfair Display", css: "'Playfair Display',serif", google: "Playfair+Display:wght@400;600;700;800;900" },
+  dmserif: { label: "DM Serif Display", css: "'DM Serif Display',serif", google: "DM+Serif+Display" },
+  montserrat: { label: "Montserrat", css: "'Montserrat',sans-serif", google: "Montserrat:wght@400;600;700;800;900" },
+  poppins: { label: "Poppins", css: "'Poppins',sans-serif", google: "Poppins:wght@400;600;700;800;900" },
+  oswald: { label: "Oswald", css: "'Oswald',sans-serif", google: "Oswald:wght@400;600;700" },
+  bebas: { label: "Bebas Neue", css: "'Bebas Neue',sans-serif", google: "Bebas+Neue" },
+  spacegrotesk: { label: "Space Grotesk", css: "'Space Grotesk',sans-serif", google: "Space+Grotesk:wght@400;600;700" },
+};
+const FAMILIA_IDS = Object.keys(FAMILIAS).filter(Boolean);
+// A peça sendo desenhada agora. A fila de render é serializada (um PNG por vez, ver htmlToPng), então
+// um valor por processo basta — e é bem mais simples que enfiar a família nos 13 pontos que montam
+// documento. Sempre limpo no `finally` de render(), para uma peça nunca herdar a fonte da anterior.
+let FAMILIA_ATUAL = "";
+function fontHead() {
+  const f = FAMILIAS[FAMILIA_ATUAL];
+  if (!f || !f.css) return FONT_LINK_BASE;
+  const link = '<link href="https://fonts.googleapis.com/css2?family=' + f.google + '&display=swap" rel="stylesheet"/>';
+  // Especificidade alta de propósito: vence os `font-family:'Inter'` escritos dentro de cada
+  // template sem precisar reescrever os 20 lugares onde eles aparecem. Os rótulos estruturais
+  // (eyebrow, selo, rodapé, numeração) seguem em JetBrains Mono — é o que dá o ar técnico da marca.
+  const over = "<style>html body .card, html body .card * { font-family:" + f.css + " !important; }"
+    + "html body .card .eyebrow, html body .card .badge, html body .card .footer, html body .card .pageno"
+    + " { font-family:'JetBrains Mono',monospace !important; }</style>";
+  return FONT_LINK_BASE + link + over;
+}
 const DEFAULT_FOOTER = ""; // sem rodapé automático (Hugo: tirar "4Selet" de toda postagem)
 
 // Comprimento VISÍVEL do headline (ignora as tags <span> do realce). Usado para
@@ -201,7 +235,7 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
   const n = headlineLen(headline);
   const headlineSize = Math.round((n > 36 ? 100 : n > 22 ? 120 : 168) * fatorPilha({ eyebrow, subtext, cta, badge }));
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${width}px; height:${height}px; }
@@ -255,7 +289,7 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
   const n = headlineLen(headline);
   const headlineSize = Math.round((n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196) * fatorPilha({ eyebrow, subtext, cta, badge }));
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${width}px; height:${height}px; }
@@ -317,7 +351,7 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
   // com rótulo E selo, 92px não corta nenhum e tira todos os 7 que estavam abaixo do piso.
   const botPad = square ? 92 : 104;
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${width}px; height:${height}px; }
@@ -373,7 +407,7 @@ function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, foote
   const n = headlineLen(headline);
   const headlineSize = Math.round((n > 40 ? 84 : n > 26 ? 100 : n > 16 ? 124 : 156) * (Number(titleScale) || 1));
   const photo = image ? `<img class="photo" src="${escAttr(resolveImage(image))}" alt=""/>` : "";
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${width}px; height:${height}px; }
@@ -530,7 +564,7 @@ function tplMediaTabletClean({ width, height, image, eyebrow, url, model, logo: 
     ${topbar}
     <div class="stage" style="top:${stageTop}px">${device}</div>
     ${botbar}`;
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
 }
 
 // ===== Mockup FOTO-REAL =====
@@ -706,7 +740,7 @@ function tplMediaFotoReal({ width, height, image, eyebrow, url, headline, logo: 
     <div class="scrim"></div>
     ${topbar}
     ${botbar}`;
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
 }
 
 // ===== Layouts alternativos de "4Selet na Mídia" (gerados+validados 2026-07-29): navegador, citação, split, selo, camadas.
@@ -843,7 +877,7 @@ function tplMediaNavegador({ width, height, image, eyebrow, url, headline, logo:
       '</g>' +
     '</svg>';
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8">' + FONT_LINK +
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">' + fontHead() +
     '<style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:' + width + 'px;height:' + height + 'px;}</style></head>' +
     '<body><div style="position:relative;width:' + width + 'px;height:' + height + 'px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%,' + P.blue + ' 0%,' + P.navy + ' 45%,' + P.darker + ' 100%);font-family:\'Inter\',sans-serif;">' +
       circuit +
@@ -1014,7 +1048,7 @@ function tplMediaCitacao({ width, height, image, eyebrow, url, headline, logo: l
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-${FONT_LINK}
+${fontHead()}
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:${W}px;height:${H}px;}
@@ -1117,7 +1151,7 @@ function tplMediaSplit({ width, height, image, eyebrow, url, headline, logo: log
 
   const showText = hasHeadline;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${fontHead()}
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:${width}px;height:${height}px}
@@ -1309,7 +1343,7 @@ function tplMediaSelo({ width, height, image, eyebrow, url, headline, logo: logo
     .cta-arrow{width:${r(ctaFont * 1.95)}px;height:${r(ctaFont * 1.95)}px;border-radius:50%;border:2px solid ${PALETTE.sky};color:${PALETTE.sky};display:flex;align-items:center;justify-content:center;font-size:${r(ctaFont * 1.35)}px;font-weight:700;line-height:1}`;
 
   const body = `${tech}<div class="vig"></div>${topbar}${stage}${botbar}`;
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}<style>${css}</style></head><body><div class="card">${body}</div></body></html>`;
 }
 
 function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: logoVariant }) {
@@ -1442,7 +1476,7 @@ function tplMediaCamadas({ width, height, image, eyebrow, url, headline, logo: l
     corner(`left:${-boff}px;bottom:${Math.round(botH * 0.5)}px;`) +
     corner(`right:${-boff}px;bottom:${Math.round(botH * 0.5)}px;`);
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${fontHead()}
   <style>*{margin:0;padding:0;box-sizing:border-box;}</style></head>
   <body style="margin:0;">
     <div class="card" style="position:relative;width:${W}px;height:${H}px;overflow:hidden;background:radial-gradient(circle,#5499B51f 1.5px,transparent 1.7px) 0 0/46px 46px,radial-gradient(128% 118% at 78% 6%, ${P.blue} 0%, ${P.navy} 45%, ${P.darker} 100%);font-family:'Inter',sans-serif;">
@@ -1500,7 +1534,7 @@ function tplMedia({ width, height, image, url, eyebrow, headline, model, logo: l
         <div style="flex:1;display:flex;flex-direction:column;gap:22px">${title}${veic}${logo}</div></div>`
     : `<div class="dots"></div><div style="position:relative;height:100%;display:flex;flex-direction:column;align-items:center;padding:74px 60px 58px">
         ${title}${veic}<div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%">${dev}</div><div style="margin-top:8px">${logo}</div></div>`;
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}<style>${common}</style></head><body><div class="card">${body}</div></body></html>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}<style>${common}</style></head><body><div class="card">${body}</div></body></html>`;
 }
 
 const TEMPLATES = { editorial: tplEditorial, bold: tplBold, split: tplSplit, photo: tplPhoto };
@@ -1518,6 +1552,14 @@ function readRenderPref(loc) {
   return (typeof j.template === "string" && TEMPLATES[j.template]) ? j.template : null;
 }
 function readLogoPref(loc) { const v = readRenderJson(loc).logo; return LOGO_IDS.indexOf(v) >= 0 ? v : null; }
+function readFontPref(loc) { const v = readRenderJson(loc).font; return FAMILIA_IDS.indexOf(v) >= 0 ? v : ""; }
+// Mesma regra do logo/marca d'água: "auto" volta para a identidade; escolha válida manda e fica.
+function pickFont(loc, requested) {
+  if (requested === "auto" || requested === "") { deleteRenderPref(loc, "font"); return ""; }
+  const ok = FAMILIA_IDS.indexOf(requested) >= 0;
+  if (ok) writeRenderPref(loc, { font: requested });
+  return ok ? requested : readFontPref(loc);
+}
 function readWatermarkPref(loc) { const v = readRenderJson(loc).watermark; return WATERMARK_IDS.indexOf(v) >= 0 ? v : null; }
 // MERGE (não sobrescreve): guardar template NÃO pode apagar logo/watermark, e vice-versa.
 function writeRenderPref(loc, patch) {
@@ -1528,7 +1570,7 @@ function writeRenderPref(loc, patch) {
     // "image" entra aqui porque a peça de FEED não tem onde guardar a foto: o arquivo dela é um
     // .txt puro. A foto escolhida aparecia na prévia e sumia ao salvar — render.json é o lugar
     // certo, é a mesma família de template/logo/marca d'água (preferência de arte da peça).
-    ["template", "logo", "watermark", "image"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
+    ["template", "logo", "watermark", "image", "font"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
     fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
   } catch (e) {}
 }
@@ -1740,7 +1782,7 @@ function carDoc(ctx, extraCss, bodyInner) {
       : "linear-gradient(180deg, rgba(4,20,28,.64) 0%, rgba(4,20,28,.48) 42%, rgba(4,20,28,.88) 100%)";
     photo = `<div class="s-photo" style="background-image:url('${escAttr(resolveImage(ctx.image))}')"></div><div class="s-scrim" style="background:${scrim}"></div>`;
   }
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}
 <style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
 <body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
@@ -2258,6 +2300,7 @@ async function renderCarousel(folder, opts) {
 // Re-renderiza UM slide do carrossel (após regerar o conteúdo só dele), sem tocar nos outros.
 async function renderCarouselSlide(folder, n) {
   const loc = requireActive(folder);
+  FAMILIA_ATUAL = readFontPref(loc);   // regerar UM slide tem que sair na mesma fonte dos outros
   const tpl = pickTemplate(loc, null);
   const logoV = pickLogo(loc, null);
   const wmV = pickWatermark(loc, null);
@@ -2265,6 +2308,7 @@ async function renderCarouselSlide(folder, n) {
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
   const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV });
+  FAMILIA_ATUAL = "";   // documento já montado: devolve a identidade antes de qualquer espera
   const item = built.find((b) => b.n === n);
   if (!item) { const e = new Error("slide " + n + " nao existe no carrossel"); e.code = "E_NO_SLIDE"; throw e; }
   const htmlPath = path.join(dir, "slide_" + n + ".html"), outPng = path.join(dir, "slide_" + n + ".png");
@@ -2390,12 +2434,15 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark, only, media } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   const tplId = (template && TEMPLATES[template]) ? template : "editorial";
   const logoV = LOGO_IDS.indexOf(logo) >= 0 ? logo : "";
   const wmV = WATERMARK_IDS.indexOf(watermark) >= 0 ? watermark : "";
+  // A prévia tem que sair na MESMA tipografia da arte final — senão a tela mostra uma coisa e o
+  // arquivo salvo sai outra, que é o erro que já custou caro aqui (foto/logo sumindo no render).
+  FAMILIA_ATUAL = FAMILIA_IDS.indexOf(font) >= 0 ? font : "";
   // 4Selet na Mídia: a prévia monta o mockup de device (tplMedia) a partir dos metadados do form
   // (print/modelo/veículo), no 1º tamanho marcado. Sem print ainda, mostra a moldura vazia.
   if (ct.kind === "media") {
@@ -2403,6 +2450,7 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
     const szKey = (Array.isArray(m.sizes) ? m.sizes : []).find((k) => MEDIA_SIZES[k]) || "4x5";
     const sz = MEDIA_SIZES[szKey];
     const html = tplMedia({ width: sz.w, height: sz.h, image: m.print || "", url: m.url || "", eyebrow: m.vehicle || "", headline: m.headline || "", model: m.model || "hand_tablet", logo: logoV });
+    FAMILIA_ATUAL = "";   // documento montado: devolve a identidade antes de esperar pelo PNG
     const png = await htmlStringToPngDataUrl(html, sz.w, sz.h);
     if (!png.ok) return { ok: false, error: png.error };
     return { ok: true, dataUrl: png.dataUrl, template: m.model || "tablet", kind: ct.kind, width: sz.w, height: sz.h };
@@ -2411,6 +2459,7 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   // com a MESMA montagem do render final (carouselSlidesHtml).
   if (ct.kind === "carousel") {
     const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId], { logo: logoV, watermark: wmV });
+    FAMILIA_ATUAL = "";   // idem: todos os slides já estão montados
     // "only" = renderiza SO o slide desse indice (o carrossel inteiro e montado p/ preservar o contexto
     // de posicao — 1o=capa, ultimo=cta). O frontend chama slide-a-slide p/ mostrar "slide N de M".
     if (only != null && built.length) {
@@ -2429,7 +2478,9 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   }
   const fields = previewFields(ct, parsed);
   if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
-  const png = await htmlStringToPngDataUrl(resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV })), fields.width, fields.height);
+  const doc = resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV }));
+  FAMILIA_ATUAL = "";
+  const png = await htmlStringToPngDataUrl(doc, fields.width, fields.height);
   if (!png.ok) return { ok: false, error: png.error, template: tplId };
   return { ok: true, dataUrl: png.dataUrl, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };
 }
@@ -2603,12 +2654,19 @@ async function renderMedia(folder, opts) {
   if (!sizes.length) sizes = ["4x5", "16x9"];
   const dir = path.join(loc.path, "ads");
   fs.mkdirSync(dir, { recursive: true });
-  const rels = []; let err = "";
-  for (const key of sizes) {
+  // Monta TODOS os documentos de uma vez, antes de qualquer await — como o carrossel já fazia. Os
+  // templates leem a tipografia da peça em desenho (fontHead), e essa leitura tem que acontecer
+  // inteira dentro do mesmo instante: montar dentro do laço deixaria os formatos 2..4 sujeitos a
+  // uma outra peça que começasse a renderizar no meio.
+  const docs = sizes.map((key) => {
     const sz = MEDIA_SIZES[key];
+    return { sz, html: tplMedia(Object.assign({ width: sz.w, height: sz.h }, props)) };
+  });
+  const rels = []; let err = "";
+  for (const { sz, html } of docs) {
     const base = sz.png.replace(/\.png$/i, "");
     const hp = path.join(dir, base + ".html"), pp = path.join(dir, sz.png);
-    fs.writeFileSync(hp, tplMedia(Object.assign({ width: sz.w, height: sz.h }, props)), "utf8");
+    fs.writeFileSync(hp, html, "utf8");
     const r = await htmlToPng(hp, pp, sz.w, sz.h, RENDER_SCALE);
     if (r.ok) rels.push("ads/" + sz.png); else err = r.stderr || err;
   }
@@ -2618,14 +2676,22 @@ async function renderMedia(folder, opts) {
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
 // Assincrono: o chamador (rota) deve usar `await render.render(...)`.
 async function render(folder, kind, opts) {
-  switch (kind) {
-    case "image": return renderImage(folder, opts);
-    case "feed": return renderFeed(folder, opts);
-    case "media": return renderMedia(folder, opts);
-    case "carousel": return renderCarousel(folder, opts);
-    case "video": return renderVideo(folder);
-    default: { const e = new Error("kind sem render de midia: " + kind); e.code = "E_NO_RENDER"; throw e; }
-  }
+  // A família tipográfica da peça vale para TODOS os documentos que este render montar (a arte, os
+  // slides do carrossel, os formatos da Mídia). Fica valendo só durante esta chamada: o `finally`
+  // devolve a identidade da marca, para a próxima peça nunca herdar a fonte da anterior.
+  let loc = null;
+  try { loc = requireActive(folder); } catch (e) { loc = null; }
+  FAMILIA_ATUAL = loc ? pickFont(loc, opts && opts.font) : "";
+  try {
+    switch (kind) {
+      case "image": return await renderImage(folder, opts);
+      case "feed": return await renderFeed(folder, opts);
+      case "media": return await renderMedia(folder, opts);
+      case "carousel": return await renderCarousel(folder, opts);
+      case "video": return await renderVideo(folder);
+      default: { const e = new Error("kind sem render de midia: " + kind); e.code = "E_NO_RENDER"; throw e; }
+    }
+  } finally { FAMILIA_ATUAL = ""; }
 }
 
 module.exports = {
@@ -2634,4 +2700,5 @@ module.exports = {
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
+  FAMILIAS, FAMILIA_IDS,   // lista fechada de tipografia (a tela monta o seletor a partir daqui)
 };

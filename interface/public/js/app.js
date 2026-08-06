@@ -1762,6 +1762,45 @@ const MARCA_DAGUA_OPCOES = [
   ["padrao", "Símbolos repetidos"],
   ["none", "Nenhuma"],
 ];
+// A tipografia da marca é Inter no texto e JetBrains Mono nos rótulos — e continua sendo o padrão.
+// A lista abaixo existe porque a arte precisa poder sair do lugar-comum quando a peça pede (uma
+// campanha específica, uma referência que o Hugo trouxe). Sair da identidade NÃO é escondido nem
+// bloqueado: o painel avisa e pergunta antes. ESPELHO de FAMILIAS em lib/render.js — mexeu lá,
+// mexe aqui, senão a caixa oferece uma fonte que o render não conhece.
+const TIPOGRAFIA_OPCOES = [
+  ["", "Inter (identidade 4Selet)"],
+  ["playfair", "Playfair Display"],
+  ["dmserif", "DM Serif Display"],
+  ["montserrat", "Montserrat"],
+  ["poppins", "Poppins"],
+  ["oswald", "Oswald"],
+  ["bebas", "Bebas Neue"],
+  ["spacegrotesk", "Space Grotesk"],
+];
+const nomeDaFamilia = (id) => { const o = TIPOGRAFIA_OPCOES.find((x) => x[0] === String(id || "")); return o ? o[1] : String(id || ""); };
+// O aviso que o Hugo desenhou: modal no meio da tela, fundo embaçado, Sim/Não embaixo. Não bloqueia
+// — só garante que ninguém saia da identidade da marca sem perceber que saiu.
+async function confirmaForaDaIdentidade(familia) {
+  if (!familia) return true;   // voltar para a Inter é voltar para casa: não pergunta nada
+  return uiConfirm(
+    "A família " + nomeDaFamilia(familia) + " não faz parte da identidade visual definida para a 4Selet, "
+    + "que usa Inter no texto e JetBrains Mono nos rótulos. A arte desta peça vai sair nessa outra família. Deseja continuar?",
+    { title: "Tipografia fora da identidade", confirmText: "Sim, usar " + nomeDaFamilia(familia), cancelText: "Não" }
+  );
+}
+// Liga a pergunta a uma caixa de tipografia: escolheu fora da identidade → pergunta; disse não →
+// a caixa volta sozinha para onde estava.
+function ligaConfirmacaoDeFonte(sel) {
+  if (!sel || sel.dataset.confWired) return;
+  sel.dataset.confWired = "1";
+  let anterior = sel.value;
+  sel.addEventListener("change", async () => {
+    const escolhida = sel.value;
+    if (!escolhida) { anterior = escolhida; return; }
+    if (await confirmaForaDaIdentidade(escolhida)) anterior = escolhida;
+    else sel.value = anterior;
+  });
+}
 const montaOpcoes = (lista, atual) => lista
   .map(([v, t]) => '<option value="' + v + '"' + (v === String(atual || "") ? " selected" : "") + ">" + esc(t) + "</option>").join("");
 
@@ -1808,14 +1847,16 @@ function templatePicker(task) {
     </label>`).join("");
   const logoOpts = montaOpcoes(LOGO_OPCOES, task.logo);
   const wmOpts = montaOpcoes(MARCA_DAGUA_OPCOES, task.watermark);
+  const fontOpts = montaOpcoes(TIPOGRAFIA_OPCOES, task.font);
   return `<div class="tpl-picker mt">
     <div class="muted" style="font-size:13px;margin-bottom:8px">Estilo visual da arte</div>
     <div class="tpl-grid">${opts}</div>
     <div class="tpl-extra">
       <label class="tpl-sel">Logo <select id="pick-logo">${logoOpts}</select></label>
       <label class="tpl-sel">Marca d’água <select id="pick-wm">${wmOpts}</select></label>
+      <label class="tpl-sel">Tipografia <select id="pick-font">${fontOpts}</select></label>
     </div>
-    <p class="hint" style="margin-top:8px;font-size:12px">O estilo, a logo e a marca d’água entram na arte ao clicar em <strong>“Gerar arte final”</strong>.</p>
+    <p class="hint" style="margin-top:8px;font-size:12px">O estilo, a logo, a marca d’água e a tipografia entram na arte ao clicar em <strong>“Gerar arte final”</strong>.</p>
   </div>`;
 }
 
@@ -1826,6 +1867,7 @@ function selectedTemplate() {
 // value "" (opção "Automático/Padrão") → sentinela "auto" p/ LIMPAR a escolha salva no re-render.
 function selectedLogo() { const el = document.getElementById("pick-logo"); return el ? (el.value || "auto") : undefined; }
 function selectedWatermark() { const el = document.getElementById("pick-wm"); return el ? (el.value || "auto") : undefined; }
+function selectedFont() { const el = document.getElementById("pick-font"); return el ? (el.value || "auto") : undefined; }
 
 function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel" || kind === "media"; }
 
@@ -2910,7 +2952,7 @@ async function doRestore(folder, file, id, task) {
   toast("Restaurando…", "info");
   try {
     await API.restoreVersion(folder, file, id);
-    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark());
+    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont());
     toast("Versão restaurada.", "success");
     router();
   } catch (e) { toast((e && e.message) || "Erro ao restaurar.", "error"); }
@@ -2937,7 +2979,7 @@ async function refineTask(folder, task) {
     });
     if (autoRenders(task.kind)) {
       btn.innerHTML = '<span class="spinner"></span> atualizando a arte…'; showBusy("Atualizando a arte…");
-      const rr = await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark());
+      const rr = await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont());
       if (!rr.ok) toast("Ajustado, mas falhou a geração da arte: " + (rr.stderr || rr.error || "erro"), "warn");
       else toast("Ajustado e arte atualizada", "success");
     } else if (task.kind === "video") {
@@ -3214,13 +3256,15 @@ async function viewTaskDetail(folder) {
       out.textContent = task.kind === "video" ? "isto pode levar alguns minutos…" : "";
       showBusy(task.kind === "video" ? "Renderizando o vídeo… (pode levar alguns minutos)" : "Gerando a arte…");
       try {
-        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate(), selectedLogo(), selectedWatermark());
+        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont());
         if (!r.ok) throw new Error(r.stderr || r.error || "falha ao gerar a arte");
         hideBusy(); toast("Arte gerada", "success"); router();
       } catch (e) { hideBusy(); toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }
     };
-    // Logo/marca d'água: trocar o seletor DESTACA "Gerar arte final" — é onde a escolha entra na arte.
-    $$("#pick-logo, #pick-wm").forEach((el) => { el.onchange = () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }; });
+    // Logo/marca d'água/tipografia: trocar o seletor DESTACA "Gerar arte final" — é onde a escolha entra na arte.
+    $$("#pick-logo, #pick-wm, #pick-font").forEach((el) => { el.onchange = () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }; });
+    // Sair da identidade da marca pergunta antes (modal centralizado, Sim/Não).
+    ligaConfirmacaoDeFonte($("#pick-font"));
   }
   if ($("#btn-discard")) {
     $("#btn-discard").onclick = async () => {
@@ -3972,6 +4016,12 @@ async function viewCreate(arg, query) {
               <select id="g-wm">${montaOpcoes(MARCA_DAGUA_OPCOES, "")}</select>
             </div>
           </div>
+          <!-- Tipografia: o padrão É a identidade da marca. Trocar não é proibido nem escondido —
+               abre um aviso perguntando se é isso mesmo, e a arte sai na família escolhida. -->
+          <div class="field art-only"><label>Tipografia <span class="hint">(a identidade da 4Selet é Inter no texto e JetBrains Mono nos rótulos; escolher outra família avisa antes)</span></label>
+            <select id="g-font">${montaOpcoes(TIPOGRAFIA_OPCOES, "")}</select>
+            <div class="ai-note" id="g-note-font" hidden></div>
+          </div>
           <div class="field" id="g-photo-row" style="display:none">
             <label>Imagem da peça <span class="hint">(enviada por você; entra como fundo da arte “Foto”)</span></label>
             <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-photo-file" accept="image/*" hidden /> Enviar imagem</label><button type="button" class="btn btn-sm btn-ghost" id="g-photo-search" title="Buscar foto de banco (Pexels)">Buscar na Pexels</button><span class="hint" id="g-photo-hint"></span></div>
@@ -4128,6 +4178,8 @@ async function viewCreate(arg, query) {
     }; });
   }
   if ($("#g-style")) $("#g-style").addEventListener("change", updPhotoRow);
+  // Escolher tipografia fora da identidade pergunta antes (modal centralizado, Sim/Não).
+  ligaConfirmacaoDeFonte($("#g-font"));
   if ($("#g-photo-file")) $("#g-photo-file").addEventListener("change", async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const hint = $("#g-photo-hint"); if (hint) hint.textContent = "enviando…";
@@ -4280,7 +4332,7 @@ function ctaDirective() {
 let ultimoTemaLido = "";      // evita reinterpretar o mesmo texto
 let leituraAplicada = null;   // { campo: {antes, depois, rotulo} } para o desfazer
 
-const ROTULO_CAMPO = { content_type: "Formato", pillar: "Assunto", cta: "Chamada" };
+const ROTULO_CAMPO = { content_type: "Formato", pillar: "Assunto", cta: "Chamada", font: "Tipografia" };
 function nomeDoValor(campo, valor) {
   if (campo === "content_type") { const t = metaType(valor); return t ? t.label : valor; }
   if (campo === "pillar") { const p = (State.meta.content_pillars || []).find((x) => x.id === valor); return p ? p.label : valor; }
@@ -4302,6 +4354,12 @@ function aplicaCampoLido(campo, valor) {
     if (d && p) d.textContent = p.description;
     return true;
   }
+  if (campo === "font") {
+    // Desfazer aqui volta para a Inter — e voltar para a identidade da marca nunca pergunta nada.
+    const sel = $("#g-font"); if (!sel) return false;
+    sel.value = valor || "";
+    return true;
+  }
   if (campo === "cta") {
     const el = $("#g-cta"); if (!el) return false;
     el.value = valor;
@@ -4321,7 +4379,7 @@ function aplicaCampoLido(campo, valor) {
 // pintado. Então o aviso não some: a seção é ABERTA quando há algo para dizer ali, o resumo do
 // bloco ganha um selo que sobrevive a recolher, e o campo de tema guarda um resumo de uma linha
 // para o que ficou fora da tela.
-const ALVO_AVISO = { content_type: "#g-note-type", pillar: "#g-note-pillar", cta: "#g-note-cta" };
+const ALVO_AVISO = { content_type: "#g-note-type", pillar: "#g-note-pillar", cta: "#g-note-cta", font: "#g-note-font" };
 // Detecção genérica, não lista fixa de ids: vale hoje para o <details> e amanhã para qualquer campo
 // escondido por .art-only/.media-only sem precisar mexer aqui de novo.
 function campoVisivel(el) {
@@ -4479,6 +4537,17 @@ async function leTemaEAplica(brief) {
     }
     itens.push(leituraAplicada[campo]);
   }
+  // Tipografia nomeada no próprio texto ("com Playfair Display", "usa bebas neue"). É o único campo
+  // lido que NÃO se aplica sozinho: sair da identidade da marca é decisão de pessoa, então aqui só
+  // pergunta. Disse não, fica na Inter e a leitura não insiste.
+  if (campos.font && campos.font.valor && $("#g-font") && $("#g-font").value !== campos.font.valor) {
+    if (await confirmaForaDaIdentidade(campos.font.valor)) {
+      $("#g-font").value = campos.font.valor;
+      const it = { campo: "font", antes: "", depois: campos.font.valor, rotulo: "Tipografia", texto: nomeDaFamilia(campos.font.valor), sugerido: false };
+      leituraAplicada.font = it;
+      itens.push(it);
+    }
+  }
   pintaAvisosLeitura(itens, r.faltou || []);
   // Formato trocado interrompe UMA vez: é a única mudança que a tela de resultado não conserta.
   if (trocouFormato) {
@@ -4507,6 +4576,7 @@ async function runGenerate() {
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
     logo: ($("#g-logo") && $("#g-logo").value) || undefined,
     watermark: ($("#g-wm") && $("#g-wm").value) || undefined,
+    font: ($("#g-font") && $("#g-font").value) || undefined,
     pillar: ($("#g-pillar") && $("#g-pillar").value) || undefined,
     cta: ctaDirective(),
     image: ((($("#g-style") && $("#g-style").value) === "photo") && $("#g-image") && $("#g-image").value) ? $("#g-image").value : undefined,
@@ -4690,6 +4760,9 @@ async function renderArtPreview(contentType, kind) {
   let template = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
   const logo = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
   const watermark = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";
+  // A prévia tem que sair na MESMA tipografia da arte final: mostrar Inter aqui e salvar outra
+  // família seria a armadilha de sempre (a tela mostra uma coisa, o arquivo sai outra).
+  const font = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.font) || ($("#g-font") && $("#g-font").value) || "";
   if (!template) {
     const task = ($("#g-task") && $("#g-task").value) || slugify(($("#g-title") && $("#g-title").value) || "");
     const date = ($("#g-date") && $("#g-date").value) || todayISO();
@@ -4706,7 +4779,7 @@ async function renderArtPreview(contentType, kind) {
       const slides = []; let tpl2 = template;
       for (let i = 0; i < total; i++) {
         setBusyMsg("Renderizando slide " + (i + 1) + " de " + total + "…");
-        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, only: i });
+        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, only: i });
         if (!r || !r.slides || !r.slides[0]) throw new Error((r && r.error) || "falha ao renderizar a prévia");
         slides.push(r.slides[0]);
         if (r.template) tpl2 = r.template;
@@ -4714,7 +4787,7 @@ async function renderArtPreview(contentType, kind) {
       }
       out = { ok: true, slides, template: tpl2, kind: "carousel", width: 1080, height: 1350 };
     } else {
-      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark });
+      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font });
     }
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     if (out.slides && out.slides.length) {
