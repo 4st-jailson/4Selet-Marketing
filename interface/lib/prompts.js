@@ -46,10 +46,20 @@ const SCHEMAS = {
   "notes": "1-2 frases de racional"
 }`,
   ad_creative: `{
-  "headline": "headline <=4 palavras",
+  "eyebrow": "rotulo curto acima da headline (ex.: tema/pilar) — opcional",
+  "headline": "headline <=4 palavras (use ==palavra== p/ realcar uma palavra em azul sublinhado)",
   "subtext": "subtexto de apoio (1-2 linhas)",
   "cta": "CTA aprovado",
   "layout_type": "editorial | bold | split | photo",  // os 4 templates REAIS do render
+  // OS TRES CAMPOS ABAIXO SAO OPCIONAIS E MUTUAMENTE EXCLUSIVOS. Preencha NO MAXIMO UM, e SO quando o
+  // conteudo REALMENTE for numeros, etapas ou uma enumeracao. Quando um deles vem preenchido, o render
+  // desenha a arte nesse formato (grade de numeros / diagrama de etapas / lista) em vez do texto solto
+  // sobre o fundo — e a peca fica muito mais cheia e informativa. Se o conteudo for uma frase/conceito,
+  // deixe os tres FORA do JSON: a peca sai no layout_type escolhido, como sempre.
+  // Regra dura: NUNCA invente numero. Use apenas os numeros oficiais dos knowledge files.
+  "stats": [{ "value": "95%", "label": "aprovacao no cartao" }],  // 2 a 4 numeros oficiais -> grade 2x2
+  "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }],  // 3 a 4 etapas de um processo -> diagrama com icones (mark:true so na etapa final)
+  "items": ["item curto de lista"],  // 3 a 6 itens -> lista com marcadores
   "visual_direction": "direcao visual concreta (fundo, cor da paleta, uso de Selet Dots, hierarquia)",
   "notes": "1-2 frases de racional de marca"
 }`,

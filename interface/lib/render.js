@@ -1773,22 +1773,69 @@ function slideText(slide, ctx) {
   return carDoc(ctx, css, inner);
 }
 // Grade de numeros (2x2): ate 4 cartoes valor + rotulo.
+// Pílula de chamada para os arquétipos que NÃO tinham nenhuma. No carrossel isso não fazia falta —
+// a chamada mora no slide de fecho. Mas quando um destes layouts vira uma PEÇA ÚNICA (imagem ou
+// feed), não existe slide seguinte: sem isto, a chamada some sem aviso, e 7 dos 10 anúncios reais
+// do acervo têm uma. Só desenha quando ctx.cta vem preenchido, então o carrossel não muda.
+function pilulaCta(ctx) {
+  const t = String((ctx && ctx.cta) || "").trim();
+  return t ? '<div class="ac-cta">' + esc(t) + " &#8594;</div>" : "";
+}
+const CSS_PILULA_CTA = ".ac-cta { align-self:flex-start; margin-top:44px; font-weight:800; font-size:36px;"
+  + " background:" + PALETTE.blue + "; color:#FFFFFF; padding:26px 48px; border-radius:999px; }";
+// Quanto o conteúdo pesa no cartão, e quanto o desenho tem que ceder. Estes arquétipos nasceram para
+// o slide de carrossel (1080x1350, sem rótulo e sem chamada). Como PEÇA ÚNICA eles perdem 270px de
+// altura E ganham dois blocos — por isso o formato quadrado e cada extra entram na conta. Em vez de
+// cortar item, número ou etapa em silêncio, a tipografia e o espaçamento cedem em dois níveis.
+// Medido: sem isto, 6 itens longos estouravam 278px e 4 números de rótulo longo sobravam 28px de
+// margem, contra os 88px que a marca exige (platform_guidelines.md).
+function cargaSlide(slide, ctx, blocos, temApoio) {
+  const quadrado = Number(ctx && ctx.height) > 0 && Number(ctx.height) < 1200;
+  const extras = (temApoio && slide.body ? 1 : 0) + (slide.note ? 1 : 0) + (slide.eyebrow ? 1 : 0)
+    + (String((ctx && ctx.cta) || "").trim() ? 1 : 0);
+  // Título que quebra em duas linhas custa quase uma etapa/item a mais. Conta só o texto VISÍVEL
+  // (os marcadores ==destaque== não ocupam espaço), e só a partir do ponto em que ele de fato quebra.
+  const tituloLen = String(slide.title || "").replace(/==/g, "").length;
+  return blocos + extras * 1.4 + (quadrado ? 1.6 : 0) + (tituloLen > 34 ? 0.8 : 0);
+}
+// Devolve v(folgado, compacto, mínimo): escolhe o valor conforme o nível de aperto.
+function cede(carga, corte1, corte2) {
+  const apertado = carga >= corte1;
+  const muito = carga >= corte2;
+  const v = (folgado, compacto, minimo) => (muito ? (minimo == null ? compacto : minimo) : apertado ? compacto : folgado);
+  v.apertado = apertado;
+  v.muito = muito;
+  return v;
+}
+// Rótulo do topo e pílula de chamada só existem quando o arquétipo vira peça única — e juntos custam
+// os ~30px por lado que empurravam a arte para cima da margem segura. Cedem junto com o resto.
+function cssExtrasApertados(v) {
+  return v.apertado
+    ? ".eyebrow { font-size:" + v(30, 27, 24) + "px; margin-bottom:" + v(26, 16, 10) + "px; }"
+      + ".ac-cta { margin-top:" + v(44, 32, 26) + "px; font-size:" + v(36, 34, 32) + "px; padding:" + v(26, 21, 18) + "px 44px; }"
+    : "";
+}
 function slideStatGrid(slide, ctx) {
   const stats = (Array.isArray(slide.stats) ? slide.stats : []).slice(0, 4);
   // Sem números: NÃO renderiza uma grade vazia (o slide ficava só com o título). Cai no layout
   // de texto p/ mostrar o conteúdo — o usuário pode escolher esse layout sem quebrar a peça.
   if (!stats.length) return slideText(slide, ctx);
   const cells = stats.map((s) => `<div class="stat"><div class="stat-v">${highlightHeadline(String(s.value == null ? "" : s.value))}</div><div class="stat-l">${esc(s.label || "")}</div></div>`).join("");
-  const css = `.s-title.sm { font-size:60px; margin-bottom:46px; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:28px; }
-    .stat { background:${PALETTE.navy}; border:2px solid ${PALETTE.blue}55; border-radius:28px; padding:44px 40px; }
-    .stat-v { font-weight:900; font-size:94px; line-height:1; color:#FFFFFF; letter-spacing:-2px; }
+  // Rótulo longo vira duas linhas dentro do cartão: pesa quase como um número a mais.
+  const longos = stats.filter((s) => String((s && s.label) || "").length > 22).length;
+  const v = cede(cargaSlide(slide, ctx, stats.length + longos * 0.5, false), 9, 11.5);
+  const css = `.s-title.sm { font-size:${v(60, 54, 48)}px; margin-bottom:${v(46, 32, 22)}px; line-height:1.04; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:${v(28, 22, 18)}px; }
+    .stat { background:${PALETTE.navy}; border:2px solid ${PALETTE.blue}55; border-radius:28px; padding:${v(44, 34, 26)}px ${v(40, 34, 30)}px; }
+    .stat-v { font-weight:900; font-size:${v(94, 80, 68)}px; line-height:1; color:#FFFFFF; letter-spacing:-2px; }
     .stat-v .accent { color:${PALETTE.sky}; }
-    .stat-l { margin-top:16px; font-size:33px; line-height:1.24; color:${PALETTE.mist}; }`;
+    .stat-l { margin-top:${v(16, 12, 9)}px; font-size:${v(33, 30, 27)}px; line-height:1.24; color:${PALETTE.mist}; }` + CSS_PILULA_CTA + cssExtrasApertados(v);
   const inner = `${carTop(ctx)}
   <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
     <div class="grid">${cells}</div>
+    ${pilulaCta(ctx)}
   </div>
   ${carFooter(ctx)}`;
   return carDoc(ctx, css, inner);
@@ -1801,17 +1848,22 @@ function slideList(slide, ctx) {
   // Sem itens: NÃO renderiza uma lista vazia. Cai no texto p/ mostrar o conteúdo do slide.
   if (!items.length) return slideText(slide, ctx);
   const lis = items.map((t) => `<div class="li"><span class="mk">&#9656;</span><span class="lt">${esc(t)}</span></div>`).join("");
-  const css = `.s-title.sm { font-size:64px; margin-bottom:42px; }
-    .list { display:flex; flex-direction:column; gap:28px; }
-    .li { display:flex; align-items:flex-start; gap:24px; }
-    .mk { color:${PALETTE.sky}; font-size:44px; line-height:1.1; font-weight:900; flex:0 0 auto; }
-    .lt { font-size:44px; line-height:1.28; color:${PALETTE.cloud}; font-weight:600; }
-    .s-body { margin-top:40px; font-size:36px; line-height:1.3; color:${PALETTE.mist}; }`;
+  // Item longo quebra em duas linhas: pesa quase como um item a mais.
+  const longos = items.filter((t) => String(t || "").length > 34).length;
+  const v = cede(cargaSlide(slide, ctx, items.length + longos * 0.5, true), 10.5, 13.5);
+  const css = `.s-title.sm { font-size:${v(64, 52, 48)}px; margin-bottom:${v(42, 24, 18)}px; line-height:1.04; }
+    .list { display:flex; flex-direction:column; gap:${v(28, 15, 12)}px; }
+    .li { display:flex; align-items:flex-start; gap:${v(24, 20, 18)}px; }
+    .mk { color:${PALETTE.sky}; font-size:${v(44, 35, 32)}px; line-height:1.1; font-weight:900; flex:0 0 auto; }
+    .lt { font-size:${v(44, 34, 30)}px; line-height:1.28; color:${PALETTE.cloud}; font-weight:600; }
+    .s-body { margin-top:${v(40, 22, 16)}px; font-size:${v(36, 29, 27)}px; line-height:1.3; color:${PALETTE.mist}; }` + CSS_PILULA_CTA + cssExtrasApertados(v);
   const inner = `${carTop(ctx)}
   <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
     <div class="list">${lis}</div>
     ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
   </div>
   ${carFooter(ctx)}`;
   return carDoc(ctx, css, inner);
@@ -1935,9 +1987,9 @@ function slideFlow(slide, ctx) {
       + ".fr-l { font-size:28px; font-weight:800; color:#FFFFFF; line-height:1.15; text-transform:uppercase; letter-spacing:0.4px; }"
       + ".fr-s { font-size:25px; color:" + PALETTE.mist + "; line-height:1.22; }"
       + ".fr-arrow { align-self:flex-start; margin-top:44px; font-size:54px; line-height:1; color:" + line + "; font-weight:700; flex:0 0 auto; }"
-      + cssNota;
+      + cssNota + CSS_PILULA_CTA;
     const inner = carTop(ctx) + '<div class="mid">' + head
-      + '<div class="frow">' + cells + "</div>" + note + "</div>" + carFooter(ctx);
+        + '<div class="frow">' + cells + "</div>" + note + pilulaCta(ctx) + "</div>" + carFooter(ctx);
     return carDoc(ctx, css, inner);
   }
 
@@ -1957,25 +2009,32 @@ function slideFlow(slide, ctx) {
   // altura fixa e nada aqui encolhia. Em vez de cortar conteúdo em silêncio, o espaçamento e o
   // corpo da letra cedem um pouco. Medido: no pior caso (4 etapas longas + apoio + nota) isso é a
   // diferença entre estourar 190px e caber.
-  const extras = (slide.body ? 1 : 0) + (slide.note ? 1 : 0);
-  const apertado = nodes.length * 1.0 + extras * 1.4 >= 5.4;
-  const v = (folgado, compacto) => (apertado ? compacto : folgado);
-  const css = ".s-title.sm { font-size:" + v(58, 52) + "px; margin-bottom:" + v(40, 26) + "px; line-height:1.04; }"
-    + ".flow { display:flex; flex-direction:column; align-items:stretch; gap:" + v(16, 10) + "px; }"
-    + ".arrow { text-align:center; font-size:" + v(50, 40) + "px; line-height:0.6; color:" + line + "; font-weight:700; }"
-    + ".node { display:flex; align-items:center; gap:26px; background:" + PALETTE.navy + "; border:2px solid " + PALETTE.blue + "40; border-radius:26px; padding:" + v(34, 24) + "px 40px; }"
+  // A pílula de chamada conta como bloco (ela só existe quando o fluxo vira uma PEÇA ÚNICA), e o
+  // formato quadrado conta dobrado: 1080x1080 é 270px mais baixo que o 1080x1350 para o qual estes
+  // arquétipos foram desenhados. Sem isso, o fluxo com 4 etapas mais chamada estourava 70px no
+  // quadrado — medido.
+  // Dois níveis, não um: no quadrado com 4 etapas e chamada, o primeiro nível economiza ~170px e
+  // ainda faltavam 70. O segundo aperta mais um pouco em vez de cortar etapa do fluxo.
+  const v = cede(cargaSlide(slide, ctx, nodes.length, true), 5.4, 7.0);
+  const apertado = v.apertado;
+  const css = ".s-title.sm { font-size:" + v(58, 52, 46) + "px; margin-bottom:" + v(40, 26, 18) + "px; line-height:1.04; }"
+    + ".flow { display:flex; flex-direction:column; align-items:stretch; gap:" + v(16, 10, 8) + "px; }"
+    + ".arrow { text-align:center; font-size:" + v(50, 40, 32) + "px; line-height:0.6; color:" + line + "; font-weight:700; }"
+    + ".node { display:flex; align-items:center; gap:26px; background:" + PALETTE.navy + "; border:2px solid " + PALETTE.blue + "40; border-radius:26px; padding:" + v(34, 24, 16) + "px 40px; }"
     + ".node-hi { background:" + (accent ? PALETTE.blue + "26" : PALETTE.navy) + "; border-color:" + (accent ? PALETTE.blue : PALETTE.mist) + "; }"
-    + ".node-ic { flex:0 0 auto; width:" + v(62, 54) + "px; height:" + v(62, 54) + "px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
-    + ".node-ic svg { width:" + v(62, 54) + "px; height:" + v(62, 54) + "px; }"
-    + ".node-l { font-size:" + v(42, 37) + "px; font-weight:700; color:#FFFFFF; line-height:1.12; }"
-    + ".node-s { margin-top:" + v(8, 5) + "px; font-size:" + v(30, 27) + "px; color:" + PALETTE.mist + "; line-height:1.24; }"
+    + ".node-ic { flex:0 0 auto; width:" + v(62, 54, 46) + "px; height:" + v(62, 54, 46) + "px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
+    + ".node-ic svg { width:" + v(62, 54, 46) + "px; height:" + v(62, 54, 46) + "px; }"
+    + ".node-l { font-size:" + v(42, 37, 33) + "px; font-weight:700; color:#FFFFFF; line-height:1.12; }"
+    + ".node-s { margin-top:" + v(8, 5, 4) + "px; font-size:" + v(30, 27, 25) + "px; color:" + PALETTE.mist + "; line-height:1.24; }"
     + ".flow-note { margin-top:" + v(38, 22) + "px; font-size:" + v(34, 30) + "px; line-height:1.32; color:" + PALETTE.mist + "; }"
     + cssNota
-    + (apertado ? ".fnote { margin-top:30px; padding:24px 30px; } .fnote span:last-child { font-size:29px; }" : "");
+    + (apertado ? ".fnote { margin-top:30px; padding:24px 30px; } .fnote span:last-child { font-size:29px; }" : "")
+    + CSS_PILULA_CTA
+    + cssExtrasApertados(v);   // depois da pílula de propósito: sobrescreve
   const inner = carTop(ctx) + '<div class="mid">' + head
     + '<div class="flow">' + nodeHtml + "</div>"
     + (slide.body ? '<div class="flow-note">' + esc(slide.body) + "</div>" : "")
-    + note + "</div>" + carFooter(ctx);
+    + note + pilulaCta(ctx) + "</div>" + carFooter(ctx);
   return carDoc(ctx, css, inner);
 }
 const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow };
@@ -1999,17 +2058,57 @@ function slideArchetype(slide, i, total) {
 }
 
 // ---- Renders por tipo -----------------------------------------------------
+// Um dado estruturado (números, itens ou etapas) transforma a peça: medido no formato publicável,
+// a grade de números preenche 30% da arte e o fluxo com ícones 33%, contra 7,3% do editorial. Esses
+// desenhos existem, estão testados e até hoje SÓ o carrossel os alcançava — a peça de Imagem ia
+// direto para os quatro templates de sempre. O gatilho é o DADO, não uma preferência: peça sem
+// números/itens/etapas segue exatamente como era, e peça antiga não muda de cara sozinha.
+// Dos 6 arquétipos de slide, só estes 3 fazem sentido como PEÇA ÚNICA. "cover", "text" e "cta"
+// pressupõem vizinhos (capa de quê? fecho de quê?) e já têm equivalente nos 4 templates de sempre.
+const ARQ_PECA = ["stat_grid", "list", "flow"];
+function arquetipoPorDado(concept) {
+  if (!concept || typeof concept !== "object") return null;
+  const tem = (v) => Array.isArray(v) && v.filter((x) => x && (typeof x === "string" ? x.trim() : (x.label || x.value || x.text))).length >= 2;
+  if (tem(concept.flow)) return "flow";
+  if (tem(concept.stats)) return "stat_grid";
+  if (tem(concept.items)) return "list";
+  return null;
+}
 async function renderImage(folder, opts) {
   const loc = requireActive(folder);
   const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
-  // A peça tem foto? Então "photo" é o único template que a desenha — os outros três nem recebem
-  // o parâmetro `image` na assinatura e descartariam a imagem em silêncio.
-  const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!((opts && opts.image) || concept.image) });
   const logoV = pickLogo(loc, opts && opts.logo);
   const wmV = pickWatermark(loc, opts && opts.watermark);
   const htmlPath = path.join(loc.path, "ads", "ad.html");
   const outPng = path.join(loc.path, "ads", "ad.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+
+  // Três travas, nesta ordem — a mesma invariante do pickTemplate ("re-renderizar nunca muda a cara
+  // da peça"): (1) a escolha da pessoa na tela sempre manda e sai por aqui; (2) se a peça já foi
+  // desenhada num arquétipo, ela CONTINUA nele mesmo que o texto mude; (3) peça já renderizada num
+  // dos 4 templates de sempre NÃO vira grade de números só porque alguém acrescentou dados depois.
+  const pedido = opts && opts.template;
+  const gravado = readRenderPref(loc);
+  const ehTpl = (id) => !!id && Object.prototype.hasOwnProperty.call(TEMPLATES, id);
+  const ehArq = (id) => !!id && Object.prototype.hasOwnProperty.call(SLIDE_ARCHETYPES, id) && ARQ_PECA.indexOf(id) >= 0;
+  const arq = ehTpl(pedido) ? null
+    : (ehArq(pedido) ? pedido
+      : (ehArq(gravado) ? gravado
+        : (gravado ? null : arquetipoPorDado(concept))));
+  if (arq) {
+    const htmlArq = SLIDE_ARCHETYPES[arq](
+      Object.assign({}, concept, { title: concept.headline || concept.title || "", body: concept.subtext || concept.body || "" }),
+      { width: 1080, height: 1080, n: 1, total: 1, cta: concept.cta || "", logo: logoV, wmStyle: wmV, image: concept.image || (opts && opts.image) || "" }
+    );
+    fs.writeFileSync(htmlPath, htmlArq, "utf8");
+    const rr = await htmlToPng(htmlPath, outPng, 1080, 1080, RENDER_SCALE);
+    writeRenderPref(loc, { template: arq });   // grava na PRIMEIRA vez, como o pickTemplate
+    return Object.assign(rr, { rel: "ads/ad.png", template: arq });
+  }
+
+  // A peça tem foto? Então "photo" é o único template que a desenha — os outros três nem recebem
+  // o parâmetro `image` na assinatura e descartariam a imagem em silêncio.
+  const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!((opts && opts.image) || concept.image) });
   const html = tpl.build({
     width: 1080, height: 1080,
     eyebrow: concept.eyebrow || "",

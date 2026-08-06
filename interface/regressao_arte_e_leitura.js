@@ -175,6 +175,96 @@ function briefingLongo() {
     checa(m.est <= 0, nome + ": cabe no cartão", m.est > 0 ? "estoura " + m.est + "px" : "margem " + m.esq + "px");
     if (nome === "fluxo SEM etapas") checa(!m.temFlow, "  e vira texto em vez de buraco");
   }
+  secao("9. Peça de Imagem com dado estruturado (arquétipos)");
+  // Até aqui, a peça de Imagem só usava os 4 templates de sempre — texto solto sobre o fundo, 7,3%
+  // da arte com tinta. Quando o conteúdo É número, etapa ou enumeração, ela passa a usar os desenhos
+  // que só o carrossel alcançava (grade 30% · fluxo 33% · lista). O gatilho é o DADO, não uma
+  // preferência: sem números/itens/etapas nada muda, e peça já desenhada não troca de cara sozinha.
+  const pg2 = await b.newPage({ viewport: { width: 1080, height: 1080 }, deviceScaleFactor: 1 });
+  const BASE_ARQ = { eyebrow: "GESTÃO FINANCEIRA", headline: "A margem real da sua ==operação==",
+    subtext: "Quatro números definem quanto você ganha por venda.", cta: "Conhecer a plataforma" };
+  const pecaArq = (extra, base) => {
+    const n = "regarq" + Math.random().toString(36).slice(2, 8) + "_" + DATA;
+    peca(n, { "ads/concept.json": Object.assign({}, BASE_ARQ, base || {}, extra) });
+    return n;
+  };
+  const mede = async (n) => {
+    await pg2.goto("file:///" + path.join(RAIZ, n, "ads", "ad.html").split(path.sep).join("/"), { waitUntil: "load" });
+    await pg2.waitForTimeout(90);
+    return pg2.evaluate(() => {
+      const c = document.querySelector(".card").getBoundingClientRect();
+      let est = 0, menor = 9999;
+      document.querySelectorAll(".stat,.li,.node,.s-title,.s-body,.ac-cta,.flow-note,.eyebrow,.headline,.subtext,.cta").forEach((el) => {
+        const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return;
+        est = Math.max(est, Math.round(r.bottom - c.bottom), Math.round(r.right - c.right));
+        menor = Math.min(menor, Math.round(c.bottom - r.bottom), Math.round(r.top - c.top));
+      });
+      return { est, menor, cta: (document.querySelector(".ac-cta, .cta") || {}).textContent || "" };
+    });
+  };
+  const NUMS = [{ value: "95%", label: "aprovação no cartão" }, { value: "D+10", label: "PIX na conta" },
+    { value: "D+30", label: "cartão na conta" }, { value: "R$ 1,99", label: "por transação" }];
+  const ETAPAS = [{ label: "VENDA", sub: "checkout aprovado", icon: "cart" }, { label: "GATEWAY", sub: "multi-adquirência", icon: "shield" },
+    { label: "PRAZO", sub: "PIX em D+10", icon: "clock" }, { label: "LÍQUIDO", sub: "margem real", icon: "wallet", mark: true }];
+  const ITENS = ["Checkout otimizado com PIX e cartão", "Área de membros integrada", "Gestão de alunos centralizada", "Coprodução automática"];
+  const ROTEIA = [
+    ["sem dado continua nos templates de sempre", {}, null],
+    ["números viram grade", { stats: NUMS }, "stat_grid"],
+    ["etapas viram fluxo", { flow: ETAPAS }, "flow"],
+    ["itens viram lista", { items: ITENS }, "list"],
+  ];
+  for (const [oq, extra, esperado] of ROTEIA) {
+    const n = pecaArq(extra);
+    const r = await render.render(n, "image", {});
+    if (esperado) checa(r.template === esperado, oq, r.template);
+    else checa(["editorial", "bold", "split", "photo"].indexOf(r.template) >= 0, oq, r.template);
+    const m = await mede(n);
+    // A régua é a margem segura da marca (88-104px): conteúdo dentro do cartão mas em cima do
+    // padding é justamente o que o Instagram corta na borda.
+    checa(m.est <= 0 && m.menor >= 88, "  respeita a margem segura (>=88px)", m.est > 0 ? "estoura " + m.est + "px" : "margem " + m.menor + "px");
+    checa(/Conhecer a plataforma/.test(m.cta), "  a chamada continua na arte");
+  }
+  // Pior caso de conteúdo: estes desenhos nasceram para o slide 1080x1350 SEM rótulo e SEM chamada.
+  // Como peça única perdem 270px de altura e ganham dois blocos — sem a compactação, 6 itens longos
+  // estouravam 278px e 4 números de rótulo longo deixavam 28px de margem.
+  const PIOR_ARQ = [
+    ["4 números de rótulo longo", { stats: [{ value: "95%", label: "de aprovação no cartão de crédito" }, { value: "D+10", label: "para o PIX cair na sua conta" },
+      { value: "D+30", label: "para o cartão cair na sua conta" }, { value: "R$ 1,99", label: "fixo por transação aprovada" }] }],
+    ["6 itens longos", { items: ["Checkout otimizado com PIX, cartão e boleto", "Área de membros imersiva e integrada", "Gestão de alunos centralizada num só lugar",
+      "Coprodução automática sem planilha", "Gestor de conta dedicado desde o primeiro dia", "Redundância inteligente entre adquirentes"] }],
+    ["4 etapas longas com apoio", { flow: [{ label: "VENDA APROVADA", sub: "checkout com PIX, cartão e boleto", icon: "cart" },
+      { label: "GATEWAY 4SELET", sub: "multi-adquirência com redundância", icon: "shield" },
+      { label: "PRAZO DE REPASSE", sub: "PIX em D+10 e cartão em D+30", icon: "clock" },
+      { label: "MARGEM LÍQUIDA", sub: "o que sobra de verdade por venda", icon: "wallet", mark: true }] }],
+  ];
+  for (const [oq, extra] of PIOR_ARQ) {
+    const n = pecaArq(extra, { subtext: "Quatro números definem quanto você realmente ganha em cada venda da sua operação.", cta: "Conhecer a plataforma 4Selet" });
+    const r = await render.render(n, "image", {});
+    const m = await mede(n);
+    checa(m.est <= 0 && m.menor >= 88, "pior caso: " + oq + " (" + r.template + ")", m.est > 0 ? "estoura " + m.est + "px" : "margem " + m.menor + "px");
+  }
+  // A cara da peça não pode mudar sozinha — mesma invariante do pickTemplate.
+  {
+    const n = pecaArq({ stats: NUMS.slice(0, 2) });
+    const a = await render.render(n, "image", {});
+    const bb = await render.render(n, "image", {});
+    checa(a.template === "stat_grid" && bb.template === "stat_grid", "re-renderizar mantém a grade", a.template + " -> " + bb.template);
+  }
+  {
+    const n = pecaArq({});
+    const a = await render.render(n, "image", {});
+    const cp = path.join(RAIZ, n, "ads", "concept.json");
+    fs.writeFileSync(cp, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(cp, "utf8")), { stats: NUMS }), null, 1));
+    const bb = await render.render(n, "image", {});
+    checa(a.template === bb.template, "acrescentar números depois NÃO troca a cara da peça", a.template + " -> " + bb.template);
+  }
+  {
+    const n = pecaArq({ stats: NUMS });
+    await render.render(n, "image", {});
+    const a = await render.render(n, "image", { template: "bold" });
+    const bb = await render.render(n, "image", {});
+    checa(a.template === "bold" && bb.template === "bold", "escolher estilo à mão vence o dado e fica", a.template + " -> " + bb.template);
+  }
   await b.close();
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
