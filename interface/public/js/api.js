@@ -3,7 +3,20 @@ const API = (() => {
   async function req(method, url, body) {
     const opt = { method, headers: {} };
     if (body !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
-    const r = await fetch(url, opt);
+    let r;
+    try {
+      r = await fetch(url, opt);
+    } catch (e) {
+      // Falha de REDE: a requisição nem chegou a ter resposta. O fetch estoura aqui, ANTES de
+      // qualquer tratamento abaixo, e a mensagem dele é "Failed to fetch" — inglês de biblioteca,
+      // que ia direto para a tela do usuário (foi o que apareceu no Assistente). Acontece quando o
+      // painel foi reiniciado no meio do pedido, quando a internet cai, ou quando a aba ficou aberta
+      // desde antes de um deploy. Como TODA chamada do painel passa por aqui, traduzir neste ponto
+      // resolve a tela inteira de uma vez.
+      const err = new Error("Não consegui falar com o painel agora. Verifique a conexão e tente de novo — se você deixou esta aba aberta por muito tempo, recarregue a página.");
+      err.status = 0; err.code = "E_REDE"; err.data = null; err.original = (e && e.message) || String(e);
+      throw err;
+    }
     const ct = r.headers.get("content-type") || "";
     let data;
     if (ct.includes("application/json")) data = await r.json();
