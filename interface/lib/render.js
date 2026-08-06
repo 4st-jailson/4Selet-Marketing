@@ -177,11 +177,29 @@ const DEFAULT_FOOTER = ""; // sem rodapé automático (Hugo: tirar "4Selet" de t
 // '<span class="accent">0%</span>') inflava a contagem e derrubava a fonte do
 // número — quebrando o efeito grande dos headlines curtos do template Destaque.
 function headlineLen(html) { return String(html || "").replace(/<[^>]+>/g, "").length; }
+// A escada de tamanho da headline reagia SÓ ao tamanho dela, nunca ao total empilhado no cartão.
+// Como o miolo usa justify-content:space-between sem altura mínima, cada bloco a mais empurra o
+// rodapé para fora: medido nos 10 anúncios reais do acervo, o Destaque com rótulo E selo cortava a
+// arte em 55px (metade da pílula do CTA ficava fora), e o Editorial só com rótulo caía de 83px de
+// margem para 10px em 5 das 10 peças. Aqui a headline cede espaço na medida do que mais existe na
+// peça — quanto mais blocos, menor o passo. Sem blocos extras o fator é 1 e nada muda.
+function fatorPilha(p) {
+  p = p || {};
+  const texto = (v) => String(v || "").replace(/<[^>]+>/g, "").trim();
+  let peso = 0;
+  if (texto(p.eyebrow)) peso += 1;
+  if (texto(p.badge)) peso += 1;
+  if (texto(p.cta)) peso += 1;
+  const sub = texto(p.subtext).length;
+  if (sub) peso += sub > 110 ? 2 : 1;
+  // 0 blocos -> 1,00 · 1 -> 0,94 · 2 -> 0,88 · 3 -> 0,82 · 4+ -> 0,78 (piso)
+  return Math.max(0.78, 1 - peso * 0.06);
+}
 
 // 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
 function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
   const n = headlineLen(headline);
-  const headlineSize = n > 36 ? 100 : n > 22 ? 120 : 168;
+  const headlineSize = Math.round((n > 36 ? 100 : n > 22 ? 120 : 168) * fatorPilha({ eyebrow, subtext, cta, badge }));
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
@@ -235,7 +253,7 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
 // Pensado p/ headlines curtas number-forward (ex.: "0%", "95%", "Os 4 numeros").
 function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
   const n = headlineLen(headline);
-  const headlineSize = n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196;
+  const headlineSize = Math.round((n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196) * fatorPilha({ eyebrow, subtext, cta, badge }));
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
@@ -293,7 +311,11 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
                               : (n > 52 ? 84 : n > 36 ? 96 : n > 22 ? 112 : 150);
   const subSize = square ? 34 : 40;
   const topFlex = square ? 22 : 26;
-  const botPad = square ? 76 : 104;
+  // Era 76 — apertado de propósito, porque sem a headline ceder espaço o CTA era cortado no
+  // formato quadrado. Com fatorPilha() encolhendo o título conforme o que mais existe na peça,
+  // dá para voltar para dentro da margem segura da marca (88-104): medido nos 10 anúncios reais
+  // com rótulo E selo, 92px não corta nenhum e tira todos os 7 que estavam abaixo do piso.
+  const botPad = square ? 92 : 104;
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${FONT_LINK}
 <style>
