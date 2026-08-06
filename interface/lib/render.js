@@ -1860,7 +1860,12 @@ function flowIcon(name) { return FLOW_ICONS[String(name || "").toLowerCase()] ||
 // linha + setas + rotulo abaixo, espelha a referencia) x padrao vertical (cartoes).
 // Cada no: { label, sub?, icon?, mark? }. slide.note -> caixa de callout ao pe.
 function slideFlow(slide, ctx) {
-  const nodes = (Array.isArray(slide.flow) ? slide.flow : []).slice(0, 4);
+  const nodes = (Array.isArray(slide.flow) ? slide.flow : []).slice(0, 4)
+    .filter((nd) => String((typeof nd === "string" ? nd : (nd && nd.label)) || "").trim());
+  // Sem etapas: NÃO desenha um diagrama vazio — saía um buraco no meio do slide, com o título em
+  // cima e nada embaixo. Cai no texto, igual ao que stat_grid e list já faziam; o fluxo era o único
+  // arquétipo sem essa rede, e é justamente o que a pessoa pode escolher no seletor sem ter os dados.
+  if (!nodes.length) return slideText(slide, ctx);
   const accent = String(slide.tone || "").toLowerCase() === "accent";
   const line = accent ? PALETTE.blue : PALETTE.mist;
   const emph = accent ? PALETTE.sky : PALETTE.mist;
@@ -1870,6 +1875,15 @@ function slideFlow(slide, ctx) {
   const note = slide.note
     ? '<div class="fnote"><span class="fnote-ic">' + toneIcon + "</span><span>" + esc(slide.note) + "</span></div>"
     : "";
+  // A nota é emitida nos DOIS layouts (vertical e horizontal), mas o CSS dela só existia no
+  // horizontal. No vertical o ícone é um SVG sem width/height, então sem regra ele esticava para a
+  // largura toda: medido, a nota virava um bloco de 908x930px e empurrava o slide 661px para fora
+  // do cartão — com 2 nós já estourava 292px. Agora a regra é uma só, usada pelos dois.
+  const cssNota = ".fnote { margin-top:66px; display:flex; gap:22px; align-items:center; background:" + PALETTE.navy
+    + "; border:2px solid " + (accent ? PALETTE.blue : PALETTE.mist) + "40; border-left-width:8px; border-radius:20px; padding:32px 36px; }"
+    + ".fnote-ic { flex:0 0 auto; width:50px; height:50px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
+    + ".fnote-ic svg { width:50px; height:50px; }"
+    + ".fnote span:last-child { font-size:33px; line-height:1.3; color:" + PALETTE.cloud + "; }";
 
   if (String(slide.orient || "").toLowerCase() === "row") {
     const cells = nodes.map((nd, i) => {
@@ -1891,10 +1905,7 @@ function slideFlow(slide, ctx) {
       + ".fr-l { font-size:28px; font-weight:800; color:#FFFFFF; line-height:1.15; text-transform:uppercase; letter-spacing:0.4px; }"
       + ".fr-s { font-size:25px; color:" + PALETTE.mist + "; line-height:1.22; }"
       + ".fr-arrow { align-self:flex-start; margin-top:44px; font-size:54px; line-height:1; color:" + line + "; font-weight:700; flex:0 0 auto; }"
-      + ".fnote { margin-top:66px; display:flex; gap:22px; align-items:center; background:" + PALETTE.navy + "; border:2px solid " + (accent ? PALETTE.blue : PALETTE.mist) + "40; border-left-width:8px; border-radius:20px; padding:32px 36px; }"
-      + ".fnote-ic { flex:0 0 auto; width:50px; height:50px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
-      + ".fnote-ic svg { width:50px; height:50px; }"
-      + ".fnote span:last-child { font-size:33px; line-height:1.3; color:" + PALETTE.cloud + "; }";
+      + cssNota;
     const inner = carTop(ctx) + '<div class="mid">' + head
       + '<div class="frow">' + cells + "</div>" + note + "</div>" + carFooter(ctx);
     return carDoc(ctx, css, inner);
@@ -1912,16 +1923,25 @@ function slideFlow(slide, ctx) {
       + '<div class="node-tx"><div class="node-l">' + esc(label) + "</div>"
       + (sub ? '<div class="node-s">' + esc(sub) + "</div>" : "") + "</div></div>";
   }).join("");
-  const css = ".s-title.sm { font-size:58px; margin-bottom:40px; line-height:1.04; }"
-    + ".flow { display:flex; flex-direction:column; align-items:stretch; gap:16px; }"
-    + ".arrow { text-align:center; font-size:50px; line-height:0.6; color:" + line + "; font-weight:700; }"
-    + ".node { display:flex; align-items:center; gap:26px; background:" + PALETTE.navy + "; border:2px solid " + PALETTE.blue + "40; border-radius:26px; padding:34px 40px; }"
+  // O slide fica APERTADO quando junta muitas etapas com texto de apoio e/ou nota — o cartão tem
+  // altura fixa e nada aqui encolhia. Em vez de cortar conteúdo em silêncio, o espaçamento e o
+  // corpo da letra cedem um pouco. Medido: no pior caso (4 etapas longas + apoio + nota) isso é a
+  // diferença entre estourar 190px e caber.
+  const extras = (slide.body ? 1 : 0) + (slide.note ? 1 : 0);
+  const apertado = nodes.length * 1.0 + extras * 1.4 >= 5.4;
+  const v = (folgado, compacto) => (apertado ? compacto : folgado);
+  const css = ".s-title.sm { font-size:" + v(58, 52) + "px; margin-bottom:" + v(40, 26) + "px; line-height:1.04; }"
+    + ".flow { display:flex; flex-direction:column; align-items:stretch; gap:" + v(16, 10) + "px; }"
+    + ".arrow { text-align:center; font-size:" + v(50, 40) + "px; line-height:0.6; color:" + line + "; font-weight:700; }"
+    + ".node { display:flex; align-items:center; gap:26px; background:" + PALETTE.navy + "; border:2px solid " + PALETTE.blue + "40; border-radius:26px; padding:" + v(34, 24) + "px 40px; }"
     + ".node-hi { background:" + (accent ? PALETTE.blue + "26" : PALETTE.navy) + "; border-color:" + (accent ? PALETTE.blue : PALETTE.mist) + "; }"
-    + ".node-ic { flex:0 0 auto; width:62px; height:62px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
-    + ".node-ic svg { width:62px; height:62px; }"
-    + ".node-l { font-size:42px; font-weight:700; color:#FFFFFF; line-height:1.12; }"
-    + ".node-s { margin-top:8px; font-size:30px; color:" + PALETTE.mist + "; line-height:1.24; }"
-    + ".flow-note { margin-top:38px; font-size:34px; line-height:1.32; color:" + PALETTE.mist + "; }";
+    + ".node-ic { flex:0 0 auto; width:" + v(62, 54) + "px; height:" + v(62, 54) + "px; color:" + emph + "; display:flex; align-items:center; justify-content:center; }"
+    + ".node-ic svg { width:" + v(62, 54) + "px; height:" + v(62, 54) + "px; }"
+    + ".node-l { font-size:" + v(42, 37) + "px; font-weight:700; color:#FFFFFF; line-height:1.12; }"
+    + ".node-s { margin-top:" + v(8, 5) + "px; font-size:" + v(30, 27) + "px; color:" + PALETTE.mist + "; line-height:1.24; }"
+    + ".flow-note { margin-top:" + v(38, 22) + "px; font-size:" + v(34, 30) + "px; line-height:1.32; color:" + PALETTE.mist + "; }"
+    + cssNota
+    + (apertado ? ".fnote { margin-top:30px; padding:24px 30px; } .fnote span:last-child { font-size:29px; }" : "");
   const inner = carTop(ctx) + '<div class="mid">' + head
     + '<div class="flow">' + nodeHtml + "</div>"
     + (slide.body ? '<div class="flow-note">' + esc(slide.body) + "</div>" : "")
