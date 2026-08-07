@@ -59,38 +59,64 @@ function toast(msg, type) {
 //   2. a chave impede um segundo disparo enquanto o primeiro não terminou;
 //   3. o `finally` devolve o botão em TODOS os caminhos de saída — sucesso, erro, retorno
 //      antecipado e modal cancelado —, que é onde remendo feito à mão costuma falhar.
-const EM_VOO = new Set();
+// REGRA DE OURO DA CHAVE: ela nomeia o ESTADO que vai ser escrito, não o botão que foi apertado.
+// "carrossel:<peça>", "publicar:<peça>", "convite:<usuário>". Quando dois controles diferentes
+// escrevem o mesmo estado, eles compartilham a chave DE PROPÓSITO — foi assim que apareceu o pior
+// caso da varredura: o ↻ de um slide travava só a si mesmo, e o ↻ do slide vizinho fotografava o
+// carrossel ANTES da resposta do primeiro chegar, depois reescrevia a árvore inteira por cima. O
+// slide regerado sumia da tela sozinho, sem aviso, com a chamada de IA já paga.
+const EM_VOO = new Map();
+const EM_VOO_IGNORADO = Symbol("em-voo-ignorado");   // deixa o chamador distinguir "não rodou" de "voltou vazio"
 function emVoo(chave, fn, opts) {
   opts = opts || {};
-  const btn = typeof opts.botao === "string" ? $(opts.botao) : (opts.botao || null);
+  const alvo = typeof opts.botao === "string" ? $(opts.botao) : (opts.botao || null);
   if (EM_VOO.has(chave)) {
     // Clicar de novo não é erro de quem clicou: é a tela que demorou a responder. Então explica,
-    // não repreende — e sacode o botão para a pessoa achar onde está o retorno.
+    // não repreende — e sacode o controle para a pessoa achar onde está o retorno.
     toast(opts.avisoRepetido || "Isso já está sendo processado. Aguarde o resultado aparecer.", "info");
-    if (btn) { btn.classList.remove("pulsa"); void btn.offsetWidth; btn.classList.add("pulsa"); }
-    return Promise.resolve(undefined);
+    if (alvo) { alvo.classList.remove("pulsa"); void alvo.offsetWidth; alvo.classList.add("pulsa"); }
+    return Promise.resolve(EM_VOO_IGNORADO);
   }
-  EM_VOO.add(chave);
+  EM_VOO.set(chave, Date.now());
+  // Tudo daqui até o `fn()` é SÍNCRONO: é o que garante que o retorno apareça na mesma volta do
+  // clique, antes de qualquer await. Era exatamente isso que faltava.
   let antes = null;
-  if (btn) {
-    antes = { html: btn.innerHTML, disabled: btn.disabled };
-    btn.disabled = true;
-    btn.setAttribute("aria-busy", "true");
-    if (opts.rotulo) btn.innerHTML = '<span class="spinner"></span> ' + esc(opts.rotulo);
+  if (alvo) {
+    antes = { html: alvo.innerHTML, disabled: alvo.disabled, aria: alvo.getAttribute("aria-disabled") };
+    alvo.setAttribute("aria-busy", "true");
+    // <button> tem `disabled`; <a> e <summary> não têm. Para esses vale o aria-disabled somado ao
+    // bloqueador de clique em captura logo abaixo — senão o navegador navega assim mesmo.
+    if ("disabled" in alvo) alvo.disabled = true; else alvo.setAttribute("aria-disabled", "true");
+    if (opts.rotulo) alvo.innerHTML = '<span class="spinner"></span> ' + esc(opts.rotulo);
   }
+  // `tela`: quando a espera é longa E existem outros controles que escrevem o MESMO estado,
+  // travar só o botão não basta. O overlay global tira a página inteira do caminho e diz o que
+  // está acontecendo. Ele tem contador de referência, então aninhar é seguro.
+  if (opts.tela) showBusy(opts.tela);
   const solta = () => {
     EM_VOO.delete(chave);
-    if (btn && antes) {
-      btn.disabled = antes.disabled;
-      btn.innerHTML = antes.html;
-      btn.removeAttribute("aria-busy");
-      btn.classList.remove("pulsa");
+    if (opts.tela) hideBusy();
+    if (alvo && antes) {
+      if ("disabled" in alvo) alvo.disabled = antes.disabled;
+      else if (antes.aria == null) alvo.removeAttribute("aria-disabled");
+      else alvo.setAttribute("aria-disabled", antes.aria);
+      alvo.innerHTML = antes.html;
+      alvo.removeAttribute("aria-busy");
+      alvo.classList.remove("pulsa");
     }
   };
+  // fn() pode estourar de forma SÍNCRONA (validação, elemento que sumiu do DOM). Sem este try a
+  // chave ficaria presa para sempre — o pior desfecho possível para uma trava.
   let p;
   try { p = Promise.resolve(fn()); } catch (e) { solta(); throw e; }
   return p.then((v) => { solta(); return v; }, (e) => { solta(); throw e; });
 }
+// Um ouvinte só, em CAPTURA: chega antes do handler do elemento e antes da navegação do link. É o
+// que permite usar o emVoo num <a download> e num <summary> de menu, que não aceitam `disabled`.
+document.addEventListener("click", (e) => {
+  const t = e.target && e.target.closest && e.target.closest('[aria-disabled="true"]');
+  if (t) { e.preventDefault(); e.stopPropagation(); }
+}, true);
 // Overlay GLOBAL de carregamento: escurece a tela + círculo no meio + frase curta do que ocorre.
 // Para os pontos que recarregam/salvam e demoram — evita deixar o usuário sem saber o que acontece.
 // Uso: showBusy("Gerando a arte…"); try {…} finally { hideBusy(); }
@@ -873,7 +899,10 @@ function renderCampaignForm(existing) {
   bindCheckPills(wrap);
   ligaConfirmacaoDeCor($("#c-palette"));   // sair da identidade pergunta antes
   $("#c-cancel").onclick = () => router();
-  $("#c-save").onclick = async () => {
+  // Sem trava, o segundo clique criava uma campanha DUPLICADA: o backend não deduplica por nome,
+  // ele só acrescenta sufixo (campaigns.js uniqueId/slugify), então saía "fim-de-ano" e
+  // "fim-de-ano-2". Entre o clique e a troca de rota não havia sinal nenhum na tela.
+  $("#c-save").onclick = (ev) => emVoo("campanha:" + (existing ? existing.id : "nova"), async () => {
     const name = $("#c-name").value.trim();
     $("#e-name").textContent = ""; $("#c-name").removeAttribute("aria-invalid");
     if (name.length < 3) { $("#c-name").classList.add("invalid"); $("#c-name").setAttribute("aria-invalid", "true"); $("#e-name").textContent = "Nome obrigatório (mín. 3 caracteres)."; return; }
@@ -892,7 +921,7 @@ function renderCampaignForm(existing) {
     } catch (e) {
       if (e.data && e.data.errors) e.data.errors.forEach((x) => toast(x, "error")); else toast(e.message, "error");
     }
-  };
+  }, { botao: ev.currentTarget, rotulo: "salvando…", avisoRepetido: "A campanha já está sendo salva." });
 }
 
 async function viewCampaignDetail(id) {
@@ -1255,7 +1284,7 @@ async function openCollection(id) {
     ${data.orphans ? '<p class="muted">Algumas peças desta coleção foram descartadas e não aparecem aqui. Se forem restauradas, voltam automaticamente. <button class="btn btn-xs" id="coll-prune">Limpar ' + plural(data.orphans, "referência órfã", "referências órfãs") + "</button></p>" : ""}
     <div id="coll-items-wrap">${itemsHtml}</div>`);
   $$("[data-lay]").forEach((b) => { b.onclick = () => { State.collLayout = b.dataset.lay; openCollection(id); }; });
-  $("#coll-add").onclick = () => addPiecesFlow(c);
+  $("#coll-add").onclick = (e) => emVoo("colecao-pecas:" + c.id, () => addPiecesFlow(c), { botao: e.currentTarget, rotulo: "abrindo…" });
   $("#coll-edit").onclick = () => editCollectionFlow(c);
   $("#coll-del").onclick = () => deleteCollectionFlow(c);
   if ($("#coll-prune")) $("#coll-prune").onclick = async () => {
@@ -3026,9 +3055,16 @@ async function wireUndo(folder, task) {
   box.innerHTML = '<div class="undo-head mt"><button class="btn btn-sm" id="btn-undo" title="Volta ao estado anterior ao último ajuste">&#8630; Desfazer último ajuste</button>'
     + '<button class="btn btn-sm btn-ghost" id="btn-history">Histórico (' + versions.length + ')</button></div>'
     + '<div class="ver-list" id="ver-list" hidden>' + rows + "</div>";
-  $("#btn-undo").onclick = () => doRestore(folder, file, versions[0].id, task);
+  // Chave da PEÇA e não do botão: "Desfazer" e cada linha do histórico escrevem o MESMO arquivo.
+  // Sem isso, mandar restaurar duas versões quase juntas faz a última resposta vencer, e a peça
+  // acaba num estado que ninguém escolheu. Era o único vizinho do refineTask sem trava nenhuma —
+  // e o botão volta a ficar clicável E FOCADO assim que o modal de confirmação fecha, então um
+  // Enter a mais já disparava a segunda restauração.
+  const restaurar = (btn, id) => emVoo("restaurar:" + folder, () => doRestore(folder, file, id, task),
+    { botao: btn, rotulo: "restaurando…", avisoRepetido: "Já estou restaurando uma versão desta peça." });
+  $("#btn-undo").onclick = (e) => restaurar(e.currentTarget, versions[0].id);
   $("#btn-history").onclick = () => { const l = $("#ver-list"); if (l) l.hidden = !l.hidden; };
-  $$("#ver-list [data-restore]").forEach((b) => { b.onclick = () => doRestore(folder, file, b.dataset.restore, task); });
+  $$("#ver-list [data-restore]").forEach((b) => { b.onclick = (e) => restaurar(e.currentTarget, b.dataset.restore); });
 }
 async function doRestore(folder, file, id, task) {
   if (!await uiConfirm("Restaurar esta versão? A versão atual fica guardada no histórico — dá para voltar depois.", { confirmText: "Restaurar" })) return;
@@ -3316,13 +3352,16 @@ async function viewTaskDetail(folder) {
       </div>
     </div>`);
   bindWorkflow(task);
-  if ($("#btn-tags")) $("#btn-tags").onclick = () => editTags(folder, task.tags || []);
+  // Estes três abrem o modal só DEPOIS de uma busca na biblioteca: até o modal nascer, o botão
+  // tem cara de morto e cada clique a mais empilha outra janela, construída sobre uma fotografia
+  // independente do MESMO dado. A trava cobre o fluxo inteiro a partir do clique.
+  if ($("#btn-tags")) $("#btn-tags").onclick = (e) => emVoo("tags:" + folder, () => editTags(folder, task.tags || []), { botao: e.currentTarget, rotulo: "abrindo…" });
   loadTaskCollections(folder);
   if ($("#btn-phone")) $("#btn-phone").onclick = () => openPhonePreview(task);
   if ($("#bd-open")) $("#bd-open").onclick = () => openCarouselBoard(folder, task);
   if ($("#mk-open")) $("#mk-open").onclick = () => openHtmlEditor(folder, task, $("#mk-open").dataset.rel);
   $$(".slide-regen").forEach((btn) => { btn.onclick = () => regenSlide(folder, task, parseInt(btn.dataset.n, 10)); });
-  if ($("#btn-add-coll")) $("#btn-add-coll").onclick = () => addToCollectionFlow(folder);
+  if ($("#btn-add-coll")) $("#btn-add-coll").onclick = (e) => emVoo("colecao-add:" + folder, () => addToCollectionFlow(folder), { botao: e.currentTarget, rotulo: "abrindo…" });
   if ($("#btn-refine")) { $("#btn-refine").onclick = () => refineTask(folder, task); wireRefineAttach(); }
   if (isImported) loadImportedCaption(folder);
   if ($("#btn-save-caption")) $("#btn-save-caption").onclick = () => saveImportedCaption(folder);
@@ -3383,7 +3422,7 @@ async function editTags(folder, current) {
     if (box) box.innerHTML = norm.length ? norm.map((tg) => '<span class="cc-tag">' + esc(tg) + "</span>").join("") : '<span class="muted">Sem tags ainda.</span>';
     if (State.task && State.task.folder === folder) State.task.tags = norm;
     const btn = $("#btn-tags");
-    if (btn) btn.onclick = () => editTags(folder, norm); // reabrir já com as tags novas
+    if (btn) btn.onclick = (e) => emVoo("tags:" + folder, () => editTags(folder, norm), { botao: e.currentTarget, rotulo: "abrindo…" }); // reabrir já com as tags novas
   } catch (e) { toast(e.message, "error"); }
 }
 
@@ -3427,7 +3466,14 @@ function bindWorkflow(task) {
   $$("#wf-actions [data-wf]").forEach((btn) => {
     btn.onclick = async () => {
       const wf = btn.dataset.wf;
-      if (wf === "publish") { openPublishModal(task); return; }
+      // "Publicar ou agendar" era o único deste bloco que saía por `return` ANTES do busy() logo
+      // abaixo — e abrir esse modal custa 2 a 3 idas ao servidor (estado da publicação + legenda),
+      // com a tela absolutamente parada. Dois cliques abriam DOIS modais de publicação empilhados,
+      // cada um com a sua própria trava interna. No botão mais consequente do painel.
+      if (wf === "publish") {
+        return emVoo("publicar:" + task.folder, () => openPublishModal(task),
+          { botao: btn, rotulo: "abrindo…", avisoRepetido: "A janela de publicação já está abrindo." });
+      }
       const orig = btn.innerHTML;
       const busy = () => { $$("#wf-actions [data-wf]").forEach((b) => (b.disabled = true)); btn.innerHTML = '<span class="spinner"></span> processando…'; };
       try {
@@ -5361,7 +5407,16 @@ function bindStructuredEditor() {
     } else if (ctl) {
       e.preventDefault();
       const item = ctl.closest(".se-item"); const list = item.parentElement; const act = ctl.dataset.se;
-      if (act === "regen") { regenSlideInCreation(ed, item, ctl); return; } // regerar slide (assíncrono) — não passa pelo renumber
+      // Regerar slide (assíncrono) — não passa pelo renumber. A chave é da PEÇA e não do slide de
+      // propósito: a trava antiga era só do botão clicado, então o ↻ do slide vizinho continuava
+      // livre, fotografava o carrossel antes da primeira resposta chegar e depois reescrevia a
+      // árvore inteira por cima. O slide já regerado sumia da tela sozinho, sem aviso, com a
+      // chamada de IA paga. `tela` acende o overlay porque "Salvar peça" também escreve isto.
+      if (act === "regen") {
+        emVoo("carrossel-criacao", () => regenSlideInCreation(ed, item, ctl),
+          { botao: ctl, tela: "Regerando o slide…", avisoRepetido: "Já estou regerando um slide desta peça. Aguarde este terminar." });
+        return;
+      }
       if (act === "del") { if (list.children.length > 1) item.remove(); }
       else if (act === "up") { const prev = item.previousElementSibling; if (prev) list.insertBefore(item, prev); }
       else if (act === "down") { const next = item.nextElementSibling; if (next) list.insertBefore(next, item); }
@@ -5403,13 +5458,19 @@ async function regenSlideInCreation(ed, item, ctl) {
   try {
     const res = await API.regenerateSlideMem({ carousel: parsed, index: index, instruction: (r.instruction || "").trim() || undefined, provider: LAST_GEN.req.provider, campaign_id: LAST_GEN.req.campaign_id, pillar: LAST_GEN.req.pillar });
     if (!res || !res.slide) throw new Error("a IA não devolveu o slide");
-    parsed.slides[index] = res.slide;
+    // Relê o carrossel DEPOIS da resposta e funde só o slide regerado. A fotografia tirada lá em
+    // cima pode não valer mais, e reescrever a árvore inteira a partir dela é o que fazia um slide
+    // já regerado voltar sozinho ao texto antigo. A trava acima evita a corrida; isto evita o
+    // estrago mesmo que algo escape dela.
+    const atual = structToParsed();
+    const alvo = (atual && Array.isArray(atual.slides) && atual.slides.length === parsed.slides.length) ? atual : parsed;
+    alvo.slides[index] = res.slide;
     // re-renderiza os cards a partir do carrossel já com o slide novo (sem o toast de "JSON aplicado")
     const host = document.querySelector(".struct-ed");
-    const html = structuredEditor("instagram_carousel", parsed);
+    const html = structuredEditor("instagram_carousel", alvo);
     if (host && html) { host.outerHTML = html; bindStructuredEditor(); }
     else { ctl.disabled = false; ctl.innerHTML = orig; } // não re-renderizou: destrava o próprio botão
-    if (LAST_GEN.res) LAST_GEN.res.parsed = parsed;
+    if (LAST_GEN.res) LAST_GEN.res.parsed = alvo;
     const warns = !!(res.governance && res.governance.warnings && res.governance.warnings.length);
     if (res.simulated) toast("Slide " + (index + 1) + " regerado (simulado — configure a IA em Configurações)", "warn");
     else if (warns) toast("Slide " + (index + 1) + " regerado — com avisos de marca, confira.", "warn");
@@ -5793,7 +5854,13 @@ async function viewSettings() {
       <p class="muted mt">Tags são rótulos livres das peças. Excluir uma tag aqui remove ela de <strong>todas</strong> as peças que a usam — útil para limpar rótulos antigos ou digitados errado.</p>
       <div class="tagman mt" id="tagman">${tagRows}</div>
     </div>`);
-  $$("#tagman [data-deltag]").forEach((b) => { b.onclick = () => deleteTagGlobally(b.dataset.deltag); });
+  // Depois do aviso são N+1 idas ao servidor EM SÉRIE, uma por peça que usa a tag: numa tag de 30
+  // peças é meio minuto de tela morta com o botão clicável. O overlay global entra aqui porque a
+  // espera é longa e a lista inteira de tags continuaria clicável sem ele.
+  $$("#tagman [data-deltag]").forEach((b) => {
+    b.onclick = (e) => emVoo("tag:" + b.dataset.deltag, () => deleteTagGlobally(b.dataset.deltag),
+      { botao: e.currentTarget, tela: "Removendo a tag das peças…", avisoRepetido: "Esta tag já está sendo removida." });
+  });
   const markAccent = () => { const cur = currentAccent(); $$("#accent-grid .accent-opt").forEach((b) => b.classList.toggle("on", b.dataset.accentId === cur)); };
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
@@ -6424,7 +6491,11 @@ function userRow(u) {
     + "</td>"
     + '<td class="muted">' + esc(fmtDate(u.created_at)) + "</td>"
     + '<td class="u-actions">'
-      + '<button class="btn btn-ghost btn-sm u-invite" title="Gerar um link de convite (a pessoa entra e define a própria senha)">Convidar</button>'
+      // Convidar a SI MESMO tranca você para fora: gerar o convite marca a conta como
+      // "precisa definir a senha" (lib/auth.js), e a partir daí o painel inteiro responde
+      // 403 até alguém aceitar o link. Descobri isso na prática, travando a conta admin.
+      // Para a própria linha o botão não existe — não há convite que faça sentido aqui.
+      + (isMe ? "" : '<button class="btn btn-ghost btn-sm u-invite" title="Gerar um link de convite (a pessoa entra e define a própria senha)">Convidar</button>')
       + '<button class="btn btn-ghost btn-sm u-pass">Resetar senha</button>'
       + (isMe ? "" : '<button class="btn btn-ghost btn-sm u-del">Remover</button>')
     + "</td></tr>";
@@ -6473,14 +6544,18 @@ function wireUserRows() {
       catch (e) { toast((e && e.message) || "Erro.", "error"); viewUsers(); }
     };
     const invBtn = $(".u-invite", tr);
-    if (invBtn) invBtn.onclick = async () => {
+    // Gerar convite NÃO é idempotente: lib/auth.js:177 sobrescreve `target.invite` a cada chamada,
+    // então o segundo convite MATA o link do primeiro. Sem trava, dois cliques abriam dois modais
+    // "Link de convite" e o administrador podia copiar o de cima — um link já morto — e mandar
+    // para o colega. A trava é por pessoa convidada.
+    if (invBtn) invBtn.onclick = () => emVoo("convite:" + username, async () => {
       try {
         const r = await API.createInvite(username);
         const url = location.origin + "/#/convite?t=" + encodeURIComponent(r.token);
         showInviteLink(url, tr.dataset.name || username);
         viewUsers();
       } catch (e) { toast((e && e.message) || "Erro ao gerar o convite.", "error"); }
-    };
+    }, { botao: invBtn, rotulo: "gerando…", avisoRepetido: "O convite já está sendo gerado. Gerar de novo invalidaria o link anterior." });
     const passBtn = $(".u-pass", tr);
     if (passBtn) passBtn.onclick = async () => {
       const v = await uiModal({ title: "Resetar senha", message: "Defina uma senha temporária para “" + username + "” (mín. 8 caracteres). A pessoa cria a própria no próximo acesso.", fields: [{ name: "password", label: "Senha temporária", inputType: "password" }], confirmText: "Salvar" });

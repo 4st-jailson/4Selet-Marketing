@@ -1317,7 +1317,12 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 @keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 
 /* ---- lightbox ---- */
-.lightbox { position: fixed; inset: 0; z-index: 1300; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; padding: var(--s7); background: rgba(3, 12, 17, .9); backdrop-filter: blur(6px); }
+/* SEM backdrop-filter aqui, de propósito. O blur promove o overlay a uma camada de GPU e o PNG da
+   arte passa a ser reamostrado em sub-pixel — a arte fica visivelmente MOLE. Isso já tinha sido
+   corrigido nos modais de publicar e de celular (.pub-ov/.phone-ov), mas o lightbox ficou de fora,
+   e ele é justamente onde a arte é vista GRANDE, que é onde o amolecimento aparece. O fundo já é
+   quase opaco (.9), então não se perde nada visualmente ao tirar o blur. */
+.lightbox { position: fixed; inset: 0; z-index: 1300; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; overscroll-behavior: contain; padding: var(--s7); background: rgba(3, 12, 17, .94); }
 .lightbox.open { display: flex; }
 /* B3 — margin:auto centra quando cabe e permite scroll vertical quando o conteúdo excede a viewport (evita o clipping do topo no flex centralizado) */
 .lightbox-stage { margin: auto; max-width: 92vw; display: flex; }

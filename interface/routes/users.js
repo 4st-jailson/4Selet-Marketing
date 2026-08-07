@@ -39,6 +39,14 @@ router.post("/:username/password", (req, res) => {
 
 // gera um LINK DE CONVITE (token de uso único) p/ a pessoa entrar e definir a própria senha
 router.post("/:username/invite", (req, res) => {
+  // Convidar a SI MESMO é um tiro no pé: createInvite marca a conta como must_change_password e,
+  // a partir daí, o gate de /api responde 403 em TUDO até alguém aceitar o link. Quem faz isso
+  // sem querer perde o acesso ao painel na hora. A tela já esconde o botão na própria linha; esta
+  // é a trava de verdade, porque a tela some e a rota fica.
+  const eu = String((req.user && req.user.username) || "").toLowerCase();
+  if (eu && eu === String(req.params.username || "").toLowerCase()) {
+    return res.status(400).json({ error: "Não dá para gerar convite para a sua própria conta — você perderia o acesso ao painel até aceitar o link. Para trocar a sua senha, use “Senha”.", code: "E_INVITE_SELF" });
+  }
   try { res.json(auth.createInvite(req.params.username)); }
   catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
