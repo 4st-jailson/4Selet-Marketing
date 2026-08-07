@@ -145,36 +145,89 @@ const BANNED_COMPETITORS = [
 // O desenho novo: UMA busca por pilar, escrita como MÉTRICA DE SETOR e nunca como preço para o
 // vendedor (medido: pergunta de métrica deu 0 concorrente em 8; a mesma família perguntada como
 // preço deu 4 em 6, mesmo com todos os filtros ligados).
+// ÂNGULOS de pesquisa por pilar, em ordem de aposta. Era um par {principal, alternativa} — e o
+// botão "Procurar outro ângulo" ALTERNAVA entre os dois: o segundo clique voltava ao primeiro. Com
+// o cache de 6h, voltava instantâneo e idêntico, então parecia que o botão não fazia nada. Pior:
+// quando o segundo ângulo vinha vazio, a única saída oferecida era voltar para o de onde se veio.
+// Agora é uma FILA — cada clique avança um ângulo, e a tela diz em qual você está.
+// AS CONSULTAS VÃO ACENTUADAS, de propósito. Estavam sem acento ("adquirencia", "regulacao",
+// "aprovacao") e o efeito foi medido: a imprensa brasileira escreve com acento, o casamento lexical
+// falhava, e o que voltava era imprensa estrangeira em inglês. Medição de 24 buscas: 4 fatos
+// aproveitáveis em 188 páginas, com 128 cortadas pelo piso de relevância — e os cortados de MAIOR
+// score eram FinTech Magazine, Retail Gazette e "UK payments sector". Não era o piso: era o idioma.
+//
+// Com acento, a mesma pergunta de "prova_plataforma" passou de 1 para 2 acima do piso e trouxe o
+// Valor com 0,785. Com acento + imprensa brasileira (RESEARCH_INCLUDE_DOMAINS), foi para 4 — e
+// "educacional" saiu de 0 para 6, com o score médio subindo de 0,079 para 0,374.
 const RESEARCH_QUERIES = {
   taxa_zero: {
-    principal: "custo de adquirencia e meios de pagamento para pequenas empresas no Brasil",
-    alternativa: "meios de pagamento mais usados no varejo brasileiro",
+    angulos: [
+      "custo de adquirência e meios de pagamento para pequenas empresas no Brasil",
+      "meios de pagamento mais usados no varejo brasileiro",
+      "taxa de intercâmbio e MDR no mercado brasileiro de cartões",
+      "custo de operação e margem de lucro do pequeno empresário brasileiro",
+    ],
   },
   educacional: {
-    principal: "prazo de recebimento de vendas online e capital de giro de pequenas empresas no Brasil",
-    alternativa: "inadimplencia e chargeback no comercio eletronico brasileiro",
+    angulos: [
+      "capital de giro e prazo de recebimento de vendas online de pequenas empresas no Brasil",
+      "inadimplência e chargeback no comércio eletrônico brasileiro",
+      "antecipação de recebíveis para pequenos negócios no Brasil",
+      "educação financeira e crédito para empreendedores brasileiros",
+    ],
   },
-  // Medido em 3 variantes: esta deu 8 de 8 resultados acima do piso (0,82 / 0,82 / 0,79), com
+  // Medido em 3 variantes: a primeira deu 8 de 8 resultados acima do piso (0,82 / 0,82 / 0,79), com
   // manchetes que falam do público real da 4Selet ("Criador de conteúdo virou vendedor: a explosão
   // do social commerce"). A que estava aqui antes ("educacao online e cursos digitais") deu 0 de 7
   // — trazia IA no trabalho, 5G e o Ideb de Goiânia.
   curiosidade_mercado: {
-    principal: "economia da criacao de conteudo e creator economy no Brasil",
-    alternativa: "vendas do comercio eletronico brasileiro faturamento e ticket medio",
+    angulos: [
+      "economia da criação de conteúdo e creator economy no Brasil",
+      "vendas do comércio eletrônico brasileiro faturamento e ticket médio",
+      "mercado de infoprodutos e cursos online no Brasil",
+      "hábitos de consumo digital do brasileiro e social commerce",
+    ],
   },
   prova_plataforma: {
-    principal: "taxa de aprovacao de pagamento com cartao no e-commerce brasileiro",
-    alternativa: "antifraude e recusa de transacao em pagamentos online no Brasil",
+    angulos: [
+      "taxa de aprovação de pagamento com cartão no e-commerce brasileiro",
+      "antifraude e recusa de transação em pagamentos online no Brasil",
+      "abandono de carrinho e checkout no e-commerce brasileiro",
+      "experiência de pagamento e conversão em lojas online no Brasil",
+    ],
   },
   novidade: {
-    principal: "regulacao do Banco Central para meios de pagamento e arranjos de pagamento",
-    alternativa: "novas regras de pagamentos instantaneos e Pix no Brasil",
+    angulos: [
+      "regulação do Banco Central para meios de pagamento e arranjos de pagamento",
+      "novas regras de pagamentos instantâneos e Pix no Brasil",
+      "Pix automático e Pix parcelado novidades no Brasil",
+      "open finance e novidades de pagamento digital no Brasil",
+    ],
   },
   motivacional: {
-    principal: "empreendedorismo digital e profissionalizacao de pequenos negocios no Brasil",
-    alternativa: "produtividade e gestao de pequenas empresas brasileiras",
+    angulos: [
+      "empreendedorismo digital e profissionalização de pequenos negócios no Brasil",
+      "produtividade e gestão de pequenas empresas brasileiras",
+      "crescimento de MEIs e pequenos negócios digitais no Brasil",
+      "trabalho autônomo e renda de criadores de conteúdo no Brasil",
+    ],
   },
 };
+// A pesquisa passa a olhar SÓ a imprensa brasileira. `country: "brazil"` não estava segurando o
+// idioma — o topo dos resultados era FinTech Magazine, Retail Gazette e The Fintech Times, sobre
+// Reino Unido e Estados Unidos. Restringir aos veículos daqui é o que faz a busca devolver o dado
+// que a peça pode citar de cabeça erguida.
+//
+// A lista é generosa de propósito: fechar demais transformaria a pesquisa em eco de dois jornais.
+// O preço é conhecido e aceito — um dado bom publicado num veículo fora da lista não aparece.
+const RESEARCH_INCLUDE_DOMAINS = [
+  "valor.globo.com", "g1.globo.com", "oglobo.globo.com", "exame.com", "infomoney.com.br",
+  "estadao.com.br", "einvestidor.estadao.com.br", "folha.uol.com.br", "uol.com.br",
+  "cnnbrasil.com.br", "poder360.com.br", "seudinheiro.com", "neofeed.com.br", "braziljournal.com",
+  "ecommercebrasil.com.br", "mercadoeconsumo.com.br", "startups.com.br", "agenciabrasil.ebc.com.br",
+  "istoedinheiro.com.br", "veja.abril.com.br", "gazetadopovo.com.br", "terra.com.br",
+  "abcomm.org", "sebrae.com.br", "bcb.gov.br", "ibge.gov.br", "cndl.org.br", "fecomercio.com.br",
+];
 // Piso de relevância aplicado no NOSSO código. A Tavily já devolve um `score` por resultado e o
 // código antigo o descartava na linha seguinte. Calibrado em ~30 resultados: o corte tira vaga de
 // emprego (0,069) e vale-brinde (0,149) e mantém matéria de veículo grande (0,79 / 0,49 / 0,32).
@@ -190,6 +243,9 @@ const RESEARCH_EXCLUDE_DOMAINS = [
   "hotmart.com", "kiwify.com.br", "eduzz.com", "monetizze.com.br", "ticto.com.br", "braip.com",
   "herospark.com", "kirvano.com", "cakto.com.br", "hubla.com", "greenn.com.br", "perfectpay.com.br",
   "mercadopago.com.br", "pagseguro.uol.com.br", "lojaintegrada.com.br", "nuvemshop.com.br",
+  // Conteúdo de marca vestido de reportagem: o Blue Studio é o estúdio de publicidade do Estadão.
+  // Saiu na medição como "Agência de Comunicação — O verdadeiro custo de exportar" com score 0,489.
+  "bluestudio.estadao.com.br",
 ];
 // Título/URL que denuncia página de COMPARAÇÃO de plataformas: mesmo sem citar nome conhecido, é
 // conteúdo que só existe para ranquear concorrente. Descarta o achado inteiro.
@@ -357,6 +413,7 @@ module.exports = {
   RESEARCH_CACHE_TTL_H,
   RESEARCH_MAX_ACEITOS,
   RESEARCH_EXCLUDE_DOMAINS,
+  RESEARCH_INCLUDE_DOMAINS,
   RESEARCH_COMPARISON_LEXICON,
   RESEARCH_INSTITUTIONS_OK,
   ALLOWED_PLATFORMS,

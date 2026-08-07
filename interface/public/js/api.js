@@ -118,7 +118,9 @@ const API = (() => {
     contentVersions: (folder, rel) => req("GET", "/api/content/" + encodeURIComponent(folder) + "/versions" + (rel ? "?rel=" + encodeURIComponent(rel) : "")),
     restoreVersion: (folder, rel, id) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restore", { rel, id }),
     saveEditedHtml: (folder, rel, html) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/edit-html", { rel, html }),
-    // acervo de imagens (fotos enviadas) — remover uma do acervo
+    // acervo de imagens (fotos enviadas) — listar, enviar e remover
+    uploads: () => req("GET", "/api/uploads"),
+    uploadImage: (payload) => req("POST", "/api/uploads", payload),
     deleteUpload: (name) => req("DELETE", "/api/uploads/" + encodeURIComponent(name)),
     // publicação (Instagram)
     publishStatus: () => req("GET", "/api/publish/status"),
@@ -134,7 +136,9 @@ const API = (() => {
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
     // fatos de mercado: passo próprio, disparado por botão (não roda dentro da geração)
-    buscarFatos: (pillar, alternativa) => req("POST", "/api/generate/research", { pillar, alternativa: !!alternativa }),
+    // `angulo` é a posição na fila de ângulos do pilar (0 = a aposta principal); `termo` é a busca
+    // que a pessoa escreveu com as próprias palavras.
+    buscarFatos: (pillar, angulo, termo) => req("POST", "/api/generate/research", { pillar, angulo: Number(angulo) || 0, termo: termo || undefined }),
     refine: (payload) => req("POST", "/api/generate/refine", payload),
     regenerateSlide: (folder, index, instruction) => req("POST", "/api/generate/slide", { folder, index, instruction }),
     regenerateSlideMem: (payload) => req("POST", "/api/generate/slide-mem", payload || {}),

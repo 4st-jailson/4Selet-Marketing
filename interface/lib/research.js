@@ -30,7 +30,7 @@ const path = require("path");
 const {
   PATHS, BANNED_COMPETITORS,
   RESEARCH_QUERIES, RESEARCH_SCORE_MIN, RESEARCH_CACHE_TTL_H, RESEARCH_MAX_ACEITOS,
-  RESEARCH_EXCLUDE_DOMAINS, RESEARCH_COMPARISON_LEXICON, RESEARCH_INSTITUTIONS_OK,
+  RESEARCH_EXCLUDE_DOMAINS, RESEARCH_INCLUDE_DOMAINS, RESEARCH_COMPARISON_LEXICON, RESEARCH_INSTITUTIONS_OK,
 } = require("./config");
 
 // A chave fica em interface/data/ (volume GRAVÁVEL) — o .env em prod é montado read-only,
@@ -180,17 +180,35 @@ function doCache(chave) {
 }
 
 // ---- A busca ----------------------------------------------------------------
-// buscaFatos({ pillar, alternativa }) ->
-//   { available, cartoes[], descartados{...}, creditos, query, doCache } | { available:false, reason }
-async function buscaFatos({ pillar, alternativa } = {}) {
+// Termo escrito pela pessoa. NÃO vai para o prompt de geração — vira consulta de busca, e o que
+// volta passa pelo mesmo funil de sempre (piso de score, concorrente, dado, navegação). Ainda
+// assim: teto de tamanho e fora com o que não é texto de busca.
+function limpaTermo(t) {
+  return String(t || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+// buscaFatos({ pillar, angulo, termo }) ->
+//   { available, cartoes[], descartados{...}, creditos, query, angulo, totalAngulos, doCache }
+//   | { available:false, reason }
+//
+// `angulo` é o índice na fila de ângulos do pilar (0 = a aposta principal). Fora da faixa, dá a
+// volta — assim o botão da tela nunca chega num beco sem saída.
+async function buscaFatos({ pillar, angulo, termo, alternativa } = {}) {
   const key = getKey();
   if (!key) return { available: false, reason: "no_key" };
   const tavily = loadTavily();
   if (!tavily) return { available: false, reason: "no_sdk" };
 
   const tabela = RESEARCH_QUERIES[pillar] || RESEARCH_QUERIES.curiosidade_mercado;
-  const query = alternativa ? tabela.alternativa : tabela.principal;
-  const chaveCache = (alternativa ? "alt:" : "pri:") + (pillar || "curiosidade_mercado");
+  const angulos = (tabela && tabela.angulos) || [];
+  const buscaLivre = limpaTermo(termo);
+  // `alternativa` é a forma antiga (booleano) — mantida para não quebrar chamada antiga em voo.
+  let idx = Number.isFinite(Number(angulo)) ? Number(angulo) : (alternativa ? 1 : 0);
+  if (!angulos.length) return { available: false, reason: "sem_angulos" };
+  idx = ((idx % angulos.length) + angulos.length) % angulos.length;
+
+  const query = buscaLivre || angulos[idx];
+  const chaveCache = buscaLivre ? ("livre:" + buscaLivre.toLowerCase()) : ("ang" + idx + ":" + (pillar || "curiosidade_mercado"));
   const cacheado = doCache(chaveCache);
   if (cacheado) return Object.assign({}, cacheado, { doCache: true });
 
@@ -204,6 +222,9 @@ async function buscaFatos({ pillar, alternativa } = {}) {
       searchDepth: "advanced",
       maxResults: 8,
       excludeDomains: RESEARCH_EXCLUDE_DOMAINS,
+      // Só imprensa brasileira. `country: "brazil"` sozinho devolvia FinTech Magazine e Retail
+      // Gazette falando de Reino Unido — medido, era a maior causa de funil seco.
+      includeDomains: RESEARCH_INCLUDE_DOMAINS,
       includeUsage: true,
     });
   } catch (e) {
@@ -247,7 +268,11 @@ async function buscaFatos({ pillar, alternativa } = {}) {
     creditos: (res && res.usage && res.usage.credits) || 0,
     query,
     pillar: pillar || "curiosidade_mercado",
-    alternativa: !!alternativa,
+    // Onde a pessoa está na fila de ângulos — é o que deixa a tela dizer "ângulo 2 de 4" em vez de
+    // um botão que parece não fazer nada.
+    angulo: buscaLivre ? -1 : idx,
+    totalAngulos: angulos.length,
+    termo: buscaLivre || "",
   };
   gravaCache(chaveCache, saida);
   return saida;

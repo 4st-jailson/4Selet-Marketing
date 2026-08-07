@@ -681,6 +681,163 @@ function pexelsSearchPage(opts) {
     if (st.query) run();
   });
 }
+
+/* ================== imagem que faltou: de onde ela vem ==================
+   Três telas que trabalham juntas:
+     capturaDeSiteModal  — pede o link e tira o print (o painel navega, a IA não)
+     escolheImagemModal  — "de onde vem esta imagem?": site / arquivo / banco
+     resolvePendencias   — depois de gerar, pergunta o que fazer com o que faltou
+   O pedido do Hugo era não ficar no escuro: "é preciso informar que há... não foi
+   possível localizar a imagem informada, como devemos prosseguir? Ou você deseja
+   subir um arquivo?" — e, quando falta o link, o painel pede o link. */
+
+// Presets de captura, buscados uma vez e guardados.
+let _capPresets = null;
+async function capturePresets() {
+  if (_capPresets) return _capPresets;
+  try {
+    const r = await API.capturePresets();
+    _capPresets = (r && r.presets) || [];
+  } catch (e) { _capPresets = []; }
+  if (!_capPresets.length) _capPresets = [{ id: "computador", rotulo: "Computador (1440 × 900)" }];
+  return _capPresets;
+}
+
+// Pede o link e captura. Resolve com a URL da foto no acervo, ou null se desistir.
+function capturaDeSiteModal(opts) {
+  opts = opts || {};
+  return new Promise(async (resolve) => {
+    const presets = await capturePresets();
+    const ov = document.createElement("div"); ov.className = "modal-ov";
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:560px;width:94vw">
+      <h3>Capturar de um site</h3>
+      <p class="muted mt">${esc(opts.hint || "Cole o endereço da página. O painel abre o site num navegador e guarda o print para usar na peça.")}</p>
+      <label class="lab mt" for="cap-url">Endereço da página</label>
+      <input id="cap-url" placeholder="ex.: 4selet.com.br  ou  valor.globo.com/empresas/noticia/..." value="${esc(opts.url || "")}" autocomplete="off" spellcheck="false" />
+      <label class="lab mt" for="cap-preset">Tamanho da tela</label>
+      <select id="cap-preset" class="se-f">${presets.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === (opts.preset || "computador") ? " selected" : "") + ">" + esc(p.rotulo) + "</option>").join("")}</select>
+      <p class="muted mt" style="font-size:12px">O print sai no formato da tela escolhida — a arte encaixa depois dentro do aparelho, cortando pelo topo.</p>
+      <div id="cap-msg" class="field-error" style="display:none"></div>
+      <div id="cap-prev" class="cap-prev" hidden><img alt="prévia da captura" /><span class="cap-prev-cap"></span></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="cap-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="cap-go">Capturar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => { ov.classList.add("open"); const i = ov.querySelector("#cap-url"); if (i) { i.focus(); i.select(); } });
+    const inp = ov.querySelector("#cap-url"), sel = ov.querySelector("#cap-preset");
+    const msg = ov.querySelector("#cap-msg"), prev = ov.querySelector("#cap-prev"), go = ov.querySelector("#cap-go");
+    const done = (v) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(v || null); };
+    const onKey = (e) => { if (e.key === "Escape") done(null); if (e.key === "Enter" && document.activeElement === inp) capturar(); };
+    document.addEventListener("keydown", onKey);
+    ov.querySelector("#cap-cancel").onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+
+    let emCurso = false;
+    async function capturar() {
+      if (emCurso) return;
+      const url = (inp.value || "").trim();
+      if (url.length < 4) { msg.textContent = "Cole o endereço da página que você quer capturar."; msg.style.display = "block"; inp.focus(); return; }
+      emCurso = true; msg.style.display = "none"; prev.hidden = true;
+      go.disabled = true; const antes = go.innerHTML;
+      // A captura leva de 5 a 20 segundos. Sem este rótulo a janela ficaria muda — exatamente o
+      // problema da janela cega que já corrigimos no botão de gerar.
+      go.innerHTML = '<span class="spinner"></span> abrindo o site…';
+      try {
+        const r = await API.captureUrl({ url, preset: sel.value });
+        if (!r || !r.ok || !r.url) throw new Error((r && r.error) || "falha na captura");
+        const img = prev.querySelector("img"); img.src = r.url + "?v=" + Date.now();
+        prev.querySelector(".cap-prev-cap").textContent = (r.titulo || r.host) + " — " + r.largura + "×" + r.altura;
+        prev.hidden = false;
+        go.innerHTML = "Usar este print";
+        go.disabled = false;
+        // Quem chamou pode querer mais do que a foto (o endereço final, o título da página, o
+        // aparelho sugerido). Sai pelo callback para não mudar o que a promise devolve — todos os
+        // outros chamadores só querem a URL da imagem.
+        go.onclick = () => { if (typeof opts.onCaptura === "function") { try { opts.onCaptura(r); } catch (e) {} } done(r.url); };
+        emCurso = false;
+      } catch (e) {
+        msg.textContent = (e && e.data && e.data.error) || (e && e.message) || "não consegui capturar essa página";
+        msg.style.display = "block";
+        go.innerHTML = antes; go.disabled = false; emCurso = false;
+      }
+    }
+    go.onclick = capturar;
+  });
+}
+
+// Envia um arquivo do computador para o acervo. Resolve com a URL, ou null.
+function enviaArquivoDeImagem() {
+  return new Promise((resolve) => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp,image/gif";
+    inp.style.display = "none";
+    document.body.appendChild(inp);
+    let respondeu = false;
+    const fim = (v) => { if (respondeu) return; respondeu = true; inp.remove(); resolve(v || null); };
+    // Cancelar no seletor de arquivo não dispara evento nenhum em vários navegadores: sem esta
+    // rede de segurança a promise ficaria pendurada e a janela que espera por ela travaria.
+    window.addEventListener("focus", () => setTimeout(() => { if (!inp.files || !inp.files.length) fim(null); }, 400), { once: true });
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return fim(null);
+      if (f.size > 10 * 1024 * 1024) { toast("Imagem muito grande (máximo 10MB).", "error"); return fim(null); }
+      try {
+        const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error("falha ao ler o arquivo")); fr.readAsDataURL(f); });
+        const r = await API.uploadImage({ name: f.name, dataUrl });
+        if (!r || !r.url) throw new Error((r && r.error) || "falha ao enviar");
+        toast("Imagem enviada para o acervo.", "success");
+        fim(r.url);
+      } catch (e) {
+        toast((e && e.data && e.data.error) || (e && e.message) || "falha ao enviar a imagem", "error");
+        fim(null);
+      }
+    };
+    inp.click();
+  });
+}
+
+// "De onde vem esta imagem?" — o menu único de origem. Resolve com a URL escolhida, ou null.
+// `tipo` muda a ORDEM e o texto: para print, capturar o site vem primeiro e o banco de imagens
+// aparece por último (nenhum banco tem o dashboard da 4Selet).
+function escolheImagemModal(opts) {
+  opts = opts || {};
+  const print = opts.tipo === "print";
+  const caminhos = [
+    { id: "site", titulo: "Capturar de um site", sub: "Você cola o link, o painel abre a página e tira o print." },
+    { id: "arquivo", titulo: "Enviar um arquivo", sub: "Um print ou uma foto que já está no seu computador." },
+    { id: "banco", titulo: "Buscar uma foto de banco", sub: print ? "Só serve para imagem ilustrativa — banco nenhum tem a sua tela." : "Fotos gratuitas do Pexels, tratadas na identidade." },
+  ];
+  if (!print) caminhos.unshift(caminhos.splice(2, 1)[0]); // foto ilustrativa: banco primeiro
+  return new Promise((resolve) => {
+    const ov = document.createElement("div"); ov.className = "modal-ov";
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:560px;width:94vw">
+      <h3>${esc(opts.title || "De onde vem esta imagem?")}</h3>
+      ${opts.message ? '<p class="muted mt">' + esc(opts.message) + "</p>" : ""}
+      <div class="orig-list mt">${caminhos.map((c) => `<button type="button" class="orig-item" data-orig="${c.id}"><span class="orig-t">${esc(c.titulo)}</span><span class="orig-s">${esc(c.sub)}</span></button>`).join("")}</div>
+      <div class="modal-actions"><button class="btn btn-ghost" id="orig-cancel">${esc(opts.cancelText || "Cancelar")}</button></div>
+    </div>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const done = (v) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(v || null); };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    document.addEventListener("keydown", onKey);
+    ov.querySelector("#orig-cancel").onclick = () => done(null);
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+    ov.querySelectorAll("[data-orig]").forEach((b) => {
+      b.onclick = () => {
+        const via = b.dataset.orig;
+        // Fecha esta janela ANTES de abrir a próxima e resolve com a promise da próxima — assim
+        // quem chamou recebe a foto final e não precisa saber por qual caminho ela veio.
+        ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160);
+        if (via === "site") return resolve(capturaDeSiteModal({ url: opts.url, preset: opts.preset, hint: opts.captureHint }));
+        if (via === "arquivo") return resolve(enviaArquivoDeImagem());
+        return resolve(pexelsSearchModal({ query: opts.query || "", target: opts.target, orientation: opts.orientation }));
+      };
+    });
+  });
+}
 /* ============================ router ============================ */
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "") || "dashboard";
@@ -2122,7 +2279,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +     '<button data-mark="outline">"SELET" contornado</button>'
     +   "</div></details>"
     +   '<button class="btn btn-sm" id="he-add-img" title="Enviar uma imagem do seu computador">+ Enviar imagem</button>'
-    +   '<button class="btn btn-sm" id="he-search-img" title="Buscar foto de banco de imagens (Pexels) e inserir">+ Buscar imagem</button>'
+    +   '<button class="btn btn-sm" id="he-search-img" title="Inserir imagem: capturar de um site, enviar um arquivo ou buscar foto de banco">+ Inserir imagem</button>'
     +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm" title="Inserir um elemento pronto da marca: CTA, rodapé ou selo">+ Elemento pronto</summary><div class="ed-pop">'
     +     '<button data-block="cta">CTA WhatsApp</button>'
     +     '<button data-block="footer">Rodapé @4selet</button>'
@@ -2648,7 +2805,12 @@ async function openHtmlEditor(folder, task, rel, opts) {
   $("#he-add-img").onclick = () => $("#he-file").click();
   $("#he-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => addImgNode(rd.result, { top: 120 }); rd.readAsDataURL(f); e.target.value = ""; };
   // Buscar foto de banco (Pexels) → baixa SÓ a escolhida pro /uploads/ e insere como imagem editável.
-  $("#he-search-img").onclick = async () => { const url = await pexelsSearchModal({ target: { w: Math.round(artW), h: Math.round(artH) } }); if (url) addImgNode(url, { top: 120 }); };
+  // Inserir imagem no editor: pergunta a ORIGEM antes de ir ao banco de fotos. O print de uma tela
+  // (a nossa ou a de uma matéria) nunca esteve disponível aqui — o único caminho era o Pexels.
+  $("#he-search-img").onclick = async () => {
+    const url = await escolheImagemModal({ title: "Inserir imagem na arte", target: { w: Math.round(artW), h: Math.round(artH) } });
+    if (url) addImgNode(url, { top: 120 });
+  };
   // Pintar o FUNDO do slide (o .card é o piso — nada some atrás dele). Cor sólida no lugar do
   // gradiente/padrão. Snapshot só ao confirmar a cor (change), não a cada arraste do seletor.
   $("#he-bg").onclick = () => $("#he-bg-input").click();
@@ -4086,7 +4248,7 @@ async function viewCreate(arg, query) {
         <div class="form-section media-only" id="g-media-section" style="display:none">
           <div class="form-section-head"><h4>A matéria na mídia</h4></div>
           <div class="field"><label>Print da matéria <span class="hint">(screenshot do artigo — no modelo Celular, use um print de celular pra não cortar)</span></label>
-            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-media-file" accept="image/*" hidden /> Enviar print</label><span class="hint" id="g-media-hint"></span></div>
+            <div class="photo-pick"><label class="btn btn-sm btn-ghost"><input type="file" id="g-media-file" accept="image/*" hidden /> Enviar print</label><button type="button" class="btn btn-sm btn-ghost" id="g-media-capture" title="O painel abre a matéria num navegador e tira o print sozinho">Capturar do link</button><span class="hint" id="g-media-hint"></span></div>
             <div class="media-print-prev" id="g-media-prev"></div>
             <input type="hidden" id="g-media-image" value="" />
           </div>
@@ -4357,6 +4519,27 @@ async function viewCreate(arg, query) {
     } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
     e.target.value = "";
   });
+  // "Capturar do link": na peça de Mídia o print É o conteúdo, e o link da matéria quase sempre já
+  // está ali no formulário. Semear o campo com ele evita pedir duas vezes a mesma coisa. Ao voltar,
+  // se o Link da matéria estiver vazio, ele é preenchido — é o mesmo endereço, afinal.
+  if ($("#g-media-capture")) $("#g-media-capture").onclick = async () => {
+    const linkAtual = ($("#g-media-url") && $("#g-media-url").value.trim()) || "";
+    const url = await capturaDeSiteModal({
+      url: linkAtual,
+      hint: "Cole o endereço da matéria publicada. O painel abre a página e captura a tela para montar no mockup.",
+      onCaptura: (r) => {
+        const campo = $("#g-media-url");
+        if (campo && !campo.value.trim() && r && r.url_final) campo.value = r.url_final;
+        const veic = $("#g-media-vehicle");
+        if (veic && !veic.value.trim() && r && r.host) veic.value = r.host.replace(/^www\./, "");
+      },
+    });
+    if (!url) return;
+    $("#g-media-image").value = url;
+    const pv = $("#g-media-prev"); if (pv) pv.innerHTML = '<img src="' + esc(url) + '" alt="print da matéria"/>';
+    const hint = $("#g-media-hint"); if (hint) hint.textContent = "print capturado do site";
+    checkMediaAspect(); markArtStale();
+  };
   $$("#g-media-model-pick .model-card").forEach((b) => { b.onclick = () => {
     $$("#g-media-model-pick .model-card").forEach((x) => x.classList.toggle("on", x === b));
     if ($("#g-media-model")) $("#g-media-model").value = b.dataset.model;
@@ -4764,11 +4947,11 @@ function ligaFatosDeMercado() {
   let achados = [];
   const lista = $("#g-fatos-lista"), conta = $("#g-fatos-conta");
 
-  const buscar = (alternativa) => emVoo("fatos-mercado", async () => {
+  const buscar = (angulo, termo) => emVoo("fatos-mercado", async () => {
     lista.innerHTML = '<p class="hint"><span class="spinner"></span> Procurando notícia recente do setor…</p>';
     conta.hidden = true;
     let r;
-    try { r = await API.buscarFatos(($("#g-pillar") && $("#g-pillar").value) || "", alternativa); }
+    try { r = await API.buscarFatos(($("#g-pillar") && $("#g-pillar").value) || "", angulo, termo); }
     catch (e) { lista.innerHTML = '<p class="hint">Não consegui pesquisar agora. Você pode gerar sem pesquisa.</p>'; return; }
     if (!r || !r.disponivel) { lista.innerHTML = '<p class="hint">' + esc((r && r.motivo) || "Pesquisa indisponível.") + "</p>"; return; }
     achados = r.cartoes || [];
@@ -4784,17 +4967,41 @@ function ligaFatosDeMercado() {
     if (d.repetido) partes.push(d.repetido + " eram repetição");
     const descartados = Object.values(d).reduce((a, b) => a + b, 0);
     conta.hidden = false;
-    conta.innerHTML = "Procurei " + (r.examinados || 0) + " páginas. "
+    // Onde estamos na fila de ângulos. Antes o botão dizia só "Procurar outro ângulo" e alternava
+    // entre DOIS — o segundo clique voltava ao primeiro, instantâneo por causa do cache de 6h, e
+    // parecia que não fazia nada. Agora a fila anda e a posição fica escrita na tela.
+    const total = Number(r.total_angulos) || 0;
+    const atual = Number(r.angulo);
+    const livre = atual < 0 || !!r.termo;
+    const posicao = livre
+      ? 'Busquei por <strong>"' + esc(r.termo || "") + '"</strong>. '
+      : (total > 1 ? "Ângulo " + (atual + 1) + " de " + total + ". " : "");
+    const proximo = livre ? 0 : (atual + 1) % Math.max(total, 1);
+    conta.innerHTML = posicao + "Procurei " + (r.examinados || 0) + " páginas. "
       + (descartados ? "Descartei " + descartados + (partes.length ? " — " + esc(partes.join(", ")) : "") + ". " : "")
-      + '<button type="button" class="lt-ver" id="g-fatos-outro">Procurar outro ângulo</button>';
+      + '<button type="button" class="lt-ver" id="g-fatos-outro">'
+      + (livre || total <= 1 ? "Voltar aos ângulos do pilar" : "Tentar o ângulo " + (proximo + 1))
+      + "</button> · "
+      + '<button type="button" class="lt-ver" id="g-fatos-termo">Procurar com as minhas palavras</button>';
     lista.innerHTML = achados.length
       ? achados.map(cartaoDeFato).join("")
-      : '<p class="hint">Procurei e não achei fato que ajude nesta peça. Pode gerar sem pesquisa — em peça motivacional isso é o normal.</p>';
+      // O beco sem saída era aqui: "não achei" e um botão que só te levava de volta. Agora o texto
+      // diz o que fazer em seguida, e os dois caminhos estão logo acima.
+      : '<p class="hint">Nada aproveitável neste ângulo. Tente o próximo, procure com as suas palavras, ou gere sem pesquisa — em peça motivacional isso é o normal.</p>';
     const outro = $("#g-fatos-outro");
-    if (outro) outro.onclick = () => buscar(!alternativa);
+    if (outro) outro.onclick = () => buscar(proximo);
+    const porTermo = $("#g-fatos-termo");
+    if (porTermo) porTermo.onclick = async () => {
+      const t = await pedeTextoModal({
+        title: "Procurar com as minhas palavras",
+        message: "Escreva o assunto do jeito que você procuraria numa busca de notícias. Vale lembrar: o que voltar passa pelos mesmos filtros — nada com nome de concorrente entra na peça.",
+        placeholder: "ex.: inadimplência do consumidor brasileiro em 2026",
+      });
+      if (t) buscar(0, t);
+    };
   }, { botao: btn, rotulo: "procurando…", avisoRepetido: "A pesquisa já está em andamento." });
 
-  btn.onclick = () => buscar(false);
+  btn.onclick = () => buscar(0);
   // Um listener só, delegado: os cartões nascem e morrem, o ouvinte fica.
   $("#g-fatos-box").addEventListener("click", (e) => {
     const usa = e.target.closest("[data-usa-fato]");
@@ -4870,6 +5077,11 @@ async function geraComPayload(prog) {
   prog.fim();
   LAST_GEN = { req: payload, res: r };
   renderGenResult(r, { autoPreview: true }); // prévia automática só aqui (1ª geração), não a cada refino
+  // Faltou imagem? Perguntar AGORA, com o resultado já na tela. Antes disto a peça saía com um
+  // aviso no meio de outros avisos e o slide errado ficava lá até alguém reparar — o "usuário no
+  // escuro" que o Hugo descreveu. A janela abre depois da prévia de propósito: dá para ver o que
+  // saiu antes de decidir o que fazer.
+  try { await resolvePendenciasDeImagem(r); } catch (e) { /* resolver a imagem é opcional; a peça já existe */ }
 }
 
 function renderGenResult(r, opts) {
@@ -5312,6 +5524,151 @@ function setSlidePhoto(item, url) {
   if (row) { const tmp = document.createElement("div"); tmp.innerHTML = slidePhotoRow(url); row.replaceWith(tmp.firstElementChild); }
   syncJsonMirror(); markArtStale();
 }
+// Troca o layout de um slide por fora do menu (usado quando o print chega e o slide precisa virar
+// "Print em aparelho"). Mexe no mesmo input escondido que o menu mexe, e atualiza o resumo visível
+// — senão a tela mostraria um layout e o JSON teria outro.
+function setSlideLayout(item, layout, device) {
+  if (!item || !layout) return;
+  const hidden = item.querySelector('input[data-k="layout"]');
+  if (hidden) hidden.value = layout;
+  const menu = item.querySelector(".lay-menu");
+  if (menu) {
+    const sum = menu.querySelector(".lay-sum");
+    if (sum) { const th = sum.querySelector(".lay-thumb"); if (th) th.innerHTML = layoutThumb(layout); const nm = sum.querySelector(".lay-name"); if (nm) nm.textContent = layoutName(layout); }
+    menu.querySelectorAll(".lay-opt").forEach((b) => b.classList.toggle("on", b.dataset.lay === layout));
+  }
+  if (device) {
+    let extra = {};
+    try { extra = item.dataset.extra ? JSON.parse(item.dataset.extra) : {}; } catch (e) { extra = {}; }
+    extra.device = String(device);
+    item.dataset.extra = JSON.stringify(extra);
+  }
+  const hintBox = item.querySelector(".se-lay-hint");
+  if (hintBox) { let ex = {}; try { ex = item.dataset.extra ? JSON.parse(item.dataset.extra) : {}; } catch (e) { ex = {}; } hintBox.innerHTML = layoutDataHint(layout, ex); }
+  syncJsonMirror(); markArtStale();
+}
+
+// PERGUNTA O QUE FAZER com a imagem que faltou. Uma janela por pendência, na ordem dos slides.
+// Devolve true se algo foi aplicado (a prévia precisa ser refeita).
+//
+// Isto é a resposta ao "não deixar o usuário no escuro". Antes: a peça saía, um aviso de texto
+// aparecia no meio de outros avisos, e o slide ficava com o conteúdo errado até alguém reparar.
+// Agora a peça sai, a janela abre e cada saída leva a um lugar concreto.
+async function resolvePendenciasDeImagem(r) {
+  const lista = (r && r.pendencias_imagem) || [];
+  if (!lista.length) return false;
+  const ct = metaType(r.content_type) || {};
+  const carrossel = ct.kind === "carousel";
+  let aplicou = false;
+
+  for (let i = 0; i < lista.length; i++) {
+    const p = lista[i];
+    const print = p.tipo === "print";
+    const onde = p.slide > 0 ? "no slide " + p.slide : "nesta peça";
+    const escolha = await pendenciaModal({
+      pedido: p.pedido, onde, print, carrossel,
+      indice: i + 1, total: lista.length,
+    });
+    if (!escolha || escolha === "pular") continue;
+
+    if (escolha === "trocar") {
+      // "Coloque outra coisa no lugar": o texto vai como instrução e o slide é regerado sozinho.
+      const novo = await pedeTextoModal({
+        title: p.slide > 0 ? "O que colocar no slide " + p.slide + "?" : "O que colocar no lugar?",
+        message: "Descreva o que deve aparecer aqui em vez da imagem que não deu para conseguir.",
+        placeholder: "ex.: os quatro números da campanha em destaque",
+      });
+      if (novo && p.slide > 0 && carrossel) { if (await regeraSlideNaCriacao(p.slide, novo)) aplicou = true; }
+      else if (novo) toast("Anotado. Use o campo de refino abaixo do resultado para aplicar: \"" + novo.slice(0, 60) + "\"", "info");
+      continue;
+    }
+
+    // Todas as outras saídas terminam numa URL de imagem.
+    const url = escolha === "site"
+      ? await capturaDeSiteModal({ hint: print
+        ? "Cole o endereço da página que deve aparecer no print. O painel abre o site num navegador e captura a tela."
+        : "Cole o endereço da página de onde tirar a imagem." })
+      : escolha === "arquivo" ? await enviaArquivoDeImagem()
+        : await pexelsSearchModal({ query: p.pedido, orientation: carrossel ? "portrait" : "landscape", target: carrossel ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 } });
+    if (!url) continue;
+
+    if (p.slide > 0 && carrossel) {
+      const item = document.querySelectorAll(".struct-ed .se-item")[p.slide - 1];
+      if (item) {
+        setSlidePhoto(item, url);
+        // Print vira "Print em aparelho": é o layout que desenha a captura dentro de um notebook,
+        // reta e legível. Sem isso a captura viraria fundo desbotado atrás do texto — que é
+        // exatamente o desfecho errado para um print de tela.
+        if (print) setSlideLayout(item, "device", "notebook");
+        aplicou = true;
+      }
+    } else {
+      const img = $("#g-image");
+      if (img) { img.value = url; const st = $("#g-style"); if (st && st.value !== "photo") st.value = "photo"; }
+      const mimg = $("#g-media-image"); if (mimg) mimg.value = url;
+      if (LAST_GEN && LAST_GEN.res && LAST_GEN.res.parsed) LAST_GEN.res.parsed.image = url;
+      markArtStale();
+      aplicou = true;
+    }
+  }
+
+  if (aplicou) {
+    toast("Imagem aplicada. Atualizando a prévia da arte…", "success");
+    try { await renderArtPreview(r.content_type, ct.kind); } catch (e) { /* a prévia fica marcada como desatualizada */ }
+  }
+  return aplicou;
+}
+
+// A janela da pendência. Resolve com "site" | "arquivo" | "banco" | "trocar" | "pular" | null.
+function pendenciaModal(o) {
+  const opcoes = [];
+  opcoes.push({ id: "site", t: "Capturar de um site", s: "Cole o link — o painel abre a página e tira o print." });
+  opcoes.push({ id: "arquivo", t: "Enviar um arquivo", s: "Um print ou uma foto que já está no seu computador." });
+  if (!o.print) opcoes.push({ id: "banco", t: "Buscar uma foto de banco", s: "Fotos gratuitas do Pexels." });
+  if (o.carrossel && o.slide !== 0) opcoes.push({ id: "trocar", t: "Colocar outra coisa no lugar", s: "Você descreve o que deve aparecer e eu refaço este slide." });
+  if (o.print) opcoes.push({ id: "banco", t: "Buscar uma foto de banco", s: "Só como ilustração — banco nenhum tem a sua tela." });
+  return new Promise((resolve) => {
+    const ov = document.createElement("div"); ov.className = "modal-ov";
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:580px;width:94vw">
+      <h3>Não consegui a imagem ${esc(o.onde)}</h3>
+      <p class="mt">Você pediu <strong>${esc(o.pedido)}</strong>, e eu não tenho como conseguir isso sozinho: não enxergo o seu acervo e não saio navegando por conta própria. ${o.print ? "Como é uma captura de tela, o caminho mais rápido costuma ser me dar o link da página." : ""}</p>
+      <p class="muted mt" style="font-size:13px">A peça já está pronta — só falta esta imagem. Como você quer prosseguir?${o.total > 1 ? " <span class=\"hint\">(" + o.indice + " de " + o.total + ")</span>" : ""}</p>
+      <div class="orig-list mt">${opcoes.map((c) => `<button type="button" class="orig-item" data-pend="${c.id}"><span class="orig-t">${esc(c.t)}</span><span class="orig-s">${esc(c.s)}</span></button>`).join("")}</div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-pend="pular">Seguir sem a imagem</button></div>
+    </div>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => ov.classList.add("open"));
+    const done = (v) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(v); };
+    const onKey = (e) => { if (e.key === "Escape") done("pular"); };
+    document.addEventListener("keydown", onKey);
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) return done("pular");
+      const b = e.target.closest("[data-pend]"); if (b) done(b.dataset.pend);
+    });
+  });
+}
+
+// Caixa de texto simples num modal. Resolve com o texto, ou null.
+function pedeTextoModal(o) {
+  o = o || {};
+  return new Promise((resolve) => {
+    const ov = document.createElement("div"); ov.className = "modal-ov";
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:540px;width:94vw">
+      <h3>${esc(o.title || "Descreva")}</h3>
+      ${o.message ? '<p class="muted mt">' + esc(o.message) + "</p>" : ""}
+      <textarea id="pt-txt" rows="3" class="mt" placeholder="${esc(o.placeholder || "")}"></textarea>
+      <div class="modal-actions"><button class="btn btn-ghost" id="pt-cancel">Cancelar</button><button class="btn btn-primary" id="pt-ok">Aplicar</button></div>
+    </div>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    requestAnimationFrame(() => { ov.classList.add("open"); const t = ov.querySelector("#pt-txt"); if (t) t.focus(); });
+    const done = (v) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(v || null); };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    document.addEventListener("keydown", onKey);
+    ov.querySelector("#pt-cancel").onclick = () => done(null);
+    ov.querySelector("#pt-ok").onclick = () => done((ov.querySelector("#pt-txt").value || "").trim());
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(null); });
+  });
+}
 // Um <input> HTML APAGA quebra de linha do value, em silêncio: remove o \n sem pôr nada no lugar,
 // colando a última palavra de uma linha na primeira da seguinte ("sua\noperação" -> "suaoperação").
 // O modelo escreve \n nos títulos por conta própria — de forma intermitente, às vezes numa geração
@@ -5483,7 +5840,13 @@ function bindStructuredEditor() {
       e.preventDefault();
       const item = photoBtn.closest(".se-item");
       const seed = ((item.querySelector('[data-k="title"]') || {}).value || (item.querySelector('[data-k="body"]') || {}).value || "").trim();
-      pexelsSearchModal({ query: seed, orientation: "portrait", target: { w: 1080, h: 1350 } }).then((url) => { if (url) setSlidePhoto(item, url); });
+      // Antes este botão ia direto para o Pexels. Agora pergunta a ORIGEM, porque a imagem que o
+      // slide pede muitas vezes não é foto de banco: é o print da nossa própria tela.
+      escolheImagemModal({
+        title: "Foto de fundo do slide",
+        message: "Escolha de onde vem a imagem deste slide.",
+        query: seed, orientation: "portrait", target: { w: 1080, h: 1350 },
+      }).then((url) => { if (url) setSlidePhoto(item, url); });
       return;
     }
     const photoX = e.target.closest("[data-se-photo-x]");
@@ -5577,6 +5940,35 @@ async function regenSlideInCreation(ed, item, ctl) {
     if (e && e.data && e.data.governance) toast("Esse slide feriu uma regra de marca — tente outra orientação.", "error");
     else toast((e && e.message) || "Falha ao regerar o slide.", "error");
   }
+}
+
+// Regera o slide N com uma instrução já em mãos — sem abrir modal próprio, porque quem chama
+// (a janela da pendência) já perguntou o que colocar no lugar. Devolve true se o slide mudou.
+async function regeraSlideNaCriacao(numero, instrucao) {
+  const index = Number(numero) - 1;
+  if (!(index >= 0) || !LAST_GEN || !LAST_GEN.req) return false;
+  const parsed = structToParsed();
+  if (!parsed || !Array.isArray(parsed.slides) || !parsed.slides[index]) return false;
+  showBusy("Refazendo o slide " + numero + "…");
+  try {
+    const res = await API.regenerateSlideMem({
+      carousel: parsed, index, instruction: String(instrucao || "").trim() || undefined,
+      provider: LAST_GEN.req.provider, campaign_id: LAST_GEN.req.campaign_id, pillar: LAST_GEN.req.pillar,
+    });
+    if (!res || !res.slide) throw new Error("a IA não devolveu o slide");
+    const atual = structToParsed();
+    const alvo = (atual && Array.isArray(atual.slides) && atual.slides.length === parsed.slides.length) ? atual : parsed;
+    alvo.slides[index] = res.slide;
+    const host = document.querySelector(".struct-ed");
+    const html = structuredEditor("instagram_carousel", alvo);
+    if (host && html) { host.outerHTML = html; bindStructuredEditor(); }
+    if (LAST_GEN.res) LAST_GEN.res.parsed = alvo;
+    toast("Slide " + numero + " refeito.", "success");
+    return true;
+  } catch (e) {
+    toast((e && e.message) || "Não consegui refazer esse slide.", "error");
+    return false;
+  } finally { hideBusy(); }
 }
 
 function govHtml(gov) {

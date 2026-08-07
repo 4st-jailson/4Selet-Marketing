@@ -280,7 +280,7 @@ router.post("/", async (req, res, next) => {
 router.post("/research", async (req, res, next) => {
   try {
     const body = req.body || {};
-    const r = await researchLib.buscaFatos({ pillar: body.pillar, alternativa: !!body.alternativa });
+    const r = await researchLib.buscaFatos({ pillar: body.pillar, angulo: body.angulo, termo: body.termo, alternativa: !!body.alternativa });
     if (!r.available) {
       const motivo = r.reason === "no_key"
         ? "Sem chave da Tavily configurada. Peça a um administrador para colar a chave em Configurações."
@@ -297,7 +297,12 @@ router.post("/research", async (req, res, next) => {
       examinados: r.examinados,
       creditos: r.creditos,
       do_cache: !!r.doCache,
-      alternativa: !!r.alternativa,
+      // Posição na fila de ângulos + a consulta usada. A tela mostra os dois: sem eles o botão de
+      // "outro ângulo" era um salto no escuro, e quem clicava não tinha como saber se algo mudou.
+      angulo: r.angulo,
+      total_angulos: r.totalAngulos,
+      termo: r.termo || "",
+      consulta: r.query,
     });
   } catch (e) { next(e); }
 });
