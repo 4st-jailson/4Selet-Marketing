@@ -40,3 +40,9 @@ Thumbs.db
 # commitaria caddy/origin/key.pem no repositório. Nunca versionar.
 caddy/origin/
 *.pem
+
+# rascunhos de layout da peca de Midia e propostas visuais (nunca foram para o painel)
+interface/_mediatest/
+interface/public/propostas/
+interface/public/propostas.html
+interface/public/outputs/
