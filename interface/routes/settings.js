@@ -90,8 +90,25 @@ router.get("/integrations", (req, res) => {
     {
       id: "instagram", name: "Instagram (Graph API)", required: false,
       purpose: "Publicação automática no Instagram (protegida por gate de aprovação).",
-      configured: envHas("IG_ACCESS_TOKEN", f),
-      detail: envHas("IG_ACCESS_TOKEN", f) ? "Token presente." : "Defina IG_ACCESS_TOKEN + IG Business account id.",
+      // Este cartão olhava a variável IG_ACCESS_TOKEN — que o publicador NÃO LÊ. O token de
+      // verdade é colado em Configurações e vive em data/publish.json. Resultado: em produção, com
+      // a conta @4selet conectada desde julho, o cartão dizia "não configurado" e mandava definir
+      // uma variável de ambiente que não faria diferença nenhuma. Agora pergunta a quem sabe.
+      ...(function () {
+        let st = null;
+        try { st = require("../lib/publish").publicConfig(); } catch (e) { st = null; }
+        const conectado = !!(st && st.configured);
+        const conexao = (st && st.connection) || {};
+        const expirado = conectado && conexao.state === "expirado";
+        return {
+          configured: conectado && !expirado,
+          detail: !conectado
+            ? "Cole o token em Configurações › Publicação Instagram e clique em Testar."
+            : expirado
+              ? "Conectada como @" + (st.username || "?") + ", mas o token EXPIROU — cole um novo em Configurações › Publicação Instagram."
+              : "Conectada como @" + (st.username || "?") + ".",
+        };
+      })(),
     },
     {
       id: "youtube", name: "YouTube (Data API)", required: false,
