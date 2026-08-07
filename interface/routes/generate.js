@@ -138,16 +138,17 @@ router.post("/", async (req, res, next) => {
       campaign = campaigns.get(body.campaign_id);
     }
 
-    // Pesquisa de mercado ao vivo (Tavily) — opt-in via body.research. Degrada
-    // com elegancia: se a chave/SDK faltar ou nada retornar, a geracao segue sem ela.
-    let research = null;
-    if (body.research) {
-      const topic = [body.brief, campaign && campaign.angle].filter(Boolean).join(" — ");
-      try {
-        const r = await researchLib.marketIntel(topic, {});
-        if (r && r.available) research = r;
-      } catch (e) { research = null; }
-    }
+    // Fatos de mercado: só entram os que a PESSOA aceitou na tela, e são revalidados aqui pelo
+    // mesmo funil de segurança da busca. Sem esta revalidação o campo seria uma porta para injetar
+    // texto arbitrário dentro do prompt de geração.
+    //
+    // Antes disto a pesquisa rodava DENTRO desta rota, sozinha, e enfiava 12 achados no prompt sem
+    // ninguém olhar — medido, 2 deles eram o FAQ público de 4selet.com.br dizendo que a taxa é
+    // "7,9% + R$ 2,00", contra o 0% por 3 meses e R$ 1,99 da campanha. A peça podia sair publicando
+    // o preço errado da própria empresa, e passava no gate, porque 7,9% é legítimo como taxa DE
+    // MERCADO. Agora nada chega aqui sem clique.
+    const fatos = researchLib.validaAceitos(body.research_accepted);
+    const research = fatos.length ? { fatos } : null;
 
     const req2 = Object.assign({}, body, { campaign, research });
     const system = prompts.systemPrompt();
@@ -181,9 +182,38 @@ router.post("/", async (req, res, next) => {
       raw: result.text,
       governance: gov,
       content_type: body.content_type,
-      research_requested: !!body.research,
-      research_used: !!research,
-      research_sources: research ? research.sources : [],
+      // research_sources era uma lista de 12 títulos crus (com nome de concorrente dentro, porque a
+      // máscara nunca foi aplicada a eles). Agora são os fatos que a pessoa aceitou, e só.
+      research_facts: fatos,
+    });
+  } catch (e) { next(e); }
+});
+
+// POST /api/generate/research — procura FATOS DE MERCADO para a pessoa aceitar ou recusar.
+// Passo próprio, disparado por botão: a pesquisa saiu de dentro da geração porque (a) o Hugo pediu
+// que o achado chegasse como sugestão que ele aceita, e (b) ela custava 4 a 5 segundos no caminho
+// crítico de TODA geração com o antigo checkbox ligado.
+router.post("/research", async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const r = await researchLib.buscaFatos({ pillar: body.pillar, alternativa: !!body.alternativa });
+    if (!r.available) {
+      const motivo = r.reason === "no_key"
+        ? "Sem chave da Tavily configurada. Peça a um administrador para colar a chave em Configurações."
+        : r.reason === "no_sdk"
+          ? "A biblioteca de pesquisa não está instalada no servidor."
+          : "Não consegui pesquisar agora. Tente de novo em alguns instantes.";
+      return res.json({ disponivel: false, motivo });
+    }
+    // `_rejeitados` é diagnóstico interno de calibragem — nunca sai para a tela.
+    res.json({
+      disponivel: true,
+      cartoes: r.cartoes,
+      descartados: r.descartados,
+      examinados: r.examinados,
+      creditos: r.creditos,
+      do_cache: !!r.doCache,
+      alternativa: !!r.alternativa,
     });
   } catch (e) { next(e); }
 });

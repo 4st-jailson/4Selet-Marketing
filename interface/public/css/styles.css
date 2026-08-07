@@ -1797,3 +1797,27 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 @keyframes ai-note-flash { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 2px var(--accent); } }
 /* Selo no resumo da seção avançada: sobrevive a recolher a seção, então o sinal não some junto. */
 .adv-block > summary .adv-badge { margin-left: 8px; font-weight: 600; font-size: 11.5px; color: var(--accent); }
+
+/* ---- Fatos de mercado (pesquisa como sugestão, não como coisa que acontece) ---- */
+/* Substituiu o antigo checkbox "Pesquisar o mercado antes de gerar". Reaproveita a linguagem
+   visual do aviso de leitura do tema, que o Hugo já usa e aceitou. Sem emoji — regra do projeto. */
+.fatos-box { border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); padding: var(--s4); margin-bottom: var(--s4); }
+.fatos-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.fatos-tit { font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+.fatos-sub { font-size: 12px; margin-top: 4px; }
+.fato-card { margin-top: var(--s3); padding: var(--s3) var(--s4); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
+.fato-txt { font-size: 13.5px; line-height: 1.5; color: var(--text-2); margin: 0; }
+/* O número é o que importa no fato — destaca sem precisar de marcação no texto. */
+.fato-txt { font-variant-numeric: tabular-nums; }
+.fato-fonte { font-size: 12px; color: var(--text-mut); margin: 6px 0 0; }
+.fato-fonte a { color: var(--accent-strong); }
+/* Publieditorial: o texto tem cara de reportagem mas é conteúdo pago. Marcar é mais honesto que
+   descartar — às vezes o dado é bom, e quem decide é quem vai assinar a peça. */
+.fato-flag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: var(--r-pill); font-size: 10.5px; font-weight: 600; color: var(--warn); border: 1px solid var(--warn); }
+.fato-acts { display: flex; gap: var(--s3); margin-top: var(--s3); }
+.fatos-aceitos { margin-top: var(--s3); display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.fato-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px 3px 10px; border-radius: var(--r-pill); font-size: 12px; font-weight: 600; color: var(--accent-ink); background: var(--accent); }
+.fato-chip-x { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 3px; opacity: .8; }
+.fato-chip-x:hover { opacity: 1; }
+/* Prestação de contas do filtro: sem isto o descarte é invisível e não dá para auditar. */
+.fatos-conta { margin-top: var(--s3); font-size: 12px; line-height: 1.6; }

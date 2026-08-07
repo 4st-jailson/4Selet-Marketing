@@ -121,9 +121,87 @@ function pillarById(id) {
   return CONTENT_PILLARS.find((p) => p.id === id) || null;
 }
 
-// Lista fechada de concorrentes proibidos em criativos abertos (brand_identity.md)
+// Concorrentes proibidos em criativos abertos (brand_identity.md). A lista tinha 9 nomes e a
+// medição mostrou que ela vazava justamente os que aparecem de verdade nas buscas: HeroSpark,
+// Mercado Pago, Loja Integrada, Kirvano e Cielo passaram inteiros, com taxa e tudo. O documento de
+// marca fecha a frase com "e qualquer outra plataforma concorrente" — a parte que importa e que
+// nunca foi implementável por lista. Por isso a lista agora é maior E existe uma regra ESTRUTURAL
+// junto (nome próprio colado a percentual), em lib/validation.js e em lib/research.js.
 const BANNED_COMPETITORS = [
   "greenn", "hubla", "kiwify", "hotmart", "eduzz", "ticto", "cakto", "monetizze", "perfect pay", "perfectpay",
+  "herospark", "hero spark", "kirvano", "braip", "digital manager guru", "guru", "yampi", "appmax",
+  "doppus", "payt", "lastlink", "hero", "voomp", "adoorei", "pepper", "kiwi", "eduzz.com",
+  "mercado pago", "mercadopago", "pagseguro", "pagbank", "cielo", "stone", "getnet", "rede",
+  "loja integrada", "nuvemshop", "shopify", "wbuy", "tray", "vtex", "kajabi", "teachable", "thinkific",
+];
+
+// ---- Pesquisa de mercado (Tavily) ------------------------------------------
+// Medido em 2026-08-07: o desenho antigo disparava 3 buscas (6 créditos) em toda geração, uma delas
+// com query CONSTANTE que não continha o tema — e era a de maior relevância, o que fazia o material
+// mais confiável que chegava ao modelo ser sempre uma tabela de preço de concorrente. Pior: o FAQ
+// público de 4selet.com.br entrava no prompt dizendo "7,9% + R$ 2,00 no plano Starter", contra o 0%
+// por 3 meses e R$ 1,99 oficiais — a peça podia publicar o preço errado da própria empresa.
+//
+// O desenho novo: UMA busca por pilar, escrita como MÉTRICA DE SETOR e nunca como preço para o
+// vendedor (medido: pergunta de métrica deu 0 concorrente em 8; a mesma família perguntada como
+// preço deu 4 em 6, mesmo com todos os filtros ligados).
+const RESEARCH_QUERIES = {
+  taxa_zero: {
+    principal: "custo de adquirencia e meios de pagamento para pequenas empresas no Brasil",
+    alternativa: "meios de pagamento mais usados no varejo brasileiro",
+  },
+  educacional: {
+    principal: "prazo de recebimento de vendas online e capital de giro de pequenas empresas no Brasil",
+    alternativa: "inadimplencia e chargeback no comercio eletronico brasileiro",
+  },
+  // Medido em 3 variantes: esta deu 8 de 8 resultados acima do piso (0,82 / 0,82 / 0,79), com
+  // manchetes que falam do público real da 4Selet ("Criador de conteúdo virou vendedor: a explosão
+  // do social commerce"). A que estava aqui antes ("educacao online e cursos digitais") deu 0 de 7
+  // — trazia IA no trabalho, 5G e o Ideb de Goiânia.
+  curiosidade_mercado: {
+    principal: "economia da criacao de conteudo e creator economy no Brasil",
+    alternativa: "vendas do comercio eletronico brasileiro faturamento e ticket medio",
+  },
+  prova_plataforma: {
+    principal: "taxa de aprovacao de pagamento com cartao no e-commerce brasileiro",
+    alternativa: "antifraude e recusa de transacao em pagamentos online no Brasil",
+  },
+  novidade: {
+    principal: "regulacao do Banco Central para meios de pagamento e arranjos de pagamento",
+    alternativa: "novas regras de pagamentos instantaneos e Pix no Brasil",
+  },
+  motivacional: {
+    principal: "empreendedorismo digital e profissionalizacao de pequenos negocios no Brasil",
+    alternativa: "produtividade e gestao de pequenas empresas brasileiras",
+  },
+};
+// Piso de relevância aplicado no NOSSO código. A Tavily já devolve um `score` por resultado e o
+// código antigo o descartava na linha seguinte. Calibrado em ~30 resultados: o corte tira vaga de
+// emprego (0,069) e vale-brinde (0,149) e mantém matéria de veículo grande (0,79 / 0,49 / 0,32).
+const RESEARCH_SCORE_MIN = 0.30;
+const RESEARCH_CACHE_TTL_H = 6;   // a Tavily é determinística: repetir a mesma pergunta devolve o mesmo
+const RESEARCH_MAX_ACEITOS = 4;   // teto do que pode ir para o prompt
+// Fora da busca: rede social e vídeo (texto de navegação, não fato), agregadores de comparação, os
+// domínios dos concorrentes — e 4selet.com.br, porque o FAQ público da casa contradiz a campanha.
+const RESEARCH_EXCLUDE_DOMAINS = [
+  "instagram.com", "youtube.com", "tiktok.com", "facebook.com", "pinterest.com", "x.com", "twitter.com",
+  "linkedin.com", "reddit.com", "quora.com", "pt.wikipedia.org", "en.wikipedia.org",
+  "4selet.com.br",
+  "hotmart.com", "kiwify.com.br", "eduzz.com", "monetizze.com.br", "ticto.com.br", "braip.com",
+  "herospark.com", "kirvano.com", "cakto.com.br", "hubla.com", "greenn.com.br", "perfectpay.com.br",
+  "mercadopago.com.br", "pagseguro.uol.com.br", "lojaintegrada.com.br", "nuvemshop.com.br",
+];
+// Título/URL que denuncia página de COMPARAÇÃO de plataformas: mesmo sem citar nome conhecido, é
+// conteúdo que só existe para ranquear concorrente. Descarta o achado inteiro.
+const RESEARCH_COMPARISON_LEXICON = [
+  "melhor plataforma", "melhores plataformas", "alternativas a", "alternativa a", "comparativo",
+  "qual plataforma", " vs ", "vs.", "taxas da", "quanto cobra", "ranking de plataformas",
+  "top 5", "top 6", "top 10", "concorrentes",
+];
+// Instituições cujo nome PODE aparecer num fato (não são concorrentes; são fonte de dado setorial).
+const RESEARCH_INSTITUTIONS_OK = [
+  "abcomm", "cndl", "sebrae", "ibge", "banco central", "bacen", "serasa", "cnc", "fgv", "ipea",
+  "nielsen", "ebit", "opinion box", "neotrust", "febraban",
 ];
 
 // Emojis banidos (associados a hype) — brand_identity.md §Emojis
@@ -274,6 +352,13 @@ module.exports = {
   PALETTE,
   PALETAS_CAMPANHA,
   PALETA_IDS,
+  RESEARCH_QUERIES,
+  RESEARCH_SCORE_MIN,
+  RESEARCH_CACHE_TTL_H,
+  RESEARCH_MAX_ACEITOS,
+  RESEARCH_EXCLUDE_DOMAINS,
+  RESEARCH_COMPARISON_LEXICON,
+  RESEARCH_INSTITUTIONS_OK,
   ALLOWED_PLATFORMS,
   BRAND_PILLARS,
   CONTENT_PILLARS,

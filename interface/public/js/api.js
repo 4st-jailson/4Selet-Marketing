@@ -129,6 +129,8 @@ const API = (() => {
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),
     renderPreview: (payload) => req("POST", "/api/generate/preview", payload),
+    // fatos de mercado: passo próprio, disparado por botão (não roda dentro da geração)
+    buscarFatos: (pillar, alternativa) => req("POST", "/api/generate/research", { pillar, alternativa: !!alternativa }),
     refine: (payload) => req("POST", "/api/generate/refine", payload),
     regenerateSlide: (folder, index, instruction) => req("POST", "/api/generate/slide", { folder, index, instruction }),
     regenerateSlideMem: (payload) => req("POST", "/api/generate/slide-mem", payload || {}),

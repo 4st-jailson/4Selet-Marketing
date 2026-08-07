@@ -179,10 +179,20 @@ function generationPrompt(req) {
     lines.push("Escreva a legenda destacando o RECONHECIMENTO externo (autoridade de terceiros), sobrio e factual. NAO invente conteudo da materia; ancore no que o veiculo representa.");
     lines.push("");
   }
-  if (req.research && Array.isArray(req.research.findings) && req.research.findings.length) {
-    lines.push("INTELIGENCIA DE MERCADO (pesquisa AO VIVO via Tavily — use como apoio factual e de atualidade; NAO copie literalmente: sintetize, valide contra os knowledge files e mantenha a voz/regras da marca 4Selet):");
-    req.research.findings.slice(0, 12).forEach((f) => lines.push("- " + f));
-    lines.push("PRIORIDADE ABSOLUTA: os knowledge files e as REGRAS DURAS vencem SEMPRE. Se a pesquisa contradisser um numero oficial da marca (taxa, prazo, aprovacao) ou citar/insinuar um concorrente, IGNORE esse ponto — nunca reproduza numero de concorrente nem contradiga a Taxa Zero oficial. A pesquisa serve so para atualidade/angulo, jamais como fonte de dados sobre a 4Selet.");
+  // Antes isto se chamava "INTELIGENCIA DE MERCADO (pesquisa AO VIVO via Tavily)" e despejava 12
+  // achados crus que ninguem tinha olhado. Sumiu junto a instrucao defensiva "se a pesquisa
+  // contradisser um numero oficial da marca, IGNORE": ela pedia ao modelo que desprezasse o site
+  // oficial da empresa em favor de um .md — nao ha mais o que contradizer, porque o dominio da casa
+  // e os dos concorrentes nao chegam mais ate aqui (excludeDomains + funil + aceite humano).
+  if (req.research && Array.isArray(req.research.fatos) && req.research.fatos.length) {
+    lines.push("FATOS DE MERCADO APROVADOS PELO OPERADOR (ele leu, conferiu a fonte e escolheu cada um):");
+    req.research.fatos.slice(0, 4).forEach((f) => {
+      const proc = [f.veiculo, f.data].filter(Boolean).join(", ");
+      lines.push("- " + f.fato + (proc ? " (fonte: " + proc + ")" : ""));
+    });
+    lines.push("COMO USAR: sao dados do SETOR, para abrir a peca ou dar contexto — nunca dados sobre a 4Selet.");
+    lines.push("Se usar um numero destes, CITE A FONTE junto (ex.: 'segundo a CNDL'): numero sem dono soa como promessa nossa.");
+    lines.push("Nao e obrigatorio usar. Se nao couber na peca sem forcar, ignore.");
     lines.push("");
   }
   lines.push("FORMATO DE SAIDA — responda APENAS com um objeto JSON valido, sem texto fora do JSON, neste schema:");

@@ -115,7 +115,7 @@ app.use("/api/content", require("./routes/content"));
 // O freio de IA vale só para as rotas que REALMENTE chamam o modelo. SALVAR e mandar para
 // revisão não gastam IA — se entrassem na mesma cota, alguém que gerasse muito ficaria sem
 // conseguir gravar o trabalho, que é exatamente o pior desfecho possível.
-app.post(["/api/generate", "/api/generate/refine", "/api/generate/assistant", "/api/generate/slide", "/api/generate/slide-mem"], limiteIA);
+app.post(["/api/generate", "/api/generate/refine", "/api/generate/assistant", "/api/generate/slide", "/api/generate/slide-mem", "/api/generate/research"], limiteIA);
 app.post("/api/generate/interpret", limiteInterpret);
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));

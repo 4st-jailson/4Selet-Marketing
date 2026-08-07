@@ -4167,8 +4167,21 @@ async function viewCreate(arg, query) {
           </details>
         </div>
 
+        <!-- Antes aqui havia um checkbox "Pesquisar o mercado antes de gerar". Ele disparava 3
+             buscas dentro da geração e enfiava 12 achados no prompt sem ninguém olhar — medido, 2
+             deles eram o FAQ público do próprio site da 4Selet dizendo que a taxa é 7,9%, contra o
+             0% da campanha. Agora a pesquisa é um passo com dono: você pede, lê, e escolhe. -->
         <div class="form-foot">
-          <label class="research-toggle"><input type="checkbox" id="g-research" /> <span>Pesquisar o mercado na internet antes de gerar <span class="hint">(busca tendências e concorrência ao vivo para embasar a peça com fatos atuais — leva alguns segundos a mais)</span></span></label>
+          <div class="fatos-box" id="g-fatos-box">
+            <div class="fatos-head">
+              <span class="fatos-tit">Fatos de mercado <span class="hint">(opcional)</span></span>
+              <button type="button" class="btn btn-sm btn-ghost" id="g-fatos-buscar">Procurar fatos atuais</button>
+            </div>
+            <p class="hint fatos-sub">Procura notícia recente do setor no Brasil e mostra o que encontrar. Nada entra na peça sem você aceitar.</p>
+            <div id="g-fatos-lista"></div>
+            <div id="g-fatos-aceitos" class="fatos-aceitos" hidden></div>
+            <div id="g-fatos-conta" class="hint fatos-conta" hidden></div>
+          </div>
           <button class="btn btn-primary btn-block" id="g-run">Gerar com IA</button>
         </div>
       </div>
@@ -4309,6 +4322,7 @@ async function viewCreate(arg, query) {
   if ($("#g-style")) $("#g-style").addEventListener("change", updPhotoRow);
   // Escolher tipografia fora da identidade pergunta antes (modal centralizado, Sim/Não).
   ligaConfirmacaoDeFonte($("#g-font"));
+  ligaFatosDeMercado();
   if ($("#g-photo-file")) $("#g-photo-file").addEventListener("change", async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const hint = $("#g-photo-hint"); if (hint) hint.textContent = "enviando…";
@@ -4720,13 +4734,91 @@ function runGenerate(ev) {
     avisoRepetido: "Já estou gerando esta peça. O resultado aparece aqui embaixo.",
   });
 }
+/* ---- Fatos de mercado: pesquisa como SUGESTÃO, não como coisa que acontece ---- */
+// Os fatos que a pessoa aceitou. Só isto vai no payload da geração — e o servidor revalida.
+let FATOS_ACEITOS = [];
+function pintaFatosAceitos() {
+  const box = $("#g-fatos-aceitos"); if (!box) return;
+  box.hidden = !FATOS_ACEITOS.length;
+  box.innerHTML = FATOS_ACEITOS.length
+    ? '<span class="hint">Vão para a peça (' + FATOS_ACEITOS.length + "):</span> "
+      + FATOS_ACEITOS.map((f, i) => '<span class="fato-chip">' + esc(f.veiculo || "fonte")
+        + '<button type="button" class="fato-chip-x" data-tira-fato="' + i + '" title="Tirar este fato">&times;</button></span>').join("")
+    : "";
+}
+function cartaoDeFato(f, i) {
+  const proc = [f.veiculo, f.data ? fmtDate(f.data) : ""].filter(Boolean).join(" · ");
+  return '<div class="fato-card" data-fato="' + i + '">'
+    + '<p class="fato-txt">' + esc(f.fato) + "</p>"
+    + '<p class="fato-fonte">' + esc(proc)
+      + (f.url ? ' · <a href="' + esc(f.url) + '" target="_blank" rel="noopener">ver matéria</a>' : "")
+      + (f.patrocinado ? ' <span class="fato-flag" title="A URL indica publieditorial — o texto tem cara de reportagem mas é conteúdo pago">conteúdo patrocinado</span>' : "")
+    + "</p>"
+    + '<div class="fato-acts"><button type="button" class="btn btn-sm" data-usa-fato="' + i + '">Usar este fato</button>'
+    + '<button type="button" class="btn btn-sm btn-ghost" data-larga-fato="' + i + '">Descartar</button></div></div>';
+}
+function ligaFatosDeMercado() {
+  const btn = $("#g-fatos-buscar"); if (!btn || btn.dataset.lig) return;
+  btn.dataset.lig = "1";
+  FATOS_ACEITOS = [];
+  let achados = [];
+  const lista = $("#g-fatos-lista"), conta = $("#g-fatos-conta");
+
+  const buscar = (alternativa) => emVoo("fatos-mercado", async () => {
+    lista.innerHTML = '<p class="hint"><span class="spinner"></span> Procurando notícia recente do setor…</p>';
+    conta.hidden = true;
+    let r;
+    try { r = await API.buscarFatos(($("#g-pillar") && $("#g-pillar").value) || "", alternativa); }
+    catch (e) { lista.innerHTML = '<p class="hint">Não consegui pesquisar agora. Você pode gerar sem pesquisa.</p>'; return; }
+    if (!r || !r.disponivel) { lista.innerHTML = '<p class="hint">' + esc((r && r.motivo) || "Pesquisa indisponível.") + "</p>"; return; }
+    achados = r.cartoes || [];
+    const d = r.descartados || {};
+    // Prestação de contas: sem isto o filtro é invisível e a pessoa não tem como auditar o que
+    // o sistema jogou fora em nome dela.
+    const partes = [];
+    if (d.concorrente) partes.push(d.concorrente + " citavam plataforma concorrente");
+    if (d.comparativo) partes.push(d.comparativo + " eram comparativo de plataformas");
+    if (d.relevancia) partes.push(d.relevancia + " não tinham a ver com o assunto");
+    if (d.sem_dado) partes.push(d.sem_dado + " não traziam dado nenhum");
+    if (d.navegacao) partes.push(d.navegacao + " eram menu de site, não texto");
+    if (d.repetido) partes.push(d.repetido + " eram repetição");
+    const descartados = Object.values(d).reduce((a, b) => a + b, 0);
+    conta.hidden = false;
+    conta.innerHTML = "Procurei " + (r.examinados || 0) + " páginas. "
+      + (descartados ? "Descartei " + descartados + (partes.length ? " — " + esc(partes.join(", ")) : "") + ". " : "")
+      + '<button type="button" class="lt-ver" id="g-fatos-outro">Procurar outro ângulo</button>';
+    lista.innerHTML = achados.length
+      ? achados.map(cartaoDeFato).join("")
+      : '<p class="hint">Procurei e não achei fato que ajude nesta peça. Pode gerar sem pesquisa — em peça motivacional isso é o normal.</p>';
+    const outro = $("#g-fatos-outro");
+    if (outro) outro.onclick = () => buscar(!alternativa);
+  }, { botao: btn, rotulo: "procurando…", avisoRepetido: "A pesquisa já está em andamento." });
+
+  btn.onclick = () => buscar(false);
+  // Um listener só, delegado: os cartões nascem e morrem, o ouvinte fica.
+  $("#g-fatos-box").addEventListener("click", (e) => {
+    const usa = e.target.closest("[data-usa-fato]");
+    if (usa) {
+      const f = achados[Number(usa.dataset.usaFato)];
+      if (f && FATOS_ACEITOS.length < 4 && !FATOS_ACEITOS.some((x) => x.url === f.url)) FATOS_ACEITOS.push(f);
+      else if (FATOS_ACEITOS.length >= 4) toast("Quatro fatos já é bastante para uma peça só.", "info");
+      const card = usa.closest(".fato-card"); if (card) card.remove();
+      pintaFatosAceitos(); return;
+    }
+    const larga = e.target.closest("[data-larga-fato]");
+    if (larga) { const card = larga.closest(".fato-card"); if (card) card.remove(); return; }
+    const tira = e.target.closest("[data-tira-fato]");
+    if (tira) { FATOS_ACEITOS.splice(Number(tira.dataset.tiraFato), 1); pintaFatosAceitos(); }
+  });
+}
+
 async function runGenerateInterno() {
   const brief = $("#g-brief").value.trim();
   $("#e-brief").textContent = ""; $("#g-brief").classList.remove("invalid"); $("#g-brief").removeAttribute("aria-invalid");
   if (brief.length < 8) { $("#g-brief").classList.add("invalid"); $("#g-brief").setAttribute("aria-invalid", "true"); $("#e-brief").textContent = "Descreva o tema (mín. 8 caracteres)."; return; }
   // O painel de progresso sobe ANTES da leitura do tema. Era esta a janela cega: a leitura é uma
   // chamada de IA de 3,6 a 5,0 segundos (medido) e, até aqui, nada na tela dizia que ela existia.
-  const prog = startGenProgress($("#g-result"), { research: !!($("#g-research") && $("#g-research").checked) });
+  const prog = startGenProgress($("#g-result"), { research: !!(FATOS_ACEITOS && FATOS_ACEITOS.length) });
   try {
     const seguir = await leTemaEAplica(brief);
     if (!seguir) {
@@ -4756,7 +4848,7 @@ async function geraComPayload(prog) {
     key_offer: $("#g-offer").value.trim() || undefined,
     mood: ($("#g-mood") && $("#g-mood").value.trim()) || undefined,
     extra: $("#g-extra").value.trim() || undefined,
-    research: ($("#g-research") && $("#g-research").checked) || undefined,
+    research_accepted: (FATOS_ACEITOS && FATOS_ACEITOS.length) ? FATOS_ACEITOS : undefined,
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
     logo: ($("#g-logo") && $("#g-logo").value) || undefined,
     watermark: ($("#g-wm") && $("#g-wm").value) || undefined,
@@ -4782,15 +4874,18 @@ async function geraComPayload(prog) {
 
 function renderGenResult(r, opts) {
   $("#g-flag").innerHTML = r.simulated ? '<span class="sim-flag">SIMULADO</span>' : '<span class="badge plain" title="Modelo de IA que gerou esta peça">' + esc(modelLabel(r.model)) + "</span>";
-  if (r.research_requested) {
-    $("#g-flag").innerHTML += r.research_used
-      ? ' <span class="badge ok" title="Pesquisa de mercado ao vivo usada como apoio na geração">▸ Tavily: ' + ((r.research_sources || []).length) + " fontes</span>"
-      : ' <span class="badge warn" title="Tavily não retornou dados — geração seguiu sem pesquisa">▸ Tavily indisponível</span>';
+  // Antes o cabeçalho dizia "Tavily: 12 fontes" e a caixa listava os 12 títulos crus — incluindo
+  // nomes de concorrente, porque a máscara nunca foi aplicada a eles. Agora só existem os fatos
+  // que a pessoa aceitou, então o número diz a verdade e a lista é curta.
+  const fatos = r.research_facts || [];
+  if (fatos.length) {
+    $("#g-flag").innerHTML += ' <span class="badge ok" title="Fatos de mercado que você aprovou e mandou para a geração">'
+      + fatos.length + (fatos.length === 1 ? " fato de pesquisa" : " fatos de pesquisa") + "</span>";
   }
-  const researchHtml = (r.research_used && (r.research_sources || []).length)
-    ? `<details class="research-box mt"><summary>Fontes da pesquisa Tavily (${r.research_sources.length})</summary>
-         <ul class="research-list">${r.research_sources.map((s) => `<li><span class="research-focus">${esc(s.focus)}</span> <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("")}</ul>
-         <p class="muted" style="font-size:12px">Usadas como apoio factual; o conteúdo final segue as regras e o conhecimento da marca.</p>
+  const researchHtml = fatos.length
+    ? `<details class="research-box mt"><summary>Fatos de mercado usados (${fatos.length})</summary>
+         <ul class="research-list">${fatos.map((f) => `<li>${esc(f.fato)}<br><span class="hint">${esc([f.veiculo, f.data ? fmtDate(f.data) : ""].filter(Boolean).join(" · "))}${f.url ? ' · <a href="' + esc(f.url) + '" target="_blank" rel="noopener">ver matéria</a>' : ""}</span></li>`).join("")}</ul>
+         <p class="muted" style="font-size:12px">Você aprovou cada um destes antes de gerar. São dados do setor — os números da 4Selet vêm dos arquivos oficiais da marca.</p>
        </details>`
     : "";
   const ct = metaType(r.content_type);
