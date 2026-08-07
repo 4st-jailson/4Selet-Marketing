@@ -57,12 +57,62 @@ function avisaFotosInventadas(gov, removidas) {
   // O caminho inventado DIZ o que era pra ser. Quando o nome cheira a captura de tela, mandar a
   // pessoa "buscar uma foto de banco" é o conselho errado — nenhum banco de imagem tem o dashboard
   // da 4Selet. Aí o caminho é o print, no layout de aparelho.
-  const pareceCaptura = removidas.some((r) => /print|captur|screenshot|dashboard|plataforma|tela|painel/i.test(String(r.caminho || r.image || "")));
+  const pareceCaptura = removidas.some((r) => ehPedidoDePrint(r.caminho));
   gov.warnings.push("Você pediu " + (pareceCaptura ? "uma captura de tela " : "foto ") + onde + ", e a peça vai sair sem ela. "
-    + "A IA não enxerga o seu acervo nem navega em sites, então ela escreve o nome de um arquivo que não existe. "
-    + (pareceCaptura
-      ? "Para colocar o print: envie a imagem em Criar Conteúdo e escolha o layout \"Print em aparelho\" no slide — ele desenha a captura dentro de um notebook, celular ou janela de navegador, reta e legível."
-      : "Para colocar a foto: use \"Buscar imagem\" no slide, ou envie a sua em Criar Conteúdo."));
+    + "A IA não enxerga o seu acervo nem navega em sites por conta própria, então ela escreve o nome de um arquivo que não existe. "
+    + "Resolva na janela que abriu: dá para capturar de um site (é só colar o link), enviar um arquivo seu, buscar uma foto ou trocar o que vai nesse lugar.");
+}
+
+// Palavras que denunciam pedido de CAPTURA DE TELA (e não de foto ilustrativa). A diferença muda o
+// caminho oferecido: nenhum banco de imagens tem o dashboard da 4Selet nem a matéria do Valor.
+const RE_PRINT = /print|captur|screenshot|screen shot|dashboard|painel|plataforma|tela d|checkout|matéria|materia|reportagem|site|página|pagina|mockup|interface/i;
+function ehPedidoDePrint(txt) { return RE_PRINT.test(String(txt || "")); }
+
+// PENDÊNCIA DE IMAGEM — a peça saiu, mas faltou uma imagem que o pedido descrevia.
+//
+// Antes isto era só um aviso em texto no meio de outros avisos, e o Hugo continuava no escuro:
+// "não é interessante deixar o usuário no escuro, sendo preciso informar que há... não foi possível
+// localizar a imagem informada, como devemos prosseguir? Ou você deseja subir um arquivo?"
+//
+// Agora vira um objeto que a tela sabe transformar em pergunta com saídas. Duas fontes alimentam a
+// lista, e as duas importam:
+//   (a) caminho de arquivo inventado — o modelo escreveu "/uploads/print-dashboard.jpg";
+//   (b) o próprio modelo declarando no campo `limitacoes` que não conseguiu (quando ele nem tenta
+//       inventar o caminho, que é o caso do slide 3 que reclamaram).
+function pendenciasDeImagem(contentTypeId, removidas, limitacoes) {
+  const out = [];
+  const visto = new Set();
+  const inclui = (slide, pedido, origem) => {
+    const n = Number(slide) || 0;
+    const chave = n + "|" + String(pedido).toLowerCase().slice(0, 60);
+    if (visto.has(chave)) return;
+    visto.add(chave);
+    out.push({
+      slide: n,
+      pedido: String(pedido || "").trim().slice(0, 200),
+      tipo: ehPedidoDePrint(pedido) ? "print" : "foto",
+      origem,
+    });
+  };
+  (removidas || []).forEach((r) => {
+    // O caminho inventado é a melhor descrição disponível do que era para estar ali:
+    // "/uploads/print-dashboard-4selet.jpg" -> "print dashboard 4selet".
+    const legivel = String(r.caminho || "").split(/[\\/]/).pop().replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim();
+    inclui(r.slide, legivel || "a imagem que você pediu", "caminho_inventado");
+  });
+  (limitacoes || []).forEach((l) => {
+    const pedido = String((l && l.pedido) || "").trim();
+    if (!pedido) return;
+    // Só as limitações que são SOBRE imagem viram pendência; as outras seguem como aviso de texto.
+    if (!/imagem|foto|print|captur|screenshot|tela|dashboard|mockup|gráfico|grafico|ilustra/i.test(pedido)) return;
+    inclui(l.slide, pedido, "limitacao");
+  });
+  // Peça de Mídia sem print é peça que não existe — o print É o conteúdo. Se nada foi detectado,
+  // ainda assim vale perguntar, porque o caminho normal dela começa pelo link da matéria.
+  if (contentTypeId === "media_mention" && !out.length) {
+    inclui(0, "o print da matéria publicada", "tipo_exige");
+  }
+  return out.slice(0, 8);
 }
 
 // O modelo declarou, no campo `limitacoes`, o que NÃO conseguiu entregar. Antes isso não existia:
@@ -71,8 +121,8 @@ function avisaFotosInventadas(gov, removidas) {
 // poderia aparecer, nunca foi exibido na tela. Aqui a declaração vira aviso de marca, que a tela
 // já sabe pintar.
 function avisaLimitacoes(gov, parsed) {
-  const lista = parsed && Array.isArray(parsed.limitacoes) ? parsed.limitacoes : [];
-  if (!gov || !lista.length) return;
+  const lista = parsed && Array.isArray(parsed.limitacoes) ? parsed.limitacoes.slice() : [];
+  if (!gov || !lista.length) { try { if (parsed) delete parsed.limitacoes; } catch (e) {} return lista; }
   if (!Array.isArray(gov.warnings)) gov.warnings = [];
   for (const l of lista.slice(0, 6)) {
     const pedido = String((l && l.pedido) || "").trim().slice(0, 220);
@@ -83,6 +133,7 @@ function avisaLimitacoes(gov, parsed) {
   }
   // O campo é instrução para o modelo, não conteúdo da peça: sai antes de virar arquivo.
   try { delete parsed.limitacoes; } catch (e) {}
+  return lista;
 }
 
 // Alerta de marca PRÉ-aplicação: se o pedido do usuário citou cor fora da paleta oficial
@@ -198,8 +249,12 @@ router.post("/", async (req, res, next) => {
     }
     const fotosInventadas = limpaFotosInventadas(parsed);
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
-    avisaFotosInventadas(gov, fotosInventadas);
-    avisaLimitacoes(gov, parsed);
+    const limitacoes = avisaLimitacoes(gov, parsed);
+    // Ordem importa: a lista de pendências é montada ANTES do aviso de foto inventada, porque o
+    // aviso agora aponta para a janela ("resolva na janela que abriu") — e só faz sentido dizer isso
+    // se a janela vai mesmo abrir.
+    const pendencias = pendenciasDeImagem(body.content_type, fotosInventadas, limitacoes);
+    if (pendencias.length) avisaFotosInventadas(gov, fotosInventadas);
 
     res.json({
       simulated: result.simulated,
@@ -212,6 +267,8 @@ router.post("/", async (req, res, next) => {
       // research_sources era uma lista de 12 títulos crus (com nome de concorrente dentro, porque a
       // máscara nunca foi aplicada a eles). Agora são os fatos que a pessoa aceitou, e só.
       research_facts: fatos,
+      // O que faltou de imagem, em forma de pergunta com saídas. Lista vazia = nada a resolver.
+      pendencias_imagem: pendencias,
     });
   } catch (e) { next(e); }
 });

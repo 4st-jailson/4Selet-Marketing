@@ -70,6 +70,10 @@ const API = (() => {
     testPexels: () => req("POST", "/api/settings/pexels-test"),
     pexelsSearch: (payload) => pexelsSearchCached(payload),
     pexelsPick: (payload) => req("POST", "/api/pexels/pick", payload),
+    // Captura de site: o painel abre a página num navegador e guarda o print no acervo.
+    // É o caminho para o que banco de imagem nenhum tem — o dashboard da 4Selet, a matéria publicada.
+    capturePresets: () => req("GET", "/api/capture/presets"),
+    captureUrl: (payload) => req("POST", "/api/capture", payload),
     // credenciais de integração inseridas pelo painel (admin) — grava em data/, nunca volta o valor
     saveCredential: (name, value) => req("POST", "/api/settings/credential", { name, value }),
     // provedores de IA (multi-IA: Claude / ChatGPT / ...)

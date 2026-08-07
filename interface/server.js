@@ -103,6 +103,9 @@ const limiteIA = limitar({ nome: "ia", max: 30, janelaMs: 5 * 60 * 1000, mensage
 const limiteInterpret = limitar({ nome: "interpret", max: 60, janelaMs: 5 * 60 * 1000, mensagem: "Muitas interpretações seguidas — aguarde alguns instantes." });
 const limiteRender = limitar({ nome: "render", max: 40, janelaMs: 5 * 60 * 1000, mensagem: "Muitos pedidos de arte seguidos." });
 const limitePexels = limitar({ nome: "pexels", max: 60, janelaMs: 5 * 60 * 1000, mensagem: "Muitas buscas de imagem seguidas." });
+// Capturar um site sobe um Chromium inteiro e fala com a internet a partir do servidor: é a rota
+// mais cara e a de maior superfície do painel. Balde curto de propósito.
+const limiteCapture = limitar({ nome: "capture", max: 20, janelaMs: 5 * 60 * 1000, mensagem: "Muitas capturas de site seguidas — aguarde alguns instantes." });
 
 app.use("/api/users", require("./routes/users"));
 app.use("/api/settings", require("./routes/settings"));
@@ -120,6 +123,8 @@ app.post("/api/generate/interpret", limiteInterpret);
 app.use("/api/generate", require("./routes/generate"));
 app.use("/api/uploads", require("./routes/uploads"));
 app.use("/api/pexels", limitePexels, require("./routes/pexels"));
+app.post("/api/capture", limiteCapture);
+app.use("/api/capture", require("./routes/capture"));
 app.use("/api/publish", require("./routes/publish"));
 
 // Disparador de agendamentos: publica as peças agendadas no horário (passando pelo gate).
