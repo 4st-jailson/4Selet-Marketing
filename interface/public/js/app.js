@@ -46,6 +46,51 @@ function toast(msg, type) {
   $("#toasts").appendChild(t);
   setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); }, 4200);
 }
+/* ---- Ação em voo: trava o disparo duplo e nunca deixa a tela muda ---------- */
+// O Hugo relatou: "no intervalo em que vc clica nessa ação e o de retornar a resposta do prompt o
+// usuario fica no escuro, de forma q ele de forma intuitiva pode clicar na ação mais de uma vez".
+// Medido no Gerar com IA: 3,6 a 5,0 segundos de tela parada ANTES de qualquer sinal, porque a
+// leitura do tema (uma chamada de IA) acontecia antes da linha que desabilitava o botão. E o
+// segundo clique não era inofensivo: disparava outra leitura, outra geração e, com a pesquisa de
+// mercado ligada, o dobro dos créditos — além de duas respostas correndo para escrever na tela.
+//
+// Este helper existe para resolver a classe inteira, não este botão só:
+//   1. o retorno visual acontece na MESMA volta do clique, antes de qualquer `await`;
+//   2. a chave impede um segundo disparo enquanto o primeiro não terminou;
+//   3. o `finally` devolve o botão em TODOS os caminhos de saída — sucesso, erro, retorno
+//      antecipado e modal cancelado —, que é onde remendo feito à mão costuma falhar.
+const EM_VOO = new Set();
+function emVoo(chave, fn, opts) {
+  opts = opts || {};
+  const btn = typeof opts.botao === "string" ? $(opts.botao) : (opts.botao || null);
+  if (EM_VOO.has(chave)) {
+    // Clicar de novo não é erro de quem clicou: é a tela que demorou a responder. Então explica,
+    // não repreende — e sacode o botão para a pessoa achar onde está o retorno.
+    toast(opts.avisoRepetido || "Isso já está sendo processado. Aguarde o resultado aparecer.", "info");
+    if (btn) { btn.classList.remove("pulsa"); void btn.offsetWidth; btn.classList.add("pulsa"); }
+    return Promise.resolve(undefined);
+  }
+  EM_VOO.add(chave);
+  let antes = null;
+  if (btn) {
+    antes = { html: btn.innerHTML, disabled: btn.disabled };
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+    if (opts.rotulo) btn.innerHTML = '<span class="spinner"></span> ' + esc(opts.rotulo);
+  }
+  const solta = () => {
+    EM_VOO.delete(chave);
+    if (btn && antes) {
+      btn.disabled = antes.disabled;
+      btn.innerHTML = antes.html;
+      btn.removeAttribute("aria-busy");
+      btn.classList.remove("pulsa");
+    }
+  };
+  let p;
+  try { p = Promise.resolve(fn()); } catch (e) { solta(); throw e; }
+  return p.then((v) => { solta(); return v; }, (e) => { solta(); throw e; });
+}
 // Overlay GLOBAL de carregamento: escurece a tela + círculo no meio + frase curta do que ocorre.
 // Para os pontos que recarregam/salvam e demoram — evita deixar o usuário sem saber o que acontece.
 // Uso: showBusy("Gerando a arte…"); try {…} finally { hideBusy(); }
@@ -4327,28 +4372,46 @@ async function viewCreate(arg, query) {
 
 // Mostra as etapas da "equipe" enquanto a IA trabalha. Avança no tempo (o
 // backend faz tudo numa chamada) só para dar a sensação de bastidores em ação.
-function startGenProgress(host, research) {
-  if (!host) return null;
+// Painel de progresso da geração. Passou a ser um CONTROLADOR (e não só um setInterval) porque
+// agora ele precisa aparecer ANTES da leitura do tema e ser marcado por quem sabe o que terminou.
+// A primeira etapa é REAL: fica acesa enquanto a leitura roda de verdade e só é dada como feita
+// quando a resposta chega. As demais avançam sozinhas — não existe progresso vindo do servidor, e
+// fingir precisão que não temos seria pior. O cronômetro é o sinal honesto de que algo está
+// acontecendo: é ele que segura a vontade de clicar de novo.
+function startGenProgress(host, opts) {
+  opts = opts || {};
+  if (!host) return { etapa() {}, fim() {} };
   const steps = [
-    research ? "Pesquisando o tema no mercado" : "Estudando o tema e o público",
+    "Lendo o seu tema",
+    opts.research ? "Pesquisando o mercado na internet" : "Estudando o tema e o público",
     "Escrevendo no tom da 4Selet",
     "Aplicando a identidade da marca",
     "Conferência final da marca",
   ];
   host.innerHTML = `
     <div class="gen-progress" role="status" aria-live="polite">
-      <div class="gp-head"><span class="spinner"></span> <strong>Sua equipe de marketing está montando a peça…</strong></div>
+      <div class="gp-head"><span class="spinner"></span> <strong>Sua equipe de marketing está montando a peça…</strong><span class="gp-timer" aria-hidden="true">0s</span></div>
       <ol class="gp-steps">${steps.map((s, i) => `<li class="gp-step${i === 0 ? " on" : ""}"><span class="gp-dot"></span><span class="gp-txt">${esc(s)}</span></li>`).join("")}</ol>
-      <p class="muted gp-note">Pesquisa, redação e checagem de marca acontecem nos bastidores.</p>
+      <p class="muted gp-note">Pode levar alguns segundos. Não precisa clicar de novo — o resultado aparece aqui.</p>
     </div>`;
   const lis = $$(".gp-step", host);
-  let i = 0;
-  const timer = setInterval(() => {
-    if (i >= lis.length - 1) return;
-    lis[i].classList.replace("on", "done");
-    i++; lis[i].classList.add("on");
-  }, 1100);
-  return timer;
+  const elTimer = $(".gp-timer", host);
+  const t0 = Date.now();
+  let i = 0, auto = null;
+  const acende = (n) => {
+    i = Math.max(0, Math.min(lis.length - 1, n));
+    lis.forEach((li, k) => { li.classList.toggle("done", k < i); li.classList.toggle("on", k === i); });
+  };
+  const relogio = setInterval(() => { if (elTimer) elTimer.textContent = Math.round((Date.now() - t0) / 1000) + "s"; }, 1000);
+  return {
+    etapa(n) {
+      acende(n);
+      // Da segunda etapa em diante não temos como saber onde o servidor está: aí sim o avanço
+      // vira estimativa, e o cronômetro ao lado deixa claro que o tempo é o real.
+      if (n >= 1 && !auto) auto = setInterval(() => { if (i < lis.length - 1) acende(i + 1); }, 1400);
+    },
+    fim() { clearInterval(relogio); if (auto) clearInterval(auto); },
+  };
 }
 
 // Lê a orientação de CTA do brief avançado: "" / select aprovado / "Outra…" (texto livre).
@@ -4595,11 +4658,48 @@ async function leTemaEAplica(brief) {
   return true;
 }
 
-async function runGenerate() {
+// A porta de entrada só trava o disparo duplo e devolve o botão; o trabalho está no interno.
+// Separado assim porque o interno tem VÁRIOS caminhos de saída antecipada (texto curto, formato
+// trocado pela leitura, erro de rede) e cada um deles precisava lembrar de reabilitar o botão —
+// era exatamente esse tipo de esquecimento que deixava a tela travada ou clicável duas vezes.
+function runGenerate(ev) {
+  // DOIS botões chamam esta mesma ação: "Gerar com IA" (#g-run) e "Começar do zero" (#g-regen, que
+  // fica na tela de resultado). O retorno visual precisa ir para o botão que a pessoa REALMENTE
+  // clicou — travar o outro deixaria o clicado solto e sem sinal nenhum. A trava por chave é uma
+  // só nos dois casos, então clicar num não deixa o outro disparar em paralelo.
+  const alvo = (ev && ev.currentTarget) || $("#g-run");
+  return emVoo("gerar-conteudo", runGenerateInterno, {
+    botao: alvo,
+    rotulo: "gerando…",
+    avisoRepetido: "Já estou gerando esta peça. O resultado aparece aqui embaixo.",
+  });
+}
+async function runGenerateInterno() {
   const brief = $("#g-brief").value.trim();
   $("#e-brief").textContent = ""; $("#g-brief").classList.remove("invalid"); $("#g-brief").removeAttribute("aria-invalid");
   if (brief.length < 8) { $("#g-brief").classList.add("invalid"); $("#g-brief").setAttribute("aria-invalid", "true"); $("#e-brief").textContent = "Descreva o tema (mín. 8 caracteres)."; return; }
-  if (!(await leTemaEAplica(brief))) return;
+  // O painel de progresso sobe ANTES da leitura do tema. Era esta a janela cega: a leitura é uma
+  // chamada de IA de 3,6 a 5,0 segundos (medido) e, até aqui, nada na tela dizia que ela existia.
+  const prog = startGenProgress($("#g-result"), { research: !!($("#g-research") && $("#g-research").checked) });
+  try {
+    const seguir = await leTemaEAplica(brief);
+    if (!seguir) {
+      // A leitura trocou o FORMATO da peça: ela para de propósito e espera conferência. Sem isto
+      // o painel ficaria girando para sempre depois de um clique que, para a pessoa, "não fez nada".
+      prog.fim();
+      $("#g-result").innerHTML = '<div class="empty">Ajustei o formato pelo seu texto. Confira acima e clique em <strong>Gerar com IA</strong> de novo.</div>';
+      return;
+    }
+    prog.etapa(1);
+    return await geraComPayload(prog);
+  } catch (e) {
+    prog.fim();
+    $("#g-result").innerHTML = '<div class="empty">Não foi possível gerar agora. Ajuste a descrição e clique em <strong>Gerar com IA</strong> de novo.</div>';
+    toastAiError(e);
+  }
+}
+async function geraComPayload(prog) {
+  const brief = $("#g-brief").value.trim();
   const payload = {
     content_type: $("#g-type").value,
     provider: ($("#g-provider") && $("#g-provider").value) || undefined,
@@ -4626,19 +4726,12 @@ async function runGenerate() {
     media_model: ($("#g-media-model") && $("#g-media-model").value) || undefined,
     media_sizes: (function () { const s = Array.prototype.slice.call(document.querySelectorAll("#g-media-sizes input:checked")).map((x) => x.value); return s.length ? s : undefined; })(),
   };
-  const btn = $("#g-run"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> gerando…';
-  const prog = startGenProgress($("#g-result"), !!payload.research);
-  try {
-    const r = await API.generate(payload);
-    clearInterval(prog);
-    LAST_GEN = { req: payload, res: r };
-    renderGenResult(r, { autoPreview: true }); // prévia automática só aqui (1ª geração), não a cada refino
-  } catch (e) {
-    clearInterval(prog);
-    $("#g-result").innerHTML = '<div class="empty">Não foi possível gerar agora. Ajuste a descrição e clique em <strong>Gerar com IA</strong> de novo.</div>';
-    toastAiError(e);
-  }
-  finally { btn.disabled = false; btn.textContent = "Gerar com IA"; }
+  // O botão já está travado e o painel já está na tela (runGenerateInterno cuidou dos dois antes
+  // da leitura do tema). Aqui só resta gerar. Erro sobe para quem chamou, que fecha o painel.
+  const r = await API.generate(payload);
+  prog.fim();
+  LAST_GEN = { req: payload, res: r };
+  renderGenResult(r, { autoPreview: true }); // prévia automática só aqui (1ª geração), não a cada refino
 }
 
 function renderGenResult(r, opts) {

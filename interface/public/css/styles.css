@@ -933,6 +933,15 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .gp-step.done .gp-dot { border-color: var(--ok); background: var(--ok); }
 .gp-step.done .gp-dot::after { content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid var(--surface); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .gp-note { margin-top: var(--s4); font-size: 12px; }
+/* Cronômetro: o sinal HONESTO de que algo está acontecendo. As etapas depois da primeira avançam
+   por estimativa; o tempo decorrido é real, e é ele que segura a vontade de clicar de novo.
+   Discreto e tabular (não "pula" a cada segundo). */
+.gp-timer { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--text-mut); font-variant-numeric: tabular-nums; }
+/* Clicou de novo enquanto a ação está em voo: em vez de repreender, o botão pisca uma vez para a
+   pessoa achar onde está o retorno. */
+@keyframes pulsaBtn { 0%, 100% { transform: none; } 30% { transform: scale(1.03); } 60% { transform: scale(.99); } }
+.pulsa { animation: pulsaBtn .42s ease-in-out 1; }
+@media (prefers-reduced-motion: reduce) { .pulsa { animation: none; } }
 @keyframes gpPulse { 0% { box-shadow: 0 0 0 0 var(--ring); } 70%, 100% { box-shadow: 0 0 0 5px transparent; } }
 @media (prefers-reduced-motion: reduce) { .gp-step.on .gp-dot { animation: none; } }
 
