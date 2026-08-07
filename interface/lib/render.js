@@ -1942,6 +1942,50 @@ function slideList(slide, ctx) {
   ${carFooter(ctx)}`;
   return carDoc(ctx, css, inner);
 }
+// Print DENTRO de um aparelho, como slide do carrossel (ou peça de Imagem).
+//
+// Existia um buraco constrangedor aqui: o Hugo pediu, num prompt detalhado, "uma captura real da
+// plataforma dentro de um mockup de notebook ou janela de sistema" — e o painel entregou uma grade
+// de números, calado. O desenho do notebook e o da janela de navegador JÁ EXISTIAM no código
+// (mediaDevice), mas presos dentro da peça "4Selet na Mídia": nenhum caminho ligava um slide de
+// carrossel a eles. Aqui o aparelho vira arquétipo de slide como qualquer outro, passando pelo
+// mesmo carDoc (fundo, Selet Dots, logo, marca d'água) para não virar remendo visível no meio do
+// carrossel.
+//
+// Sem véu por cima da tela e sem perspectiva, de propósito: o pedido dizia "não alterar os textos,
+// números, proporções ou elementos reais da interface", e a lição de 29/07 sobre a matéria torta
+// vale igual — warp entorta o print e derruba justamente esse requisito.
+function slideDevice(slide, ctx) {
+  const img = (slide && slide.image) || "";
+  // Sem imagem de verdade, um aparelho vazio no meio do carrossel é pior que o layout de texto.
+  if (!img || !imagemExiste(img)) return slideText(slide, ctx);
+  const modelos = ["notebook", "janela", "celular", "tablet"];
+  const model = modelos.indexOf(String(slide.device || "")) >= 0 ? slide.device : "notebook";
+  // O carDoc desenha `ctx.image` como FOTO DE FUNDO do slide. Aqui a imagem é o conteúdo da TELA
+  // do aparelho, não atmosfera — sem isto o print aparecia duas vezes: dentro do notebook e
+  // gigante atrás dele, com o texto ilegível por cima. Medido na primeira montagem.
+  ctx.image = "";
+  const v = cede(cargaSlide(slide, ctx, 3, true), 4.6, 6.2);
+  const css = ".s-title.sm { font-size:" + v(58, 50, 44) + "px; margin-bottom:" + v(30, 20, 14) + "px; line-height:1.04; }"
+    + ".dev-wrap { display:flex; align-items:center; justify-content:center; flex:1; min-height:0; }"
+    // O aparelho é desenhado em px fixos (herdados da peça de imprensa). O `zoom` encolhe o
+    // conjunto inteiro para caber no slide sem reamostrar o print em sub-pixel, que é o que
+    // amoleceria a captura — a mesma armadilha do backdrop-filter no lightbox.
+    + ".dev { zoom:" + v(0.86, 0.74, 0.64) + "; }"
+    + ".dev .scr { overflow:hidden; background:#0d1317; }"
+    + ".dev .scr img { width:100%; height:100%; object-fit:cover; object-position:top center; display:block; }"
+    + ".dev .scr-empty { display:flex; align-items:center; justify-content:center; height:100%; color:" + PALETTE.mist + "; font-size:26px; }"
+    + ".dev-nota { margin-top:" + v(26, 18, 12) + "px; font-size:" + v(32, 29, 26) + "px; line-height:1.3; color:" + PALETTE.mist + "; }"
+    + CSS_PILULA_CTA + cssExtrasApertados(v);
+  const inner = carTop(ctx) + '<div class="mid">'
+    + (slide.eyebrow ? '<div class="eyebrow">' + esc(slide.eyebrow) + "</div>" : "")
+    + (slide.title ? '<div class="s-title sm">' + highlightHeadline(slide.title) + "</div>" : "")
+    + '<div class="dev-wrap">' + mediaDevice(model, resolveImage(img), slide.url || "") + "</div>"
+    + (slide.body ? '<div class="dev-nota">' + esc(slide.body) + "</div>" : "")
+    + pilulaCta(ctx) + "</div>" + carFooter(ctx);
+  return carDoc(ctx, css, inner);
+}
+
 // CTA de fechamento: centralizado, logo + headline + pilula de CTA.
 function slideCta(slide, ctx) {
   const headline = slide.title || ctx.cta || "4Selet";
@@ -2111,7 +2155,7 @@ function slideFlow(slide, ctx) {
     + note + pilulaCta(ctx) + "</div>" + carFooter(ctx);
   return carDoc(ctx, css, inner);
 }
-const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow };
+const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow, device: slideDevice };
 
 // Decide o arquetipo de um slide: override explicito (layout/type) > inferencia
 // por posicao (1o=capa, ultimo=cta) e por conteudo (flow=>fluxo, stats=>grade, items=>lista).
@@ -2123,8 +2167,11 @@ function slideArchetype(slide, i, total) {
   if (ex === "cover" || ex === "capa" || ex === "hook") return "cover";
   if (ex === "cta") return "cta";
   if (ex === "text" || ex === "texto") return "text";
+  if (ex === "device" || ex === "mockup" || ex === "print" || ex === "screenshot" || ex === "aparelho") return "device";
   if (i === 0) return "cover";
   if (i === total - 1 && total > 1) return "cta";
+  // Slide que traz IMAGEM + aparelho pedido: o print manda, mesmo que também tenha números.
+  if (slide && slide.image && slide.device) return "device";
   if (Array.isArray(slide && slide.flow) && slide.flow.length) return "flow";
   if (Array.isArray(slide && slide.stats) && slide.stats.length) return "stat_grid";
   if (Array.isArray(slide && slide.items) && slide.items.length) return "list";

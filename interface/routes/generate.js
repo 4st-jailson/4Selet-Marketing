@@ -54,9 +54,35 @@ function avisaFotosInventadas(gov, removidas) {
   const onde = !ns.length ? "nesta peça"
     : ns.length === 1 ? "no slide " + ns[0]
       : "nos slides " + ns.slice(0, -1).join(", ") + " e " + ns[ns.length - 1];
-  gov.warnings.push("Você pediu foto " + onde + ", e a peça vai sair sem ela. A IA não enxerga o seu acervo, "
-    + "então ela escreve o nome de um arquivo que não existe. Para colocar a foto: use \"Buscar imagem\" no "
-    + "slide, ou envie a sua em Criar Conteúdo.");
+  // O caminho inventado DIZ o que era pra ser. Quando o nome cheira a captura de tela, mandar a
+  // pessoa "buscar uma foto de banco" é o conselho errado — nenhum banco de imagem tem o dashboard
+  // da 4Selet. Aí o caminho é o print, no layout de aparelho.
+  const pareceCaptura = removidas.some((r) => /print|captur|screenshot|dashboard|plataforma|tela|painel/i.test(String(r.caminho || r.image || "")));
+  gov.warnings.push("Você pediu " + (pareceCaptura ? "uma captura de tela " : "foto ") + onde + ", e a peça vai sair sem ela. "
+    + "A IA não enxerga o seu acervo nem navega em sites, então ela escreve o nome de um arquivo que não existe. "
+    + (pareceCaptura
+      ? "Para colocar o print: envie a imagem em Criar Conteúdo e escolha o layout \"Print em aparelho\" no slide — ele desenha a captura dentro de um notebook, celular ou janela de navegador, reta e legível."
+      : "Para colocar a foto: use \"Buscar imagem\" no slide, ou envie a sua em Criar Conteúdo."));
+}
+
+// O modelo declarou, no campo `limitacoes`, o que NÃO conseguiu entregar. Antes isso não existia:
+// pedido um print da plataforma no slide 3, o painel entregou uma grade de números e ficou calado —
+// e quem pediu só descobriu olhando a arte pronta. O campo `notes` do schema, onde algo assim
+// poderia aparecer, nunca foi exibido na tela. Aqui a declaração vira aviso de marca, que a tela
+// já sabe pintar.
+function avisaLimitacoes(gov, parsed) {
+  const lista = parsed && Array.isArray(parsed.limitacoes) ? parsed.limitacoes : [];
+  if (!gov || !lista.length) return;
+  if (!Array.isArray(gov.warnings)) gov.warnings = [];
+  for (const l of lista.slice(0, 6)) {
+    const pedido = String((l && l.pedido) || "").trim().slice(0, 220);
+    const motivo = String((l && l.motivo) || "").trim().slice(0, 220);
+    if (!pedido) continue;
+    const onde = Number(l && l.slide) > 0 ? "No slide " + Number(l.slide) + ": " : "";
+    gov.warnings.push(onde + "não consegui entregar \"" + pedido + "\"" + (motivo ? " — " + motivo : "") + ".");
+  }
+  // O campo é instrução para o modelo, não conteúdo da peça: sai antes de virar arquivo.
+  try { delete parsed.limitacoes; } catch (e) {}
 }
 
 // Alerta de marca PRÉ-aplicação: se o pedido do usuário citou cor fora da paleta oficial
@@ -173,6 +199,7 @@ router.post("/", async (req, res, next) => {
     const fotosInventadas = limpaFotosInventadas(parsed);
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
     avisaFotosInventadas(gov, fotosInventadas);
+    avisaLimitacoes(gov, parsed);
 
     res.json({
       simulated: result.simulated,
