@@ -961,7 +961,11 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 @media (prefers-reduced-motion: reduce) { .skel::after { animation: none; } }
 
 /* ---- modal ---- */
-.modal-ov { position: fixed; inset: 0; z-index: 1600; display: flex; align-items: center; justify-content: center; padding: var(--s5); background: rgba(4, 16, 22, .62); backdrop-filter: blur(4px); opacity: 0; transition: opacity var(--tr); }
+/* ACIMA do véu de progresso (.busy-ov = 1650) e abaixo dos toasts (1700). Um modal é uma PERGUNTA
+   à pessoa; o véu é só aviso de que algo está rodando. Estando o véu por cima, a pergunta ficava
+   coberta e sem resposta possível — foi o que apareceu na validação em produção: a janela "não
+   consegui a imagem no slide 3" abria e o "Renderizando slide 1 de 5…" caía por cima dela. */
+.modal-ov { position: fixed; inset: 0; z-index: 1660; display: flex; align-items: center; justify-content: center; padding: var(--s5); background: rgba(4, 16, 22, .62); backdrop-filter: blur(4px); opacity: 0; transition: opacity var(--tr); }
 .modal-ov.open { opacity: 1; }
 .modal { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s6); box-shadow: var(--shadow); transform: translateY(8px) scale(.98); transition: transform var(--tr); }
 .modal-ov.open .modal { transform: none; }
