@@ -360,6 +360,75 @@ function briefingLongo() {
     campanhas.remove(cCor.id); campanhas.remove(cSem.id);
   }
 
+  // 12. Captura de site: o porteiro do endereço --------------------------------
+  // Esta é a peça de MAIOR superfície do painel: o servidor abre uma URL que a pessoa digitou.
+  // Cada linha aqui é um ataque conhecido que precisa continuar barrado depois de qualquer mexida.
+  {
+    secao("12. Captura de site (porteiro do endereço)");
+    const guard = require("./lib/urlguard");
+    const bloqueia = [
+      ["http://169.254.169.254/latest/meta-data/", "metadados da nuvem"],
+      ["http://127.0.0.1:4500/api/content", "a própria máquina por porta interna"],
+      ["http://localhost/", "localhost pelo nome"],
+      ["https://10.0.0.5/", "rede privada 10/8"],
+      ["http://192.168.1.1/", "rede privada 192.168/16"],
+      ["http://172.16.0.1/", "rede privada 172.16/12"],
+      ["https://[::1]/", "loopback IPv6"],
+      ["http://0177.0.0.1/", "loopback disfarçado de octal"],
+      ["http://2130706433/", "loopback disfarçado de decimal"],
+      ["ftp://arquivo.com/x", "protocolo fora de http/https"],
+      ["file:///etc/passwd", "arquivo local"],
+      ["https://user:senha@site.com/", "credencial embutida na URL"],
+      ["https://site.com:22/", "porta de serviço interno"],
+      ["https://metadata.google.internal/", "metadados do Google pelo nome"],
+      ["https://intranet.local/", "nome de rede interna"],
+    ];
+    for (const [url, oq] of bloqueia) {
+      const r = await guard.verifica(url);
+      checa(!r.ok, "barra " + oq, r.ok ? "PASSOU INDEVIDAMENTE" : "");
+    }
+    const publico = await guard.verifica("4selet.com.br");
+    checa(publico.ok && !!publico.ip, "deixa passar site público e devolve o IP para fixar", publico.ip || "");
+    // O filtro de sub-recursos roda DENTRO do navegador: a página pode pedir de CDN, mas não de IP interno.
+    checa(guard.pedidoPermitido("https://cdn.algum-site.com/a.css"), "sub-recurso de CDN passa (senão a página sai quebrada)");
+    checa(!guard.pedidoPermitido("http://169.254.169.254/x.png"), "sub-recurso apontando para metadados é barrado");
+    checa(!guard.pedidoPermitido("http://127.0.0.1/x.png"), "sub-recurso apontando para a própria máquina é barrado");
+  }
+
+  // 13. Pendência de imagem: o pedido que não deu ------------------------------
+  // O slide 3 delirava e ninguém era avisado. O contrato agora é: faltou imagem -> a rota DECLARA
+  // o que faltou, em qual slide, e se é print ou foto. A tela transforma isso em pergunta.
+  {
+    secao("13. Pendência de imagem (o que faltou vira pergunta)");
+    const gen = require("./routes/generate");
+    const pend = gen.__testes && gen.__testes.pendenciasDeImagem;
+    checa(typeof pend === "function", "a rota expõe a montagem de pendências para teste");
+    if (typeof pend === "function") {
+      const p1 = pend("instagram_carousel", [{ slide: 3, caminho: "/uploads/print-dashboard-4selet.jpg" }], []);
+      checa(p1.length === 1 && p1[0].slide === 3, "caminho inventado vira pendência no slide certo");
+      checa(p1[0].tipo === "print", "nome de arquivo com 'print/dashboard' é classificado como captura de tela");
+      checa(/dashboard/i.test(p1[0].pedido), "o pedido guarda o que o caminho dizia", p1[0].pedido);
+
+      const p2 = pend("instagram_carousel", [{ slide: 2, caminho: "/uploads/escritorio-moderno.jpg" }], []);
+      checa(p2[0].tipo === "foto", "nome sem cara de tela é classificado como foto ilustrativa");
+
+      const p3 = pend("instagram_carousel", [], [{ slide: 4, pedido: "print da tela de checkout", motivo: "não tenho acesso" }]);
+      checa(p3.length === 1 && p3[0].origem === "limitacao", "limitação declarada pelo modelo também vira pendência");
+
+      const p4 = pend("instagram_carousel", [], [{ slide: 1, pedido: "encurtar o título para 3 palavras" }]);
+      checa(p4.length === 0, "limitação que NÃO é sobre imagem não vira pendência de imagem");
+
+      const p5 = pend("instagram_carousel", [{ slide: 3, caminho: "/uploads/print-x.jpg" }], [{ slide: 3, pedido: "print x" }]);
+      checa(p5.length === 1, "a mesma falta vinda pelas duas portas não vira duas perguntas");
+
+      const p6 = pend("media_mention", [], []);
+      checa(p6.length === 1 && p6[0].slide === 0, "peça de Mídia sem print pergunta pelo print (o print É a peça)");
+
+      const p7 = pend("instagram_caption", [], []);
+      checa(p7.length === 0, "peça de texto sem imagem nenhuma não inventa pergunta");
+    }
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

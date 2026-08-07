@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1350px; }
+  body {
+    font-family:'Inter', system-ui, sans-serif;
+    background:#07212B;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+
+  .card {
+    position:relative;
+    width:1080px;
+    height:1350px;
+    overflow:hidden;
+    background:
+      radial-gradient(128% 118% at 78% 6%, #006494 0%, #003554 45%, #07212B 100%);
+  }
+
+  /* ambient depth: soft vignette to seat the scene */
+  .vignette {
+    position:absolute; inset:0;
+    background:
+      radial-gradient(140% 90% at 50% 118%, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 55%),
+      radial-gradient(120% 80% at 50% -18%, rgba(84,153,181,.16) 0%, rgba(0,0,0,0) 60%);
+    pointer-events:none;
+  }
+
+  /* ---- subtle tech / circuit graphics ---- */
+  .tech { position:absolute; inset:0; pointer-events:none; }
+
+  /* ---------- HEADER ---------- */
+  .header {
+    position:absolute;
+    top:96px; left:0; right:0;
+    text-align:center;
+    z-index:5;
+  }
+  .eyebrow {
+    font-family:'JetBrains Mono', monospace;
+    font-weight:500;
+    font-size:20px;
+    letter-spacing:6.5px;
+    text-transform:uppercase;
+    color:#AFBCC9;
+    display:inline-flex;
+    align-items:center;
+    gap:16px;
+    opacity:.94;
+  }
+  .eyebrow .dot {
+    width:5px; height:5px; border-radius:50%;
+    background:#5499B5;
+    box-shadow:0 0 10px rgba(84,153,181,.9);
+  }
+  .eyebrow .tick {
+    display:inline-block; width:26px; height:1px;
+    background:linear-gradient(90deg, rgba(175,188,201,0), #AFBCC9);
+  }
+  .eyebrow .tick.r { background:linear-gradient(90deg, #AFBCC9, rgba(175,188,201,0)); }
+
+  .title {
+    margin-top:26px;
+    font-size:76px;
+    line-height:1.02;
+    letter-spacing:-1.6px;
+  }
+  .title .b { font-weight:900; color:#ffffff; }
+  .title .s { font-weight:700; color:#5499B5; }
+
+  .rule {
+    margin:24px auto 0;
+    width:96px; height:2px;
+    background:linear-gradient(90deg, rgba(84,153,181,0), #5499B5 50%, rgba(84,153,181,0));
+    border-radius:2px;
+  }
+
+  /* ---------- DEVICE STAGE ---------- */
+  .stage {
+    position:absolute;
+    top:338px; left:0; right:0;
+    display:flex;
+    justify-content:center;
+    z-index:4;
+  }
+  .device-wrap {
+    position:relative;
+    transform:rotate(-3.4deg);
+    transform-origin:center;
+  }
+
+  /* projected shadow on the floor (offset, blurred) */
+  .cast-shadow {
+    position:absolute;
+    left:50%; bottom:-46px;
+    width:560px; height:120px;
+    transform:translateX(-50%);
+    background:radial-gradient(50% 50% at 50% 50%, rgba(0,0,0,.62) 0%, rgba(0,0,0,0) 72%);
+    filter:blur(6px);
+    z-index:0;
+  }
+
+  /* the tablet */
+  .tablet {
+    position:relative;
+    width:600px;
+    height:800px;
+    border-radius:38px;
+    padding:17px;
+    background:linear-gradient(150deg, #12181d 0%, #080b0e 100%);
+    box-shadow:
+      0 2px 0 rgba(255,255,255,.05) inset,
+      0 40px 90px -20px rgba(0,0,0,.72),
+      0 18px 40px -14px rgba(0,0,0,.55),
+      0 0 0 1px rgba(84,153,181,.16);
+    z-index:2;
+  }
+  /* thin bright rim */
+  .tablet::before {
+    content:"";
+    position:absolute; inset:0;
+    border-radius:38px;
+    padding:1px;
+    background:linear-gradient(150deg, rgba(255,255,255,.22), rgba(255,255,255,0) 38%, rgba(84,153,181,.18));
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude;
+    pointer-events:none;
+  }
+
+  .screen {
+    position:relative;
+    width:100%; height:100%;
+    border-radius:22px;
+    overflow:hidden;
+    background:#ffffff;
+    box-shadow:0 0 0 1px rgba(0,0,0,.5) inset;
+  }
+  .screen img {
+    display:block;
+    width:100%; height:100%;
+    object-fit:cover;
+    object-position:top center;
+  }
+
+  /* screen glow / backlight warmth */
+  .screen .backlight {
+    position:absolute; inset:0;
+    background:radial-gradient(120% 70% at 50% 0%, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 45%);
+    mix-blend-mode:screen;
+    pointer-events:none;
+  }
+  /* diagonal glass reflection */
+  .screen .glass {
+    position:absolute; inset:0;
+    background:linear-gradient(118deg, rgba(255,255,255,.20) 0%, rgba(255,255,255,.05) 16%, rgba(255,255,255,0) 34%);
+    pointer-events:none;
+  }
+  /* faint bottom vignette so headline pops */
+  .screen .lift {
+    position:absolute; left:0; right:0; bottom:0; height:26%;
+    background:linear-gradient(0deg, rgba(0,0,0,.12), rgba(0,0,0,0));
+    pointer-events:none;
+  }
+
+  /* ---- press seal, small + elegant ---- */
+  .seal {
+    position:absolute;
+    top:-16px; right:-20px;
+    z-index:3;
+    display:inline-flex;
+    align-items:center;
+    gap:11px;
+    padding:12px 20px 12px 16px;
+    background:linear-gradient(160deg, rgba(13,32,42,.96), rgba(7,20,26,.96));
+    border:1px solid rgba(84,153,181,.42);
+    border-radius:100px;
+    box-shadow:
+      0 14px 30px -10px rgba(0,0,0,.6),
+      0 0 0 1px rgba(255,255,255,.04) inset;
+    transform:rotate(3.4deg);
+  }
+  .seal .badge {
+    width:26px; height:26px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 34% 28%, #006494, #003554);
+    box-shadow:0 0 0 1px rgba(84,153,181,.55), 0 0 12px rgba(84,153,181,.4);
+    flex:0 0 auto;
+  }
+  .seal .badge svg { display:block; }
+  .seal .txt {
+    font-family:'JetBrains Mono', monospace;
+    font-weight:500;
+    font-size:14px;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    color:#D9DCD6;
+    white-space:nowrap;
+  }
+
+  /* ---------- FLOOR REFLECTION of the tablet ---------- */
+  .reflection {
+    position:absolute;
+    top:800px;                 /* just under the tablet body */
+    left:50%;
+    width:600px; height:340px;
+    transform:translateX(-50%) rotate(-3.4deg) scaleY(-1);
+    transform-origin:top center;
+    border-radius:38px;
+    overflow:hidden;
+    -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.42) 0%, rgba(0,0,0,.14) 40%, rgba(0,0,0,0) 78%);
+    mask-image:linear-gradient(180deg, rgba(0,0,0,.42) 0%, rgba(0,0,0,.14) 40%, rgba(0,0,0,0) 78%);
+    opacity:.5;
+    pointer-events:none;
+    z-index:1;
+  }
+  .reflection .rtablet {
+    width:600px; height:800px;
+    border-radius:38px;
+    padding:17px;
+    background:linear-gradient(150deg, #12181d 0%, #080b0e 100%);
+  }
+  .reflection .rscreen {
+    width:100%; height:100%;
+    border-radius:22px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .reflection .rscreen img {
+    width:100%; height:100%;
+    object-fit:cover;
+    object-position:top center;
+  }
+
+  /* ---------- FOOTER ---------- */
+  .footer {
+    position:absolute;
+    bottom:74px; left:0; right:0;
+    text-align:center;
+    z-index:6;
+  }
+  .footer .fline {
+    margin:0 auto 26px;
+    width:220px; height:1px;
+    background:linear-gradient(90deg, rgba(175,188,201,0), rgba(175,188,201,.34), rgba(175,188,201,0));
+  }
+  .footer img {
+    height:46px;
+    width:auto;
+    display:inline-block;
+    opacity:.98;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- tech / circuit graphics -->
+    <svg class="tech" width="1080" height="1350" viewBox="0 0 1080 1350" fill="none" preserveAspectRatio="xMidYMid slice">
+      <g stroke="#5499B5" stroke-width="1" opacity="0.15">
+        <!-- left circuit -->
+        <path d="M -20 300 H 150 V 380 H 250"/>
+        <path d="M 150 300 V 210 H 300"/>
+        <path d="M -20 470 H 90 V 560"/>
+        <path d="M 90 560 H 210"/>
+        <!-- right circuit -->
+        <path d="M 1100 360 H 940 V 250 H 830"/>
+        <path d="M 940 360 V 470 H 1030"/>
+        <path d="M 1100 620 H 980 V 700"/>
+        <!-- lower flowing lines -->
+        <path d="M -20 1160 H 180 V 1240 H 360"/>
+        <path d="M 1100 1120 H 900 V 1200 H 740"/>
+      </g>
+      <!-- nodes -->
+      <g fill="#5499B5" opacity="0.55">
+        <circle cx="250" cy="380" r="3"/>
+        <circle cx="300" cy="210" r="3"/>
+        <circle cx="210" cy="560" r="3"/>
+        <circle cx="830" cy="250" r="3"/>
+        <circle cx="1030" cy="470" r="3"/>
+        <circle cx="980" cy="700" r="3"/>
+        <circle cx="360" cy="1240" r="3"/>
+        <circle cx="740" cy="1200" r="3"/>
+      </g>
+      <g fill="#5499B5" opacity="0.18">
+        <circle cx="150" cy="300" r="2"/>
+        <circle cx="90" cy="560" r="2"/>
+        <circle cx="940" cy="360" r="2"/>
+        <circle cx="980" cy="1120" r="2"/>
+      </g>
+    </svg>
+
+    <div class="vignette"></div>
+
+    <!-- header -->
+    <div class="header">
+      <div class="eyebrow">
+        <span class="tick"></span>
+        VALOR ECONÔMICO
+        <span class="dot"></span>
+        PULSEBRAND
+        <span class="tick r"></span>
+      </div>
+      <div class="title">
+        <span class="b">4Selet</span> <span class="s">na mídia</span>
+      </div>
+      <div class="rule"></div>
+    </div>
+
+    <!-- floor reflection (behind device) -->
+    <div class="reflection">
+      <div class="rtablet">
+        <div class="rscreen">
+          <img src="file:///C:/Users/Administrator/Documents/Agentes_Marketing_4Selet/Claude Equipe de Marketing - 6 Agentes/interface/public/uploads/valor_print.png" alt="">
+        </div>
+      </div>
+    </div>
+
+    <!-- device -->
+    <div class="stage">
+      <div class="device-wrap">
+        <div class="cast-shadow"></div>
+        <div class="tablet">
+          <div class="screen">
+            <img src="file:///C:/Users/Administrator/Documents/Agentes_Marketing_4Selet/Claude Equipe de Marketing - 6 Agentes/interface/public/uploads/valor_print.png" alt="Matéria 4Selet no Valor Econômico">
+            <div class="backlight"></div>
+            <div class="lift"></div>
+            <div class="glass"></div>
+          </div>
+        </div>
+        <!-- press seal -->
+        <div class="seal">
+          <span class="badge">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2.4 7.2 L5.6 10.4 L11.6 3.6" stroke="#5499B5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="txt">Na Imprensa</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- footer -->
+    <div class="footer">
+      <div class="fline"></div>
+      <img src="file:///C:/Users/Administrator/Documents/Agentes_Marketing_4Selet/Claude Equipe de Marketing - 6 Agentes/assets/logo-4selet-light.png" alt="4Selet">
+    </div>
+
+  </div>
+</body>
+</html>

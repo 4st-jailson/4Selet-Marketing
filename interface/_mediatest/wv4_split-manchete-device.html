@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1350px; }
+  body {
+    font-family:'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+
+  .card {
+    position:relative;
+    width:1080px;
+    height:1350px;
+    overflow:hidden;
+    background:
+      radial-gradient(128% 118% at 78% 6%, #006494 0%, #003554 45%, #07212B 100%);
+    color:#fff;
+  }
+
+  /* ---- linhas finas de tecnologia (grafismo sutil) ---- */
+  .tech {
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    z-index:1;
+  }
+
+  /* leve vinheta para dar profundidade nas bordas */
+  .vignette {
+    position:absolute;
+    inset:0;
+    z-index:2;
+    pointer-events:none;
+    background:
+      radial-gradient(150% 120% at 50% 40%, rgba(7,33,43,0) 55%, rgba(7,33,43,.55) 100%);
+  }
+
+  /* ============ LAYOUT: DUAS COLUNAS ============ */
+  .stage {
+    position:absolute;
+    inset:0;
+    z-index:3;
+    display:grid;
+    grid-template-columns: 512px 568px;   /* esquerda / direita */
+    align-items:center;
+  }
+
+  /* ---------- COLUNA ESQUERDA ---------- */
+  .col-left {
+    padding:0 0 0 84px;
+    padding-right:40px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    height:100%;
+  }
+
+  .eyebrow {
+    display:flex;
+    align-items:center;
+    gap:14px;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:500;
+    font-size:16px;
+    letter-spacing:.30em;
+    text-transform:uppercase;
+    color:#AFBCC9;
+    margin-bottom:34px;
+  }
+  .eyebrow .dot {
+    width:7px; height:7px;
+    border-radius:50%;
+    background:#5499B5;
+    box-shadow:0 0 0 5px rgba(84,153,181,.14);
+    flex:0 0 auto;
+  }
+  .eyebrow .txt { white-space:nowrap; }
+
+  .kicker {
+    display:inline-block;
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:#5499B5;
+    margin-bottom:20px;
+  }
+
+  .title {
+    font-weight:800;
+    font-size:78px;
+    line-height:.98;
+    letter-spacing:-0.02em;
+    margin-bottom:38px;
+  }
+  .title .brand { font-weight:900; color:#ffffff; }
+  .title .rest  { font-weight:700; color:#5499B5; }
+
+  .rule {
+    width:64px;
+    height:4px;
+    border-radius:2px;
+    background:linear-gradient(90deg,#5499B5,rgba(84,153,181,0));
+    margin-bottom:34px;
+  }
+
+  .headline {
+    font-size:33px;
+    font-weight:700;
+    line-height:1.24;
+    letter-spacing:-0.01em;
+    color:#EAF1F4;
+    margin-bottom:30px;
+  }
+  .headline .hl { color:#ffffff; }
+
+  .lede {
+    font-size:19px;
+    font-weight:400;
+    line-height:1.55;
+    color:#AFBCC9;
+    max-width:400px;
+  }
+
+  .attribution {
+    margin-top:44px;
+    display:flex;
+    align-items:center;
+    gap:16px;
+  }
+  .attribution .pb {
+    width:52px; height:52px;
+    flex:0 0 auto;
+    border-radius:14px;
+    border:1.5px solid rgba(175,188,201,.35);
+    background:linear-gradient(150deg,#0a2733,#07212B);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:500;
+    font-size:19px;
+    letter-spacing:.02em;
+    color:#D9DCD6;
+  }
+  .attribution .meta { line-height:1.35; }
+  .attribution .meta .src {
+    font-size:17px;
+    font-weight:700;
+    color:#ffffff;
+    letter-spacing:.01em;
+  }
+  .attribution .meta .sub {
+    font-size:14px;
+    font-weight:500;
+    color:#AFBCC9;
+    letter-spacing:.02em;
+  }
+
+  /* ---------- COLUNA DIREITA: CARD DA MATÉRIA (RETO) ---------- */
+  .col-right {
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding-right:84px;
+  }
+
+  .frame {
+    position:relative;
+    width:420px;
+    height:560px;              /* 3:4 exato */
+    border-radius:22px;
+    /* moldura escura sutil + anel */
+    padding:14px;
+    background:linear-gradient(150deg,#12181d,#080b0e);
+    box-shadow:
+      0 46px 90px -28px rgba(0,0,0,.72),
+      0 18px 40px -20px rgba(0,0,0,.6),
+      0 0 0 1px rgba(175,188,201,.10),
+      inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  /* halo suave atrás do card */
+  .frame::before {
+    content:"";
+    position:absolute;
+    inset:-30px;
+    border-radius:36px;
+    background:radial-gradient(60% 55% at 50% 42%, rgba(84,153,181,.20), rgba(84,153,181,0) 70%);
+    z-index:-1;
+    filter:blur(2px);
+  }
+
+  .screen {
+    position:relative;
+    width:100%;
+    height:100%;
+    border-radius:12px;
+    overflow:hidden;
+    background:#ffffff;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);
+  }
+  .screen img {
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    object-position:top center;   /* mostra manchete + foto */
+  }
+
+  /* reflexo de vidro diagonal — NÃO deforma o texto (é overlay) */
+  .glass {
+    position:absolute;
+    inset:0;
+    border-radius:12px;
+    pointer-events:none;
+    background:linear-gradient(118deg,
+      rgba(255,255,255,.20) 0%,
+      rgba(255,255,255,.05) 14%,
+      rgba(255,255,255,0) 34%);
+    mix-blend-mode:screen;
+  }
+
+  /* selo "NA IMPRENSA" no topo do card */
+  .press-tag {
+    position:absolute;
+    top:-15px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:4;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:9px 18px;
+    border-radius:999px;
+    background:linear-gradient(180deg,#006494,#004b6f);
+    box-shadow:0 12px 26px -10px rgba(0,52,84,.9), inset 0 1px 0 rgba(255,255,255,.18);
+    font-family:'JetBrains Mono', monospace;
+    font-weight:500;
+    font-size:12.5px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:#EAF1F4;
+    white-space:nowrap;
+  }
+  .press-tag .d { width:6px; height:6px; border-radius:50%; background:#8FD0E8; box-shadow:0 0 0 4px rgba(143,208,232,.18); }
+
+  /* ---------- RODAPÉ: LOGO ---------- */
+  .footer {
+    position:absolute;
+    left:0; right:0;
+    bottom:56px;
+    z-index:4;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:20px;
+  }
+  .footer .line {
+    height:1px;
+    width:120px;
+    background:linear-gradient(90deg, rgba(175,188,201,0), rgba(175,188,201,.4));
+  }
+  .footer .line.r { background:linear-gradient(90deg, rgba(175,188,201,.4), rgba(175,188,201,0)); }
+  .footer img {
+    height:46px;
+    width:auto;
+    display:block;
+    opacity:.98;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- grafismo de linhas finas de tecnologia -->
+    <svg class="tech" viewBox="0 0 1080 1350" fill="none" preserveAspectRatio="xMidYMid slice">
+      <g stroke="#5499B5" stroke-width="1" opacity="0.15">
+        <path d="M-40 210 H520 V470 H860"/>
+        <path d="M120 -20 V300 H360"/>
+        <path d="M1120 340 H720 V620"/>
+        <path d="M-40 1120 H300 V860 H560"/>
+        <path d="M1120 1180 H640 V960"/>
+        <path d="M980 -20 V180 H760 V420"/>
+      </g>
+      <g fill="#5499B5" opacity="0.28">
+        <circle cx="520" cy="470" r="3.5"/>
+        <circle cx="360" cy="300" r="3.5"/>
+        <circle cx="720" cy="620" r="3.5"/>
+        <circle cx="300" cy="1120" r="3.5"/>
+        <circle cx="640" cy="960" r="3.5"/>
+        <circle cx="760" cy="420" r="3.5"/>
+      </g>
+      <g fill="#5499B5" opacity="0.10">
+        <circle cx="120" cy="300" r="2"/>
+        <circle cx="560" cy="860" r="2"/>
+        <circle cx="980" cy="180" r="2"/>
+      </g>
+    </svg>
+
+    <div class="vignette"></div>
+
+    <div class="stage">
+
+      <!-- ======= ESQUERDA ======= -->
+      <div class="col-left">
+        <div class="eyebrow">
+          <span class="dot"></span>
+          <span class="txt">Valor Econômico &middot; PulseBrand</span>
+        </div>
+
+        <span class="kicker">4Selet na imprensa</span>
+
+        <h1 class="title">
+          <span class="brand">4Selet</span><br>
+          <span class="rest">na mídia</span>
+        </h1>
+
+        <div class="rule"></div>
+
+        <p class="headline">
+          &ldquo;Por que o produtor digital <span class="hl">deixou de escolher plataforma de pagamento pela taxa</span>&rdquo;
+        </p>
+
+        <p class="lede">
+          Matéria do Valor Econômico discute a nova fase de seleção entre as instituições de pagamento no Brasil.
+        </p>
+
+        <div class="attribution">
+          <div class="pb">PB</div>
+          <div class="meta">
+            <div class="src">Por Pulse Brand</div>
+            <div class="sub">Conteúdo de marca &middot; São Paulo</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======= DIREITA: CARD RETO ======= -->
+      <div class="col-right">
+        <div class="frame">
+          <div class="press-tag"><span class="d"></span>Na imprensa</div>
+          <div class="screen">
+            <img src="file:///C:/Users/Administrator/Documents/Agentes_Marketing_4Selet/Claude Equipe de Marketing - 6 Agentes/interface/public/uploads/valor_print.png" alt="Matéria Valor Econômico sobre a 4Selet">
+            <div class="glass"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- rodapé com logo -->
+    <div class="footer">
+      <span class="line"></span>
+      <img src="file:///C:/Users/Administrator/Documents/Agentes_Marketing_4Selet/Claude Equipe de Marketing - 6 Agentes/assets/logo-4selet-light.png" alt="4Selet">
+      <span class="line r"></span>
+    </div>
+
+  </div>
+</body>
+</html>

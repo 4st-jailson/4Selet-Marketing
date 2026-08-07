@@ -674,4 +674,8 @@ router.post("/slide-mem", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// A montagem da pendência é a regra de negócio mais delicada deste arquivo (decide se a pessoa é
+// perguntada ou fica no escuro) e não tem como ser exercitada por HTTP sem gastar uma geração de IA
+// por caso. Sai por aqui, num campo marcado como de teste, para a bateria de regressão cobrir.
+router.__testes = { pendenciasDeImagem, ehPedidoDePrint };
 module.exports = router;

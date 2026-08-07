@@ -1971,7 +1971,13 @@ function slideDevice(slide, ctx) {
     // O aparelho é desenhado em px fixos (herdados da peça de imprensa). O `zoom` encolhe o
     // conjunto inteiro para caber no slide sem reamostrar o print em sub-pixel, que é o que
     // amoleceria a captura — a mesma armadilha do backdrop-filter no lightbox.
-    + ".dev { zoom:" + v(0.86, 0.74, 0.64) + "; }"
+    // O aparelho cresce quando o slide é leve. Medido na primeira captura de verdade (o dashboard
+    // da 4Selet no notebook): com título curto e uma linha de apoio, sobrava vazio acima e abaixo e
+    // o print — que é o CONTEÚDO do slide — saía pequeno demais para se ler no feed.
+    // 0,95 é o teto: a base do notebook tem 928px e 928 × 0,95 = 882px, o que deixa 99px de margem
+    // de cada lado, dentro da margem segura de 88–104px do platform_guidelines.md. Passar disso
+    // encosta o aparelho na borda de corte do Instagram.
+    + ".dev { zoom:" + v(0.95, 0.78, 0.66) + "; }"
     + ".dev .scr { overflow:hidden; background:#0d1317; }"
     + ".dev .scr img { width:100%; height:100%; object-fit:cover; object-position:top center; display:block; }"
     + ".dev .scr-empty { display:flex; align-items:center; justify-content:center; height:100%; color:" + PALETTE.mist + "; font-size:26px; }"
