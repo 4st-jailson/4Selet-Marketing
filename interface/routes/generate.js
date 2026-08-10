@@ -157,30 +157,44 @@ function paletteWarn(gov, instruction) {
 // etapas. O próprio schema do prompt pede `"stats": [{ "value": "95%" }]`. Resultado: um número
 // errado passava pela checagem de geração, passava pelo bloqueio do salvamento (o que devolve
 // 422) e chegava no PNG sem nunca ter sido olhado. A checagem tem que ver o que é RENDERIZADO.
+// Era uma LISTA BRANCA de campos: cada campo novo que virasse pixel escapava calado da checagem de
+// concorrente, emoji e CTA proibido — inclusive o texto que lê MAIOR no slide. Passa a ser um
+// caminhador: tudo que é texto entra, e o que não é texto para o leitor sai por uma lista curta de
+// exceções (caminho de arquivo, id de layout, nome de ícone). Isto também tapa um buraco que já
+// existia: item de lista em forma de objeto ({text}), aceito pelo render desde sempre, sumia daqui.
+const CHAVES_NAO_TEXTO = ["image", "url", "icon", "device", "layout", "type", "theme", "tone", "estilo", "orient", "side"];
 function textForGovernance(contentTypeId, parsed) {
   if (!parsed) return "";
   const parts = [];
-  const push = (v) => { if (typeof v === "string" && v.trim()) parts.push(v); };
-  const lista = (v) => { if (Array.isArray(v)) v.forEach((x) => push(typeof x === "string" ? x : "")); };
+  const vistos = new Set();   // objeto que se referencia não pode virar laço infinito
+  const push = (v) => {
+    if (v == null) return;
+    if (typeof v === "string" || typeof v === "number") {
+      const s = String(v).trim();
+      if (s) parts.push(s);
+      return;
+    }
+    if (typeof v !== "object") return;
+    if (vistos.has(v)) return;
+    vistos.add(v);
+    if (Array.isArray(v)) { v.forEach(push); return; }
+    Object.keys(v).forEach((k) => { if (CHAVES_NAO_TEXTO.indexOf(k) < 0) push(v[k]); });
+  };
 
   if (typeof parsed.body === "string") {
     push(parsed.body);
-    if (Array.isArray(parsed.hashtags)) push(parsed.hashtags.join(" "));
+    push(parsed.hashtags);
     push(parsed.cta);
     return parts.join("\n");
   }
   for (const k of ["headline", "subtext", "concept", "hook", "caption", "cta", "eyebrow", "badge", "notes"]) push(parsed[k]);
-  if (Array.isArray(parsed.slides)) {
-    parsed.slides.forEach((s) => {
-      if (!s) return;
-      push(s.title); push(s.body); push(s.note); push(s.eyebrow); push(s.watermark);
-      lista(s.items);
-      if (Array.isArray(s.stats)) s.stats.forEach((e) => { if (e) { push(e.value); push(e.label); } });
-      if (Array.isArray(s.flow)) s.flow.forEach((e) => { if (e) { push(e.label); push(e.sub); } });
-    });
-  }
-  if (Array.isArray(parsed.scenes)) parsed.scenes.forEach((s) => { if (s) { push(s.text); push(s.subtitle); } });
-  if (Array.isArray(parsed.hashtags)) push(parsed.hashtags.join(" "));
+  push(parsed.slides);
+  push(parsed.cards);     // story
+  push(parsed.scenes);
+  push(parsed.hashtags);
+  // Campos próprios da peça única (o concept não tem `slides`): a palavra gigante, a citação, os
+  // dois lados da comparação e o rótulo da série são texto de marca como qualquer outro.
+  ["word", "versus", "citacao", "serie"].forEach((k) => push(parsed[k]));
   return parts.join("\n");
 }
 
@@ -234,10 +248,22 @@ router.post("/", async (req, res, next) => {
     const result = await ai.complete({
       system,
       prompt: userPrompt,
-      maxTokens: 2500,
+      // 2500 dava conta do schema antigo. Com os campos dos arquétipos novos (serie, citacao,
+      // versus, word) um carrossel de 7 slides passa do teto e volta cortado — e JSON cortado vira
+      // `parsed: null`, que na tela aparece como "a IA não entendeu". Ver a guarda logo abaixo.
+      maxTokens: 4000,
       provider: body.provider, // IA escolhida na hora de gerar (default = padrao das Config.)
       simulate: () => prompts.simulate(req2),
     });
+
+    // A mesma guarda que a /interpret já tinha e esta rota não: resposta cortada é um problema
+    // DIFERENTE de resposta sem sentido, e quem lê a tela precisa saber o que fazer a respeito.
+    if (result.stop_reason === "max_tokens") {
+      return res.status(422).json({
+        error: "A resposta ficou grande demais e foi cortada no meio. Peça menos slides ou um texto mais curto e tente de novo.",
+        code: "E_RESPOSTA_TRUNCADA",
+      });
+    }
 
     const parsed = extractJson(result.text);
     // Orientacao de CTA do brief avancado: respeita a escolha do usuario (vale p/ real e simulado).

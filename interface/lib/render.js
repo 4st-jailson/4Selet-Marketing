@@ -190,7 +190,10 @@ const PREVIEW_SCALE = Number(process.env.PREVIEW_SCALE || 2) || 2;
 // 3 layouts on-brand (paleta 4Selet, Inter/JetBrains Mono, logo, Selet Dots).
 // Contrato comum: { width, height, eyebrow, headline(HTML), subtext, cta, badge, footer }.
 // `headline` chega como HTML ja realcado (spans .accent); os demais sao escapados.
-const FONT_LINK_BASE = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
+// O eixo `ital` da Inter entra aqui (e nao numa familia nova): o arquetipo de citacao precisa de
+// italico DE VERDADE, e sem o eixo o navegador inclina a fonte na marra, o que engorda a haste e
+// suja o traco. Custo zero de peso — e a mesma fonte, so com mais um corte.
+const FONT_LINK_BASE = '<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>';
 
 // ---- Tipografia fora da identidade (por peça) -----------------------------
 // A identidade da 4Selet é Inter no texto e JetBrains Mono nos rótulos, e o prompt de geração diz
@@ -1570,7 +1573,13 @@ const WATERMARK_IDS = ["word", "symbol", "outline", "none", "canto", "padrao"];
 function readRenderJson(loc) { return readJson(path.join(loc.path, "render.json")) || {}; }
 function readRenderPref(loc) {
   const j = readRenderJson(loc);
-  return (typeof j.template === "string" && TEMPLATES[j.template]) ? j.template : null;
+  if (typeof j.template !== "string") return null;
+  // Aceita tanto os 4 templates de arte quanto os arquetipos que valem como peca unica. Antes so
+  // aceitava os 4, entao o `writeRenderPref({template: arq})` do renderImage era codigo morto: a
+  // peca era re-derivada do dado a cada render e podia trocar de cara sozinha ao editar o texto.
+  if (TEMPLATES[j.template]) return j.template;
+  if (SLIDE_ARCHETYPES[j.template] && ARQ_PECA.indexOf(j.template) >= 0) return j.template;
+  return null;
 }
 function readLogoPref(loc) { const v = readRenderJson(loc).logo; return LOGO_IDS.indexOf(v) >= 0 ? v : null; }
 function readFontPref(loc) { const v = readRenderJson(loc).font; return FAMILIA_IDS.indexOf(v) >= 0 ? v : ""; }
@@ -1688,9 +1697,14 @@ function logoSrc(variant, fallback) {
 function highlightHeadline(text) {
   const HL = "color:" + PALETTE.sky + ";font-weight:800;text-decoration:underline;"
     + "text-decoration-color:" + PALETTE.sky + ";text-decoration-thickness:0.07em;text-underline-offset:0.14em;";
+  // ::palavra:: = marca-texto (fundo azul translúcido atrás da palavra). É o recurso de hierarquia
+  // mais usado na fase atual do perfil real, e o painel só tinha o sublinhado. Fica DEPOIS do
+  // sublinhado na ordem para os dois poderem conviver na mesma frase.
+  const MK = "background:" + PALETTE.blue + "33;padding:0 .14em;border-radius:.12em;";
   return esc(text)
     .replace(/(?<![A-Za-zÀ-ÿ])(\d+[%.,]?\d*\s*%?|R\$\s?\d[\d.,]*|D\+\d+)(?![A-Za-zÀ-ÿ])/g, '<span class="accent">$1</span>')
-    .replace(/==(.+?)==/g, '<span style="' + HL + '">$1</span>');
+    .replace(/==(.+?)==/g, '<span style="' + HL + '">$1</span>')
+    .replace(/::(.+?)::/g, '<span class="mark" style="' + MK + '">$1</span>');
 }
 
 // Barra de navegacao do carrossel: bolinhas (dots), a atual vira uma pilula.
@@ -1842,7 +1856,7 @@ function slideText(slide, ctx) {
   <div class="mid">
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     <div class="s-title">${highlightHeadline(slide.title || "")}</div>
-    ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+    ${slide.body ? `<div class="s-body">${highlightHeadline(slide.body)}</div>` : ""}
   </div>`;
   return carDoc(ctx, css, inner);
 }
@@ -1891,19 +1905,39 @@ function cssExtrasApertados(v) {
 }
 function slideStatGrid(slide, ctx) {
   const stats = (Array.isArray(slide.stats) ? slide.stats : []).slice(0, 4);
+  // Tema é TINTA, não layout: resolvido aqui e nunca entra no roteador de arquétipo. O campo
+  // `theme` já existia no schema e era jogado fora por quatro dos seis arquétipos — alternar claro
+  // e escuro dentro do mesmo carrossel é o principal recurso de ritmo do perfil real.
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
   // Sem números: NÃO renderiza uma grade vazia (o slide ficava só com o título). Cai no layout
   // de texto p/ mostrar o conteúdo — o usuário pode escolher esse layout sem quebrar a peça.
   if (!stats.length) return slideText(slide, ctx);
+  // UM número só não é grade: é um cartão solitário ocupando meia arte. Delega para o arquétipo do
+  // número gigante mesmo quando a grade foi escolhida à mão — medido numa geração real, o modelo
+  // pede "stat_grid" com um stat só e o desenho saía pobre.
+  if (stats.length === 1) return slideNumero(slide, ctx);
   const cells = stats.map((s) => `<div class="stat"><div class="stat-v">${highlightHeadline(String(s.value == null ? "" : s.value))}</div><div class="stat-l">${esc(s.label || "")}</div></div>`).join("");
   // Rótulo longo vira duas linhas dentro do cartão: pesa quase como um número a mais.
   const longos = stats.filter((s) => String((s && s.label) || "").length > 22).length;
   const v = cede(cargaSlide(slide, ctx, stats.length + longos * 0.5, false), 9, 11.5);
+  // Par de cores explícito. Os valores ESCUROS são exatamente os que já estavam aqui — nada de token
+  // único: `.stat` usa blue+"55" e o `.accent` usa Sky, e um helper genérico mudaria peça escura já
+  // publicada. O par claro nunca põe Mist sobre Cloud (1,4:1 de contraste — some).
+  const c = light ? {
+    cartao: PALETTE.cloud, borda: PALETTE.blue + "33", valor: PALETTE.darker,
+    acento: PALETTE.blue, rotulo: PALETTE.navy,
+  } : {
+    cartao: PALETTE.navy, borda: PALETTE.blue + "55", valor: "#FFFFFF",
+    acento: PALETTE.sky, rotulo: PALETTE.mist,
+  };
   const css = `.s-title.sm { font-size:${v(60, 54, 48)}px; margin-bottom:${v(46, 32, 22)}px; line-height:1.04; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:${v(28, 22, 18)}px; }
-    .stat { background:${PALETTE.navy}; border:2px solid ${PALETTE.blue}55; border-radius:28px; padding:${v(44, 34, 26)}px ${v(40, 34, 30)}px; }
-    .stat-v { font-weight:900; font-size:${v(94, 80, 68)}px; line-height:1; color:#FFFFFF; letter-spacing:-2px; }
-    .stat-v .accent { color:${PALETTE.sky}; }
-    .stat-l { margin-top:${v(16, 12, 9)}px; font-size:${v(33, 30, 27)}px; line-height:1.24; color:${PALETTE.mist}; }` + CSS_PILULA_CTA + cssExtrasApertados(v);
+    .stat { background:${c.cartao}; border:2px solid ${c.borda}; border-radius:28px; padding:${v(44, 34, 26)}px ${v(40, 34, 30)}px; }
+    .stat-v { font-weight:900; font-size:${v(94, 80, 68)}px; line-height:1; color:${c.valor}; letter-spacing:-2px; }
+    .stat-v .accent { color:${c.acento}; }
+    .stat-l { margin-top:${v(16, 12, 9)}px; font-size:${v(33, 30, 27)}px; line-height:1.24; color:${c.rotulo}; }
+    ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}` + CSS_PILULA_CTA + cssExtrasApertados(v);
   const inner = `${carTop(ctx)}
   <div class="mid">
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
@@ -1919,24 +1953,30 @@ function slideList(slide, ctx) {
   const items = (Array.isArray(slide.items) ? slide.items : []).slice(0, 6)
     .map((it) => (typeof it === "string" ? it : (it && it.text) || ""))
     .filter((t) => String(t || "").trim());
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
   // Sem itens: NÃO renderiza uma lista vazia. Cai no texto p/ mostrar o conteúdo do slide.
   if (!items.length) return slideText(slide, ctx);
   const lis = items.map((t) => `<div class="li"><span class="mk">&#9656;</span><span class="lt">${esc(t)}</span></div>`).join("");
   // Item longo quebra em duas linhas: pesa quase como um item a mais.
   const longos = items.filter((t) => String(t || "").length > 34).length;
   const v = cede(cargaSlide(slide, ctx, items.length + longos * 0.5, true), 10.5, 13.5);
+  const c = light
+    ? { marcador: PALETTE.blue, item: PALETTE.darker, apoio: PALETTE.navy }
+    : { marcador: PALETTE.sky, item: PALETTE.cloud, apoio: PALETTE.mist };
   const css = `.s-title.sm { font-size:${v(64, 52, 48)}px; margin-bottom:${v(42, 24, 18)}px; line-height:1.04; }
     .list { display:flex; flex-direction:column; gap:${v(28, 15, 12)}px; }
     .li { display:flex; align-items:flex-start; gap:${v(24, 20, 18)}px; }
-    .mk { color:${PALETTE.sky}; font-size:${v(44, 35, 32)}px; line-height:1.1; font-weight:900; flex:0 0 auto; }
-    .lt { font-size:${v(44, 34, 30)}px; line-height:1.28; color:${PALETTE.cloud}; font-weight:600; }
-    .s-body { margin-top:${v(40, 22, 16)}px; font-size:${v(36, 29, 27)}px; line-height:1.3; color:${PALETTE.mist}; }` + CSS_PILULA_CTA + cssExtrasApertados(v);
+    .mk { color:${c.marcador}; font-size:${v(44, 35, 32)}px; line-height:1.1; font-weight:900; flex:0 0 auto; }
+    .lt { font-size:${v(44, 34, 30)}px; line-height:1.28; color:${c.item}; font-weight:600; }
+    .s-body { margin-top:${v(40, 22, 16)}px; font-size:${v(36, 29, 27)}px; line-height:1.3; color:${c.apoio}; }
+    ${light ? `.s-title span, .s-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}` + CSS_PILULA_CTA + cssExtrasApertados(v);
   const inner = `${carTop(ctx)}
   <div class="mid">
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
     <div class="list">${lis}</div>
-    ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+    ${slide.body ? `<div class="s-body">${highlightHeadline(slide.body)}</div>` : ""}
     ${pilulaCta(ctx)}
   </div>
   ${carFooter(ctx)}`;
@@ -2035,7 +2075,7 @@ function slideCta(slide, ctx) {
     <img class="logo-c" src="${logoSrc(ctx.logo, LOGO_LIGHT)}" alt="4Selet"/>
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
     <div class="s-title big">${hl}</div>
-    ${slide.body ? `<div class="s-body">${esc(slide.body)}</div>` : ""}
+    ${slide.body ? `<div class="s-body">${highlightHeadline(slide.body)}</div>` : ""}
     ${ctx.cta ? `<span class="cta">${esc(ctx.cta)} &#8594;</span>` : ""}
   </div>
   ${carFooter(ctx)}`;
@@ -2157,31 +2197,308 @@ function slideFlow(slide, ctx) {
     + cssExtrasApertados(v);   // depois da pílula de propósito: sobrescreve
   const inner = carTop(ctx) + '<div class="mid">' + head
     + '<div class="flow">' + nodeHtml + "</div>"
-    + (slide.body ? '<div class="flow-note">' + esc(slide.body) + "</div>" : "")
+    + (slide.body ? '<div class="flow-note">' + highlightHeadline(slide.body) + "</div>" : "")
     + note + pilulaCta(ctx) + "</div>" + carFooter(ctx);
   return carDoc(ctx, css, inner);
 }
-const SLIDE_ARCHETYPES = { stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow, device: slideDevice };
+// ---- Arquetipos nascidos do estudo do Instagram real da 4Selet ------------
+// As 63 publicacoes do perfil usam 20 familias visuais; o painel desenhava 5 inteiras. Estes cinco
+// fecham as lacunas mais usadas. Regra que vale para todos: o gatilho e o DADO, nunca sorteio nem
+// adjetivo — sem o campo correspondente o slide volta a ser texto, em vez de virar moldura vazia.
+// Levantamento completo em ESTUDO_INSTAGRAM_4SELET.md.
 
-// Decide o arquetipo de um slide: override explicito (layout/type) > inferencia
-// por posicao (1o=capa, ultimo=cta) e por conteudo (flow=>fluxo, stats=>grade, items=>lista).
+// F04 — a palavra-conceito ocupando o slide (o perfil faz isso com "SELET", "Simplificar", "lógica").
+// Nao e marca d'agua: e o conteudo. Por isso desliga a marca d'agua do slide, senao ficam duas
+// palavras gigantes empilhadas.
+function slidePalavra(slide, ctx) {
+  const palavra = String(slide.word || "").trim();
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  // A palavra E a marca d'agua deste slide.
+  ctx.watermark = slide.watermark != null ? slide.watermark : "";
+  const n = palavra.length;
+  const teto = (Number(ctx.height) > 0 && Number(ctx.height) < 1200) ? 300 : 380;
+  const util = Number(ctx.width || 1080) - 184;
+  const tam = Math.min(teto, Math.round(util / Math.max(1, n * 0.56)));
+  // Palavra longa demais viraria um fio ilegivel: melhor sair como texto do que sair errado.
+  if (!palavra || tam < 96) return slideText(slide, ctx);
+  const corPalavra = light ? PALETTE.mist : PALETTE.sky;
+  // 0.30, e não a opacidade de marca d'água (0.05-0.18): aqui a palavra É o conteúdo. Medido na
+  // primeira montagem, 0.18 sumia no gradiente e o slide lia como "fundo com sujeira".
+  const op = light ? 0.95 : 0.30;
+  const bodyColor = light ? PALETTE.navy : PALETTE.mist;
+  const accentFix = light
+    ? `.s-title span, .s-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }`
+    : "";
+  const css = `.pw { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      z-index:1; pointer-events:none; font-weight:900; line-height:.84; letter-spacing:-.045em;
+      white-space:nowrap; color:${corPalavra}; opacity:${op}; font-size:${tam}px; }
+    .mid { justify-content:flex-end; z-index:2; }
+    .s-body { margin-top:30px; font-size:40px; line-height:1.42; color:${bodyColor}; max-width:88%; }
+    ${accentFix}`;
+  const inner = `${carTop(ctx)}
+  <div class="pw">${esc(palavra)}</div>
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    ${slide.title ? `<div class="s-title">${highlightHeadline(slide.title)}</div>` : ""}
+    ${slide.body ? `<div class="s-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+// F06 — UM numero, gigante. A grade (stat_grid) existe para 2 a 4; com um numero so ela desenhava
+// um cartao solitario no canto. Separa nucleo e sufixo para o "%" e o "mil" nao competirem com o
+// numero, que e quem tem que ser lido de longe.
+function slideNumero(slide, ctx) {
+  const stats = (Array.isArray(slide.stats) ? slide.stats : []).filter((s) => s && s.value != null);
+  if (!stats.length) return slideText(slide, ctx);
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "");
+  const bruto = String(stats[0].value).trim();
+  const m = bruto.match(/^\s*((?:R\$\s?)?[\d.,]+)\s*(.*)$/);
+  const nucleo = m ? m[1] : bruto;
+  const sufixo = m ? m[2] : "";
+  // O tamanho sai da LARGURA DISPONIVEL, nao de uma escada fixa. Escada fixa foi a primeira versao
+  // e estourou na medicao: "96,4%" saiu com 1039px de largura numa arte de 1080 com margem de 88.
+  // Conta: cada glifo pesa ~0.6em no peso 900, o letter-spacing negativo devolve 16px por emenda, e
+  // o sufixo ("%", "mil") entra proporcional porque fica na mesma linha, ao lado.
+  const len = nucleo.length;
+  if (len > 8) return slideText(slide, ctx);
+  const util = (Number(ctx.width) || 1080) - 184;
+  const pesoTotal = len + String(sufixo).length * 0.42;
+  const tam = Math.min(460, Math.floor((util + (len - 1) * 16 - (sufixo ? 14 : 0)) / (pesoTotal * 0.6)));
+  // Numero que so caberia minusculo nao e mais um numero gigante: melhor sair como texto.
+  if (tam < 120) return slideText(slide, ctx);
+  const corVal = light ? PALETTE.darker : "#FFFFFF";
+  const corUn = light ? PALETTE.blue : PALETTE.sky;
+  const corLab = light ? PALETTE.navy : PALETTE.mist;
+  const accentFix = light
+    ? `.s-title span, .n-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }`
+    : "";
+  const css = `.n-wrap { display:flex; align-items:baseline; gap:14px; margin-top:26px; }
+    .n-val { font-weight:900; font-size:${tam}px; line-height:.82; letter-spacing:-16px; color:${corVal}; }
+    .n-un { font-weight:800; font-size:${Math.round(tam * 0.42)}px; color:${corUn}; letter-spacing:-2px; }
+    .n-lab { margin-top:22px; font-size:46px; font-weight:700; color:${corLab}; max-width:88%; line-height:1.24; }
+    .n-body { margin-top:22px; font-size:38px; line-height:1.42; color:${corLab}; max-width:88%; }
+    ${accentFix}`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    ${slide.title ? `<div class="s-title">${highlightHeadline(slide.title)}</div>` : ""}
+    <div class="n-wrap"><div class="n-val">${esc(nucleo)}</div>${sufixo ? `<div class="n-un">${esc(sufixo)}</div>` : ""}</div>
+    ${stats[0].label ? `<div class="n-lab">${esc(stats[0].label)}</div>` : ""}
+    ${slide.body ? `<div class="n-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+// F07 + F18 — o item numerado de uma serie ("PRINCIPIO 2", "Regra 3"). O algarismo entra gigante e
+// fantasma atras do texto, que e como o perfil desenha. Um campo so (`serie`) em vez de dois campos
+// de mesma forma: escolher entre "principio" e "regra" seria adjetivo, e adjetivo vira sorteio.
+function slideSerie(slide, ctx) {
+  const s = slide.serie || {};
+  const n = Number(s.n);
+  if (!(n >= 1)) return slideText(slide, ctx);
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : "";
+  const total = Number(s.total) > 0 ? Number(s.total) : 0;
+  const rotulo = String(s.rotulo || slide.eyebrow || "").trim();
+  const digitos = n < 10 ? ("0" + n) : String(n);
+  const tamGhost = n >= 100 ? 420 : 560;
+  const corGhost = light ? PALETTE.navy : PALETTE.sky;
+  const opGhost = light ? 0.20 : 0.14;
+  const bodyColor = light ? PALETTE.navy : PALETTE.mist;
+  const accentFix = light
+    ? `.s-title span, .sr-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }`
+    : "";
+  const css = `.sr-ghost { position:absolute; right:-52px; top:50%; transform:translateY(-50%); z-index:1;
+      pointer-events:none; font-weight:900; font-size:${tamGhost}px; line-height:.78; letter-spacing:-42px;
+      color:${corGhost}; opacity:${opGhost}; }
+    .sr-head { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:22px; }
+    .sr-de { font-size:28px; font-weight:700; letter-spacing:.06em; color:${light ? PALETTE.blue : PALETTE.sky}; }
+    .mid { z-index:2; }
+    .s-title { max-width:78%; }
+    .sr-body { margin-top:28px; font-size:42px; line-height:1.42; color:${bodyColor}; max-width:72%; }
+    ${accentFix}`;
+  const inner = `${carTop(ctx)}
+  <div class="sr-ghost">${esc(digitos)}</div>
+  <div class="mid">
+    ${(rotulo || total) ? `<div class="sr-head">
+      ${rotulo ? `<div class="eyebrow" style="margin:0">${esc(rotulo)}</div>` : "<span></span>"}
+      ${total ? `<div class="sr-de">${esc(digitos)} / ${esc(total < 10 ? "0" + total : String(total))}</div>` : ""}
+    </div>` : ""}
+    ${slide.title ? `<div class="s-title">${highlightHeadline(slide.title)}</div>` : ""}
+    ${slide.body ? `<div class="sr-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+// F16 — comparacao de dois termos ("Liquidez > Volume"). O separador e uma lista fechada e so vale
+// quando parte a frase em EXATAMENTE dois lados curtos: "Cadastro > Aprovacao > Repasse" tem que
+// continuar sendo fluxo, nao virar comparacao com tres partes espremidas.
+const SEP_VERSUS = /\s*(?:>|&gt;|\bversus\b|vs\.?(?=\s)|\sx\s|\s[–—]\s)\s*/i;
+function parVersus(slide) {
+  const v = slide && slide.versus;
+  if (v && typeof v === "object" && v.a && v.b) return { a: String(v.a).trim(), b: String(v.b).trim() };
+  const bruto = String((v && typeof v === "string" ? v : "") || slide.title || "").trim();
+  if (!bruto) return null;
+  const partes = bruto.split(SEP_VERSUS).map((x) => x.trim()).filter(Boolean);
+  // Exatamente dois lados: três partes é fluxo ("Cadastro > Aprovação > Repasse"), não comparação.
+  if (partes.length !== 2) return null;
+  // Teto de 28 porque acima disso não é um TERMO, é uma frase — e duas frases empilhadas em corpo
+  // 100px estouram o cartão. Piso é só "não vazio": "3 x 1" e "A vs B" são comparações legítimas.
+  if (partes.some((p) => !p.length || p.length > 28)) return null;
+  return { a: partes[0], b: partes[1] };
+}
+function slideComparacao(slide, ctx) {
+  const par = parVersus(slide);
+  if (!par) return slideText(slide, ctx);
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "");
+  const maior = Math.max(par.a.length, par.b.length);
+  const tam = maior <= 10 ? 132 : maior <= 16 ? 104 : maior <= 22 ? 84 : 68;
+  const corForte = light ? PALETTE.darker : "#FFFFFF";
+  // No claro o termo rebaixado vai a Blue: Sky sobre Cloud da 2,29:1 e some.
+  const corFraco = light ? PALETTE.blue : PALETTE.mist;
+  const corGlifo = light ? PALETTE.sky : PALETTE.sky;
+  const bodyColor = light ? PALETTE.navy : PALETTE.mist;
+  const css = `.cp { display:flex; flex-direction:column; gap:8px; margin-top:20px; }
+    .cp-a { font-weight:900; font-size:${tam}px; line-height:1.04; letter-spacing:-.03em; color:${corForte}; }
+    .cp-s { font-weight:900; font-size:${Math.round(tam * 0.86)}px; line-height:1; color:${corGlifo}; margin:2px 0; }
+    .cp-b { font-weight:600; font-size:${Math.round(tam * 0.78)}px; line-height:1.06; letter-spacing:-.02em; color:${corFraco}; }
+    .cp-body { margin-top:34px; font-size:40px; line-height:1.42; color:${bodyColor}; max-width:88%; }`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    <div class="cp">
+      <div class="cp-a">${esc(par.a)}</div>
+      <div class="cp-s">&gt;</div>
+      <div class="cp-b">${esc(par.b)}</div>
+    </div>
+    ${slide.body ? `<div class="cp-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+// F08 — citacao com autoria. O perfil usa isso com Churchill e Charles Mingus. Italico REAL da Inter
+// (o eixo ital entrou no FONT_LINK_BASE); serifa continua fora, porque o GOVERNANCE proibe outra
+// familia e a regra tem par no validador.
+function slideCitacao(slide, ctx) {
+  const c = slide.citacao || {};
+  const texto = String((typeof c === "string" ? c : c.text) || "").trim();
+  if (!texto) return slideText(slide, ctx);
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : "";
+  const autor = String((c && c.autor) || (c && c.author) || "").trim();
+  const papel = String((c && c.papel) || (c && c.role) || "").trim();
+  const len = texto.length;
+  const tam = len > 220 ? 44 : len > 150 ? 52 : len > 90 ? 60 : 68;
+  const corTexto = light ? PALETTE.darker : "#FFFFFF";
+  const corAspa = light ? PALETTE.blue : PALETTE.sky;
+  const corAutor = light ? PALETTE.navy : PALETTE.mist;
+  const css = `.qt-aspa { font-weight:900; font-size:300px; line-height:.62; color:${corAspa}; opacity:${light ? 0.34 : 0.42}; height:150px; }
+    .qt-txt { font-style:italic; font-weight:400; font-size:${tam}px; line-height:1.34; color:${corTexto}; max-width:92%; }
+    .qt-fio { width:96px; height:3px; background:${corAspa}; margin:34px 0 22px; border-radius:2px; }
+    .qt-au { font-size:36px; font-weight:800; color:${corAutor}; }
+    .qt-pa { margin-top:6px; font-size:28px; font-weight:500; color:${corAutor}; opacity:.82; }`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    <div class="qt-aspa">&#8220;</div>
+    <div class="qt-txt">${esc(texto)}</div>
+    ${(autor || papel) ? `<div class="qt-fio"></div>` : ""}
+    ${autor ? `<div class="qt-au">${esc(autor)}</div>` : ""}
+    ${papel ? `<div class="qt-pa">${esc(papel)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+const SLIDE_ARCHETYPES = {
+  stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow, device: slideDevice,
+  palavra: slidePalavra, numero: slideNumero, serie: slideSerie, comparacao: slideComparacao, citacao: slideCitacao,
+};
+
+// Apelidos aceitos no campo `layout`. Sem acento de propósito: o normalizador tira os acentos antes
+// de comparar, então "princípio", "citação" e "opções" caem aqui sem precisar de entrada dupla.
+const ALIAS_ARQUETIPO = {
+  stats: "stat_grid", grid: "stat_grid", stat_grid: "stat_grid", number_grid: "stat_grid", grade: "stat_grid",
+  list: "list", lista: "list", bullets: "list",
+  flow: "flow", fluxo: "flow", diagram: "flow", diagrama: "flow",
+  cover: "cover", capa: "cover", hook: "cover",
+  cta: "cta", fecho: "cta",
+  text: "text", texto: "text",
+  device: "device", mockup: "device", print: "device", screenshot: "device", aparelho: "device",
+  palavra: "palavra", word: "palavra", conceito: "palavra",
+  numero: "numero", number: "numero", dado: "numero",
+  serie: "serie", principio: "serie", regra: "serie", passo: "serie",
+  comparacao: "comparacao", versus: "comparacao", vs: "comparacao",
+  citacao: "citacao", quote: "citacao", frase: "citacao",
+};
+
+// Os campos que fazem um slide ter desenho PRÓPRIO. Um slide que traz um deles não é capa nem fecho,
+// mesmo estando na primeira ou na última posição — foi o que a auditoria pegou: a citação de fecho
+// (que existe nas peças reais do perfil) virava CTA, e o "Princípio 1" virava capa.
+// `flow`, `stats` e `items` ficam DE FORA: são genéricos e aparecem em capa e em fecho o tempo todo.
+const CAMPOS_PROPRIOS = ["word", "versus", "citacao", "serie"];
+// O `versus` só CONTA como dado próprio quando de fato dá um par válido. Sem isto o roteador
+// anunciava "comparacao" para "Cadastro > Aprovação > Repasse" e o desenho, que rejeita três
+// partes, caía em texto — layout anunciado e desenho entregue tinham que ser a mesma coisa, senão
+// a peça única grava um template que não corresponde ao que está na tela.
+// O título NÃO entra aqui de propósito: um título com ">" não pode sequestrar o slide.
+function versusValido(slide) {
+  if (!slide || !slide.versus) return false;
+  return !!parVersus({ versus: slide.versus, title: "" });
+}
+function temDadoProprio(slide) {
+  if (!slide || typeof slide !== "object") return false;
+  if (slide.word && String(slide.word).trim()) return true;
+  if (versusValido(slide)) return true;
+  if (slide.citacao && (typeof slide.citacao === "string" ? slide.citacao.trim() : String(slide.citacao.text || "").trim())) return true;
+  if (slide.serie && Number(slide.serie.n) >= 1) return true;
+  return false;
+}
+
+// Decide o arquetipo de um slide, em três degraus e nesta ordem:
+//   1) apelido explícito no campo `layout`/`type` — a escolha da pessoa vence tudo;
+//   2) posição (1o = capa, último = fecho), MAS cedendo quando o slide tem dado próprio;
+//   3) o DADO, do mais específico ao mais genérico.
+// A ordem do degrau 3 é a mesma de `arquetipoPorDado`, e mexer numa sem mexer na outra é bug.
 function slideArchetype(slide, i, total) {
-  const ex = String((slide && (slide.layout || slide.type)) || "").toLowerCase().replace(/[\s-]+/g, "_");
-  if (ex === "stats" || ex === "grid" || ex === "stat_grid" || ex === "number_grid") return "stat_grid";
-  if (ex === "list" || ex === "lista" || ex === "bullets") return "list";
-  if (ex === "flow" || ex === "fluxo" || ex === "diagram" || ex === "diagrama") return "flow";
-  if (ex === "cover" || ex === "capa" || ex === "hook") return "cover";
-  if (ex === "cta") return "cta";
-  if (ex === "text" || ex === "texto") return "text";
-  if (ex === "device" || ex === "mockup" || ex === "print" || ex === "screenshot" || ex === "aparelho") return "device";
-  if (i === 0) return "cover";
-  if (i === total - 1 && total > 1) return "cta";
-  // Slide que traz IMAGEM + aparelho pedido: o print manda, mesmo que também tenha números.
-  if (slide && slide.image && slide.device) return "device";
-  if (Array.isArray(slide && slide.flow) && slide.flow.length) return "flow";
-  if (Array.isArray(slide && slide.stats) && slide.stats.length) return "stat_grid";
-  if (Array.isArray(slide && slide.items) && slide.items.length) return "list";
-  return "text";
+  const ex = String((slide && (slide.layout || slide.type)) || "")
+    .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s-]+/g, "_");
+  if (ALIAS_ARQUETIPO[ex]) return ALIAS_ARQUETIPO[ex];
+
+  const proprio = temDadoProprio(slide);
+  if (i === 0 && !proprio) return "cover";
+  if (i === total - 1 && total > 1 && !proprio) return "cta";
+  return arquetipoDoDado(slide) || "text";
+}
+
+// O degrau do DADO, isolado para o roteador do carrossel e o da peça única usarem a MESMA ordem.
+function arquetipoDoDado(slide) {
+  if (!slide || typeof slide !== "object") return null;
+  // Print de tela pedido em aparelho: o print manda, mesmo que o slide também tenha números.
+  if (slide.image && slide.device) return "device";
+  if (temDadoProprio(slide)) {
+    if (slide.citacao) return "citacao";
+    if (versusValido(slide)) return "comparacao";
+    if (slide.word) return "palavra";
+    if (slide.serie) return "serie";
+  }
+  if (Array.isArray(slide.flow) && slide.flow.length) return "flow";
+  if (Array.isArray(slide.stats) && slide.stats.length === 1) return "numero";
+  if (Array.isArray(slide.stats) && slide.stats.length >= 2) return "stat_grid";
+  if (Array.isArray(slide.items) && slide.items.length) return "list";
+  return null;
 }
 
 // ---- Renders por tipo -----------------------------------------------------
@@ -2192,15 +2509,28 @@ function slideArchetype(slide, i, total) {
 // números/itens/etapas segue exatamente como era, e peça antiga não muda de cara sozinha.
 // Dos 6 arquétipos de slide, só estes 3 fazem sentido como PEÇA ÚNICA. "cover", "text" e "cta"
 // pressupõem vizinhos (capa de quê? fecho de quê?) e já têm equivalente nos 4 templates de sempre.
-const ARQ_PECA = ["stat_grid", "list", "flow"];
+// Os arquetipos que fazem sentido como PECA UNICA. "cover", "text" e "cta" continuam de fora
+// (capa de que? fecho de que?), e "serie" tambem: "2 de 5" pressupoe vizinhos.
+const ARQ_PECA = ["stat_grid", "list", "flow", "palavra", "numero", "comparacao", "citacao"];
+// A peca unica usa a MESMA ordem do carrossel (arquetipoDoDado), so filtrando o que nao vale
+// sozinho. Duas listas separadas era o caminho garantido para elas divergirem com o tempo.
 function arquetipoPorDado(concept) {
   if (!concept || typeof concept !== "object") return null;
-  const tem = (v) => Array.isArray(v) && v.filter((x) => x && (typeof x === "string" ? x.trim() : (x.label || x.value || x.text))).length >= 2;
-  if (tem(concept.flow)) return "flow";
-  if (tem(concept.stats)) return "stat_grid";
-  if (tem(concept.items)) return "list";
+  const arq = arquetipoDoDado(concept);
+  if (arq && ARQ_PECA.indexOf(arq) >= 0) {
+    // Grade e lista continuam exigindo 2+ entradas de verdade: uma so nao justifica o desenho
+    // (e com um numero so quem responde e o arquetipo `numero`).
+    const tem = (v) => Array.isArray(v) && v.filter((x) => x && (typeof x === "string" ? x.trim() : (x.label || x.value || x.text))).length >= 2;
+    if (arq === "stat_grid" && !tem(concept.stats)) return null;
+    if (arq === "list" && !tem(concept.items)) return null;
+    if (arq === "flow" && !tem(concept.flow)) return null;
+    return arq;
+  }
   return null;
 }
+// Todos os ids que a tela pode mandar como "template" da peca unica: os 4 de sempre + os arquetipos
+// que valem sozinhos. Sem isto a rota derruba `template=numero` antes de chegar aqui.
+const PECA_IDS = TEMPLATE_IDS.concat(ARQ_PECA);
 async function renderImage(folder, opts) {
   const loc = requireActive(folder);
   const concept = readJson(path.join(loc.path, "ads", "concept.json")) || {};
@@ -2787,6 +3117,7 @@ module.exports = {
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
-  TEMPLATE_IDS, LOGO_IDS, WATERMARK_IDS,
+  TEMPLATE_IDS, PECA_IDS, ARQ_PECA, LOGO_IDS, WATERMARK_IDS,
+  slideArchetype, arquetipoDoDado,   // puras: o roteador de layout, testavel sem render
   FAMILIAS, FAMILIA_IDS,   // lista fechada de tipografia (a tela monta o seletor a partir daqui)
 };

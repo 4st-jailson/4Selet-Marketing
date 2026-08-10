@@ -29,10 +29,22 @@ const SCHEMAS = {
   instagram_carousel: `{
   "eyebrow": "rotulo curto da capa (ex.: tema/pilar)",
   "slides": [
-    { "title": "titulo curto (use ==palavra== p/ realcar palavra em azul sublinhado)", "body": "texto de apoio (opcional)", "layout": "cover|stat_grid|list|text|flow|cta|device (opcional — inferido pela posicao/conteudo se ausente; a lista e sugestao, nao cerca)", "image": "/uploads/... — foto do acervo. Vale na capa E em qualquer slide de conteudo. ATENCAO: em layout que NAO seja 'device' ela entra como ATMOSFERA (fundo atras do texto, com veu de leitura por cima e recorte que corta as bordas); NAO serve para print/captura que precise ser lido. Print vai no layout 'device'.",
+    { "title": "titulo curto (use ==palavra== p/ realce azul sublinhado e ::palavra:: p/ marca-texto de fundo azul; os dois valem tambem no body)", "body": "texto de apoio (opcional)", "layout": "cover|stat_grid|list|text|flow|cta|device|numero|palavra|serie|citacao|comparacao (opcional — inferido pela posicao/conteudo se ausente; a lista e sugestao, nao cerca)", "image": "/uploads/... — foto do acervo. Vale na capa E em qualquer slide de conteudo. ATENCAO: em layout que NAO seja 'device' ela entra como ATMOSFERA (fundo atras do texto, com veu de leitura por cima e recorte que corta as bordas); NAO serve para print/captura que precise ser lido. Print vai no layout 'device'.",
       "device": "notebook|janela|celular|tablet — SO no layout 'device': desenha a imagem DENTRO do aparelho, reta e legivel, sem veu por cima. Use quando o pedido falar em print, captura de tela, dashboard, ou 'dentro de um notebook/celular/janela'. Exige uma imagem REAL no campo image; sem ela o slide vira texto.",
-      "url": "endereco mostrado na barra do navegador — SO no layout 'device' com device 'janela'", "titleOffsetY": "numero, SO na capa: desloca o titulo N px na vertical (negativo sobe, ex.: -50)", "titleOffsetX": "numero, SO capa: desloca o titulo N px na horizontal", "titleScale": "numero, SO capa: escala do titulo (1 = normal, 1.3 = 30% maior)", "theme": "dark|light — SO em slide de FRASE (layout text): light = editorial claro (fundo Cloud, texto escuro, marca d'agua) — use p/ intercalar 1-2 slides claros no meio dos escuros e dar variedade/respiro", "watermark": "marca d'agua do slide: string (palavra) OU objeto {text, style} — style: word|outline|symbol|none (padrao word 'SELET')", "items": ["item de lista"], "stats": [{ "value": "95%", "label": "rotulo" }], "orient": "row (SO no layout flow: icones em linha + setas)", "tone": "muted|accent (SO no flow: cinza+alerta x azul+escudo)", "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }], "note": "frase da caixa de callout ao pe do flow (opcional)" }
-  ],  // 4-7 slides com VARIEDADE de layout: capa (gancho, pode ter foto no campo image) -> desenvolvimento (stat_grid p/ numeros; list p/ enumeracao; flow p/ diagrama de etapas com icones — use orient:"row" e um icon por no; text p/ frase forte; device p/ print de tela dentro de um aparelho) -> CTA. Escolha o layout que melhor comunica; nem todo slide precisa de items/stats/flow. Esta lista e SUGESTAO, nao cerca: se o pedido descreve algo que nenhum layout atende, NAO troque em silencio por outro — declare em "limitacoes".
+      "url": "endereco mostrado na barra do navegador — SO no layout 'device' com device 'janela'", "titleOffsetY": "numero, SO na capa: desloca o titulo N px na vertical (negativo sobe, ex.: -50)", "titleOffsetX": "numero, SO capa: desloca o titulo N px na horizontal", "titleScale": "numero, SO capa: escala do titulo (1 = normal, 1.3 = 30% maior)", "theme": "dark|light — vale em QUALQUER layout: light = editorial claro (fundo Cloud, texto escuro, marca d'agua) — use p/ intercalar 1-2 slides claros no meio dos escuros e dar variedade/respiro", "watermark": "marca d'agua do slide: string (palavra) OU objeto {text, style} — style: word|outline|symbol|none (padrao word 'SELET')", "items": ["item de lista"], "stats": [{ "value": "95%", "label": "rotulo" }], "orient": "row (SO no layout flow: icones em linha + setas)", "tone": "muted|accent (SO no flow: cinza+alerta x azul+escudo)", "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }], "note": "frase da caixa de callout ao pe do flow (opcional)",
+      "stats com UM item so": "quando houver UM numero e ele for o assunto do slide, mande stats com UMA entrada: vira NUMERO GIGANTE. Dois a quatro viram grade.",
+      "word": "UMA palavra (ate 16 caracteres) quando o slide inteiro e sobre um conceito: ela ocupa o slide atras do texto. Ex.: Simplificar, Confianca, Friccao.",
+      "serie": { "n": 2, "total": 5, "rotulo": "PRINCIPIO" },
+      "citacao": { "text": "frase de terceiro, entre aspas no original", "autor": "quem disse", "papel": "cargo/obra (opcional)" },
+      "versus": { "a": "termo que ganha", "b": "termo que perde" } }
+  ],  // __SLIDES__ com VARIEDADE de layout. O layout nasce do DADO que voce escreve, nao de escolha estetica:
+  //   NUMEROS  -> stats com 1 entrada = numero gigante; com 2 a 4 = grade
+  //   ENUMERACAO -> items (lista)   ·   ETAPAS -> flow (use orient:"row" e um icon por no)
+  //   CONCEITO EM UMA PALAVRA -> word   ·   ITEM DE UMA SERIE (principio/regra/passo N de M) -> serie
+  //   FRASE DE TERCEIRO -> citacao (com autor)   ·   DOIS TERMOS EM CONTRASTE -> versus
+  //   PRINT DE TELA -> device (exige image real)   ·   FRASE FORTE SEM DADO -> text
+  // RITMO: intercale 1 ou 2 slides com theme:"light" no meio dos escuros — e o principal recurso de respiro da marca.
+  // Capa (gancho, pode ter foto no campo image) -> desenvolvimento -> CTA. Escolha o layout que melhor comunica; nem todo slide precisa de items/stats/flow. Esta lista e SUGESTAO, nao cerca: se o pedido descreve algo que nenhum layout atende, NAO troque em silencio por outro — declare em "limitacoes".
   "caption": "caption que acompanha o post",
   "hashtags": ["#4Selet", "..."],
   "cta": "CTA aprovado",
@@ -122,7 +134,7 @@ function generationPrompt(req) {
   const ct = contentTypeById(req.content_type);
   let schema = SCHEMAS[req.content_type] || `{ "body": "...", "notes": "..." }`;
   const nSlides = req.content_type === "instagram_carousel" ? slidesPedidos(req.brief) : null;
-  if (nSlides) schema = schema.replace(/4-7 slides/g, "EXATAMENTE " + nSlides + " slides (foi o que a pessoa pediu)");
+  schema = schema.replace("__SLIDES__", nSlides ? "EXATAMENTE " + nSlides + " slides (foi o que a pessoa pediu)" : "4 a 7 slides");
   const lines = [];
   lines.push("TAREFA: gerar **" + (ct ? ct.label : req.content_type) + "**.");
   if (ct) lines.push("Definicao do formato: " + ct.description);
