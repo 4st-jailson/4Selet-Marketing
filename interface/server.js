@@ -80,6 +80,18 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
+// A versão do front viaja DE CARONA em toda resposta de /api. É ~30 bytes num cabeçalho, em
+// requisições que o painel já faz de qualquer jeito — custo de rede zero.
+//
+// A 1ª versão disto era um relógio: o front pedia /api/meta a cada 5 minutos e toda vez que a aba
+// voltava a ficar visível. Medido, /api/meta pesa 6.090 bytes para entregar ~20 bytes de versão,
+// não tem freio de requisição, e o relógio nunca parava — nem depois do aviso aparecer. Alternar
+// entre abas (que é o que se faz o dia inteiro) viraria uma rajada de chamadas de 6KB por nada.
+app.use("/api", (req, res, next) => {
+  res.setHeader("X-Painel-Versao", ASSET_VERS.app + "-" + ASSET_VERS.css);
+  next();
+});
+
 // Metadados para o front (dropdowns, tema)
 app.get("/api/meta", (req, res) => {
   res.json({
@@ -89,11 +101,9 @@ app.get("/api/meta", (req, res) => {
     content_pillars: CONTENT_PILLARS,
     content_types: CONTENT_TYPES,
     kind_labels: KIND_LABELS,
-    // Versão do front que ESTE servidor tem agora. O painel é uma página só: quem deixa a aba
-    // aberta navega entre telas pelo # e NUNCA recarrega o app.js — então continua rodando a
-    // versão de quando abriu, mesmo dias depois de um deploy. Aconteceu de verdade: o Hugo
-    // relatou duas vezes que a seção "Ajustes" não aparecia, com a correção já no ar.
-    // O front compara este número com o dele e avisa quando ficou para trás.
+    // Versão do front que ESTE servidor tem. O painel NÃO usa isto (ele lê o cabeçalho
+    // X-Painel-Versao, que vem em toda resposta e não custa requisição nenhuma). Fica aqui para
+    // conferência: um `curl /api/meta` diz qual versão está no ar sem ter que ler o HTML.
     app_version: ASSET_VERS.app + "-" + ASSET_VERS.css,
   });
 });

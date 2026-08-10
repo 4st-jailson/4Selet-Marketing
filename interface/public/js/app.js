@@ -7191,6 +7191,7 @@ async function boot() {
   setupLightbox();
   // meta e settings (via refreshKeyStatus) são independentes — busca em PARALELO antes do
   // 1º render. settings continua resolvido pré-router (o dashboard usa State.settings p/ o aviso de chave).
+  ligaAvisoDeVersao();   // ouvinte no ar ANTES da 1ª chamada — senão o 1º carimbo de versão passa batido
   let metaFail = false;
   await Promise.all([
     API.meta().then((m) => { State.meta = m; }).catch(() => { metaFail = true; }),
@@ -7199,7 +7200,6 @@ async function boot() {
   if (metaFail) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   window.addEventListener("hashchange", router);
   window.addEventListener("auth:expired", onAuthExpired);
-  ligaAvisoDeVersao(State.meta);
   router();
 }
 boot();
@@ -7236,19 +7236,18 @@ function avisaVersaoNova() {
     location.replace(u.toString());
   };
 }
-function ligaAvisoDeVersao(meta) {
+function ligaAvisoDeVersao() {
   const minha = versaoCarregada();
   // Sem hash na URL dos arquivos (ambiente local sem cache-busting) não há o que comparar.
-  if (!minha || minha === "-" || !(meta && meta.app_version)) return;
-  if (meta.app_version !== minha) return avisaVersaoNova();
-  const confere = async () => {
-    try {
-      const m = await API.meta();
-      if (m && m.app_version && m.app_version !== minha) avisaVersaoNova();
-    } catch (e) { /* sem rede: tenta de novo no próximo ciclo */ }
-  };
-  // A cada 5 minutos e sempre que a aba volta a ficar visível — que é quando a pessoa retoma o
-  // trabalho e é o momento certo de descobrir que o painel mudou.
-  setInterval(confere, 5 * 60 * 1000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) confere(); });
+  if (!minha || minha === "-") return;
+  // Nenhum relógio, nenhuma requisição própria: o servidor carimba a versão em TODA resposta de
+  // /api e o api.js avisa aqui. Custo = uma comparação de string por chamada que já ia acontecer.
+  //
+  // A 1ª versão disto pedia /api/meta a cada 5 minutos e a cada volta de aba. Medido: 6.090 bytes
+  // por checagem para ler ~20 bytes de versão, sem freio de requisição, e o relógio não parava nem
+  // depois do aviso aparecer. Alternar entre abas o dia inteiro viraria uma rajada por nada.
+  window.addEventListener("painel:versao", (e) => {
+    const doServidor = e && e.detail;
+    if (doServidor && doServidor !== minha) avisaVersaoNova();
+  });
 }

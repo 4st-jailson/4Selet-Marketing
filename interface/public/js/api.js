@@ -17,6 +17,14 @@ const API = (() => {
       err.status = 0; err.code = "E_REDE"; err.data = null; err.original = (e && e.message) || String(e);
       throw err;
     }
+    // Versão do front que o SERVIDOR tem, carimbada em toda resposta de /api. Comparar aqui é
+    // grátis (uma comparação de string por chamada que já ia acontecer) e cobre o painel inteiro,
+    // porque TODA chamada passa por este ponto. Sem relógio, sem requisição extra: quem está
+    // trabalhando descobre na próxima ação; quem está parado não precisa saber.
+    const versaoServidor = r.headers.get("X-Painel-Versao");
+    if (versaoServidor) {
+      try { window.dispatchEvent(new CustomEvent("painel:versao", { detail: versaoServidor })); } catch (_) { /* fora do browser */ }
+    }
     const ct = r.headers.get("content-type") || "";
     let data;
     if (ct.includes("application/json")) data = await r.json();
