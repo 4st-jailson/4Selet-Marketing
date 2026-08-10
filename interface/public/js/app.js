@@ -181,7 +181,7 @@ function isNewPiece(t) {
 function kindLabel(k) { return (State.meta.kind_labels && State.meta.kind_labels[k]) || k || "Outros"; }
 function pillarLabel(id) { const p = (State.meta.content_pillars || []).find((x) => x.id === id); return p ? (p.short || p.label) : null; }
 function mediaLabel(m) { return m === "video" ? "vídeo" : (m === "image" ? "imagem" : "texto"); }
-function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video" || k === "media"; }
+function isMediaKind(k) { return k === "image" || k === "feed" || k === "carousel" || k === "video" || k === "media" || k === "story"; }
 // Modelos de "4Selet na Mídia", agrupados por COMO o print aparece na arte. A ordem antiga
 // misturava as três famílias (tablet, foto real, editorial) e não dava para entender a lógica.
 // `grupo` monta os subtítulos do seletor; `svg` segue em uso no cartão de descoberta da peça;
@@ -232,6 +232,7 @@ function pintaPreviewModelo(id) {
 function artSizeForType(typeId) {
   const ct = metaType(typeId); const k = ct && ct.kind;
   if (k === "image") return { w: 1080, h: 1080 };       // quadrado
+  if (k === "story") return { w: 1080, h: 1920 };        // story — 9:16 (a arte já reserva a faixa do app)
   return { w: 1080, h: 1350 };                            // feed / carrossel / mídia — retrato 4:5
 }
 // Proporção ideal do print por modelo de dispositivo — avisa (sem travar) quando o print destoa
@@ -1694,10 +1695,10 @@ function chooseCollectionModal(collections, folder) {
 // HTML intermediários do render (fonte dos slides/ads). Mantém dados + prévia.
 function visibleFiles(task) {
   const files = task.files || [];
-  if (["carousel", "image", "feed", "video"].indexOf(task.kind) === -1) return files;
+  if (["carousel", "image", "feed", "video", "story"].indexOf(task.kind) === -1) return files;
   return files.filter((f) => {
     if (f.isImage || f.isVideo) return false;
-    if (/(slides\/slide_\d+|ads\/(ad|feed))\.html?$/i.test(f.rel)) return false;
+    if (/(slides\/slide_\d+|story\/story_\d+|ads\/(ad|feed))\.html?$/i.test(f.rel)) return false;
     if (/\.(canvas|editable)\.json$/i.test(f.rel)) return false; // sidecars do editor visual (não entregáveis)
     return true;
   });
@@ -2186,7 +2187,7 @@ function selectedLogo() { const el = document.getElementById("pick-logo"); retur
 function selectedWatermark() { const el = document.getElementById("pick-wm"); return el ? (el.value || "auto") : undefined; }
 function selectedFont() { const el = document.getElementById("pick-font"); return el ? (el.value || "auto") : undefined; }
 
-function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel" || kind === "media"; }
+function autoRenders(kind) { return kind === "image" || kind === "feed" || kind === "carousel" || kind === "media" || kind === "story"; }
 
 // Imagens de referencia anexadas ao "Ajustar com IA" (a IA as "ve" via visao).
 let REFINE_IMAGES = [];
@@ -2266,6 +2267,13 @@ function refineCard(task) {
 // Quais artes desta peca abrem no editor: carrossel -> 1 por slide; imagem/feed -> a arte principal.
 function editorTargets(task) {
   const files = (task && task.files) || [];
+  if (task.kind === "story") {
+    return files
+      .filter((f) => /story_0*\d+\.png$/i.test(f.rel))
+      .map((f) => ({ f, n: parseInt((f.rel.match(/story_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+      .sort((a, b) => a.n - b.n)
+      .map((c) => ({ rel: c.f.rel, label: "Cartão " + c.n }));
+  }
   if (task.kind === "carousel") {
     return files
       .filter((f) => /slide_0*\d+\.png$/i.test(f.rel))
@@ -5183,7 +5191,7 @@ function renderGenResult(r, opts) {
        </details>`
     : "";
   // #1 — prévia RENDERIZADA da arte (imagem final) para tipos visuais.
-  const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel" || ct.kind === "media";
+  const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel" || ct.kind === "media" || ct.kind === "story";
   const artDesc = ct.kind === "media"
     ? "Monta o mockup da aparição: o print da matéria no dispositivo escolhido, na identidade 4Selet. Não salva nada — confira antes de salvar."
     : `Renderiza a imagem final ${ct.kind === "carousel" ? "de TODOS os slides " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe se quiser (rascunho rápido).`;

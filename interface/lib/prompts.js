@@ -3,7 +3,7 @@
 // de saida (estrutura padrao) que o back valida.
 "use strict";
 const { brandContext } = require("./knowledge");
-const { contentTypeById, pillarById, HASHTAG_RULES, CONTENT_TYPES, CONTENT_PILLARS, APPROVED_CTAS, BRIEF_MAX_CHARS } = require("./config");
+const { contentTypeById, pillarById, HASHTAG_RULES, CONTENT_TYPES, CONTENT_PILLARS, APPROVED_CTAS, BRIEF_MAX_CHARS, STORY_SAFE } = require("./config");
 
 const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 - Paleta azul oficial; sem neon; NUNCA preto puro (#000000 -> use Selet Darker #07212B). Branco puro (#FFFFFF) SO como TEXTO sobre fundo Navy/Darker (headline, CTA) e dentro de mockup (tela do dispositivo, card do veiculo) — nunca como fundo da peca, card de conteudo ou area chapada de marca.
@@ -55,6 +55,25 @@ const SCHEMAS = {
   "body": "post <=500 caracteres, provocacao controlada com dado especifico",
   "hashtags": ["#4Selet"],  // 0-1 hashtag
   "notes": "1-2 frases de racional"
+}`,
+  instagram_story: `{
+  "destaque": "quem_somos|nosso_dna|diferenciais|\"\" — a qual destaque fixo do perfil esta sequencia pertence (opcional)",
+  "cards": [
+    { "title": "frase curta e forte (use ==palavra== p/ realce e ::palavra:: p/ marca-texto)", "body": "apoio curto (opcional)", "eyebrow": "rotulo curto (opcional)",
+      "layout": "cover|text|number|quote|poll|photo|link (opcional — inferido pelo dado)",
+      "theme": "dark|light — intercale 1 cartao claro para dar respiro",
+      "stats": [{ "value": "96,4%", "label": "rotulo curto" }],
+      "quote": { "text": "frase de terceiro", "autor": "quem disse" },
+      "poll": { "question": "pergunta curta — a arte RESERVA o espaco e voce cola a enquete no app" },
+      "link": { "label": "texto da pilula, ex.: Solicitar convite" },
+      "image": "/uploads/... foto do acervo (opcional)" }
+  ],  // 3 a 7 cartoes. Story NAO e feed encolhido nem carrossel vertical:
+  //   - cada cartao e visto por 5 segundos: UMA ideia por cartao, frase curta, nada de paragrafo;
+  //   - o aplicativo COBRE __TOPO__px em cima e __RODAPE__px embaixo da arte 1080x1920 — o desenho ja
+  //     reserva isso, mas NAO escreva texto pensando em ocupar a tela toda;
+  //   - o ultimo cartao chama a acao (link);
+  //   - NAO existe legenda em story: todo o texto mora na arte.
+  "notes": "1-2 frases de racional de marca"
 }`,
   linkedin_post: `{
   "body": "post editorial 1.200-1.500 caracteres: tese -> dados -> CTA suave",
@@ -135,6 +154,10 @@ function generationPrompt(req) {
   let schema = SCHEMAS[req.content_type] || `{ "body": "...", "notes": "..." }`;
   const nSlides = req.content_type === "instagram_carousel" ? slidesPedidos(req.brief) : null;
   schema = schema.replace("__SLIDES__", nSlides ? "EXATAMENTE " + nSlides + " slides (foi o que a pessoa pediu)" : "4 a 7 slides");
+  // A faixa que o app do Instagram cobre sai da MESMA constante que o render usa. Escrever o número
+  // à mão aqui foi o que produziu, no projeto, dois valores que discordavam (250px na documentação
+  // e 269/384px na tela) sem nenhum deles chegar ao renderizador.
+  schema = schema.replace("__TOPO__", String(STORY_SAFE.top)).replace("__RODAPE__", String(STORY_SAFE.bottom));
   const lines = [];
   lines.push("TAREFA: gerar **" + (ct ? ct.label : req.content_type) + "**.");
   if (ct) lines.push("Definicao do formato: " + ct.description);

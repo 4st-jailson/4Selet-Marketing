@@ -83,8 +83,15 @@ function isVideo(rel) { return VIDEO_EXT.includes(extOf(rel)); }
 function classifyKind(files, status) {
   if (status && status.content_type === "media_mention") return "media";
   if (status && status.media) return "media";
+  // Story ancorado pelo content_type ANTES de qualquer inferencia por arquivo — e a licao que a peca
+  // de Midia deixou: la o kind era adivinhado, a peca virava feed e o "Gerar arte final" redesenhava
+  // como feed em vez do mockup. Aqui o tipo e declarado na criacao e nao se perde.
+  if (status && status.content_type === "instagram_story") return "story";
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
   const has = (re) => rels.some((r) => re.test(r));
+  // Antes do ramo de carrossel e do de feed: os cartoes se chamam story_N.png de proposito, para
+  // nao caírem no regex de slide_N, mas o arquivo de conteudo tambem ancora.
+  if (has(/instagram_story\.json$/) || has(/story\/story_\d+\.(png|jpe?g)$/i)) return "story";
   if (rels.some(isVideo) || has(/video\/(scenes|concept)\.json$/)) return "video";
   const slidePngs = rels.filter((r) => /slide_\d+\.(png|jpe?g)$/i.test(r));
   if (slidePngs.length > 1 || has(/instagram_carousel\.json$/)) return "carousel";

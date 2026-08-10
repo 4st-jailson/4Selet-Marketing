@@ -9,7 +9,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
-const { PATHS, PALETTE, PALETAS_CAMPANHA, PALETA_IDS, contentTypeById } = require("./config");
+const { PATHS, PALETTE, PALETAS_CAMPANHA, PALETA_IDS, STORY_SAFE, contentTypeById } = require("./config");
 const { findTask } = require("./content");
 
 // --- Fila de render (assincrona + serializada) ------------------------------
@@ -2687,6 +2687,300 @@ function carouselSlidesHtml(concept, buildCover, opts) {
   return out;
 }
 
+// ===========================================================================
+// STORY (1080x1920) — o formato mais usado do Instagram e o unico que o painel
+// nao tinha. Os tres destaques fixos do perfil (QUEM SOMOS, NOSSO DNA,
+// DIFERENCIAIS) provam que a conta usa story; ate aqui a unica arte 9:16 que o
+// painel produzia era um tamanho solto da peca de Midia, com o logo caindo
+// debaixo da interface do aplicativo.
+//
+// A diferenca que manda: story NAO e feed encolhido. O aplicativo COBRE 250px em
+// cima (foto, nome, horario, "x") e 250px embaixo (a caixa "Enviar mensagem").
+// Aqui essa faixa vira PADDING do cartao — geometria, nao recomendacao —, entao
+// nenhum layout consegue escrever ali dentro por engano. O numero mora em
+// config.js (STORY_SAFE) e e o mesmo que o prompt e a tela leem.
+function storyBase(theme) {
+  const t = theme || THEME_DARK;
+  const S = STORY_SAFE;
+  return `* { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:${S.w}px; height:${S.h}px; }
+  .card { position:relative; width:${S.w}px; height:${S.h}px; overflow:hidden;
+    font-family:'Inter',sans-serif; color:${t.text}; background:${t.bg};
+    display:flex; flex-direction:column;
+    padding:${S.top}px ${S.side}px ${S.bottom}px; }
+  /* Decorativo vai de ponta a ponta (inset:0), FORA da caixa com recuo: a textura pode
+     encostar na borda, o texto nao. */
+  .dots { position:absolute; inset:0; background-image:radial-gradient(${t.dotTex} 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
+  .s-photo { position:absolute; inset:0; z-index:0; background-size:cover; background-position:center; }
+  .s-scrim { position:absolute; inset:0; z-index:1; }
+  .card.has-photo .dots { opacity:.16; z-index:1; }
+  .top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .logo { height:52px; }
+  .conta { font-family:'JetBrains Mono',monospace; font-size:26px; letter-spacing:.12em; color:${t.eyebrow}; }
+  .mid { position:relative; z-index:2; flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; font-size:28px; letter-spacing:.16em; text-transform:uppercase; color:${t.eyebrow}; margin-bottom:26px; }
+  .s-title { font-weight:900; font-size:104px; line-height:1.04; letter-spacing:-.03em; }
+  .s-title .accent { color:${t.eyebrow}; }
+  .s-body { margin-top:36px; font-size:46px; line-height:1.4; }
+  .rodape { position:relative; z-index:2; display:flex; align-items:center; justify-content:center; }
+  /* Barra de progresso da sequencia, no alto da area util: e o que o proprio Instagram desenha,
+     e repetir isso dentro da arte dá continuidade quando a pessoa avanca os cartoes. */
+  .barra { position:relative; z-index:2; display:flex; gap:8px; margin-bottom:30px; }
+  .barra i { flex:1; height:6px; border-radius:3px; background:${t.dot}; }
+  .barra i.on { background:${t.dotOn}; }`;
+}
+
+function storyDoc(ctx, extraCss, bodyInner) {
+  const wmSpec = ctx.watermark != null ? ctx.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : null);
+  const wm = wmSpec ? watermark(wmSpec, ctx.theme) : "";
+  let photo = "";
+  const temFoto = ctx.image && imagemExiste(ctx.image);
+  if (temFoto) {
+    const claro = ctx.theme === THEME_LIGHT;
+    const scrim = claro
+      ? `linear-gradient(180deg, ${PALETTE.cloud}D9 0%, ${PALETTE.cloud}B8 45%, ${PALETTE.cloud}F2 100%)`
+      : `linear-gradient(180deg, ${PALETTE.darker}CC 0%, ${PALETTE.darker}99 42%, ${PALETTE.darker}F2 100%)`;
+    photo = `<div class="s-photo" style="background-image:url('${fileUrl(ctx.image)}')"></div><div class="s-scrim" style="background:${scrim}"></div>`;
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"/>${FONT_LINK_BASE}
+  <style>${storyBase(ctx.theme)}${extraCss || ""}</style></head>
+  <body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots"></div>${wm}${bodyInner}</div></body></html>`;
+}
+
+// Cabecalho comum: logo e a contagem "2/5". Fica DENTRO da caixa com recuo — nunca em
+// position:absolute no topo, que e onde a interface do aplicativo passa por cima.
+function storyTop(ctx) {
+  const logo = logoSrc(ctx.logo, (ctx.theme && ctx.theme.logo) || LOGO_LIGHT);
+  const total = Number(ctx.total) || 1;
+  return `<div class="top"><img class="logo" src="${logo}" alt="4Selet"/>`
+    + (total > 1 ? `<div class="conta">${ctx.n}/${total}</div>` : "")
+    + "</div>"
+    + (total > 1 ? `<div class="barra">${Array.from({ length: total }, (_, k) => `<i class="${k < (ctx.n || 1) ? "on" : ""}"></i>`).join("")}</div>` : "");
+}
+
+function storyCover(card, ctx) {
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "SELET";
+  ctx.image = card.image || "";
+  const light = ctx.theme === THEME_LIGHT;
+  const css = `.s-title { font-size:118px; }
+    .s-body { color:${light ? PALETTE.navy : PALETTE.mist}; }
+    .mid { justify-content:flex-end; }`;
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
+    <div class="s-title">${highlightHeadline(card.title || "")}</div>
+    ${card.body ? `<div class="s-body">${highlightHeadline(card.body)}</div>` : ""}
+  </div>`);
+}
+
+function storyText(card, ctx) {
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.image = card.image || "";
+  const light = ctx.theme === THEME_LIGHT;
+  const css = `.s-body { color:${light ? PALETTE.navy : PALETTE.mist}; }
+    ${light ? `.s-title span, .s-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
+    <div class="s-title">${highlightHeadline(card.title || "")}</div>
+    ${card.body ? `<div class="s-body">${highlightHeadline(card.body)}</div>` : ""}
+  </div>`);
+}
+
+function storyNumber(card, ctx) {
+  const stats = (Array.isArray(card.stats) ? card.stats : []).filter((s) => s && s.value != null).slice(0, 3);
+  if (!stats.length) return storyText(card, ctx);
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.image = card.image || "";
+  const light = ctx.theme === THEME_LIGHT;
+  const um = stats.length === 1;
+  const tam = um ? 300 : stats.length === 2 ? 172 : 132;
+  const c = light
+    ? { val: PALETTE.darker, lab: PALETTE.navy, cartao: PALETTE.cloud, borda: PALETTE.blue + "33" }
+    : { val: "#FFFFFF", lab: PALETTE.mist, cartao: PALETTE.navy, borda: PALETTE.blue + "55" };
+  const css = `.s-title { font-size:64px; margin-bottom:40px; }
+    .nums { display:flex; flex-direction:column; gap:${um ? 0 : 26}px; }
+    .num { ${um ? "" : `background:${c.cartao}; border:2px solid ${c.borda}; border-radius:30px; padding:36px 40px;`} }
+    .num-v { font-weight:900; font-size:${tam}px; line-height:.9; letter-spacing:-.05em; color:${c.val}; }
+    .num-l { margin-top:${um ? 24 : 12}px; font-size:${um ? 46 : 34}px; line-height:1.24; color:${c.lab}; }`;
+  const blocos = stats.map((s) => `<div class="num"><div class="num-v">${esc(String(s.value))}</div>${s.label ? `<div class="num-l">${esc(s.label)}</div>` : ""}</div>`).join("");
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
+    ${card.title ? `<div class="s-title">${highlightHeadline(card.title)}</div>` : ""}
+    <div class="nums">${blocos}</div>
+  </div>`);
+}
+
+function storyQuote(card, ctx) {
+  const q = card.quote || card.citacao || {};
+  const texto = String((typeof q === "string" ? q : q.text) || "").trim();
+  if (!texto) return storyText(card, ctx);
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.image = card.image || "";
+  const light = ctx.theme === THEME_LIGHT;
+  const autor = String(q.autor || q.author || "").trim();
+  const tam = texto.length > 180 ? 54 : texto.length > 110 ? 62 : 72;
+  const css = `.q-aspa { font-weight:900; font-size:260px; line-height:.6; height:130px; color:${light ? PALETTE.blue : PALETTE.sky}; opacity:.4; }
+    .q-txt { font-style:italic; font-size:${tam}px; line-height:1.32; color:${light ? PALETTE.darker : "#FFFFFF"}; }
+    .q-fio { width:88px; height:3px; border-radius:2px; margin:34px 0 20px; background:${light ? PALETTE.blue : PALETTE.sky}; }
+    .q-au { font-size:38px; font-weight:800; color:${light ? PALETTE.navy : PALETTE.mist}; }`;
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    <div class="q-aspa">&#8220;</div>
+    <div class="q-txt">${esc(texto)}</div>
+    ${autor ? `<div class="q-fio"></div><div class="q-au">${esc(autor)}</div>` : ""}
+  </div>`);
+}
+
+// Enquete/pergunta: a arte RESERVA o espaço e escreve a pergunta; ela NAO desenha caixa tracejada.
+// O sticker de verdade e colado no aplicativo — a Graph API nao publica sticker nenhum. Retangulo
+// tracejado impresso no PNG le como erro de render depois de publicado.
+function storyPoll(card, ctx) {
+  const p = card.poll || {};
+  const pergunta = String(p.question || p.pergunta || "").trim();
+  if (!pergunta) return storyText(card, ctx);
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.image = card.image || "";
+  const light = ctx.theme === THEME_LIGHT;
+  const S = STORY_SAFE;
+  const css = `.s-title { font-size:88px; }
+    .mid { justify-content:flex-start; padding-top:40px; }
+    /* espaco reservado para o sticker que a pessoa cola no app: vazio de proposito */
+    .reserva { height:${S.stickerBand.h}px; }
+    .dica { font-size:30px; color:${light ? PALETTE.navy : PALETTE.mist}; opacity:.75; }`;
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
+    <div class="s-title">${highlightHeadline(pergunta)}</div>
+    <div class="reserva"></div>
+    <div class="dica">Cole aqui a enquete no aplicativo.</div>
+  </div>`);
+}
+
+function storyPhoto(card, ctx) {
+  if (!card.image || !imagemExiste(card.image)) return storyText(card, ctx);
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.image = card.image;
+  const css = `.mid { justify-content:flex-end; }
+    .s-title { font-size:96px; }
+    .s-body { color:${PALETTE.cloud}; }`;
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
+    ${card.title ? `<div class="s-title">${highlightHeadline(card.title)}</div>` : ""}
+    ${card.body ? `<div class="s-body">${highlightHeadline(card.body)}</div>` : ""}
+  </div>`);
+}
+
+// Cartao de link. NAO desenha seta "arrasta pra cima": o swipe-up nao existe mais no Instagram —
+// hoje e um sticker de link, que a pessoa cola. A arte so deixa claro o convite e o espaco.
+function storyLink(card, ctx) {
+  ctx.theme = resolveTheme(card.theme);
+  ctx.watermark = card.watermark != null ? card.watermark : "SELET";
+  ctx.image = card.image || "";
+  const light = ctx.theme === THEME_LIGHT;
+  const L = card.link || {};
+  const rotulo = String(L.label || card.cta || "Solicitar convite").trim();
+  const S = STORY_SAFE;
+  const css = `.s-title { font-size:96px; }
+    .mid { justify-content:center; }
+    .pil { align-self:flex-start; margin-top:48px; background:${PALETTE.blue}; color:#FFFFFF;
+      font-weight:800; font-size:42px; padding:30px 56px; border-radius:999px; }
+    .obs { margin-top:${Math.max(24, S.ctaBottom - S.bottom)}px; font-size:28px; color:${light ? PALETTE.navy : PALETTE.mist}; opacity:.72; }`;
+  return storyDoc(ctx, css, `${storyTop(ctx)}
+  <div class="mid">
+    ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
+    <div class="s-title">${highlightHeadline(card.title || "")}</div>
+    ${card.body ? `<div class="s-body">${highlightHeadline(card.body)}</div>` : ""}
+    <div class="pil">${esc(rotulo)}</div>
+    <div class="obs">Cole o sticker de link no aplicativo.</div>
+  </div>`);
+}
+
+const STORY_ARCHETYPES = {
+  story_cover: storyCover, story_text: storyText, story_number: storyNumber,
+  story_quote: storyQuote, story_poll: storyPoll, story_photo: storyPhoto, story_link: storyLink,
+};
+const ALIAS_STORY = {
+  cover: "story_cover", capa: "story_cover", story_cover: "story_cover",
+  text: "story_text", texto: "story_text", story_text: "story_text",
+  number: "story_number", numero: "story_number", story_number: "story_number",
+  quote: "story_quote", citacao: "story_quote", story_quote: "story_quote",
+  poll: "story_poll", enquete: "story_poll", pergunta: "story_poll", story_poll: "story_poll",
+  photo: "story_photo", foto: "story_photo", story_photo: "story_photo",
+  link: "story_link", cta: "story_link", story_link: "story_link",
+};
+// A regra de POSICAO cede ao dado aqui muito mais do que no carrossel, e de proposito: um story real
+// tem 3 cartoes. Com a posicao mandando, sobraria UM cartao livre no meio — e o formato viraria
+// "capa + coisa + fecho" sempre.
+function storyArchetype(card, i, total) {
+  const ex = String((card && (card.layout || card.type)) || "")
+    .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s-]+/g, "_");
+  if (ALIAS_STORY[ex]) return ALIAS_STORY[ex];
+  if (card) {
+    if ((card.quote && (card.quote.text || typeof card.quote === "string")) || card.citacao) return "story_quote";
+    if (card.poll && (card.poll.question || card.poll.pergunta)) return "story_poll";
+    if (Array.isArray(card.stats) && card.stats.length) return "story_number";
+    if (card.link && (card.link.label || card.link.url)) return "story_link";
+    if (card.image && imagemExiste(card.image)) return "story_photo";
+  }
+  if (i === 0) return "story_cover";
+  if (i === total - 1 && total > 1) return "story_link";
+  return "story_text";
+}
+
+// Monta os cartoes (puro, sem I/O — espelha o carouselSlidesHtml para ser testavel do mesmo jeito).
+function storyCardsHtml(concept, opts) {
+  const logoV = (opts && opts.logo) || "";
+  const wmV = (opts && opts.watermark) || "";
+  const S = STORY_SAFE;
+  const cards = Array.isArray(concept.cards) && concept.cards.length
+    ? concept.cards
+    : [{ title: "4Selet", body: "" }];
+  const total = cards.length;
+  const out = [];
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    const arq = storyArchetype(card, i, total);
+    const desenha = STORY_ARCHETYPES[arq] || storyText;
+    const html = desenha(card, {
+      width: S.w, height: S.h, n: i + 1, total: total,
+      cta: concept.cta || "", logo: logoV, wmStyle: wmV, image: (card && card.image) || "",
+    });
+    out.push({ n: i + 1, html: html, arquetipo: arq });
+  }
+  return out;
+}
+
+async function renderStory(folder, opts) {
+  const loc = requireActive(folder);
+  const logoV = pickLogo(loc, opts && opts.logo);
+  const wmV = pickWatermark(loc, opts && opts.watermark);
+  const concept = readJson(path.join(loc.path, "copy", "instagram_story.json")) || {};
+  const dir = path.join(loc.path, "story");
+  fs.mkdirSync(dir, { recursive: true });
+  const S = STORY_SAFE;
+  const built = storyCardsHtml(concept, { logo: logoV, watermark: wmV });
+  const rels = [];
+  let lastErr = null;
+  for (const item of built) {
+    const htmlPath = path.join(dir, "story_" + item.n + ".html");
+    const outPng = path.join(dir, "story_" + item.n + ".png");
+    fs.writeFileSync(htmlPath, item.html, "utf8");
+    const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
+    if (!r.ok) lastErr = r.stderr || r.stdout;
+    else rels.push("story/story_" + item.n + ".png");
+  }
+  return { ok: rels.length > 0, rels: rels, total: built.length, stderr: lastErr };
+}
+
 async function renderCarousel(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
@@ -3106,6 +3400,7 @@ async function render(folder, kind, opts) {
       case "feed": return await renderFeed(folder, opts);
       case "media": return await renderMedia(folder, opts);
       case "carousel": return await renderCarousel(folder, opts);
+      case "story": return await renderStory(folder, opts);
       case "video": return await renderVideo(folder);
       default: { const e = new Error("kind sem render de midia: " + kind); e.code = "E_NO_RENDER"; throw e; }
     }
@@ -3115,6 +3410,7 @@ async function render(folder, kind, opts) {
 module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
+  storyCardsHtml, storyArchetype,   // idem, para o story
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, PECA_IDS, ARQ_PECA, LOGO_IDS, WATERMARK_IDS,

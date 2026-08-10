@@ -322,6 +322,20 @@ const CONTENT_TYPES = [
     description: "Roteiro de slides (capa + desenvolvimento + CTA) renderizados em PNG.",
   },
   {
+    id: "instagram_story",
+    label: "Story Instagram",
+    short: "Story",
+    platform: "instagram",
+    file: "copy/instagram_story.json",
+    format: "json",
+    media: "image",
+    kind: "story",
+    icon: "▯",
+    // "cards", e nao "slides", de proposito: `slides` cairia nos regex de classifyKind e nos
+    // apelidos do carrossel, e a peca seria classificada como carrossel na biblioteca.
+    description: "Sequência de 3 a 7 cartões verticais 1080x1920, com a área que o app do Instagram cobre já reservada. Story não tem legenda: o texto mora na arte.",
+  },
+  {
     id: "ad_creative",
     label: "Imagem / Anúncio",
     short: "Imagem",
@@ -388,9 +402,26 @@ const CONTENT_TYPES = [
 ];
 
 // Rotulos amigaveis por "kind" (biblioteca de aprovados / agrupamento).
+// A faixa que o aplicativo do Instagram COBRE no story, em 1080x1920. Mora aqui porque render.js,
+// prompts.js e a tela (via /api/meta) precisam ler o MESMO número — antes havia dois que discordavam
+// e nenhum chegava ao renderizador: a prosa "evitar top/bottom 250px" no platform_guidelines.md e o
+// overlay de 14%/20%/6% da tela (269px / 384px / 65px — e 65px ainda furava o piso de 88px da marca).
+// Em cima: foto, nome do perfil, horário e o "x". Embaixo: a caixa "Enviar mensagem" e os ícones.
+const STORY_SAFE = {
+  w: 1080, h: 1920,
+  top: 250, bottom: 250, side: 96,
+  ctaBottom: 340,                                  // onde uma pílula de chamada ainda é clicável
+  stickerBand: { w: 888, h: 320, bottom: 1580 },   // espaço reservado p/ o sticker que a pessoa cola no app
+};
+
+// Rótulo operacional do destaque a que o story pertence. Não existe endpoint de Highlights na
+// Graph API: isto é instrução para a pessoa, não automação.
+const STORY_HIGHLIGHTS = ["", "quem_somos", "nosso_dna", "diferenciais"];
+
 const KIND_LABELS = {
   feed: "Feed",
   carousel: "Carrossel",
+  story: "Story",
   image: "Imagem / Anúncio",
   media: "4Selet na Mídia",
   video: "Vídeo",
@@ -427,6 +458,7 @@ module.exports = {
   HASHTAG_RULES,
   CONTENT_TYPES,
   KIND_LABELS,
+  STORY_SAFE, STORY_HIGHLIGHTS,
   contentTypeById,
   pillarById,
 };

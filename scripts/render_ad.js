@@ -70,7 +70,9 @@ const { fileURLToPath } = require("url");
   // Emitido so para as ARTES FINAIS (ad/feed/slide_N). O editor visual reconstroi
   // cada elemento como objeto movivel/redimensionavel a partir deste manifesto.
   const base = path.basename(outPath).toLowerCase();
-  const isFinalArt = /^(ad|feed)\.png$/.test(base) || /^slide_0*\d+\.png$/.test(base);
+  // story_N.png entra junto: sem isto o cartao de story nasce sem o manifesto que o editor visual
+  // usa para deixar a arte editavel — a peca sairia como PNG chapado, sem caminho de ajuste.
+  const isFinalArt = /^(ad|feed)\.png$/.test(base) || /^(slide|story)_0*\d+\.png$/.test(base);
   if (isFinalArt) {
     try {
       const manifest = await page.evaluate(({ W, H }) => {
