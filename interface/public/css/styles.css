@@ -1229,6 +1229,13 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .utable .u-actions { text-align: right; white-space: nowrap; }
 .utable .u-actions .btn { margin-left: 4px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
+/* Aviso de painel desatualizado. Fica embaixo, discreto, e não cobre nada: é informação, não
+   interrupção — quem está no meio de uma peça termina antes de recarregar. z-index abaixo dos
+   toasts (1700) e do modal (1660), acima do resto. */
+.ver-bar { position: fixed; left: 50%; bottom: 18px; z-index: 1500; display: flex; align-items: center; gap: 14px; padding: 10px 14px 10px 18px; border: 1px solid var(--accent); border-radius: 999px; background: var(--surface-3); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); font-size: 13px; color: var(--text); transform: translate(-50%, 120%); opacity: 0; transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .28s ease; }
+.ver-bar.on { transform: translate(-50%, 0); opacity: 1; }
+@media (max-width: 560px) { .ver-bar { left: 12px; right: 12px; transform: translateY(120%); border-radius: var(--r-sm); } .ver-bar.on { transform: translateY(0); } }
+
 /* "De onde vem esta imagem?" — lista de caminhos (capturar site / enviar arquivo / banco).
    Cada linha é um botão largo com título e explicação: a escolha é entre CAMINHOS, não entre
    rótulos curtos, então o subtítulo é parte da decisão e não decoração. */

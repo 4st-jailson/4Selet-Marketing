@@ -89,6 +89,12 @@ app.get("/api/meta", (req, res) => {
     content_pillars: CONTENT_PILLARS,
     content_types: CONTENT_TYPES,
     kind_labels: KIND_LABELS,
+    // Versão do front que ESTE servidor tem agora. O painel é uma página só: quem deixa a aba
+    // aberta navega entre telas pelo # e NUNCA recarrega o app.js — então continua rodando a
+    // versão de quando abriu, mesmo dias depois de um deploy. Aconteceu de verdade: o Hugo
+    // relatou duas vezes que a seção "Ajustes" não aparecia, com a correção já no ar.
+    // O front compara este número com o dele e avisa quando ficou para trás.
+    app_version: ASSET_VERS.app + "-" + ASSET_VERS.css,
   });
 });
 

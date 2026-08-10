@@ -7199,6 +7199,56 @@ async function boot() {
   if (metaFail) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   window.addEventListener("hashchange", router);
   window.addEventListener("auth:expired", onAuthExpired);
+  ligaAvisoDeVersao(State.meta);
   router();
 }
 boot();
+
+/* ============== o painel avisa quando ficou para trás ==============
+   O painel é uma página só: quem deixa a aba aberta navega entre telas pelo # e NUNCA recarrega
+   o app.js. Resultado real, duas vezes: o Hugo relatou que a seção "Ajustes" não aparecia — com
+   a correção já publicada e servida. A aba dele estava rodando o código de antes do deploy.
+   O servidor já versiona os arquivos (?v=hash) e manda o HTML com no-cache; o que faltava era o
+   painel PERCEBER que ficou velho. Agora ele compara a sua versão com a do servidor e avisa. */
+function versaoCarregada() {
+  const v = (sel, attr) => {
+    const el = document.querySelector(sel);
+    const m = el && /[?&]v=([a-z0-9]+)/i.exec(el.getAttribute(attr) || "");
+    return m ? m[1] : "";
+  };
+  return v('script[src*="/js/app.js"]', "src") + "-" + v('link[href*="/css/styles.css"]', "href");
+}
+let _avisoVersaoNaTela = false;
+function avisaVersaoNova() {
+  if (_avisoVersaoNaTela) return;
+  _avisoVersaoNaTela = true;
+  const bar = document.createElement("div");
+  bar.className = "ver-bar";
+  bar.setAttribute("role", "status");
+  bar.innerHTML = '<span>Saiu uma versão nova do painel. Esta aba ainda está com a anterior.</span>'
+    + '<button type="button" class="btn btn-sm btn-primary" id="ver-recarregar">Atualizar agora</button>';
+  document.body.appendChild(bar);
+  requestAnimationFrame(() => bar.classList.add("on"));
+  // Recarga forte: troca a query para o navegador não reaproveitar nada do que está em memória.
+  bar.querySelector("#ver-recarregar").onclick = () => {
+    const u = new URL(location.href);
+    u.searchParams.set("_v", Date.now().toString(36));
+    location.replace(u.toString());
+  };
+}
+function ligaAvisoDeVersao(meta) {
+  const minha = versaoCarregada();
+  // Sem hash na URL dos arquivos (ambiente local sem cache-busting) não há o que comparar.
+  if (!minha || minha === "-" || !(meta && meta.app_version)) return;
+  if (meta.app_version !== minha) return avisaVersaoNova();
+  const confere = async () => {
+    try {
+      const m = await API.meta();
+      if (m && m.app_version && m.app_version !== minha) avisaVersaoNova();
+    } catch (e) { /* sem rede: tenta de novo no próximo ciclo */ }
+  };
+  // A cada 5 minutos e sempre que a aba volta a ficar visível — que é quando a pessoa retoma o
+  // trabalho e é o momento certo de descobrir que o painel mudou.
+  setInterval(confere, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) confere(); });
+}
