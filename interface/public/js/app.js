@@ -1041,7 +1041,7 @@ function taskRow(t) {
   const ico = hasThumb
     ? `<span class="lr-thumb">${t.thumb.type === "video"
         ? `<video src="${API.rawUrl(t.folder, t.thumb.rel)}" muted preload="metadata"></video>`
-        : `<img src="${API.rawUrl(t.folder, t.thumb.rel)}" alt="" loading="lazy" onerror="this.closest('.lr-thumb').classList.add('lr-thumb-fb')" />`}<span class="lr-thumb-ico" aria-hidden="true">${kindIcon(t.kind)}</span></span>`
+        : `<img src="${API.thumbUrl(t.folder, t.thumb.rel)}" alt="" loading="lazy" onerror="this.closest('.lr-thumb').classList.add('lr-thumb-fb')" />`}<span class="lr-thumb-ico" aria-hidden="true">${kindIcon(t.kind)}</span></span>`
     : `<span class="lr-ico" aria-hidden="true">${kindIcon(t.kind)}</span>`;
   return `<a class="list-row" href="#/task/${encodeURIComponent(t.folder)}">
     ${ico}
@@ -1187,9 +1187,8 @@ document.addEventListener("click", (e) => {
 
 function thumbHtml(t) {
   if (t.thumb && t.thumb.rel) {
-    const url = API.rawUrl(t.folder, t.thumb.rel);
-    if (t.thumb.type === "video") return `<video class="thumb" src="${url}" muted preload="metadata"></video>`;
-    return `<img class="thumb" src="${url}" alt="" loading="lazy" onerror="this.style.display='none';this.closest('.content-card').classList.add('thumb-fallback')" />`;
+    if (t.thumb.type === "video") return `<video class="thumb" src="${API.rawUrl(t.folder, t.thumb.rel)}" muted preload="metadata"></video>`;
+    return `<img class="thumb" src="${API.thumbUrl(t.folder, t.thumb.rel)}" alt="" loading="lazy" onerror="this.style.display='none';this.closest('.content-card').classList.add('thumb-fallback')" />`;
   }
   return "";
 }
@@ -1450,7 +1449,7 @@ function collectionTile(c) {
   const cover = c.cover
     ? (c.cover.type === "video"
         ? `<video src="${API.rawUrl(c.cover.folder, c.cover.rel)}" muted preload="metadata"></video>`
-        : `<img src="${API.rawUrl(c.cover.folder, c.cover.rel)}" alt="" loading="lazy" />`)
+        : `<img src="${API.thumbUrl(c.cover.folder, c.cover.rel)}" alt="" loading="lazy" />`)
     : `<span class="coll-ph">${FOLDER_ICON}</span>`;
   return `<a class="coll-tile" href="#/approved?collection=${encodeURIComponent(c.id)}">
     <div class="coll-cover ${c.cover ? "" : "is-empty"}">${cover}</div>
@@ -1601,7 +1600,7 @@ function pickPiecesModal(opts) {
     ov.className = "modal-ov";
     const rows = candidates.map((t) => {
       const thumb = (t.thumb && t.thumb.rel)
-        ? (t.thumb.type === "video" ? '<video src="' + API.rawUrl(t.folder, t.thumb.rel) + '" muted preload="metadata"></video>' : '<img src="' + API.rawUrl(t.folder, t.thumb.rel) + '" alt="" loading="lazy"/>')
+        ? (t.thumb.type === "video" ? '<video src="' + API.rawUrl(t.folder, t.thumb.rel) + '" muted preload="metadata"></video>' : '<img src="' + API.thumbUrl(t.folder, t.thumb.rel) + '" alt="" loading="lazy"/>')
         : '<span class="pick-ph">' + kindIcon(t.kind) + "</span>";
       return `<label class="pick-row">
         <input type="checkbox" value="${esc(t.folder)}" />
@@ -4327,9 +4326,9 @@ async function viewCreate(arg, query) {
 
         <div class="form-section">
           <div class="form-section-head"><span class="fs-num">3</span><h4>Ajustes <span class="fs-opt">— opcional</span></h4></div>
-        <details class="adv-block">
+        <details class="mais-opcoes">
           <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
-          <p class="muted adv-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
+          <p class="muted mais-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
           <div class="field"><label>IA que vai gerar <span class="hint">(provedor; o modelo de cada um fica em Configurações — o padrão já funciona)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
           <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; oriente a IA aqui — o CTA final você ajusta no resultado)</span></label>
             <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer chamada" />
@@ -4371,7 +4370,7 @@ async function viewCreate(arg, query) {
           <div class="field mood-field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — vale para arte e vídeo, sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
           <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
         </details>
-          <details class="adv-block"${(State.user && State.user.role === "admin") ? "" : ' style="display:none"'}>
+          <details class="mais-opcoes"${(State.user && State.user.role === "admin") ? "" : ' style="display:none"'}>
             <summary>Identificador técnico e data (avançado)</summary>
             <div class="field"><label>Nome da pasta (identificador) <span class="hint">(derivado do título; só edite se souber o que faz)</span></label><input id="g-task" placeholder="taxa_zero_caption" aria-describedby="e-task" /><div class="field-error" id="e-task" role="alert"></div></div>
             <div class="field"><label>Data da peça <span class="hint">(entra no identificador/pasta e organiza na biblioteca; NÃO é a data de publicação — no uso normal, deixe em hoje)</span></label><input type="date" id="g-date" value="${todayISO()}" style="max-width:220px" /></div>
@@ -4808,9 +4807,9 @@ function pintaAvisosLeitura(itens, faltou) {
   if (det) {
     const sum = det.querySelector("summary");
     if (sum) {
-      const velho = sum.querySelector(".adv-badge"); if (velho) velho.remove();
+      const velho = sum.querySelector(".mais-badge"); if (velho) velho.remove();
       if (itens.some((i) => i.campo === "cta")) {
-        const b = document.createElement("span"); b.className = "adv-badge"; b.textContent = "1 campo preenchido pela IA";
+        const b = document.createElement("span"); b.className = "mais-badge"; b.textContent = "1 campo preenchido pela IA";
         sum.appendChild(b);
       }
     }
@@ -5161,7 +5160,7 @@ function renderGenResult(r, opts) {
   let editorBlock;
   if (structHtml) {
     editorBlock = `<div class="field mt"><label>Conteúdo (editável por ${r.content_type === "video_idea" ? "cena" : (r.content_type === "instagram_carousel" ? "slide" : "campo")})</label>${structHtml}</div>
-       <details class="json-adv mt"><summary>JSON (avançado)</summary>
+       <details class="json-mais mt"><summary>JSON (avançado)</summary>
          <textarea id="g-edit" rows="12" style="font-family:var(--mono)">${esc(editorVal)}</textarea>
          <p class="muted" style="font-size:12px;margin-top:6px">Atualizado automaticamente pelos campos acima. Para editar à mão, altere o JSON e clique em “Aplicar JSON”.</p>
          <button class="btn btn-ghost btn-sm" id="g-json-apply" type="button">Aplicar JSON aos campos</button>
@@ -5518,7 +5517,7 @@ async function insertSlideData(item, kind) {
 }
 // Abre o "JSON (avançado)", rola até ele e SELECIONA o trecho do campo (stats/items) p/ destacar onde editar.
 function highlightJsonField(field) {
-  const det = document.querySelector("details.json-adv"); if (det) det.open = true;
+  const det = document.querySelector("details.json-mais"); if (det) det.open = true;
   const ta = $("#g-edit"); if (!ta) return;
   ta.scrollIntoView({ behavior: "smooth", block: "center" });
   ta.classList.add("flash-hl"); setTimeout(() => ta.classList.remove("flash-hl"), 1800);

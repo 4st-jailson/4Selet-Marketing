@@ -8,6 +8,7 @@ const router = express.Router();
 const content = require("../lib/content");
 const render = require("../lib/render");
 const campaigns = require("../lib/campaigns");
+const thumbs = require("../lib/thumbs");
 
 router.get("/", (req, res) => {
   res.json({ tasks: content.listTasks() });
@@ -132,6 +133,12 @@ router.get("/:folder/raw", (req, res) => {
   res.set("Cache-Control", "no-cache");
   // M4: HTML/SVG servido inline nunca deve executar — serve como texto puro.
   if (/\.(html?|svg)$/i.test(String(rel))) { try { return res.type("text/plain").send(fs.readFileSync(f.abs)); } catch (e) { return res.status(404).end(); } }
+  // ?thumb=1 — o cartão da biblioteca quer só a miniatura (ver lib/thumbs.js). Enquanto ela não
+  // existe, serve a arte original: a tela nunca fica pior do que era, só melhora depois.
+  if (req.query.thumb) {
+    const mini = thumbs.miniatura(f.abs, String(rel));
+    if (mini) return res.type("image/jpeg").sendFile(mini);
+  }
   res.sendFile(f.abs);
 });
 

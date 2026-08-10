@@ -429,6 +429,33 @@ function briefingLongo() {
     }
   }
 
+  // ------------------------------------------------------------------
+  secao("14. Nomes que bloqueador de anúncio esconde");
+  // O Hugo viu a seção "Ajustes" vazia no computador dele e cheia aqui no servidor. A causa não era
+  // versão nem tela: a classe se chamava `.adv-block` e a EasyList (uBlock, AdBlock, AdGuard, Brave
+  // e navegadores com bloqueio nativo) tem a regra GLOBAL `##.adv-block`, que aplica display:none
+  // em qualquer site. Num painel de MARKETING esses nomes brotam sozinhos — então isto vira teste.
+  {
+    const front = ["public/js/app.js", "public/js/api.js", "public/css/styles.css", "public/index.html"]
+      .map((f) => path.join(__dirname, f)).filter((f) => fs.existsSync(f))
+      .map((f) => fs.readFileSync(f, "utf8")).join("\n");
+
+    // Amostra das regras globais reais da EasyList que um painel tem chance de encostar.
+    const NOMES_CACADOS = ["adv-block", "adv-block-container", "side-adv-block", "ad-block", "adBlock",
+      "advert", "advertisement", "ad-banner", "adbanner", "ad-container", "ad-wrapper", "ad-box",
+      "banner-ad", "sponsored", "promo-banner", "popupad"];
+    const encontrados = NOMES_CACADOS.filter((n) => new RegExp('(class="[^"]*\\b' + n + '\\b|\\.' + n + '\\s*[{,:>])').test(front));
+    checa(encontrados.length === 0, "nenhuma classe do painel bate com regra global de bloqueador",
+      encontrados.length ? "ACHADO: " + encontrados.join(", ") : "0 colisões");
+
+    // E o bloco de Ajustes, especificamente, continua com nome neutro e presente nos dois arquivos.
+    checa(/class="mais-opcoes"/.test(front), "o bloco de Criação avançada usa o nome neutro (.mais-opcoes)");
+    // Procura USO (atributo class ou seletor), não menção: o comentário que explica a armadilha
+    // cita `.adv-block` de propósito, e apagar essa explicação é justamente o que faz o erro voltar.
+    const usoDoNomeVelho = /class="[^"]*\badv-block\b|\.adv-block\s*[{,:>]/.test(front);
+    checa(!usoDoNomeVelho, "o nome antigo adv-block não é mais usado (só citado no comentário que explica)");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

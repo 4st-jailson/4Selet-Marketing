@@ -111,6 +111,9 @@ const API = (() => {
     task: (folder) => req("GET", "/api/content/" + encodeURIComponent(folder)),
     taskFile: (folder, rel) => fetch("/api/content/" + encodeURIComponent(folder) + "/file?rel=" + encodeURIComponent(rel)).then(r => r.text()),
     rawUrl: (folder, rel) => "/api/content/" + encodeURIComponent(folder) + "/raw?rel=" + encodeURIComponent(rel),
+    // Mesma arte, versão leve — só para MINIATURA de cartão. A arte cheia tem 2160×2700 e até
+    // 3,3 MB; o cartão mostra 255×191. Ampliar, editar e baixar continuam usando rawUrl.
+    thumbUrl: (folder, rel) => "/api/content/" + encodeURIComponent(folder) + "/raw?thumb=1&rel=" + encodeURIComponent(rel),
     downloadUrl: (folder, rel, scale) => "/api/content/" + encodeURIComponent(folder) + "/download?rel=" + encodeURIComponent(rel) + (scale ? "&scale=" + encodeURIComponent(scale) : ""),
     zipUrl: (folder) => "/api/content/" + encodeURIComponent(folder) + "/zip",
     preview: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preview"),
