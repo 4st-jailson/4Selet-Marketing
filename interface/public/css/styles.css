@@ -780,15 +780,24 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
 }
 
-.adv-block { margin-top: var(--s2); border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); }
-.adv-block > summary { padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-dim); list-style: none; }
+/* O Hugo abriu a tela, olhou a seção "Ajustes" e relatou que ela não existia — os dez campos de
+   criação avançada estavam lá, dentro deste bloco fechado.
+   Medindo, o motivo NÃO era contraste: `.adv-block` e `.fatos-box` (o cartão logo abaixo, que ele
+   enxerga sem esforço) tinham exatamente o mesmo estilo — mesma borda, mesma superfície. A
+   diferença é PRESENÇA: o cartão tem rótulo forte, texto e botão em ~90px; o bloco era uma tira
+   de 46px com texto apagado, que o olho lê como divisória e pula.
+   Correção: borda cheia (não a suave), faixa de acento à esquerda, título na cor de leitura e
+   chevron na cor da marca — para o bloco se anunciar como algo que ABRE, e não como uma linha. */
+.adv-block { position: relative; margin-top: var(--s3); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-sm); background: var(--surface-2); transition: border-color .15s ease, background .15s ease; }
+.adv-block:hover { background: var(--surface-3); }
+.adv-block > summary { padding: 14px 16px; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--text); list-style: none; }
 .adv-block > summary::-webkit-details-marker { display: none; }
 /* Marcador chevron desenhado em CSS (cantos top+right girados 45deg). Mais limpo e
    moderno que o triangulo glyph "▸"/"▾"; gira suave ao abrir/fechar. */
 .adv-block > summary::before {
   content: ""; display: inline-block; width: 6px; height: 6px;
   margin-right: 11px; vertical-align: middle; position: relative; top: -2px;
-  border-top: 2px solid var(--text-mut); border-right: 2px solid var(--text-mut);
+  border-top: 2px solid var(--accent); border-right: 2px solid var(--accent);
   transform: rotate(45deg); transition: transform .18s ease;
 }
 .adv-block[open] > summary::before { transform: rotate(135deg); top: -1px; }
@@ -1224,10 +1233,36 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    Cada linha é um botão largo com título e explicação: a escolha é entre CAMINHOS, não entre
    rótulos curtos, então o subtítulo é parte da decisão e não decoração. */
 .orig-list { display: flex; flex-direction: column; gap: 8px; }
-.orig-item { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); cursor: pointer; transition: border-color .12s, background .12s; }
+/* Grade de 3 colunas: ícone · texto · atalho. Antes eram quatro caixas idênticas só com texto —
+   o olho não tinha onde se apoiar e era preciso LER as quatro para escolher uma. */
+.orig-item { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); cursor: pointer; transition: border-color .12s, background .12s, transform .12s; }
 .orig-item:hover, .orig-item:focus-visible { border-color: var(--accent); background: var(--surface-3, var(--surface-2)); }
-.orig-t { display: block; font-weight: 600; font-size: 14px; }
-.orig-s { display: block; font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+.orig-item:active { transform: scale(.995); }
+.orig-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.orig-ico { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
+.orig-ico svg { width: 19px; height: 19px; display: block; }
+.orig-txt { min-width: 0; }
+.orig-t { display: block; font-weight: 600; font-size: 14px; color: var(--text); }
+.orig-s { display: block; font-size: 12.5px; color: var(--text-dim); margin-top: 3px; line-height: 1.35; }
+/* O caminho que resolve o caso na maioria das vezes — captura para print, banco para foto. */
+.orig-item.is-rec { border-color: var(--accent); background: var(--accent-soft); }
+.orig-rec { margin-left: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--accent); vertical-align: 1px; }
+.orig-key { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: var(--text-mut); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+.orig-item:hover .orig-key, .orig-item:focus-visible .orig-key { color: var(--accent); border-color: var(--accent); }
+
+/* Janela da pendência de imagem */
+.pend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pend-head h3 { margin: 0; }
+.pend-cont { flex: none; font-size: 11.5px; font-weight: 600; color: var(--text-dim); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; }
+.pend-slide { margin: 6px 0 0; font-size: 12.5px; color: var(--text-dim); }
+/* O pedido vem escrito como direção de arte e é longo. Em linha, dentro da frase, engolia a
+   frase; como citação, dá para reconhecer de relance e voltar a ler o resto. */
+.pend-pedido { margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--surface-2); color: var(--text-2); font-size: 13.5px; line-height: 1.45; max-height: 4.4em; overflow: hidden; }
+.pend-lead { margin: 12px 0 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.pend-rodape { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: var(--s5); flex-wrap: wrap; }
+.pend-dica { font-size: 11.5px; color: var(--text-mut); }
+.pend-dica kbd { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin: 0 1px; }
+@media (max-width: 560px) { .pend-dica { display: none; } .orig-key { display: none; } }
 /* Prévia da captura dentro do modal: mostra o que foi capturado ANTES de aplicar na peça. */
 .cap-prev { margin-top: var(--s4); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2); }
 .cap-prev img { display: block; width: 100%; max-height: 220px; object-fit: cover; object-position: top center; }

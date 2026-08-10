@@ -798,16 +798,65 @@ function enviaArquivoDeImagem() {
   });
 }
 
+// Ícones dos caminhos de origem. Traço, 20px, herdando a cor — nunca emoji (regra de UI do painel).
+// Existem porque a lista era de quatro caixas cinzas idênticas: o olho não tinha onde se apoiar e
+// era preciso LER as quatro para escolher. Com ícone, a escolha vira reconhecimento.
+const ICONE_ORIGEM = {
+  site: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg>',
+  arquivo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/></svg>',
+  banco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="15" height="12" rx="2"/><path d="m6 15 3.2-3.4a1 1 0 0 1 1.5 0L14 15"/><circle cx="13.4" cy="10" r="1.1"/><path d="M21 8v9a2 2 0 0 1-2 2H8"/></svg>',
+  trocar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 4.5a2.1 2.1 0 0 1 3 3L9 18l-4 1 1-4z"/><path d="M13.5 7.5l3 3"/></svg>',
+};
+// Uma linha do menu de origem. `rec` marca o caminho recomendado para o caso — sem ele, quatro
+// opções equivalentes empurram a decisão inteira para quem está lendo.
+function opcaoOrigemHtml(c, i) {
+  return '<button type="button" class="orig-item' + (c.rec ? " is-rec" : "") + '" data-orig="' + c.id + '" data-pend="' + c.id + '">'
+    + '<span class="orig-ico" aria-hidden="true">' + (ICONE_ORIGEM[c.id] || "") + "</span>"
+    + '<span class="orig-txt"><span class="orig-t">' + esc(c.titulo)
+    + (c.rec ? '<span class="orig-rec">mais rápido aqui</span>' : "") + "</span>"
+    + '<span class="orig-s">' + esc(c.sub) + "</span></span>"
+    + '<span class="orig-key" aria-hidden="true">' + (i + 1) + "</span></button>";
+}
+
+// A descrição da imagem é escrita para um DIRETOR DE ARTE ("Still fotográfico limpo — folha de
+// papel off-white sobre mesa de metal fosco, luz lateral controlada, sombra longa"). Jogar isso
+// inteiro num banco de fotos não acha nada: são instruções de fotografia, não assunto. Aqui sobram
+// só os substantivos do que aparece na foto — "folha papel mesa metal".
+const RUIDO_BUSCA = new RegExp("\\b("
+  // direção de fotografia
+  + "still|fotografic\\w*|fotografia|foto|fotos|imagem|imagens|image|limpo|limpa|clean|real|luz|iluminacao"
+  + "|lateral|frontal|controlada|difusa|natural|sombra|sombras|longa|curta|suave|plano|angulo|close|macro"
+  + "|vista|superior|fundo|background|alta|baixa|resolucao|qualidade|profissional|editorial|minimalista"
+  + "|moderno|moderna|elegante|sofisticado|off|white|fosco|fosca|brilhante|escuro|escura|claro|clara"
+  + "|composicao|enquadramento|detalhe|destaque"
+  // ONDE buscar não é O QUE buscar: nome de banco de imagens vira ruído dentro da própria busca
+  + "|banco|bancos|pexels|unsplash|stock|gratuita|gratuitas|gratuito|gratuitos"
+  // conectivos e verbos de instrução
+  + "|sem|texto|na|no|nos|nas|de|da|do|das|dos|sobre|com|em|e|ou|um|uma|ao|aos|que|para|por|seu|sua"
+  + "|dentro|diante|mostrando|exibindo|varias|varios|tipo|estilo"
+  + ")\\b", "gi");
+function termosDeBusca(pedido) {
+  const limpo = String(pedido || "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")   // tira acento só para o FILTRO casar
+    .replace(RUIDO_BUSCA, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/).filter((w) => w.length > 2);
+  const vistos = new Set();
+  const termos = limpo.filter((w) => { const k = w.toLowerCase(); if (vistos.has(k)) return false; vistos.add(k); return true; }).slice(0, 4);
+  return termos.join(" ");
+}
+
 // "De onde vem esta imagem?" — o menu único de origem. Resolve com a URL escolhida, ou null.
 // `tipo` muda a ORDEM e o texto: para print, capturar o site vem primeiro e o banco de imagens
 // aparece por último (nenhum banco tem o dashboard da 4Selet).
 function escolheImagemModal(opts) {
   opts = opts || {};
   const print = opts.tipo === "print";
+  const busca = termosDeBusca(opts.query || "");
   const caminhos = [
-    { id: "site", titulo: "Capturar de um site", sub: "Você cola o link, o painel abre a página e tira o print." },
+    { id: "site", titulo: "Capturar de um site", sub: "Você cola o link, o painel abre a página e tira o print.", rec: print },
     { id: "arquivo", titulo: "Enviar um arquivo", sub: "Um print ou uma foto que já está no seu computador." },
-    { id: "banco", titulo: "Buscar uma foto de banco", sub: print ? "Só serve para imagem ilustrativa — banco nenhum tem a sua tela." : "Fotos gratuitas do Pexels, tratadas na identidade." },
+    { id: "banco", titulo: "Buscar uma foto de banco", sub: print ? "Só serve para imagem ilustrativa — banco nenhum tem a sua tela." : (busca ? "Já procuro por “" + busca + "” no Pexels." : "Fotos gratuitas do Pexels."), rec: !print },
   ];
   if (!print) caminhos.unshift(caminhos.splice(2, 1)[0]); // foto ilustrativa: banco primeiro
   return new Promise((resolve) => {
@@ -815,7 +864,7 @@ function escolheImagemModal(opts) {
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:560px;width:94vw">
       <h3>${esc(opts.title || "De onde vem esta imagem?")}</h3>
       ${opts.message ? '<p class="muted mt">' + esc(opts.message) + "</p>" : ""}
-      <div class="orig-list mt">${caminhos.map((c) => `<button type="button" class="orig-item" data-orig="${c.id}"><span class="orig-t">${esc(c.titulo)}</span><span class="orig-s">${esc(c.sub)}</span></button>`).join("")}</div>
+      <div class="orig-list mt">${caminhos.map(opcaoOrigemHtml).join("")}</div>
       <div class="modal-actions"><button class="btn btn-ghost" id="orig-cancel">${esc(opts.cancelText || "Cancelar")}</button></div>
     </div>`;
     document.body.appendChild(ov); document.body.classList.add("no-scroll");
@@ -5565,8 +5614,13 @@ async function resolvePendenciasDeImagem(r) {
     const p = lista[i];
     const print = p.tipo === "print";
     const onde = p.slide > 0 ? "no slide " + p.slide : "nesta peça";
+    // O título do slide ancora a pergunta: sem ele, "slide 4" é um número sem cara, e quem gerou
+    // uma peça de 5 slides não lembra qual é qual.
+    const slideObj = (p.slide > 0 && LAST_GEN && LAST_GEN.res && LAST_GEN.res.parsed && Array.isArray(LAST_GEN.res.parsed.slides))
+      ? LAST_GEN.res.parsed.slides[p.slide - 1] : null;
+    const tituloSlide = slideObj && slideObj.title ? String(slideObj.title).replace(/==/g, "").trim().slice(0, 70) : "";
     const escolha = await pendenciaModal({
-      pedido: p.pedido, onde, print, carrossel,
+      pedido: p.pedido, onde, print, carrossel, tituloSlide, slide: p.slide,
       indice: i + 1, total: lista.length,
     });
     if (!escolha || escolha === "pular") continue;
@@ -5589,7 +5643,11 @@ async function resolvePendenciasDeImagem(r) {
         ? "Cole o endereço da página que deve aparecer no print. O painel abre o site num navegador e captura a tela."
         : "Cole o endereço da página de onde tirar a imagem." })
       : escolha === "arquivo" ? await enviaArquivoDeImagem()
-        : await pexelsSearchModal({ query: p.pedido, orientation: carrossel ? "portrait" : "landscape", target: carrossel ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 } });
+        // A descrição vem escrita para um diretor de arte ("Still fotográfico limpo — folha de
+        // papel off-white sobre mesa de metal fosco, luz lateral controlada"). Jogar isso inteiro
+        // no Pexels não acha nada: são instruções de fotografia, não assunto. Vai só o que aparece
+        // na foto.
+        : await pexelsSearchModal({ query: termosDeBusca(p.pedido) || p.pedido, orientation: carrossel ? "portrait" : "landscape", target: carrossel ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 } });
     if (!url) continue;
 
     if (p.slide > 0 && carrossel) {
@@ -5621,25 +5679,48 @@ async function resolvePendenciasDeImagem(r) {
 
 // A janela da pendência. Resolve com "site" | "arquivo" | "banco" | "trocar" | "pular" | null.
 function pendenciaModal(o) {
+  const busca = termosDeBusca(o.pedido);
+  // Ordem = probabilidade de resolver. Para captura de tela, o link é o caminho curto; para foto
+  // ilustrativa, o banco. O caminho provável vem primeiro e leva a marca — quatro opções
+  // equivalentes empurram a decisão inteira para quem está lendo.
   const opcoes = [];
-  opcoes.push({ id: "site", t: "Capturar de um site", s: "Cole o link — o painel abre a página e tira o print." });
-  opcoes.push({ id: "arquivo", t: "Enviar um arquivo", s: "Um print ou uma foto que já está no seu computador." });
-  if (!o.print) opcoes.push({ id: "banco", t: "Buscar uma foto de banco", s: "Fotos gratuitas do Pexels." });
-  if (o.carrossel && o.slide !== 0) opcoes.push({ id: "trocar", t: "Colocar outra coisa no lugar", s: "Você descreve o que deve aparecer e eu refaço este slide." });
-  if (o.print) opcoes.push({ id: "banco", t: "Buscar uma foto de banco", s: "Só como ilustração — banco nenhum tem a sua tela." });
+  const banco = { id: "banco", titulo: "Buscar uma foto de banco",
+    sub: o.print ? "Só como ilustração — banco nenhum tem a sua tela."
+      : (busca ? "Já procuro por “" + busca + "” no Pexels." : "Fotos gratuitas do Pexels."), rec: !o.print };
+  const site = { id: "site", titulo: "Capturar de um site", sub: "Cole o link — o painel abre a página e tira o print.", rec: o.print };
+  if (o.print) opcoes.push(site); else opcoes.push(banco);
+  opcoes.push({ id: "arquivo", titulo: "Enviar um arquivo", sub: "Um print ou uma foto que já está no seu computador." });
+  if (o.print) opcoes.push(banco); else opcoes.push(site);
+  if (o.carrossel && o.slide !== 0) opcoes.push({ id: "trocar", titulo: "Colocar outra coisa no lugar", sub: "Você descreve o que deve aparecer e eu refaço este slide." });
+
+  // O pedido é um parágrafo de direção de arte. Em linha, dentro da frase, ele engolia a frase.
+  // Aqui vira citação: a pessoa reconhece o que pediu de relance e volta a ler o resto.
+  const pedidoCurto = String(o.pedido || "");
   return new Promise((resolve) => {
     const ov = document.createElement("div"); ov.className = "modal-ov";
-    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:580px;width:94vw">
-      <h3>Não consegui a imagem ${esc(o.onde)}</h3>
-      <p class="mt">Você pediu <strong>${esc(o.pedido)}</strong>, e eu não tenho como conseguir isso sozinho: não enxergo o seu acervo e não saio navegando por conta própria. ${o.print ? "Como é uma captura de tela, o caminho mais rápido costuma ser me dar o link da página." : ""}</p>
-      <p class="muted mt" style="font-size:13px">A peça já está pronta — só falta esta imagem. Como você quer prosseguir?${o.total > 1 ? " <span class=\"hint\">(" + o.indice + " de " + o.total + ")</span>" : ""}</p>
-      <div class="orig-list mt">${opcoes.map((c) => `<button type="button" class="orig-item" data-pend="${c.id}"><span class="orig-t">${esc(c.t)}</span><span class="orig-s">${esc(c.s)}</span></button>`).join("")}</div>
-      <div class="modal-actions"><button class="btn btn-ghost" data-pend="pular">Seguir sem a imagem</button></div>
+    ov.innerHTML = `<div class="modal pend" role="dialog" aria-modal="true" aria-labelledby="pend-h" style="max-width:600px;width:94vw">
+      <div class="pend-head">
+        <h3 id="pend-h">Falta uma imagem ${esc(o.onde)}</h3>
+        ${o.total > 1 ? '<span class="pend-cont">' + o.indice + " de " + o.total + "</span>" : ""}
+      </div>
+      ${o.tituloSlide ? '<p class="pend-slide">' + esc(String(o.onde).replace(/^no\s+/i, "").replace(/^./, (c) => c.toUpperCase())) + " · “" + esc(o.tituloSlide) + "”</p>" : ""}
+      <blockquote class="pend-pedido" title="${esc(pedidoCurto)}">${esc(pedidoCurto)}</blockquote>
+      <p class="pend-lead">A peça já está pronta — só falta esta imagem. Eu não consigo sozinho: não enxergo o seu acervo e não saio navegando por conta própria.</p>
+      <div class="orig-list mt">${opcoes.map(opcaoOrigemHtml).join("")}</div>
+      <div class="pend-rodape">
+        <span class="pend-dica" aria-hidden="true">Atalhos: <kbd>1</kbd>–<kbd>${opcoes.length}</kbd> escolhe · <kbd>Esc</kbd> segue sem</span>
+        <button class="btn btn-ghost" data-pend="pular">Seguir sem a imagem</button>
+      </div>
     </div>`;
     document.body.appendChild(ov); document.body.classList.add("no-scroll");
-    requestAnimationFrame(() => ov.classList.add("open"));
+    requestAnimationFrame(() => { ov.classList.add("open"); const p = ov.querySelector(".orig-item"); if (p) p.focus(); });
     const done = (v) => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); document.removeEventListener("keydown", onKey); setTimeout(() => ov.remove(), 160); resolve(v); };
-    const onKey = (e) => { if (e.key === "Escape") done("pular"); };
+    const onKey = (e) => {
+      if (e.key === "Escape") return done("pular");
+      // 1..N escolhe direto: quem já sabe o caminho não precisa mirar o mouse.
+      const n = parseInt(e.key, 10);
+      if (n >= 1 && n <= opcoes.length && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); done(opcoes[n - 1].id); }
+    };
     document.addEventListener("keydown", onKey);
     ov.addEventListener("click", (e) => {
       if (e.target === ov) return done("pular");
