@@ -456,6 +456,40 @@ function briefingLongo() {
     checa(!usoDoNomeVelho, "o nome antigo adv-block não é mais usado (só citado no comentário que explica)");
   }
 
+  // ------------------------------------------------------------------
+  secao("15. Comentário de CSS não pode engolir regra");
+  // Escrevendo o comentário que explica o item 14, digitei "adv-*/ad-*" — e a dupla asterisco-barra
+  // FECHOU o comentário no meio da frase. O resto virou lixo, e o interpretador engoliu a regra
+  // `.mais-opcoes` inteira junto: o bloco ficou sem fundo e sem borda, e o defeito só aparecia ao
+  // passar o mouse (a regra :hover sobreviveu). Nenhum teste pegou, porque o elemento continuava
+  // na tela. Esta varredura pega a causa, não o sintoma.
+  {
+    const arquivosCss = ["public/css/styles.css"].map((f) => path.join(__dirname, f)).filter((f) => fs.existsSync(f));
+    let sobrando = [];
+    let abertoNoFim = false;
+    for (const arq of arquivosCss) {
+      const css = fs.readFileSync(arq, "utf8");
+      let dentro = false, i = 0, linha = 1;
+      while (i < css.length) {
+        if (css[i] === "\n") linha++;
+        if (!dentro && css[i] === "/" && css[i + 1] === "*") { dentro = true; i += 2; continue; }
+        if (dentro && css[i] === "*" && css[i + 1] === "/") { dentro = false; i += 2; continue; }
+        if (!dentro && css[i] === "*" && css[i + 1] === "/") { sobrando.push(path.basename(arq) + ":" + linha); i += 2; continue; }
+        i++;
+      }
+      if (dentro) abertoNoFim = true;
+    }
+    checa(sobrando.length === 0, "nenhum fechamento de comentário sobrando (que fecharia o comentário cedo)",
+      sobrando.length ? sobrando.join(", ") : "0");
+    checa(!abertoNoFim, "nenhum comentário fica aberto no fim do arquivo");
+
+    // E a prova direta: as regras de fundo dos blocos precisam existir FORA de comentário.
+    const semComentarios = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    checa(/\.mais-opcoes\s*\{[^}]*background:/.test(semComentarios), "o bloco de Ajustes tem regra de fundo ativa");
+    checa(/\.mais-opcoes\s*\{[^}]*border:/.test(semComentarios), "e tem regra de borda ativa");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

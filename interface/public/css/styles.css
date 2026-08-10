@@ -796,8 +796,11 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    abreviação de advertisement. Ou seja: em todo dispositivo com bloqueador, os dois blocos de
    Ajustes simplesmente não eram desenhados — enquanto no navegador limpo do servidor apareciam
    normalmente. Daí o "na VPS aparece, nos outros dispositivos não".
-   NÃO renomeie de volta para adv-*/ad-*/banner-*: um painel de marketing é justamente onde
-   esses nomes brotam sozinhos. A varredura das classes contra a EasyList está no relatório. */
+   NÃO renomeie de volta para nomes começados em adv-, ad- ou banner-: um painel de marketing é
+   justamente onde esses nomes brotam sozinhos. A varredura contra a EasyList está no relatório.
+   (E cuidado ao escrever esses prefixos aqui dentro: a dupla asterisco-barra fecha o comentário no
+   meio da frase e o CSS engole a regra seguinte — foi exatamente o que aconteceu na primeira
+   versão deste texto, e o bloco ficou sem fundo até alguém passar o mouse.) */
 .mais-opcoes { position: relative; margin-top: var(--s3); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-sm); background: var(--surface-2); transition: border-color .15s ease, background .15s ease; }
 .mais-opcoes:hover { background: var(--surface-3); }
 .mais-opcoes > summary { padding: 14px 16px; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--text); list-style: none; }
