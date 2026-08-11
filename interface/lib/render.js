@@ -1996,6 +1996,8 @@ function slideList(slide, ctx) {
 // números, proporções ou elementos reais da interface", e a lição de 29/07 sobre a matéria torta
 // vale igual — warp entorta o print e derruba justamente esse requisito.
 function slideDevice(slide, ctx) {
+  ctx.theme = resolveTheme(slide.theme);
+  const claro = ctx.theme === THEME_LIGHT;
   const img = (slide && slide.image) || "";
   // Sem imagem de verdade, um aparelho vazio no meio do carrossel é pior que o layout de texto.
   if (!img || !imagemExiste(img)) return slideText(slide, ctx);
@@ -2022,7 +2024,7 @@ function slideDevice(slide, ctx) {
     + ".dev .scr img { width:100%; height:100%; object-fit:cover; object-position:top center; display:block; }"
     + ".dev .scr-empty { display:flex; align-items:center; justify-content:center; height:100%; color:" + PALETTE.mist + "; font-size:26px; }"
     + ".dev-nota { margin-top:" + v(26, 18, 12) + "px; font-size:" + v(32, 29, 26) + "px; line-height:1.3; color:" + PALETTE.mist + "; }"
-    + CSS_PILULA_CTA + cssExtrasApertados(v);
+    + CSS_PILULA_CTA + cssExtrasApertados(v) + cssAparelhoClaro(claro);
   const inner = carTop(ctx) + '<div class="mid">'
     + (slide.eyebrow ? '<div class="eyebrow">' + esc(slide.eyebrow) + "</div>" : "")
     + (slide.title ? '<div class="s-title sm">' + highlightHeadline(slide.title) + "</div>" : "")
@@ -2105,7 +2107,34 @@ function flowIcon(name) { return FLOW_ICONS[String(name || "").toLowerCase()] ||
 // tone: "muted" (cinza, alerta) x "accent" (azul, escudo). orient: "row" (icones em
 // linha + setas + rotulo abaixo, espelha a referencia) x padrao vertical (cartoes).
 // Cada no: { label, sub?, icon?, mark? }. slide.note -> caixa de callout ao pe.
+// Tema claro no fluxo e no aparelho. Estes dois arquétipos têm dezenas de cores escritas na mão, e
+// reescrever cada declaração arriscaria mudar peça escura já publicada. Então o par claro entra como
+// um bloco no FIM do CSS, que só existe quando o slide pede tema claro: o caminho escuro continua
+// byte a byte o que era. Sem isto, um slide marcado como claro saía com fundo Cloud e texto Mist —
+// invisível — no meio dos claros, e o ritmo do carrossel (que depende justamente dessa alternância)
+// quebrava nos dois layouts mais cheios.
+function cssFluxoClaro(claro) {
+  if (!claro) return "";
+  return ".s-title, .s-title.sm { color:" + PALETTE.darker + "; }"
+    + ".s-title span { color:" + PALETTE.blue + " !important; text-decoration-color:" + PALETTE.blue + " !important; }"
+    + ".flow-note, .fr-l, .nd-l { color:" + PALETTE.darker + " !important; }"
+    + ".fr-s, .nd-s { color:" + PALETTE.navy + " !important; }"
+    + ".node, .fr-ic { background:" + PALETTE.cloud + " !important; border-color:" + PALETTE.blue + "33 !important; color:" + PALETTE.navy + " !important; }"
+    + ".fr-ic.hi, .node.hi { background:" + PALETTE.blue + " !important; color:#FFFFFF !important; }"
+    + ".fr-arrow { color:" + PALETTE.blue + " !important; }";
+}
+function cssAparelhoClaro(claro) {
+  if (!claro) return "";
+  // A moldura do aparelho NÃO muda: ele é um objeto do mundo, não um cartão da arte. Um notebook
+  // branco sobre fundo creme sumiria. Só o texto ao redor acompanha o tema.
+  return ".s-title, .s-title.sm { color:" + PALETTE.darker + "; }"
+    + ".s-title span { color:" + PALETTE.blue + " !important; text-decoration-color:" + PALETTE.blue + " !important; }"
+    + ".dev-nota, .s-body { color:" + PALETTE.navy + " !important; }";
+}
+
 function slideFlow(slide, ctx) {
+  ctx.theme = resolveTheme(slide.theme);
+  const claro = ctx.theme === THEME_LIGHT;
   const nodes = (Array.isArray(slide.flow) ? slide.flow : []).slice(0, 4)
     .filter((nd) => String((typeof nd === "string" ? nd : (nd && nd.label)) || "").trim());
   // Sem etapas: NÃO desenha um diagrama vazio — saía um buraco no meio do slide, com o título em
@@ -2113,7 +2142,7 @@ function slideFlow(slide, ctx) {
   // arquétipo sem essa rede, e é justamente o que a pessoa pode escolher no seletor sem ter os dados.
   if (!nodes.length) return slideText(slide, ctx);
   const accent = String(slide.tone || "").toLowerCase() === "accent";
-  const line = accent ? PALETTE.blue : PALETTE.mist;
+  const line = accent ? PALETTE.blue : (claro ? PALETTE.navy : PALETTE.mist);
   const emph = accent ? PALETTE.sky : PALETTE.mist;
   const toneIcon = accent ? ICON_SHIELD : ICON_ALERT;
   const head = (slide.eyebrow ? '<div class="eyebrow">' + esc(slide.eyebrow) + "</div>" : "")
@@ -2151,7 +2180,7 @@ function slideFlow(slide, ctx) {
       + ".fr-l { font-size:28px; font-weight:800; color:#FFFFFF; line-height:1.15; text-transform:uppercase; letter-spacing:0.4px; }"
       + ".fr-s { font-size:25px; color:" + PALETTE.mist + "; line-height:1.22; }"
       + ".fr-arrow { align-self:flex-start; margin-top:44px; font-size:54px; line-height:1; color:" + line + "; font-weight:700; flex:0 0 auto; }"
-      + cssNota + CSS_PILULA_CTA;
+      + cssNota + CSS_PILULA_CTA + cssFluxoClaro(claro);
     const inner = carTop(ctx) + '<div class="mid">' + head
         + '<div class="frow">' + cells + "</div>" + note + pilulaCta(ctx) + "</div>" + carFooter(ctx);
     return carDoc(ctx, css, inner);
@@ -2366,7 +2395,8 @@ function slideComparacao(slide, ctx) {
   const corForte = light ? PALETTE.darker : "#FFFFFF";
   // No claro o termo rebaixado vai a Blue: Sky sobre Cloud da 2,29:1 e some.
   const corFraco = light ? PALETTE.blue : PALETTE.mist;
-  const corGlifo = light ? PALETTE.sky : PALETTE.sky;
+  // Sky sobre Cloud da 2,29:1 e o sinal some. No claro o glifo vai a Blue, que da 4,67:1.
+  const corGlifo = light ? PALETTE.blue : PALETTE.sky;
   const bodyColor = light ? PALETTE.navy : PALETTE.mist;
   const css = `.cp { display:flex; flex-direction:column; gap:8px; margin-top:20px; }
     .cp-a { font-weight:900; font-size:${tam}px; line-height:1.04; letter-spacing:-.03em; color:${corForte}; }

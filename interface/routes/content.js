@@ -183,7 +183,11 @@ router.post("/:folder/render", async (req, res) => {
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
   const kind = String((req.query.kind || req.body && req.body.kind || t.kind || "").trim());
   const reqTpl = String((req.query.template || (req.body && req.body.template) || "").trim());
-  const template = render.TEMPLATE_IDS.includes(reqTpl) ? reqTpl : undefined;
+  // PECA_IDS, nao TEMPLATE_IDS: alem dos 4 templates classicos, a peca unica agora aceita os
+  // arquetipos que valem sozinhos (numero, palavra, citacao, comparacao, grade, lista, fluxo).
+  // Validando so contra os 4, `template=numero` virava undefined ANTES de chegar ao render — e era
+  // por isso que a peca continuava saindo com a mesma cara depois de todo o trabalho dos arquetipos.
+  const template = render.PECA_IDS.includes(reqTpl) ? reqTpl : undefined;
   const reqLogo = String((req.query.logo || (req.body && req.body.logo) || "").trim());
   const logo = (render.LOGO_IDS.includes(reqLogo) || reqLogo === "auto") ? reqLogo : undefined;
   const reqWm = String((req.query.watermark || (req.body && req.body.watermark) || "").trim());
