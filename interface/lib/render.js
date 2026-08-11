@@ -2740,9 +2740,16 @@ function storyDoc(ctx, extraCss, bodyInner) {
     const scrim = claro
       ? `linear-gradient(180deg, ${PALETTE.cloud}D9 0%, ${PALETTE.cloud}B8 45%, ${PALETTE.cloud}F2 100%)`
       : `linear-gradient(180deg, ${PALETTE.darker}CC 0%, ${PALETTE.darker}99 42%, ${PALETTE.darker}F2 100%)`;
-    photo = `<div class="s-photo" style="background-image:url('${fileUrl(ctx.image)}')"></div><div class="s-scrim" style="background:${scrim}"></div>`;
+    // MESMA montagem do carrossel (escAttr + resolveImage). Escrevi fileUrl() na primeira versao e a
+    // foto nunca resolvia — enquanto o `imagemExiste` respondia que sim e o veu de leitura era ligado
+    // por cima de foto nenhuma, escurecendo a arte a toa. E o mesmo defeito de 15/07, e a licao e a
+    // mesma: caminho de imagem tem UM jeito de ser montado neste arquivo.
+    photo = `<div class="s-photo" style="background-image:url('${escAttr(resolveImage(ctx.image))}')"></div><div class="s-scrim" style="background:${scrim}"></div>`;
   }
-  return `<!doctype html><html><head><meta charset="utf-8"/>${FONT_LINK_BASE}
+  // fontHead(), nao FONT_LINK_BASE: e ele que carrega a familia escolhida na peca e emite o override
+  // de especificidade. Com a constante crua, a pessoa escolhia Playfair, confirmava o aviso de que
+  // estava saindo da identidade, e a arte saia em Inter.
+  return `<!doctype html><html><head><meta charset="utf-8"/>${fontHead()}
   <style>${storyBase(ctx.theme)}${extraCss || ""}</style></head>
   <body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots"></div>${wm}${bodyInner}</div></body></html>`;
 }
@@ -2760,7 +2767,7 @@ function storyTop(ctx) {
 
 function storyCover(card, ctx) {
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "SELET";
+  ctx.watermark = card.watermark != null ? card.watermark : (ctx.wmStyle ? null : "SELET");
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const css = `.s-title { font-size:118px; }
@@ -2776,7 +2783,7 @@ function storyCover(card, ctx) {
 
 function storyText(card, ctx) {
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const css = `.s-body { color:${light ? PALETTE.navy : PALETTE.mist}; }
@@ -2793,7 +2800,7 @@ function storyNumber(card, ctx) {
   const stats = (Array.isArray(card.stats) ? card.stats : []).filter((s) => s && s.value != null).slice(0, 3);
   if (!stats.length) return storyText(card, ctx);
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const um = stats.length === 1;
@@ -2820,7 +2827,7 @@ function storyQuote(card, ctx) {
   const texto = String((typeof q === "string" ? q : q.text) || "").trim();
   if (!texto) return storyText(card, ctx);
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const autor = String(q.autor || q.author || "").trim();
@@ -2845,7 +2852,7 @@ function storyPoll(card, ctx) {
   const pergunta = String(p.question || p.pergunta || "").trim();
   if (!pergunta) return storyText(card, ctx);
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const S = STORY_SAFE;
@@ -2866,7 +2873,7 @@ function storyPoll(card, ctx) {
 function storyPhoto(card, ctx) {
   if (!card.image || !imagemExiste(card.image)) return storyText(card, ctx);
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "";
+  ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image;
   const css = `.mid { justify-content:flex-end; }
     .s-title { font-size:96px; }
@@ -2883,11 +2890,14 @@ function storyPhoto(card, ctx) {
 // hoje e um sticker de link, que a pessoa cola. A arte so deixa claro o convite e o espaco.
 function storyLink(card, ctx) {
   ctx.theme = resolveTheme(card.theme);
-  ctx.watermark = card.watermark != null ? card.watermark : "SELET";
+  ctx.watermark = card.watermark != null ? card.watermark : (ctx.wmStyle ? null : "SELET");
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const L = card.link || {};
-  const rotulo = String(L.label || card.cta || "Solicitar convite").trim();
+  // A chamada vem da PECA (ctx.cta), como em todos os outros arquetipos. Lia card.cta, que o schema
+  // nunca ofereceu — entao a escolha da tela ("Falar com o time") nunca chegava a arte, e "sem
+  // chamada" imprimia "Solicitar convite" do mesmo jeito por causa do fallback.
+  const rotulo = String(L.label || ctx.cta || "").trim();
   const S = STORY_SAFE;
   const css = `.s-title { font-size:96px; }
     .mid { justify-content:center; }
@@ -2899,7 +2909,7 @@ function storyLink(card, ctx) {
     ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
     <div class="s-title">${highlightHeadline(card.title || "")}</div>
     ${card.body ? `<div class="s-body">${highlightHeadline(card.body)}</div>` : ""}
-    <div class="pil">${esc(rotulo)}</div>
+    ${rotulo ? `<div class="pil">${esc(rotulo)}</div>` : ""}
     <div class="obs">Cole o sticker de link no aplicativo.</div>
   </div>`);
 }
@@ -3163,6 +3173,27 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
     const png = await htmlStringToPngDataUrl(html, sz.w, sz.h);
     if (!png.ok) return { ok: false, error: png.error };
     return { ok: true, dataUrl: png.dataUrl, template: m.model || "tablet", kind: ct.kind, width: sz.w, height: sz.h };
+  }
+  // Story: mesma ideia do carrossel, com a MESMA montagem do render final (storyCardsHtml). Sem este
+  // ramo, toda geracao de Story terminava numa tarja vermelha dizendo "este tipo nao tem previa de
+  // arte" — em jargao e sem acento —, e a pessoa so via a arte depois de salvar e renderizar tudo.
+  if (ct.kind === "story") {
+    const S = STORY_SAFE;
+    const cartoes = storyCardsHtml(parsed || {}, { logo: logoV, watermark: wmV });
+    FAMILIA_ATUAL = "";
+    if (only != null && cartoes.length) {
+      const i = Math.max(0, Math.min(cartoes.length - 1, Number(only) || 0));
+      const png = await htmlStringToPngDataUrl(cartoes[i].html, S.w, S.h);
+      if (!png.ok) return { ok: false, error: png.error };
+      return { ok: true, slides: [{ n: cartoes[i].n, dataUrl: png.dataUrl }], total: cartoes.length, only: i, kind: ct.kind, width: S.w, height: S.h };
+    }
+    const saida = [];
+    for (const c of cartoes) {
+      const png = await htmlStringToPngDataUrl(c.html, S.w, S.h);
+      if (!png.ok) return { ok: false, error: png.error };
+      saida.push({ n: c.n, dataUrl: png.dataUrl });
+    }
+    return { ok: true, slides: saida, total: cartoes.length, kind: ct.kind, width: S.w, height: S.h };
   }
   // Carrossel: a previa mostra TODOS os slides (nao so a capa) — renderiza cada um in-memory,
   // com a MESMA montagem do render final (carouselSlidesHtml).
