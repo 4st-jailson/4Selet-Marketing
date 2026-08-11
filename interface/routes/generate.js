@@ -66,8 +66,25 @@ function avisaFotosInventadas(gov, removidas) {
 
 // Palavras que denunciam pedido de CAPTURA DE TELA (e não de foto ilustrativa). A diferença muda o
 // caminho oferecido: nenhum banco de imagens tem o dashboard da 4Selet nem a matéria do Valor.
-const RE_PRINT = /print|captur|screenshot|screen shot|dashboard|painel|plataforma|tela d|checkout|matéria|materia|reportagem|site|página|pagina|mockup|interface/i;
-function ehPedidoDePrint(txt) { return RE_PRINT.test(String(txt || "")); }
+// Palavras que denunciam CAPTURA DE TELA sem margem para dúvida. Aqui não entra "notebook" nem
+// "checkout": elas dizem o ASSUNTO, não o meio.
+const RE_CAPTURA = /\b(print|prints|captura|capturar|screenshot|screen shot|mockup)\b|captura de tela|tela do (site|sistema|painel|checkout|dashboard)|dashboard da|matéria publicada|materia publicada/i;
+// Palavras que dizem, explicitamente, que o pedido é uma FOTOGRAFIA. Elas VENCEM as de aparelho.
+const RE_FOTO = /\b(fotografia|fotografias|foto|fotos|still|cena|ambiente|bastidor|imagem editorial|banco de imagens|iluminação|iluminacao|profundidade de campo|enquadramento)\b/i;
+// Palavras que sugerem tela, mas sozinhas não decidem nada.
+const RE_TELA = /dashboard|painel|plataforma|tela d|checkout|interface|site|página|pagina|reportagem|matéria|materia/i;
+
+// O Hugo pediu "uma fotografia editorial realista de um ambiente de trabalho... notebook aberto
+// exibindo uma interface de checkout" e o painel montou um MOCKUP: desenhou um notebook e enfiou a
+// foto na tela dele. O classificador via "notebook" e "checkout" e decidia que era captura de tela.
+// Mas o pedido dizia "fotografia" — o notebook era o ASSUNTO da foto, não a moldura dela.
+// Agora a ordem é: captura explícita manda; senão, a palavra "fotografia" manda; só então a tela.
+function ehPedidoDePrint(txt) {
+  const s = String(txt || "");
+  if (RE_CAPTURA.test(s)) return true;
+  if (RE_FOTO.test(s)) return false;
+  return RE_TELA.test(s);
+}
 
 // PENDÊNCIA DE IMAGEM — a peça saiu, mas faltou uma imagem que o pedido descrevia.
 //
@@ -121,16 +138,33 @@ function pendenciasDeImagem(contentTypeId, removidas, limitacoes) {
 // e quem pediu só descobriu olhando a arte pronta. O campo `notes` do schema, onde algo assim
 // poderia aparecer, nunca foi exibido na tela. Aqui a declaração vira aviso de marca, que a tela
 // já sabe pintar.
+// Corta no ESPAÇO anterior e marca com reticência. Cortar no meio da palavra e emendar um ponto
+// final produz "gradiente rad." — a frase não parece abreviada, parece quebrada. Também tira os
+// marcadores de realce (==palavra==, ::palavra::), que são instrução de desenho e não texto.
+function encurtaFrase(t, n) {
+  let s = String(t || "").replace(/==(.+?)==/g, "$1").replace(/::(.+?)::/g, "$1").trim();
+  s = s.replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+  if (s.length <= n) return s;
+  const corte = s.slice(0, n);
+  const esp = corte.lastIndexOf(" ");
+  return (esp > n * 0.6 ? corte.slice(0, esp) : corte).replace(/[,;:\-–—]$/, "") + "…";
+}
+
 function avisaLimitacoes(gov, parsed) {
   const lista = parsed && Array.isArray(parsed.limitacoes) ? parsed.limitacoes.slice() : [];
   if (!gov || !lista.length) { try { if (parsed) delete parsed.limitacoes; } catch (e) {} return lista; }
   if (!Array.isArray(gov.warnings)) gov.warnings = [];
   for (const l of lista.slice(0, 6)) {
-    const pedido = String((l && l.pedido) || "").trim().slice(0, 220);
-    const motivo = String((l && l.motivo) || "").trim().slice(0, 220);
+    const pedido = encurtaFrase(l && l.pedido, 110);
+    const motivo = encurtaFrase(l && l.motivo, 150);
     if (!pedido) continue;
-    const onde = Number(l && l.slide) > 0 ? "No slide " + Number(l.slide) + ": " : "";
-    gov.warnings.push(onde + "não consegui entregar \"" + pedido + "\"" + (motivo ? " — " + motivo : "") + ".");
+    const onde = Number(l && l.slide) > 0 ? "Slide " + Number(l.slide) + ": " : "";
+    // Antes: 'No slide 1: não consegui entregar "<220 chars do briefing>" — <220 chars de
+    // justificativa técnica>.' Os dois cortes caíam no meio da palavra e ganhavam um ponto final,
+    // então a frase terminava em "gradiente rad." e parecia texto quebrado. E o "não consegui
+    // entregar" repetido seis vezes vira ruído: o que a pessoa precisa saber é O QUE ficou de fora
+    // e O QUE FAZER, não uma confissão por slide.
+    gov.warnings.push(onde + "ficou de fora — " + pedido + (motivo ? ". " + motivo : "."));
   }
   // O campo é instrução para o modelo, não conteúdo da peça: sai antes de virar arquivo.
   try { delete parsed.limitacoes; } catch (e) {}

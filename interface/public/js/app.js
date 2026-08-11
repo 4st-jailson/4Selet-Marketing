@@ -5686,6 +5686,19 @@ async function resolvePendenciasDeImagem(r) {
   const carrossel = ct.kind === "carousel";
   let aplicou = false;
 
+  // Tira os marcadores de realce do texto que vai para a TELA. Eles são instrução para o desenho
+  // da arte; na pergunta aparecem como lixo no meio da frase.
+  function limpaMarcadores(t) { return String(t || "").replace(/==(.+?)==/g, "$1").replace(/::(.+?)::/g, "$1").replace(/[=:]{2}/g, "").trim(); }
+  // Corta no ESPAÇO anterior e avisa que cortou. Cortar no meio da palavra faz o texto parecer
+  // quebrado em vez de abreviado — foi o que aconteceu com "consegue pa".
+  function encurta(t, n) {
+    const s = String(t || "").trim();
+    if (s.length <= n) return s;
+    const corte = s.slice(0, n);
+    const esp = corte.lastIndexOf(" ");
+    return (esp > n * 0.6 ? corte.slice(0, esp) : corte).replace(/[,;:\-–—]$/, "") + "…";
+  }
+
   for (let i = 0; i < lista.length; i++) {
     const p = lista[i];
     const print = p.tipo === "print";
@@ -5694,7 +5707,10 @@ async function resolvePendenciasDeImagem(r) {
     // uma peça de 5 slides não lembra qual é qual.
     const slideObj = (p.slide > 0 && LAST_GEN && LAST_GEN.res && LAST_GEN.res.parsed && Array.isArray(LAST_GEN.res.parsed.slides))
       ? LAST_GEN.res.parsed.slides[p.slide - 1] : null;
-    const tituloSlide = slideObj && slideObj.title ? String(slideObj.title).replace(/==/g, "").trim().slice(0, 70) : "";
+    // Os marcadores de realce (==palavra== e ::palavra::) são instrução para o desenho, não texto:
+    // vazavam crus na pergunta ("ou a ::forma como ele consegue pa"). E o corte era em 70 caracteres
+    // no meio da palavra, sem reticência — parecia texto quebrado, não texto abreviado.
+    const tituloSlide = slideObj && slideObj.title ? encurta(limpaMarcadores(slideObj.title), 76) : "";
     const escolha = await pendenciaModal({
       pedido: p.pedido, onde, print, carrossel, tituloSlide, slide: p.slide,
       indice: i + 1, total: lista.length,
@@ -5723,8 +5739,20 @@ async function resolvePendenciasDeImagem(r) {
         // papel off-white sobre mesa de metal fosco, luz lateral controlada"). Jogar isso inteiro
         // no Pexels não acha nada: são instruções de fotografia, não assunto. Vai só o que aparece
         // na foto.
-        : await pexelsSearchModal({ query: termosDeBusca(p.pedido) || p.pedido, orientation: carrossel ? "portrait" : "landscape", target: carrossel ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 } });
-    if (!url) continue;
+        // A orientação segue ONDE a imagem vai parar, não o formato do slide. Quando o slide é um
+        // mockup, a foto entra na TELA do aparelho — e a tela do notebook é deitada. Pedindo retrato
+        // (porque o slide é 1080x1350) e encaixando numa tela deitada, o corte come metade da foto:
+        // foi exatamente o que apareceu no mockup, com o rosto da pessoa cortado.
+        : await pexelsSearchModal({
+          query: termosDeBusca(p.pedido) || p.pedido,
+          orientation: print ? "landscape" : (carrossel ? "portrait" : "landscape"),
+          target: print ? { w: 1440, h: 900 } : (carrossel ? { w: 1080, h: 1350 } : { w: 1080, h: 1080 }),
+        });
+    // Fechar a busca é "mudei de ideia sobre ONDE pegar a imagem", não "desista deste slide". Antes
+    // daqui saía um `continue`, que pulava para a pendência seguinte e abandonava o slide em que a
+    // pessoa estava mexendo — sem avisar. Agora volta para a mesma pergunta, e sair de vez continua
+    // sendo possível pelo "Seguir sem a imagem" ou pelo Esc na janela da pendência.
+    if (!url) { i--; continue; }
 
     if (p.slide > 0 && carrossel) {
       const item = document.querySelectorAll(".struct-ed .se-item")[p.slide - 1];

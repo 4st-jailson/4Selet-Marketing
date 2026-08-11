@@ -490,8 +490,14 @@ function tplPhoto({ width, height, eyebrow, headline, subtext, cta, badge, foote
 // Modelos: tablet | celular | notebook | janela. O print (imagem enviada) entra na "tela".
 // Foco na postagem. Layout adapta: 4:5 empilhado (título topo, device centro) e 16:9 lado a lado.
 const MED_BEZEL = "0 55px 130px rgba(0,0,0,.6), 0 0 0 2px rgba(84,153,181,.22)";
+// A tela do aparelho recorta a imagem com `cover`. Para um PRINT de página, ancorar no topo é o
+// certo — é onde estão o cabeçalho e o título. Para uma FOTO, ancorar no topo corta o assunto: foi
+// o que aconteceu com a foto de banco dentro do notebook, com o rosto da pessoa cortado ao meio.
+// Como o HTML é renderizado num navegador de verdade, a imagem se mede sozinha ao carregar: bem mais
+// alta que a tela = página capturada, ancora no topo; o resto = foto, ancora no centro.
+const FIT_TELA = "this.style.objectPosition=(this.naturalHeight/this.naturalWidth>1.35)?'top center':'center';";
 function mediaDevice(model, imgSrc, url) {
-  const shot = imgSrc ? `<img src="${escAttr(imgSrc)}" alt=""/>` : `<div class="scr-empty">print da matéria</div>`;
+  const shot = imgSrc ? `<img src="${escAttr(imgSrc)}" alt="" onload="${FIT_TELA}"/>` : `<div class="scr-empty">print da matéria</div>`;
   if (model === "celular" || model === "phone") {
     return `<div class="dev" data-stage="1" style="width:406px;height:846px;background:#0a1015;border-radius:56px;padding:14px;box-shadow:${MED_BEZEL};position:relative;transform:rotate(.5deg)"><div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);width:116px;height:32px;background:#05090d;border-radius:18px;z-index:2"></div><div class="scr" style="width:100%;height:100%;border-radius:44px">${shot}</div></div>`;
   }
