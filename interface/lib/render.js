@@ -2337,6 +2337,10 @@ function slideSerie(slide, ctx) {
   const total = Number(s.total) > 0 ? Number(s.total) : 0;
   const rotulo = String(s.rotulo || slide.eyebrow || "").trim();
   const digitos = n < 10 ? ("0" + n) : String(n);
+  // Estilo PAPEL (F18) — as "Regra 1, Regra 2" numa folha com o canto dobrado. É o mesmo dado da
+  // série, com outra roupa: escolher entre "princípio" e "regra" seria adjetivo, e adjetivo vira
+  // sorteio. Por isso um campo só, com `estilo` declarado.
+  if (String(s.estilo || "").toLowerCase() === "papel") return serieEmPapel(slide, ctx, { n, total, rotulo, digitos });
   const tamGhost = n >= 100 ? 420 : 560;
   const corGhost = light ? PALETTE.navy : PALETTE.sky;
   const opGhost = light ? 0.20 : 0.14;
@@ -2363,6 +2367,40 @@ function slideSerie(slide, ctx) {
     ${slide.title ? `<div class="s-title">${highlightHeadline(slide.title)}</div>` : ""}
     ${slide.body ? `<div class="sr-body">${highlightHeadline(slide.body)}</div>` : ""}
     ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+// A folha de papel da série. Duas armadilhas resolvidas aqui, as duas medidas na montagem:
+//  1) a sombra vai num INVÓLUCRO com a mesma rotação, nunca na folha. `box-shadow` no elemento que
+//     tem `clip-path` é apagada pelo recorte, e a folha sai chapada, sem relevo nenhum.
+//  2) o tamanho da aba dobrada e o recorte saem da MESMA variável — se divergirem, sobra um degrau
+//     branco no canto.
+function serieEmPapel(slide, ctx, s) {
+  ctx.theme = resolveTheme(slide.theme);
+  ctx.watermark = slide.watermark != null ? slide.watermark : null;
+  const ABA = 92;
+  const css = `.pp-mesa { align-self:center; transform:rotate(-1.1deg);
+      filter:drop-shadow(0 26px 44px ${PALETTE.darker}80); margin-top:14px; }
+    .pp { position:relative; width:856px; max-width:100%; background:${PALETTE.cloud}; border-radius:6px;
+      padding:72px 68px 88px;
+      clip-path: polygon(0 0, 100% 0, 100% calc(100% - ${ABA}px), calc(100% - ${ABA}px) 100%, 0 100%); }
+    .pp-fold { position:absolute; right:0; bottom:0; width:${ABA}px; height:${ABA}px;
+      background:${PALETTE.mist}; clip-path: polygon(100% 0, 0 100%, 100% 100%); opacity:.85; }
+    .pp-rot { font-family:'JetBrains Mono',monospace; font-size:26px; letter-spacing:.14em;
+      text-transform:uppercase; color:${PALETTE.blue}; margin-bottom:18px; }
+    .pp-tit { font-weight:800; font-size:66px; line-height:1.1; letter-spacing:-.02em; color:${PALETTE.darker}; }
+    .pp-body { margin-top:24px; font-size:36px; line-height:1.42; color:${PALETTE.navy}; }
+    .pp-tit span, .pp-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }
+    .mid { justify-content:center; }`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    <div class="pp-mesa"><div class="pp">
+      <div class="pp-rot">${esc((s.rotulo || "REGRA") + " " + s.n + (s.total ? " de " + s.total : ""))}</div>
+      ${slide.title ? `<div class="pp-tit">${highlightHeadline(slide.title)}</div>` : ""}
+      ${slide.body ? `<div class="pp-body">${highlightHeadline(slide.body)}</div>` : ""}
+      <div class="pp-fold"></div>
+    </div></div>
   </div>`;
   return carDoc(ctx, css, inner);
 }
@@ -2452,9 +2490,165 @@ function slideCitacao(slide, ctx) {
   return carDoc(ctx, css, inner);
 }
 
+// F19 — o medidor. É o "96,4%" e o medidor de cortisol do perfil real.
+// A trava importante: só desenha quando existe ESCALA. Sem "%" e sem `max` declarado, "D+10" viraria
+// um ponteiro cravado em 10% de uma régua que ninguém escreveu — o desenho estaria mentindo. Nesse
+// caso devolve o número gigante, que diz a mesma coisa sem inventar contexto.
+function slideMedidor(slide, ctx) {
+  const g = slide.gauge || {};
+  const bruto = String(g.value == null ? "" : g.value).trim();
+  const num = parseFloat(bruto.replace(/\./g, "").replace(",", "."));
+  const ehPercentual = /%/.test(bruto);
+  const max = Number(g.max) > 0 ? Number(g.max) : (ehPercentual ? 100 : 0);
+  if (!isFinite(num) || !max) {
+    return (Array.isArray(slide.stats) && slide.stats.length) ? slideNumero(slide, ctx) : slideText(slide, ctx);
+  }
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : null;
+  const frac = Math.max(0, Math.min(1, num / max));
+  // Arco de 180 graus, raio 80: comprimento = PI * 80 = 251.33. O dashoffset desenha a fração.
+  const COMP = 251.33;
+  const corTrilho = light ? PALETTE.mist : PALETTE.navy;
+  const corVal = light ? PALETTE.darker : "#FFFFFF";
+  const corLab = light ? PALETTE.navy : PALETTE.mist;
+  const rot = String(g.label || (slide.stats && slide.stats[0] && slide.stats[0].label) || "").trim();
+  const css = `.gz { display:flex; flex-direction:column; align-items:center; margin-top:20px; }
+    .gz svg { width:${v0(ctx)}px; height:auto; display:block; }
+    .gz-val { margin-top:-58px; font-weight:900; font-size:132px; line-height:1; letter-spacing:-6px; color:${corVal}; }
+    .gz-lab { margin-top:18px; font-size:38px; line-height:1.3; color:${corLab}; text-align:center; max-width:80%; }
+    .gz-body { margin-top:30px; font-size:36px; line-height:1.42; color:${corLab}; max-width:88%; }
+    ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
+  const arco = `<svg viewBox="0 0 200 118" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="gz" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="${PALETTE.blue}"/><stop offset="100%" stop-color="${PALETTE.sky}"/>
+      </linearGradient></defs>
+      <path d="M20 106 A80 80 0 0 1 180 106" fill="none" stroke="${corTrilho}" stroke-width="16" stroke-linecap="round"/>
+      <path d="M20 106 A80 80 0 0 1 180 106" fill="none" stroke="url(#gz)" stroke-width="16" stroke-linecap="round"
+        stroke-dasharray="${COMP}" stroke-dashoffset="${(COMP * (1 - frac)).toFixed(1)}"/>
+    </svg>`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
+    <div class="gz">${arco}<div class="gz-val">${esc(bruto)}</div>${rot ? `<div class="gz-lab">${esc(rot)}</div>` : ""}</div>
+    ${slide.body ? `<div class="gz-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+// Largura do arco: no quadrado (peça única) sobra menos altura, então ele encolhe junto.
+function v0(ctx) { return (Number(ctx && ctx.height) > 0 && Number(ctx.height) < 1200) ? 500 : 620; }
+
+// F14 — o fluxograma que se DIVIDE. O `flow` que já existe é uma fila: um passo depois do outro.
+// Este tem ramificação (o caminho do checkout que se parte) ou convergência (o funil). Reaproveita o
+// objeto de nó do fluxo — {label, sub, icon, mark} — então o vocabulário de dez ícones vem de graça.
+function slideMapa(slide, ctx) {
+  const t = slide.tree || {};
+  const raiz = String((t.root && t.root.label) || t.root || "").trim();
+  const ramos = (Array.isArray(t.branches) ? t.branches : [])
+    .filter((b) => String((typeof b === "string" ? b : (b && b.label)) || "").trim()).slice(0, 3);
+  if (!raiz || ramos.length < 2) return slideFlow(slide, ctx);
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : null;
+  const converge = String(t.direction || "") === "converge";
+  const N = ramos.length;
+  const c = light
+    ? { caixa: PALETTE.cloud, borda: PALETTE.blue + "33", tx: PALETTE.darker, sub: PALETTE.navy, linha: PALETTE.blue, forte: PALETTE.blue }
+    : { caixa: PALETTE.navy, borda: PALETTE.blue + "40", tx: "#FFFFFF", sub: PALETTE.mist, linha: PALETTE.sky, forte: PALETTE.blue };
+  const noHtml = (nd, destaque) => {
+    const label = String(typeof nd === "string" ? nd : nd.label || "").trim();
+    const sub = String((nd && nd.sub) || "").trim();
+    const ic = flowIcon((nd && nd.icon) || "");
+    return `<div class="tr-no${destaque ? " hi" : ""}">${ic ? `<div class="tr-ic">${ic}</div>` : ""}`
+      + `<div class="tr-l">${esc(label)}</div>${sub ? `<div class="tr-s">${esc(sub)}</div>` : ""}</div>`;
+  };
+  const raizHtml = `<div class="tr-raiz">${noHtml(t.root && typeof t.root === "object" ? t.root : { label: raiz, icon: t.icon }, !converge)}</div>`;
+  const ramosHtml = `<div class="tr-ramos">${ramos.map((b) => noHtml(b, converge && b && b.mark)).join("")}</div>`;
+  // O barramento alinha com as pontas dos ramos sem JS: a margem lateral é metade da largura de um
+  // ramo, e cada ramo ocupa 1/N do espaço.
+  const css = `.tr { display:flex; flex-direction:column; align-items:stretch; gap:0; margin-top:18px; }
+    .tr-no { background:${c.caixa}; border:2px solid ${c.borda}; border-radius:26px; padding:26px 24px; text-align:center; }
+    .tr-no.hi { background:${c.forte}; border-color:${c.forte}; }
+    .tr-no.hi .tr-l, .tr-no.hi .tr-s, .tr-no.hi .tr-ic { color:#FFFFFF; }
+    .tr-ic { display:flex; justify-content:center; margin-bottom:12px; color:${c.linha}; }
+    .tr-ic svg { width:44px; height:44px; }
+    .tr-l { font-weight:800; font-size:32px; line-height:1.16; letter-spacing:.01em; color:${c.tx}; }
+    .tr-s { margin-top:8px; font-size:25px; line-height:1.26; color:${c.sub}; }
+    .tr-raiz { display:flex; justify-content:center; }
+    .tr-raiz .tr-no { min-width:52%; }
+    .tr-tronco { height:44px; width:4px; background:${c.linha}; align-self:center; }
+    .tr-bus { height:4px; background:${c.linha}; margin:0 calc(50% / ${N}); border-radius:2px; }
+    .tr-pernas { display:grid; grid-template-columns:repeat(${N}, 1fr); }
+    .tr-pernas i { height:40px; width:4px; background:${c.linha}; justify-self:center; }
+    .tr-ramos { display:grid; grid-template-columns:repeat(${N}, 1fr); gap:20px; }
+    .tr-body { margin-top:38px; font-size:34px; line-height:1.4; color:${c.sub}; }
+    ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
+  const pernas = `<div class="tr-pernas">${Array.from({ length: N }, () => "<i></i>").join("")}</div>`;
+  const meio = `<div class="tr-tronco"></div><div class="tr-bus"></div>${pernas}`;
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
+    <div class="tr">${converge ? ramosHtml + meio + raizHtml : raizHtml + meio + ramosHtml}</div>
+    ${slide.body ? `<div class="tr-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
+// F11 — os balões. É o pensamento do cliente desenhado, como o perfil faz nos carrosséis de confiança
+// no checkout ("isso aqui parece confiável?"). Pergunta à esquerda em Navy; resposta à direita em Blue
+// com texto branco — o mesmo par da pílula de chamada, então não abre precedente contra a regra de
+// branco da marca. `think: true` troca o bico por três bolinhas (balão de pensamento).
+function slideDialogo(slide, ctx) {
+  const falas = (Array.isArray(slide.dialog) ? slide.dialog : [])
+    .filter((f) => String((typeof f === "string" ? f : (f && f.text)) || "").trim()).slice(0, 4);
+  if (falas.length < 1) return slideText(slide, ctx);
+  ctx.theme = resolveTheme(slide.theme);
+  const light = ctx.theme === THEME_LIGHT;
+  ctx.watermark = slide.watermark != null ? slide.watermark : null;
+  const tam = falas.length >= 4 ? 34 : falas.length === 3 ? 38 : 44;
+  const corPerg = light ? PALETTE.cloud : PALETTE.navy;
+  const txPerg = light ? PALETTE.darker : "#FFFFFF";
+  const css = `.dlg { display:flex; flex-direction:column; gap:${falas.length >= 4 ? 20 : 28}px; margin-top:22px; }
+    .dlg-b { position:relative; max-width:82%; padding:26px 30px; border-radius:30px; font-size:${tam}px; line-height:1.32; }
+    .dlg-p { align-self:flex-start; background:${corPerg}; color:${txPerg}; border-bottom-left-radius:8px; }
+    .dlg-r { align-self:flex-end; background:${PALETTE.blue}; color:#FFFFFF; border-bottom-right-radius:8px; }
+    .dlg-r .accent, .dlg-r span { color:#FFFFFF !important; text-decoration-color:#FFFFFF !important; }
+    .dlg-b::after { content:""; position:absolute; bottom:-9px; width:0; height:0; border-top:14px solid transparent; }
+    .dlg-p::after { left:16px; border-right:18px solid ${corPerg}; }
+    .dlg-r::after { right:16px; border-left:18px solid ${PALETTE.blue}; }
+    .dlg-t::after { display:none; }
+    .dlg-pts { display:flex; gap:7px; margin-top:8px; }
+    .dlg-pts i { width:12px; height:12px; border-radius:50%; background:${corPerg}; display:block; }
+    .dlg-pts i:nth-child(2) { width:9px; height:9px; }
+    .dlg-pts i:nth-child(3) { width:6px; height:6px; }
+    .dlg-body { margin-top:34px; font-size:34px; line-height:1.4; color:${light ? PALETTE.navy : PALETTE.mist}; }
+    ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
+  const bolhas = falas.map((f) => {
+    const txt = String(typeof f === "string" ? f : f.text).trim();
+    const resp = String((f && f.side) || "") === "resposta";
+    const pensa = !!(f && f.think);
+    return `<div class="dlg-b ${resp ? "dlg-r" : "dlg-p"}${pensa ? " dlg-t" : ""}">${highlightHeadline(txt)}</div>`
+      + (pensa ? '<div class="dlg-pts"><i></i><i></i><i></i></div>' : "");
+  }).join("");
+  const inner = `${carTop(ctx)}
+  <div class="mid">
+    ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
+    ${slide.title ? `<div class="s-title sm">${highlightHeadline(slide.title)}</div>` : ""}
+    <div class="dlg">${bolhas}</div>
+    ${slide.body ? `<div class="dlg-body">${highlightHeadline(slide.body)}</div>` : ""}
+    ${pilulaCta(ctx)}
+  </div>`;
+  return carDoc(ctx, css, inner);
+}
+
 const SLIDE_ARCHETYPES = {
   stat_grid: slideStatGrid, list: slideList, text: slideText, cta: slideCta, flow: slideFlow, device: slideDevice,
   palavra: slidePalavra, numero: slideNumero, serie: slideSerie, comparacao: slideComparacao, citacao: slideCitacao,
+  medidor: slideMedidor, mapa: slideMapa, dialogo: slideDialogo,
 };
 
 // Apelidos aceitos no campo `layout`. Sem acento de propósito: o normalizador tira os acentos antes
@@ -2472,13 +2666,16 @@ const ALIAS_ARQUETIPO = {
   serie: "serie", principio: "serie", regra: "serie", passo: "serie",
   comparacao: "comparacao", versus: "comparacao", vs: "comparacao",
   citacao: "citacao", quote: "citacao", frase: "citacao",
+  medidor: "medidor", gauge: "medidor", velocimetro: "medidor",
+  mapa: "mapa", fluxograma: "mapa", arvore: "mapa", tree: "mapa",
+  dialogo: "dialogo", balao: "dialogo", conversa: "dialogo", dialog: "dialogo",
 };
 
 // Os campos que fazem um slide ter desenho PRÓPRIO. Um slide que traz um deles não é capa nem fecho,
 // mesmo estando na primeira ou na última posição — foi o que a auditoria pegou: a citação de fecho
 // (que existe nas peças reais do perfil) virava CTA, e o "Princípio 1" virava capa.
 // `flow`, `stats` e `items` ficam DE FORA: são genéricos e aparecem em capa e em fecho o tempo todo.
-const CAMPOS_PROPRIOS = ["word", "versus", "citacao", "serie"];
+const CAMPOS_PROPRIOS = ["word", "versus", "citacao", "serie", "gauge", "tree", "dialog"];
 // O `versus` só CONTA como dado próprio quando de fato dá um par válido. Sem isto o roteador
 // anunciava "comparacao" para "Cadastro > Aprovação > Repasse" e o desenho, que rejeita três
 // partes, caía em texto — layout anunciado e desenho entregue tinham que ser a mesma coisa, senão
@@ -2494,7 +2691,19 @@ function temDadoProprio(slide) {
   if (versusValido(slide)) return true;
   if (slide.citacao && (typeof slide.citacao === "string" ? slide.citacao.trim() : String(slide.citacao.text || "").trim())) return true;
   if (slide.serie && Number(slide.serie.n) >= 1) return true;
+  // O medidor só conta como dado próprio quando existe ESCALA — senão o slide não vira medidor e
+  // anunciar isso aqui faria o roteador prometer um desenho que o arquétipo recusa.
+  if (slide.gauge && escalaValida(slide.gauge)) return true;
+  if (slide.tree && slide.tree.root && Array.isArray(slide.tree.branches) && slide.tree.branches.length >= 2) return true;
+  if (Array.isArray(slide.dialog) && slide.dialog.length >= 1) return true;
   return false;
+}
+// Escala do medidor: percentual OU máximo declarado. "D+10" sem max não tem régua.
+function escalaValida(g) {
+  const bruto = String((g && g.value) == null ? "" : g.value).trim();
+  const num = parseFloat(bruto.replace(/\./g, "").replace(",", "."));
+  if (!isFinite(num)) return false;
+  return /%/.test(bruto) || Number(g.max) > 0;
 }
 
 // Decide o arquetipo de um slide, em três degraus e nesta ordem:
@@ -2523,6 +2732,9 @@ function arquetipoDoDado(slide) {
     if (versusValido(slide)) return "comparacao";
     if (slide.word) return "palavra";
     if (slide.serie) return "serie";
+    if (Array.isArray(slide.dialog) && slide.dialog.length) return "dialogo";
+    if (slide.gauge && escalaValida(slide.gauge)) return "medidor";
+    if (slide.tree) return "mapa";
   }
   if (Array.isArray(slide.flow) && slide.flow.length) return "flow";
   if (Array.isArray(slide.stats) && slide.stats.length === 1) return "numero";
@@ -2541,7 +2753,7 @@ function arquetipoDoDado(slide) {
 // pressupõem vizinhos (capa de quê? fecho de quê?) e já têm equivalente nos 4 templates de sempre.
 // Os arquetipos que fazem sentido como PECA UNICA. "cover", "text" e "cta" continuam de fora
 // (capa de que? fecho de que?), e "serie" tambem: "2 de 5" pressupoe vizinhos.
-const ARQ_PECA = ["stat_grid", "list", "flow", "palavra", "numero", "comparacao", "citacao"];
+const ARQ_PECA = ["stat_grid", "list", "flow", "palavra", "numero", "comparacao", "citacao", "medidor", "mapa", "dialogo"];
 // A peca unica usa a MESMA ordem do carrossel (arquetipoDoDado), so filtrando o que nao vale
 // sozinho. Duas listas separadas era o caminho garantido para elas divergirem com o tempo.
 function arquetipoPorDado(concept) {
