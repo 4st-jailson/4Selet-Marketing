@@ -87,15 +87,20 @@ const SCHEMAS = {
   "subtext": "subtexto de apoio (1-2 linhas)",
   "cta": "CTA aprovado",
   "layout_type": "editorial | bold | split | photo",  // os 4 templates REAIS do render
-  // OS TRES CAMPOS ABAIXO SAO OPCIONAIS E MUTUAMENTE EXCLUSIVOS. Preencha NO MAXIMO UM, e SO quando o
-  // conteudo REALMENTE for numeros, etapas ou uma enumeracao. Quando um deles vem preenchido, o render
+  // OS CAMPOS ABAIXO SAO OPCIONAIS E MUTUAMENTE EXCLUSIVOS. Preencha NO MAXIMO UM, e SO quando o
+  // conteudo REALMENTE for aquilo (numeros, etapas, enumeracao, conceito, citacao, contraste). Quando um deles vem preenchido, o render
   // desenha a arte nesse formato (grade de numeros / diagrama de etapas / lista) em vez do texto solto
   // sobre o fundo — e a peca fica muito mais cheia e informativa. Se o conteudo for uma frase/conceito,
   // deixe os tres FORA do JSON: a peca sai no layout_type escolhido, como sempre.
   // Regra dura: NUNCA invente numero. Use apenas os numeros oficiais dos knowledge files.
-  "stats": [{ "value": "95%", "label": "aprovacao no cartao" }],  // 2 a 4 numeros oficiais -> grade 2x2
+  "stats": [{ "value": "95%", "label": "aprovacao no cartao" }],  // UM numero oficial -> NUMERO GIGANTE ocupando a arte; 2 a 4 -> grade 2x2.
+  //   Quando o pedido for "um numero grande e nada competindo com ele", mande stats com UMA entrada
+  //   em vez de escrever o numero na headline: e a diferenca entre a arte do numero e um texto comum.
   "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }],  // 3 a 4 etapas de um processo -> diagrama com icones (mark:true so na etapa final)
   "items": ["item curto de lista"],  // 3 a 6 itens -> lista com marcadores
+  "word": "UMA palavra (ate 16 caracteres) quando a peca inteira e sobre um conceito -> a palavra ocupa a arte",
+  "citacao": { "text": "frase de terceiro", "autor": "quem disse", "papel": "cargo/obra (opcional)" },  // -> arte de citacao, com aspa e filete
+  "versus": { "a": "termo que ganha", "b": "termo que perde" },  // -> dois termos com peso diferente
   "visual_direction": "direcao visual concreta (fundo, cor da paleta, uso de Selet Dots, hierarquia)",
   "limitacoes": [{ "pedido": "o que foi pedido e voce NAO conseguiu entregar", "motivo": "por que nao deu, em linguagem de gente" }],  // deixe FORA do JSON se entregou tudo
   "notes": "1-2 frases de racional de marca"
