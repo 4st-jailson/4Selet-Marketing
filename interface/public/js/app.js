@@ -4031,7 +4031,7 @@ async function viewPublications(arg, query) {
       <td>${esc(fmt(it.scheduled_at))}</td>
       <td>${sb(it.status)}${it.error ? '<div class="hint" style="color:var(--err)">' + esc(String(it.error).slice(0, 90)) + "</div>" : ""}</td>
       <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(it.folder)}">Ver peça</a>${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : ""}</td>
-    </tr>`).join("") : '<tr><td colspan="5" class="muted">Nenhum agendamento pendente. Agende uma peça aprovada em “Publicar ou agendar”.</td></tr>';
+    </tr>`).join("") : '<tr><td colspan="5" class="utable-vazio">Nenhum agendamento pendente. Agende uma peça aprovada em “Publicar ou agendar”.</td></tr>';
     body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Destino</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`;
   } else {
     const rows = pubs.length ? pubs.map((p) => `<tr>
@@ -4039,7 +4039,7 @@ async function viewPublications(arg, query) {
       <td>${esc(fmt(p.published_at))}</td>
       <td>${selosDe(p)}${p.scheduled_at ? '<div class="hint">agendada</div>' : (p.manual ? '<div class="hint">registrada por você</div>' : "")}</td>
       <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}</td>
-    </tr>`).join("") : '<tr><td colspan="4" class="muted">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
+    </tr>`).join("") : '<tr><td colspan="4" class="utable-vazio">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
     body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Destino</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   setView(`<div class="section-head"><div><h2>Publicações</h2><p class="muted">O que já foi ao ar no Instagram e o que está agendado.</p></div></div>${segs}${body}`);
