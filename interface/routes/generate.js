@@ -9,6 +9,7 @@ const ai = require("../lib/ai"); // dispatcher multi-provedor (Claude / OpenAI /
 const prompts = require("../lib/prompts");
 const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
+const paletaAviso = require("../lib/paleta_aviso");
 const researchLib = require("../lib/research");
 const render = require("../lib/render");
 const { contentTypeById, pillarById, APPROVED_CTAS, BRIEF_MAX_CHARS } = require("../lib/config");
@@ -295,6 +296,9 @@ router.post("/", async (req, res, next) => {
       research_facts: fatos,
       // O que faltou de imagem, em forma de pergunta com saídas. Lista vazia = nada a resolver.
       pendencias_imagem: pendencias,
+      // A referência visual pediu uma cor que a identidade não tem? Não bloqueia nada: a tela abre
+      // um aviso com saídas e quem decide é a pessoa. null = nada a avisar (o caso comum).
+      aviso_paleta: paletaAviso.analisa(body.mood || ""),
     });
   } catch (e) { next(e); }
 });

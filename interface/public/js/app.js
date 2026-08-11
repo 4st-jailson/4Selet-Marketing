@@ -5149,6 +5149,7 @@ async function geraComPayload(prog) {
   // aviso no meio de outros avisos e o slide errado ficava lá até alguém reparar — o "usuário no
   // escuro" que o Hugo descreveu. A janela abre depois da prévia de propósito: dá para ver o que
   // saiu antes de decidir o que fazer.
+  try { await avisaPaletaFora(r); } catch (e) { /* o aviso de paleta nunca pode impedir a peça de existir */ }
   try { await resolvePendenciasDeImagem(r); } catch (e) { /* resolver a imagem é opcional; a peça já existe */ }
 }
 
@@ -5414,6 +5415,10 @@ async function refineGenerated() {
     instruction,
     campaign_id: LAST_GEN.req.campaign_id || undefined,
     pillar: LAST_GEN.req.pillar || undefined,
+    // O ajuste ia para a IA sem o tema e sem a referência visual: quem ajustava era uma IA que não
+    // sabia o que a peça era nem o clima que a pessoa pediu.
+    brief: LAST_GEN.req.brief || undefined,
+    mood: ($("#g-mood") && $("#g-mood").value.trim()) || LAST_GEN.req.mood || undefined,
   };
   const btn = $("#g-refine-btn"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ajustando…';
   showBusy("Ajustando com IA…");
@@ -5622,6 +5627,58 @@ function setSlideLayout(item, layout, device) {
 // Isto é a resposta ao "não deixar o usuário no escuro". Antes: a peça saía, um aviso de texto
 // aparecia no meio de outros avisos, e o slide ficava com o conteúdo errado até alguém reparar.
 // Agora a peça sai, a janela abre e cada saída leva a um lugar concreto.
+// A referência visual pediu uma cor que a identidade não tem. Não bloqueia: avisa, explica onde a
+// marca PERMITE outra cor (a paleta de campanha) e deixa a pessoa decidir. É o fluxo consultivo que
+// o Hugo desenhou — "modal com OK, e uma flag num canto perguntando se quer prosseguir, nunca
+// bloquear". Aparece uma vez por referência: quem já leu e escolheu não é interrompido de novo.
+const PALETA_AVISADA = new Set();
+async function avisaPaletaFora(r) {
+  const a = r && r.aviso_paleta;
+  if (!a || !a.mensagem) return false;
+  const chave = String(a.termo || "") + "|" + String(a.sugerida || "");
+  if (PALETA_AVISADA.has(chave)) return false;
+  PALETA_AVISADA.add(chave);
+
+  const corpo = '<p class="pend-lead">' + esc(a.mensagem) + "</p>"
+    + '<div class="orig-list">'
+    + (a.opcoes || []).map((o, i) => '<button type="button" class="orig-item" data-op="' + esc(o.id) + '">'
+      + '<span class="orig-t">' + esc(o.label) + "</span>"
+      + '<span class="orig-s">' + esc(o.detalhe || "") + "</span></button>").join("")
+    + "</div>"
+    + '<p class="pend-dica">A arte já foi gerada e continua válida. Isto é só sobre a cor.</p>';
+
+  const escolha = await modalEscolha({ titulo: "Sobre a cor que você pediu", corpo: corpo });
+  if (escolha === "campanha" && a.sugerida) {
+    // Não troca a paleta por baixo do pano: a paleta é da CAMPANHA, vale para todas as peças dela.
+    // Levar a pessoa até lá é honesto; mudar sozinho seria mexer no visual de peças que ela não abriu.
+    toast('Escolha a paleta "' + (a.label || a.sugerida) + '" na campanha desta peça, em Campanhas.', "info");
+  }
+  return true;
+}
+
+// Modal simples de escolha: devolve o id do botão clicado (ou "" se fechar). Reusa a moldura que a
+// pendência de imagem já usa, então não nasce um segundo jeito de perguntar as coisas.
+function modalEscolha(o) {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "modal-ov on";
+    ov.innerHTML = '<div class="modal pend-modal" role="dialog" aria-modal="true">'
+      + '<div class="pend-head"><h3>' + esc(o.titulo || "") + "</h3>"
+      + '<button class="btn btn-ghost btn-sm" data-op="">Fechar</button></div>'
+      + '<div class="pend-cont">' + (o.corpo || "") + "</div></div>";
+    document.body.appendChild(ov);
+    const fim = (v) => { try { ov.remove(); } catch (e) {} resolve(v); };
+    ov.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-op]");
+      if (b) return fim(b.getAttribute("data-op") || "");
+      if (ev.target === ov) fim("");
+    });
+    document.addEventListener("keydown", function esc2(ev) {
+      if (ev.key === "Escape") { document.removeEventListener("keydown", esc2); fim(""); }
+    });
+  });
+}
+
 async function resolvePendenciasDeImagem(r) {
   const lista = (r && r.pendencias_imagem) || [];
   if (!lista.length) return false;

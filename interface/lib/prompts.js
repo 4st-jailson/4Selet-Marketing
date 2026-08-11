@@ -106,7 +106,7 @@ const SCHEMAS = {
   "word": "UMA palavra (ate 16 caracteres) quando a peca inteira e sobre um conceito -> a palavra ocupa a arte",
   "citacao": { "text": "frase de terceiro", "autor": "quem disse", "papel": "cargo/obra (opcional)" },  // -> arte de citacao, com aspa e filete
   "versus": { "a": "termo que ganha", "b": "termo que perde" },  // -> dois termos com peso diferente
-  "visual_direction": "direcao visual concreta (fundo, cor da paleta, uso de Selet Dots, hierarquia)",
+  "foto_busca": "2 a 4 palavras para procurar uma FOTO que combine com a referencia visual (ex.: ceu entardecer minimalista). So preencha se a peca ganha com foto de fundo; deixe FORA se o assunto e dado/numero.",
   "limitacoes": [{ "pedido": "o que foi pedido e voce NAO conseguiu entregar", "motivo": "por que nao deu, em linguagem de gente" }],  // deixe FORA do JSON se entregou tudo
   "notes": "1-2 frases de racional de marca"
 }`,
@@ -220,7 +220,18 @@ function generationPrompt(req) {
   if (req.platforms && req.platforms.length) lines.push("- Plataforma(s): " + req.platforms.join(", "));
   if (req.tone) lines.push("- Tom desejado: " + req.tone);
   if (req.key_offer) lines.push("- Oferta/numero a destacar: " + req.key_offer);
-  if (req.mood) lines.push("- Referencia visual/mood (clima e estilo a evocar, sempre dentro da marca): " + req.mood);
+  if (req.mood) {
+    lines.push("- Referencia visual/mood: " + req.mood);
+    // A referencia nao muda a PALETA (as cores vem da identidade da 4Selet e o painel avisa a pessoa
+    // quando ela pede cor de fora). Mas ela manda no que e legitimo mandar — e sem dizer isso, o
+    // modelo escrevia uma "direcao visual" bonita que ninguem lia, e a arte saia identica.
+    lines.push("  A referencia acima DEVE guiar, nesta ordem: (a) o LAYOUT de cada slide; (b) a");
+    lines.push("  TEMPERATURA — use theme:\"light\" nos slides em que a referencia pede leveza, respiro");
+    lines.push("  ou luz, e mantenha escuro onde pede peso e sobriedade; (c) o TOM do texto.");
+    lines.push("  A PALETA nao muda: as cores sao as da identidade 4Selet. Se a referencia pede uma cor");
+    lines.push("  que a marca nao tem (quente, terrosa, neon), NAO invente cor nem descreva cor no");
+    lines.push("  texto — traduza a intencao em LUZ e RITMO (mais slides claros, mais respiro).");
+  }
   if (req.extra) lines.push("- Observacoes extras: " + req.extra);
   if (req.cta) lines.push("- Chamada para acao (CTA): use EXATAMENTE \"" + req.cta + "\" como CTA — coloque no campo cta do JSON e, quando fizer sentido, como fechamento natural do texto.");
   else lines.push("- SEM CTA forcado: NAO use chamadas de conversao (ex.: 'Solicitar convite', 'Ver as condicoes'). Deixe o campo cta do JSON vazio (\"\") e encerre o texto de forma natural, no maximo um fechamento suave de relacionamento.");
