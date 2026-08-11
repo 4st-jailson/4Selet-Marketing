@@ -8,7 +8,7 @@ const crypto = require("crypto");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
-const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_PILLARS, CONTENT_TYPES, KIND_LABELS } = require("./lib/config");
+const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_PILLARS, CONTENT_TYPES, KIND_LABELS, DESTINOS } = require("./lib/config");
 const auth = require("./lib/auth");
 
 const app = express();
@@ -100,6 +100,7 @@ app.get("/api/meta", (req, res) => {
     pillars: BRAND_PILLARS,
     content_pillars: CONTENT_PILLARS,
     content_types: CONTENT_TYPES,
+    destinos: DESTINOS,
     kind_labels: KIND_LABELS,
     // Versão do front que ESTE servidor tem. O painel NÃO usa isto (ele lê o cabeçalho
     // X-Painel-Versao, que vem em toda resposta e não custa requisição nenhuma). Fica aqui para

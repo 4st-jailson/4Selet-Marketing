@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { PATHS } = require("./config");
+const { PATHS, DESTINO_IDS } = require("./config");
 const publications = require("./publications");
 
 const FILE = path.join(PATHS.DATA_DIR, "schedule.json");
@@ -19,14 +19,22 @@ function save(list) {
 }
 
 // Agendamentos ainda pendentes de uma peça (usado para evitar duplicidade).
-function pendingFor(folder) { return load().filter((x) => x.folder === folder && x.status === "pending"); }
+// Pendentes de uma peça. Com `destino`, só os daquele destino — é o que permite ter o feed
+// publicado e o story ainda agendado ao mesmo tempo. Sem `destino`, todos (usado ao descartar a peça).
+// Agendamento antigo, gravado antes deste campo existir, conta como "feed".
+function destinoDe(x) { return DESTINO_IDS.indexOf(x && x.destino) >= 0 ? x.destino : "feed"; }
+function pendingFor(folder, destino) {
+  return load().filter((x) => x.folder === folder && x.status === "pending"
+    && (!destino || destinoDe(x) === destino));
+}
 
 // Cancela todos os pendentes de uma peça. Usado quando a peça é publicada por outro caminho
 // (botão "Publicar agora" ou marcação manual): sem isso, o agendamento dispararia depois e
 // postaria a MESMA peça uma segunda vez, horas mais tarde, sem ninguém olhando.
-function cancelPendingFor(folder, reason) {
+function cancelPendingFor(folder, reason, destino) {
   const l = load();
-  const hit = l.filter((x) => x.folder === folder && x.status === "pending");
+  const hit = l.filter((x) => x.folder === folder && x.status === "pending"
+    && (!destino || destinoDe(x) === destino));
   if (!hit.length) return [];
   const now = new Date().toISOString();
   for (const it of hit) { it.status = "cancelled"; it.cancelled_at = now; it.cancelled_reason = reason || "a peça foi publicada por outro caminho"; }
@@ -35,16 +43,20 @@ function cancelPendingFor(folder, reason) {
 }
 
 // Cria um agendamento (pendente). scheduled_at = ISO string.
-function add({ folder, kind, caption, scheduled_at, by, label }) {
+function add({ folder, kind, caption, scheduled_at, by, label, destino }) {
   const when = new Date(scheduled_at);
   if (isNaN(when.getTime())) { const e = new Error("Data/hora inválida."); e.code = "E_BAD_DATE"; throw e; }
   // Um agendamento pendente por peça. Duplo clique no botão "Agendar" (ou um retry) criava dois
   // itens iguais, e cada um virava um post no horário marcado.
-  if (pendingFor(folder).length) { const e = new Error("Esta peça já tem um agendamento pendente. Cancele o atual antes de criar outro."); e.code = "E_ALREADY_SCHEDULED"; throw e; }
+  const dest = DESTINO_IDS.indexOf(destino) >= 0 ? destino : "feed";
+  if (pendingFor(folder, dest).length) {
+    const e = new Error("Esta peça já tem um agendamento pendente para " + dest + ". Cancele o atual antes de criar outro.");
+    e.code = "E_ALREADY_SCHEDULED"; throw e;
+  }
   const list = load();
   const item = {
     id: crypto.randomBytes(8).toString("hex"),
-    folder, label: label || folder, kind: kind || null, caption: caption || null,
+    folder, label: label || folder, kind: kind || null, caption: caption || null, destino: dest,
     scheduled_at: when.toISOString(), status: "pending",
     created_at: new Date().toISOString(), by: by || null,
   };
@@ -121,7 +133,7 @@ function startWorker(publishFn, isPublishedFn) {
           try { require("./content").setPublished(it.folder, { by: it.by, post_id: r.post_id }); }
           catch (e) { console.error("[schedule] post publicado mas falhou ao marcar a peça:", it.folder, e && e.message); }
           // registra no histórico de publicações (aba "Publicados") quando saiu de verdade
-          try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); }
+          try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, destino: destinoDe(it), caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); }
           catch (e) { console.error("[schedule] post publicado mas falhou ao registrar no histórico:", it.folder, e && e.message); }
         }
       } catch (e) {

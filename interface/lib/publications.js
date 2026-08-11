@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { PATHS } = require("./config");
+const { PATHS, DESTINO_IDS } = require("./config");
 
 const FILE = path.join(PATHS.DATA_DIR, "publications.json");
 
@@ -29,6 +29,9 @@ function add(rec) {
     folder: String(rec.folder || ""),
     label: String(rec.label || rec.folder || ""),
     kind: rec.kind || null,
+    // Destino da publicação. Registro antigo (sem o campo) e lido como "feed", que era o unico
+    // destino que existia quando ele foi gravado — assim o historico nao fica com buraco.
+    destino: DESTINO_IDS.indexOf(rec.destino) >= 0 ? rec.destino : "feed",
     caption: rec.caption || null,
     post_id: rec.post_id || null,
     permalink: rec.permalink || null,

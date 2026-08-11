@@ -4007,28 +4007,40 @@ async function viewPublications(arg, query) {
   try {
     const [pr, sr] = await Promise.all([API.publications(), API.listSchedule().catch(() => ({ items: [] }))]);
     pubs = pr.items || [];
-    pend = (sr.items || []).filter((it) => it.status === "pending" || it.status === "publishing");
+    // Antes filtrava só pendente e publicando — então um agendamento que FALHOU sumia da tela,
+    // indistinguível de "saiu". A pessoa descobria dias depois olhando o perfil. O rótulo "Falhou"
+    // já existia no código e nunca podia aparecer.
+    pend = (sr.items || []).filter((it) => it.status !== "cancelled");
   } catch (e) { setView('<div class="empty">Erro ao carregar as publicações.</div>'); return; }
   const fmt = (iso) => { try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso; } };
-  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], failed: ["rejected", "Falhou"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
+  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], failed: ["rejected", "Falhou"], cancelled: ["plain", "Cancelado"], skipped: ["plain", "Pulado"], simulated: ["plain", "Simulado"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
+  // Para ONDE foi. Registro antigo, gravado antes deste campo existir, era sempre feed.
+  const DEST = { feed: "Feed", story: "Story", reels: "Reels", outro: "Outro" };
+  const selosDe = (x) => {
+    const d = DEST[x && x.destino] ? x.destino : "feed";
+    const auto = d === "feed";
+    return '<span class="badge dest-' + d + '">' + esc(DEST[d]) + "</span>"
+      + '<span class="badge ' + (auto ? "modo-auto" : "modo-manual") + '">' + (auto ? "Automático" : "Manual") + "</span>";
+  };
   const segs = `<div class="seg-group mb"><a class="seg ${tab === "publicados" ? "on" : ""}" href="#/publicacoes?tab=publicados">Publicados${pubs.length ? " (" + pubs.length + ")" : ""}</a><a class="seg ${tab === "agendados" ? "on" : ""}" href="#/publicacoes?tab=agendados">Agendados${pend.length ? " (" + pend.length + ")" : ""}</a></div>`;
   let body;
   if (tab === "agendados") {
     const rows = pend.length ? pend.map((it) => `<tr>
       <td><strong>${esc(it.label || it.folder)}</strong><div class="muted">${esc(it.folder)}</div></td>
+      <td>${selosDe(it)}</td>
       <td>${esc(fmt(it.scheduled_at))}</td>
-      <td>${sb(it.status)}</td>
+      <td>${sb(it.status)}${it.error ? '<div class="hint" style="color:var(--err)">' + esc(String(it.error).slice(0, 90)) + "</div>" : ""}</td>
       <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(it.folder)}">Ver peça</a>${it.status === "pending" ? '<button class="btn btn-sm btn-danger" data-cancel="' + esc(it.id) + '">Cancelar</button>' : ""}</td>
-    </tr>`).join("") : '<tr><td colspan="4" class="muted">Nenhum agendamento pendente. Agende uma peça aprovada em “Publicar ou agendar”.</td></tr>';
-    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`;
+    </tr>`).join("") : '<tr><td colspan="5" class="muted">Nenhum agendamento pendente. Agende uma peça aprovada em “Publicar ou agendar”.</td></tr>';
+    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Destino</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`;
   } else {
     const rows = pubs.length ? pubs.map((p) => `<tr>
       <td><strong>${esc(p.label || p.folder)}</strong><div class="muted">${esc(p.folder)}</div></td>
       <td>${esc(fmt(p.published_at))}</td>
-      <td>${esc(p.kind || "—")}${p.scheduled_at ? ' <span class="hint">· agendada</span>' : (p.manual ? ' <span class="hint">· registrada manualmente</span>' : "")}</td>
+      <td>${selosDe(p)}${p.scheduled_at ? '<div class="hint">agendada</div>' : (p.manual ? '<div class="hint">registrada por você</div>' : "")}</td>
       <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}</td>
     </tr>`).join("") : '<tr><td colspan="4" class="muted">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
-    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Tipo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Destino</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   setView(`<div class="section-head"><div><h2>Publicações</h2><p class="muted">O que já foi ao ar no Instagram e o que está agendado.</p></div></div>${segs}${body}`);
   $$("#sched-rows [data-cancel]").forEach((b) => { b.onclick = async () => {

@@ -416,6 +416,31 @@ const STORY_SAFE = {
 
 // Rótulo operacional do destaque a que o story pertence. Não existe endpoint de Highlights na
 // Graph API: isto é instrução para a pessoa, não automação.
+// Para ONDE uma publicação vai. É campo da PUBLICAÇÃO, não da peça: a mesma arte de feed pode
+// virar story, e um carrossel pode ir ao feed hoje e ter um slide reaproveitado como story amanhã.
+// `auto` = o painel publica pela Graph API; `manual` = a arte sai pronta e a pessoa posta no app.
+const DESTINOS = [
+  { id: "feed", label: "Feed", modo: "auto", kinds: ["feed", "image", "carousel", "media"] },
+  { id: "story", label: "Story", modo: "manual", kinds: ["story", "feed", "image", "carousel", "media"] },
+  { id: "reels", label: "Reels", modo: "manual", kinds: ["video"] },
+  { id: "outro", label: "Outro", modo: "manual", kinds: [] },
+];
+const DESTINO_IDS = DESTINOS.map((d) => d.id);
+function destinoById(id) { return DESTINOS.find((d) => d.id === String(id || "")) || null; }
+// O destino que o painel sugere para uma peça, pelo tipo dela. É sugestão: quem manda é a pessoa.
+function destinoPadrao(kind) {
+  const k = String(kind || "");
+  if (k === "story") return "story";
+  if (k === "video") return "reels";
+  return "feed";
+}
+// O painel publica sozinho? Só o feed, e só para os tipos que a Graph API aceita hoje.
+function publicaSozinho(destino, kind) {
+  const d = destinoById(destino);
+  if (!d || d.modo !== "auto") return false;
+  return d.kinds.indexOf(String(kind || "")) >= 0;
+}
+
 const STORY_HIGHLIGHTS = ["", "quem_somos", "nosso_dna", "diferenciais"];
 
 const KIND_LABELS = {
@@ -459,6 +484,7 @@ module.exports = {
   CONTENT_TYPES,
   KIND_LABELS,
   STORY_SAFE, STORY_HIGHLIGHTS,
+  DESTINOS, DESTINO_IDS, destinoById, destinoPadrao, publicaSozinho,
   contentTypeById,
   pillarById,
 };
