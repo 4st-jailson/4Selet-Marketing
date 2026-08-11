@@ -177,10 +177,43 @@ router.post("/:folder/tags", (req, res) => {
   res.json({ ok: true, tags: saved });
 });
 
+// Prepara uma peça IMPORTADA para edição: a imagem vira a primeira camada de uma prancheta que o
+// editor sabe abrir. O original fica guardado como <nome>.orig.<ext> dentro da própria peça.
+// É um passo EXPLÍCITO, e não parte do "Importar": importar continua instantâneo e à prova de falha,
+// e assim a peça que já foi importada antes desta mudança também vira editável, sem reimportar.
+router.post("/:folder/preparar-edicao", async (req, res) => {
+  const t = content.getTask(req.params.folder);
+  if (!t) return res.status(404).json({ error: "task nao encontrada" });
+  try {
+    const r = await render.prepararImportada(req.params.folder);
+    console.log("[preparar-edicao] " + req.params.folder + ": " + r.preparadas.length + " arte(s), "
+      + r.ja_preparadas.length + " ja estavam prontas — por " + ((req.user && req.user.username) || "?"));
+    res.json(r);
+  } catch (e) {
+    const humano = {
+      E_SEM_ARTE: "Não encontrei nenhuma arte importada nesta peça para preparar.",
+      E_SEM_DIMENSAO: "Não consegui ler o tamanho da imagem. Envie um PNG ou JPEG comum.",
+      E_PRANCHETA: "Não consegui montar a prancheta desta arte.",
+      E_NOT_ACTIVE: "Esta peça está aprovada. Reabra para edição antes de preparar.",
+    };
+    res.status(e.code === "E_SEM_ARTE" ? 409 : 500)
+      .json({ error: humano[e.code] || e.message, code: e.code || "E_PREPARAR" });
+  }
+});
+
 // Renderiza a midia final (PNG/MP4) a partir do conceito. ?kind=image|feed|carousel|video
 router.post("/:folder/render", async (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
+  // Peça IMPORTADA não se re-renderiza: "Gerar arte final" redesenharia pelo template da marca e
+  // sobrescreveria a imagem que a pessoa trouxe pronta. A tela já esconde o botão — mas só a tela.
+  // Uma chamada direta a esta rota destruía a arte, e o resultado é irreversível.
+  if (t.status && t.status.imported) {
+    return res.status(409).json({
+      error: "Esta peça foi importada por você. Gerar a arte final substituiria a sua imagem pelo desenho do painel.",
+      code: "E_PECA_IMPORTADA",
+    });
+  }
   const kind = String((req.query.kind || req.body && req.body.kind || t.kind || "").trim());
   const reqTpl = String((req.query.template || (req.body && req.body.template) || "").trim());
   // PECA_IDS, nao TEMPLATE_IDS: alem dos 4 templates classicos, a peca unica agora aceita os

@@ -1989,9 +1989,19 @@ function openCarouselBoard(folder, task) {
 
 function renderPanel(folder, task) {
   if (!isMediaKind(task.kind)) return "";
-  // Peça importada: a arte foi trazida pronta, não há fonte (HTML/JSON) para re-render.
+  // Peça importada. Antes isto era um beco: "já é a versão final, para trocar importe outra".
+  // O editor não abria porque a arte não tinha RECEITA — ela chegou pronta, como uma foto de fora.
+  // Agora dá para escrever a receita que falta: a imagem vira a primeira camada de uma prancheta,
+  // e o editor passa a abri-la como qualquer outra peça.
   if (task.status && task.status.imported) {
-    return `<div class="card"><h3>Arte final</h3><p class="muted mt">Arte <strong>importada por você</strong> — já é a versão final. Para trocar a imagem, importe uma peça nova. Você ainda pode ajustar a <strong>legenda</strong> abaixo.</p></div>`;
+    const jaPronta = (task.files || []).some((f) => /\.orig\.(png|jpe?g|webp)$/i.test(f.rel));
+    if (jaPronta) return "";   // já preparada: cai no painel de arte normal, com o botão de editar
+    return `<div class="card"><h3>Arte final</h3>
+      <p class="muted mt">Esta arte foi <strong>importada por você</strong>, então ela chegou como imagem pronta — sem as camadas que o editor precisa para abrir.</p>
+      <p class="muted mt">Preparando, a sua imagem vira a <strong>primeira camada</strong> de uma prancheta: você poderá escrever por cima, tampar um pedaço e acrescentar logo, formas e outras imagens. <strong>A imagem original fica guardada</strong> e dá para voltar a ela.</p>
+      <div class="mt"><button class="btn btn-primary" data-prep="${esc(folder)}">Preparar para editar</button></div>
+      <p class="hint mt">Leva alguns segundos por imagem. A arte redesenhada fica um pouco mais pesada — é o preço de ela passar a ser editável.</p>
+    </div>`;
   }
   const hasMedia = task.files.some((f) => f.isImage || f.isVideo);
   if (task.zone !== "active") {
@@ -3681,7 +3691,24 @@ function workflowHint(s) {
   return "";
 }
 function bindWorkflow(task) {
-  $$("#wf-actions [data-wf]").forEach((btn) => {
+  // "Preparar para editar" na peca importada: escreve a receita que falta e recarrega a peca.
+  $("[data-prep]").forEach((b) => {
+    b.onclick = async () => {
+      const f = b.getAttribute("data-prep");
+      b.disabled = true; b.innerHTML = '<span class="spinner"></span> preparando…';
+      showBusy("Preparando a arte para edição…");
+      try {
+        const r = await API.prepararEdicao(f);
+        const n = (r.preparadas || []).length;
+        toast(n === 1 ? "Arte pronta para editar." : n + " artes prontas para editar.", "success");
+        await viewTask(f);
+      } catch (e) {
+        toast((e && e.message) || "Não consegui preparar a arte.", "error");
+        b.disabled = false; b.textContent = "Preparar para editar";
+      } finally { hideBusy(); }
+    };
+  });
+  $("#wf-actions [data-wf]").forEach((btn) => {
     btn.onclick = async () => {
       const wf = btn.dataset.wf;
       // "Publicar ou agendar" era o único deste bloco que saía por `return` ANTES do busy() logo

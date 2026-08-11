@@ -3239,6 +3239,67 @@ async function renderStory(folder, opts) {
   return { ok: rels.length > 0, rels: rels, total: built.length, stderr: lastErr };
 }
 
+// Prepara uma peça IMPORTADA para edição: cada arte vira imagem-base de uma prancheta editável.
+// Idempotente: já preparada, não faz nada (senão a segunda passada usaria a arte JÁ redesenhada como
+// base, e a cada clique a imagem perderia qualidade sobre si mesma).
+async function prepararImportada(folder) {
+  const loc = requireActive(folder);
+  const alvos = [];
+  const varrer = (sub, re) => {
+    const dir = path.join(loc.path, sub);
+    if (!fs.existsSync(dir)) return;
+    for (const f of fs.readdirSync(dir)) {
+      if (!re.test(f) || /\.(orig|bg)\./i.test(f)) continue;
+      alvos.push({ sub, nome: f, abs: path.join(dir, f) });
+    }
+  };
+  varrer("ads", /^(ad|feed)\.(png|jpe?g|webp)$/i);
+  varrer("slides", /^slide_\d+\.(png|jpe?g|webp)$/i);
+  if (!alvos.length) { const e = new Error("nenhuma arte importada para preparar"); e.code = "E_SEM_ARTE"; throw e; }
+
+  const feitos = [];
+  const pulados = [];
+  for (const a of alvos) {
+    const semExt = a.nome.replace(/\.[^.]+$/, "");
+    const ext = (a.nome.match(/\.[^.]+$/) || [".png"])[0];
+    const htmlPath = path.join(loc.path, a.sub, semExt + ".html");
+    // Já tem receita? Então já foi preparada (ou nasceu do painel): não mexe.
+    if (fs.existsSync(htmlPath)) { pulados.push(a.sub + "/" + a.nome); continue; }
+
+    const dim = dimensoesDeImagem(a.abs);
+    if (!dim || !dim.w || !dim.h) {
+      const e = new Error("não consegui ler o tamanho de " + a.nome + " — sem isso a prancheta sairia do tamanho errado");
+      e.code = "E_SEM_DIMENSAO"; throw e;
+    }
+
+    // 1) o arquivo que a pessoa enviou fica guardado, dentro da própria peça
+    const origAbs = path.join(loc.path, a.sub, semExt + ".orig" + ext);
+    if (!fs.existsSync(origAbs)) fs.copyFileSync(a.abs, origAbs);
+
+    // 2) cópia de trabalho no acervo, em subpasta própria: é o endereço que o desenho consegue ler
+    //    (file:// local) e que sobrevive à viagem entre o Windows daqui e o Linux de produção.
+    const dirTrab = path.join(PATHS.INTERFACE_DIR, "public", "uploads", "importados");
+    fs.mkdirSync(dirTrab, { recursive: true });
+    const nomeTrab = folder.replace(/[^a-zA-Z0-9_-]/g, "_") + "__" + a.sub + "_" + semExt + ext;
+    fs.copyFileSync(a.abs, path.join(dirTrab, nomeTrab));
+
+    // 3) a receita, apontando para a cópia de trabalho
+    const html = pranchetaHtml(fileUrl(path.join(dirTrab, nomeTrab)), dim.w, dim.h);
+    fs.writeFileSync(htmlPath, html, "utf8");
+
+    // 4) redesenha a arte a partir da receita. Escala 1: ampliar aqui só borraria a foto.
+    const pngPath = path.join(loc.path, a.sub, semExt + ".png");
+    const r = await htmlToPng(htmlPath, pngPath, dim.w, dim.h, 1, { strictNet: true });
+    if (!r.ok) {
+      try { fs.unlinkSync(htmlPath); } catch (e) {}
+      const err = new Error("não consegui desenhar a prancheta de " + a.nome + ": " + String(r.stderr || "").slice(0, 200));
+      err.code = "E_PRANCHETA"; throw err;
+    }
+    feitos.push({ rel: a.sub + "/" + semExt + ".png", w: dim.w, h: dim.h, original: a.sub + "/" + semExt + ".orig" + ext });
+  }
+  return { ok: true, preparadas: feitos, ja_preparadas: pulados };
+}
+
 async function renderCarousel(folder, opts) {
   const loc = requireActive(folder);
   const tpl = pickTemplate(loc, opts && opts.template);
@@ -3597,6 +3658,88 @@ function relocalizeAssets(html) {
 // re-renderiza o PNG via Playwright — pixel-perfect (a arte JA e HTML). So zona active.
 // Seguranca: SANITIZA o HTML (nao confiavel), so EDITA arte que ja existe, renderiza com
 // REDE BLOQUEADA (strictNet) e RESTAURA o HTML original se o render falhar.
+// ===========================================================================
+// EDITAR ARTE IMPORTADA
+//
+// O editor do painel não mexe em pixels: ele reabre a RECEITA da arte (o HTML que a desenhou),
+// altera e manda redesenhar. Arte importada chega pronta, sem receita — daí o "não consigo editar".
+//
+// Aqui a receita que falta é ESCRITA: a imagem vira o primeiro elemento de um documento do tamanho
+// exato dela. A partir desse momento a peça é igual a qualquer outra para o editor — abre, aceita
+// camadas por cima, salva, redesenha, baixa e publica. Nenhum mecanismo novo de edição precisou ser
+// inventado; o contrato do editor é "existe um .html irmão do .png, com a regra de tamanho dentro".
+//
+// A imagem original NÃO é destruída: vira `<nome>.orig.<ext>` dentro da própria peça, protegida
+// pelo mesmo travamento de integridade que congela peça aprovada.
+
+// Dimensões de JPEG lendo os marcadores na unha. O projeto já lê PNG assim (não há biblioteca de
+// imagem instalada), e como a tela de importar converte tudo para JPEG, sem isto não há como saber
+// o tamanho da prancheta — e prancheta com tamanho errado gera peça que morre depois.
+function _jpegDims(buf) {
+  if (!buf || buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return null;
+  let i = 2;
+  while (i < buf.length - 9) {
+    if (buf[i] !== 0xFF) { i++; continue; }
+    const marca = buf[i + 1];
+    // SOF0..SOF15, menos os que não carregam dimensão (DHT C4, JPG C8, DAC CC)
+    if (marca >= 0xC0 && marca <= 0xCF && marca !== 0xC4 && marca !== 0xC8 && marca !== 0xCC) {
+      return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+    }
+    const tam = buf.readUInt16BE(i + 2);
+    if (!(tam > 1)) return null;
+    i += 2 + tam;
+  }
+  return null;
+}
+function dimensoesDeImagem(abs) {
+  try {
+    const buf = fs.readFileSync(abs);
+    if (buf.length > 24 && buf.toString("ascii", 12, 16) === "IHDR") return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    return _jpegDims(buf);
+  } catch (e) { return null; }
+}
+
+// A prancheta. O `html, body` sai na forma exata que o leitor de dimensões do editor exige
+// (largura antes da altura, inteiros em px, na mesma declaração) — se divergir, o editor abre e
+// recusa salvar com E_NO_DIMS, que é o defeito que o modelo "Camadas" da peça de Mídia tem até hoje.
+function pranchetaHtml(imgSrc, w, h) {
+  return `<!doctype html><html><head><meta charset="utf-8"/>${fontHead()}
+  <style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:${w}px; height:${h}px; }
+  .card { position:relative; width:${w}px; height:${h}px; overflow:hidden; background:${PALETTE.darker};
+    font-family:'Inter',sans-serif; color:#FFFFFF; }
+  /* A imagem importada é a PRIMEIRA CAMADA. Fica em position:absolute como todo elemento do editor,
+     então dá para reenquadrar, girar e trocar a opacidade dela como qualquer outra camada. */
+  .base { position:absolute; left:0; top:0; width:${w}px; height:${h}px; object-fit:cover; display:block; }
+  </style></head>
+  <body><div class="card"><img class="base" src="${escAttr(imgSrc)}" alt=""/></div></body></html>`;
+}
+
+// Toda imagem file:// citada no HTML que NÃO existe mais em disco. Devolve a lista, para a mensagem
+// poder dizer QUAL sumiu — "uma imagem sumiu" não ajuda ninguém a resolver.
+function imagensAusentes(html) {
+  const fora = [];
+  const txt = String(html || "");
+  const achados = [];
+  // Dentro de ASPAS o caminho vai até a aspa — parar no espaço quebra todo caminho do Windows, e a
+  // pasta deste projeto tem espaços no nome ("Claude Equipe de Marketing - 6 Agentes"). Foi
+  // exatamente esse o falso positivo: a guarda acusava "Claude" como arquivo sumido.
+  let m;
+  const aspas = /(?:src|href)\s*=\s*"(file:\/\/\/[^"]+)"|(?:src|href)\s*=\s*'(file:\/\/\/[^']+)'/gi;
+  while ((m = aspas.exec(txt))) achados.push(m[1] || m[2]);
+  const emUrl = /url\(\s*(?:"(file:\/\/\/[^"]+)"|'(file:\/\/\/[^']+)'|(file:\/\/\/[^)]+?))\s*\)/gi;
+  while ((m = emUrl.exec(txt))) achados.push(m[1] || m[2] || m[3]);
+
+  for (const bruto of achados) {
+    let p = bruto.replace(/^file:\/\/\//, "");
+    try { p = decodeURI(p); } catch (e) { /* já vem sem codificar */ }
+    p = p.replace(/\//g, path.sep).trim();
+    try { if (!fs.existsSync(p)) fora.push(p); } catch (e) { fora.push(p); }
+  }
+  return fora;
+}
+
 async function renderEditedHtml(folder, rel, html) {
   const loc = findTask(folder);
   if (!loc) { const e = new Error("task nao encontrada: " + folder); e.code = "E_TASK_NOT_FOUND"; throw e; }
@@ -3611,11 +3754,28 @@ async function renderEditedHtml(folder, rel, html) {
   const clean = relocalizeAssets(sanitizeArtHtml(String(html)));
   const base = _pngBaseDims(clean);
   if (!base) { const e = new Error("nao foi possivel ler as dimensoes do HTML editado"); e.code = "E_NO_DIMS"; throw e; }
+  // TODA imagem que o HTML aponta precisa EXISTIR antes de desenhar. Sem esta conferência o
+  // desenho não falha: ele grava um retângulo chapado no lugar da foto que sumiu, retorna sucesso,
+  // e o arquivo da arte — que é o próprio alvo do render — já foi sobrescrito. O backup só é
+  // restaurado quando o render FALHA, então neste caminho a arte se perde e o sistema diz que deu
+  // certo. É o pior desfecho possível: trabalho destruído com confirmação de sucesso.
+  const faltando = imagensAusentes(clean);
+  if (faltando.length) {
+    const e = new Error("a arte aponta para " + faltando.length + " imagem(ns) que não existe(m) mais: "
+      + faltando.slice(0, 3).map((f) => f.split(/[\\/]/).pop()).join(", ")
+      + ". Salvar agora apagaria a arte e deixaria um retângulo no lugar.");
+    e.code = "E_IMAGEM_SUMIU";
+    throw e;
+  }
   const backup = fs.readFileSync(htmlPath, "utf8"); // p/ restaurar se o render falhar
+  const backupPng = fs.existsSync(absPng) ? fs.readFileSync(absPng) : null;   // a ARTE também
   fs.writeFileSync(htmlPath, clean, "utf8");
   const r = await htmlToPng(htmlPath, absPng, base.w, base.h, RENDER_SCALE, { strictNet: true });
   if (!r.ok || !fs.existsSync(absPng)) {
     try { fs.writeFileSync(htmlPath, backup, "utf8"); } catch (e) { /* melhor esforco */ }
+    // Devolve também o PNG anterior: sem isto, um render que morre no meio deixa a arte truncada
+    // ou pela metade no disco, e a receita restaurada não bate com o que está na tela.
+    if (backupPng) { try { fs.writeFileSync(absPng, backupPng); } catch (e) { /* melhor esforco */ } }
     const e = new Error((r.stderr || "falha ao renderizar").slice(0, 300)); e.code = "E_RENDER_FAIL"; throw e;
   }
   return { ok: true, w: base.w, h: base.h, rel };
@@ -3690,6 +3850,7 @@ module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   storyCardsHtml, storyArchetype,   // idem, para o story
+  prepararImportada, dimensoesDeImagem,   // arte importada -> prancheta editavel
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, PECA_IDS, ARQ_PECA, LOGO_IDS, WATERMARK_IDS,
