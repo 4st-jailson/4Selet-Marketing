@@ -20,12 +20,29 @@ router.get("/status", (req, res) => {
 });
 
 // salvar token + ID da conta + base pública (admin). Nunca ecoa o token de volta.
-router.post("/config", adminOnly, (req, res) => {
+router.post("/config", adminOnly, async (req, res) => {
   try {
     const b = req.body || {};
     const cfg = publish.setInstagram({ access_token: b.access_token, ig_user_id: b.ig_user_id, public_base_url: b.public_base_url });
-    res.json({ ok: true, instagram: cfg });
+    // DIZ O QUE FOI COLADO. O painel aceitava um token de 1 hora em silêncio e chamava de
+    // "conectado" — a conexão caiu duas vezes por isso, e a informação estava a uma chamada de
+    // distância. Agora a resposta traz tipo, validade e se dá para publicar; a tela mostra na hora.
+    let token = null;
+    if (b.access_token) {
+      try { token = await publish.inspecionaToken(b.access_token); } catch (e) { token = null; }
+    }
+    res.json({ ok: true, instagram: cfg, token });
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// Deriva o token da PÁGINA (que não expira) a partir do de usuário e troca. Um clique no lugar da
+// sequência manual no Explorer + depurador, que já falhou duas vezes por um passo esquecido.
+router.post("/tornar-permanente", adminOnly, async (req, res) => {
+  try {
+    const r = await publish.tornarPermanente();
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // testar conexão com a Meta (valida token + retorna @ da conta)

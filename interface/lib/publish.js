@@ -67,6 +67,86 @@ function setInstagram({ access_token, ig_user_id, public_base_url }) {
   return publicConfig();
 }
 
+// Inspeciona um token na própria Meta: que TIPO ele é e até quando vale.
+//
+// Existe porque o painel aceitava um token de 1 hora sem dizer nada — e isso derrubou a conexão duas
+// vezes. A informação sempre esteve a uma chamada de distância: o `debug_token` responde tipo,
+// validade e permissões. Guardar o resultado permite avisar ANTES de a publicação falhar, em vez de
+// a pessoa descobrir pelo post que não saiu.
+async function inspecionaToken(token) {
+  const t = String(token || "").replace(/\s+/g, "");
+  if (!t) return { ok: false, motivo: "sem token" };
+  // O próprio token inspeciona a si mesmo: vale para tokens do mesmo app, e evita precisar do
+  // app_secret — que seria mais um segredo para guardar aqui dentro.
+  const r = await graphGet("/debug_token", { input_token: t, access_token: t }, "inspecionar o token");
+  const d = r.ok && r.body && r.body.data;
+  if (!d) {
+    const e = r.body && r.body.error;
+    return { ok: false, motivo: (e && e.message) || "não consegui inspecionar este token" };
+  }
+  const expiraEm = Number(d.expires_at) || 0;   // 0 = não expira
+  const acessoAte = Number(d.data_access_expires_at) || 0;
+  const escopos = Array.isArray(d.scopes) ? d.scopes : [];
+  return {
+    ok: true,
+    valido: !!d.is_valid,
+    tipo: String(d.type || "").toUpperCase(),          // USER | PAGE
+    permanente: expiraEm === 0,
+    expira_em: expiraEm ? new Date(expiraEm * 1000).toISOString() : null,
+    acesso_ate: acessoAte ? new Date(acessoAte * 1000).toISOString() : null,
+    escopos,
+    pode_publicar: escopos.indexOf("instagram_content_publish") >= 0,
+  };
+}
+
+// Deriva o token da PÁGINA a partir do token de usuário guardado, e troca — se ele for permanente.
+// É a dança que fizemos à mão: o token de Página tirado de um token de usuário de longa duração não
+// tem data de validade, e só alcança a Página, não a conta inteira da pessoa.
+async function tornarPermanente() {
+  const c = ig();
+  if (!c.access_token) return { ok: false, error: "Cole o token de acesso primeiro." };
+  const atual = await inspecionaToken(c.access_token);
+  if (!atual.ok) return { ok: false, error: atual.motivo };
+  if (atual.tipo === "PAGE" && atual.permanente) {
+    return { ok: true, ja_permanente: true, mensagem: "A conexão já é permanente: o token é da Página e não tem data para vencer." };
+  }
+  if (!atual.permanente) {
+    return {
+      ok: false, code: "E_TOKEN_CURTO",
+      error: "Este token vence em " + (atual.expira_em ? new Date(atual.expira_em).toLocaleString("pt-BR") : "breve")
+        + ". Estenda ele antes (no depurador de tokens da Meta, botão \"Estender token de acesso\") e cole o estendido aqui — só a partir de um token de longa duração é possível gerar um da Página que não expira.",
+    };
+  }
+  // Token de usuário permanente: acha a Página com o Instagram certo.
+  const disc = await graphGet("/me/accounts", { fields: "name,access_token,instagram_business_account{id,username}", access_token: c.access_token }, "listar as Páginas");
+  if (!disc.ok || (disc.body && disc.body.error)) {
+    const e = disc.body && disc.body.error;
+    return { ok: false, error: (e && e.message) || "Não consegui listar as Páginas com este token." };
+  }
+  const paginas = Array.isArray(disc.body.data) ? disc.body.data : [];
+  const alvo = paginas.find((p) => p.instagram_business_account && (!c.ig_user_id || p.instagram_business_account.id === c.ig_user_id))
+    || paginas.find((p) => p.instagram_business_account);
+  if (!alvo || !alvo.access_token) {
+    return { ok: false, error: "Não achei uma Página com conta Instagram vinculada neste token." };
+  }
+  const daPagina = await inspecionaToken(alvo.access_token);
+  if (!daPagina.ok || !daPagina.permanente) {
+    return { ok: false, code: "E_PAGINA_NAO_PERMANENTE", error: "O token da Página veio com data de validade — o token de usuário não era de longa duração." };
+  }
+  // Guarda o anterior antes de trocar: a troca precisa ser reversível.
+  const cfg = loadConfig();
+  cfg.instagram = cfg.instagram || {};
+  cfg.instagram.token_anterior = { valor: cfg.instagram.access_token, trocado_em: new Date().toISOString() };
+  cfg.instagram.access_token = alvo.access_token;
+  cfg.instagram.token_kind = "page";
+  cfg.instagram.ig_user_id = alvo.instagram_business_account.id;
+  cfg.instagram.username = alvo.instagram_business_account.username || cfg.instagram.username;
+  cfg.instagram.page_id = alvo.id; cfg.instagram.page_name = alvo.name;
+  cfg.instagram.connected_at = new Date().toISOString();
+  saveConfig(cfg);
+  return { ok: true, trocado: true, pagina: alvo.name, username: cfg.instagram.username, acesso_ate: daPagina.acesso_ate };
+}
+
 // ---- Graph API ----
 // Teto de tempo por chamada. Sem isso, uma instabilidade da Meta segurava a requisição do
 // usuário por minutos (o padrão do fetch do Node é longuíssimo): a tela ficava em "publicando",
@@ -278,4 +358,5 @@ async function publishTask(folder, opts) {
 module.exports = {
   connectionState,
   isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved,
+  inspecionaToken, tornarPermanente,   // diz o QUE o token e e ate quando vale; e deriva o da Pagina
 };

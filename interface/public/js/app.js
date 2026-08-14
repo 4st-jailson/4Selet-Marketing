@@ -6479,8 +6479,9 @@ async function viewSettings() {
       <div class="field"><label>Token de acesso <span class="hint">(longa duração, gerado na Meta)</span></label><input id="ig-token" type="password" placeholder="${ig.configured ? "Cole um novo token para trocar..." : "Cole o token aqui e clique em Testar conexão..."}" /></div>
       <div class="field"><label>ID da conta do Instagram <span class="hint">(opcional — deixe vazio que o painel descobre pelo token)</span></label><input id="ig-id" value="${esc(ig.ig_user_id || "")}" placeholder="descoberto automaticamente ao testar" /></div>
       <div class="field"><label>Endereço público do painel <span class="hint">(a Meta busca a imagem por aqui)</span></label><input id="ig-base" value="${esc(ig.public_base_url || "https://mkt.4st.co")}" style="max-width:340px" /></div>
-      <div class="flex"><button class="btn btn-primary" id="ig-save">Salvar conexão</button><button class="btn" id="ig-test">Testar conexão</button><span id="ig-out" class="muted"></span></div>
-      <p class="hint mt">Só administradores configuram. Prefira um token de longa duração (60 dias) ou de usuário do sistema, que não vence.</p>`,
+      <div class="flex"><button class="btn btn-primary" id="ig-save">Salvar conexão</button><button class="btn" id="ig-test">Testar conexão</button><button class="btn" id="ig-perm" title="Deriva o token da Página, que não tem data para vencer">Tornar permanente</button><span id="ig-out" class="muted"></span></div>
+      <div id="ig-token-info" class="mt"></div>
+      <p class="hint mt">Só administradores configuram. O token do Explorer da Meta vale <strong>1 hora</strong> — estenda no depurador antes de colar. Depois, "Tornar permanente" troca pelo token da Página, que não vence e só alcança o @4selet.</p>`,
       })}
       ${conexao({
         id: "tavily",
@@ -6564,15 +6565,64 @@ async function viewSettings() {
   $$("#accent-grid .accent-opt").forEach((b) => { b.onclick = () => { setAccent(b.dataset.accentId); markAccent(); toast("Aparência atualizada", "success"); }; });
   markAccent();
   if ($("#scheme-open")) $("#scheme-open").onclick = openSchemeCarousel;
+  // Desenha, em português, o que o token colado É. Três informações importam para quem publica:
+  // o que ele alcança (conta inteira ou só a Página), até quando vale, e se pode publicar.
+  function mostraTokenInfo(t) {
+    const cx = $("#ig-token-info");
+    if (!cx) return;
+    if (!t) { cx.innerHTML = ""; return; }
+    if (!t.ok) {
+      cx.innerHTML = '<div class="aviso-tok erro">Não consegui conferir este token com a Meta: ' + esc(t.motivo || "") + "</div>";
+      return;
+    }
+    const ehPagina = t.tipo === "PAGE";
+    const quando = t.expira_em ? new Date(t.expira_em).toLocaleString("pt-BR") : null;
+    const linhas = [];
+    linhas.push("<strong>" + (ehPagina ? "Token da Página" : "Token de usuário") + "</strong> — "
+      + (ehPagina ? "alcança só a Página e o Instagram dela." : "alcança tudo o que a sua conta alcança."));
+    linhas.push(t.permanente
+      ? "<strong>Não tem data para vencer.</strong>"
+      : "<strong>Vence em " + esc(quando || "breve") + ".</strong> Depois disso a publicação para até alguém colar outro.");
+    if (!t.pode_publicar) linhas.push("Atenção: falta a permissão de publicar no Instagram (instagram_content_publish).");
+    if (t.acesso_ate) linhas.push('<span class="hint">Reautorização do app exigida pela Meta até ' + esc(new Date(t.acesso_ate).toLocaleDateString("pt-BR")) + ".</span>");
+    const classe = (!t.valido || !t.pode_publicar) ? "erro" : (t.permanente ? "bom" : "alerta");
+    cx.innerHTML = '<div class="aviso-tok ' + classe + '">' + linhas.join("<br/>")
+      + (!t.permanente ? '<br/><span class="hint">Use "Tornar permanente" depois de colar um token de longa duração.</span>' : "")
+      + "</div>";
+  }
+
   // Publicação Instagram: salvar conexão + testar
   if ($("#ig-save")) $("#ig-save").onclick = async () => {
     const out = $("#ig-out"); out.textContent = "Salvando…";
     try {
       const payload = { ig_user_id: $("#ig-id").value.trim(), public_base_url: $("#ig-base").value.trim() };
       const tok = $("#ig-token").value.replace(/\s+/g, ""); if (tok) payload.access_token = tok; // remove espaços/quebras coladas junto do token
-      await API.savePublishConfig(payload);
-      toast("Conexão salva.", "ok"); viewSettings();
+      const r = await API.savePublishConfig(payload);
+      // O painel SABE o que acabou de receber: diz na hora, em vez de deixar a pessoa descobrir
+      // pela publicação que não saiu daqui a uma hora.
+      mostraTokenInfo(r && r.token);
+      if (r && r.token && r.token.ok && !r.token.permanente) {
+        toast("Conexão salva — mas este token vence. Veja o aviso abaixo.", "warn");
+      } else {
+        toast("Conexão salva.", "ok");
+      }
     } catch (e) { out.textContent = ""; toast((e && e.message) || "Erro ao salvar.", "error"); }
+  };
+  if ($("#ig-perm")) $("#ig-perm").onclick = async () => {
+    const b = $("#ig-perm"), out = $("#ig-out");
+    b.disabled = true; out.textContent = "Trocando pelo token da Página…";
+    try {
+      const r = await API.tornarTokenPermanente();
+      out.textContent = "";
+      if (r.ja_permanente) toast(r.mensagem || "A conexão já é permanente.", "ok");
+      else toast("Pronto: a conexão agora usa o token da Página " + (r.pagina || "") + ", que não vence.", "success");
+      viewSettings();
+    } catch (e) {
+      out.textContent = "";
+      // O caso comum é o token curto — a mensagem do servidor já explica o que fazer.
+      toast((e && e.message) || "Não consegui tornar a conexão permanente.", "error");
+      b.disabled = false;
+    }
   };
   if ($("#ig-test")) $("#ig-test").onclick = async () => {
     const out = $("#ig-out"); out.textContent = "Testando…";

@@ -139,6 +139,8 @@ const API = (() => {
     publishStatus: () => req("GET", "/api/publish/status"),
     savePublishConfig: (cfg) => req("POST", "/api/publish/config", cfg),
     testPublish: () => req("POST", "/api/publish/test"),
+    // Deriva o token da Pagina (que nao expira) a partir do de usuario, e troca.
+    tornarTokenPermanente: () => req("POST", "/api/publish/tornar-permanente", {}),
     publishPiece: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder), payload || {}),
     schedulePost: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/schedule", payload || {}),
     markPublished: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/mark-published", payload || {}),

@@ -412,6 +412,15 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .badge.dest-feed, .badge.dest-story, .badge.dest-reels, .badge.dest-outro {
   color: var(--accent); background: var(--accent-soft); border-color: var(--accent);
 }
+/* Aviso do que o token colado É. Três estados, e a cor carrega o recado: verde = permanente,
+   âmbar = tem data para vencer (a pessoa precisa fazer algo), vermelho = não serve. */
+.aviso-tok { padding: 12px 14px; border-radius: var(--r-sm); font-size: 13.5px; line-height: 1.5;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); }
+.aviso-tok.bom { border-color: var(--ok); background: var(--ok-soft); }
+.aviso-tok.alerta { border-color: var(--warn); background: var(--warn-soft); }
+.aviso-tok.erro { border-color: var(--err); background: var(--err-soft); }
+.aviso-tok strong { color: var(--text); }
+
 .badge.modo-auto { color: var(--ok); background: var(--ok-soft); border-color: var(--ok); }
 .badge.modo-manual { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
 .badge.draft     { color: var(--text-dim); }
