@@ -3851,6 +3851,7 @@ module.exports = {
   carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   storyCardsHtml, storyArchetype,   // idem, para o story
   prepararImportada, dimensoesDeImagem,   // arte importada -> prancheta editavel
+  htmlToPng, sanitizeArtHtml,   // usados pelo recebimento do squad: HTML de FORA vira PNG (limpo + sem rede)
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, PECA_IDS, ARQ_PECA, LOGO_IDS, WATERMARK_IDS,

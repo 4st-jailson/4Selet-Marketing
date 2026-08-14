@@ -12,6 +12,34 @@ const { PATHS, PALETTE, ALLOWED_PLATFORMS, BRAND_PILLARS, CONTENT_PILLARS, CONTE
 const auth = require("./lib/auth");
 
 const app = express();
+
+// --- Porta do sistema squad.4st.co (artes prontas chegando de fora) -------------------
+// Precisa vir ANTES do parser global por dois motivos, os dois medidos:
+//   1) TAMANHO. Um post de carrossel do squad tem cards de 1080x1350 em 2x com foto de IA:
+//      5,3 MB CADA, mais de 30 MB no total. O parser global abaixo aceita 16 MB e, uma vez
+//      que ele roda, marca o corpo como lido — um limite maior declarado depois é ignorado
+//      em silêncio. O jeito de valer é este: um parser próprio, registrado primeiro.
+//   2) SEGURANÇA. Quem chama não tem login, então o token é o porteiro — e ele é conferido
+//      AQUI, antes de ler o corpo. Sem isso, qualquer um na internet faria o painel
+//      bufferizar 80 MB só para tomar 401 depois.
+const squadLib = require("./lib/squad");
+// Uma forma só do caminho, usada TAMBÉM pela exceção anti-CSRF mais abaixo. Quando as duas
+// checagens discordavam, um simples "/" a mais no fim do endereço (o erro mais provável de
+// quem digita a URL à mão) passava pelo token e morria depois com "origem inválida" — sem
+// virar linha na tela, sem conteúdo guardado, e com uma mensagem que aponta para o lugar errado.
+const CAMINHO_SQUAD = /^\/api\/squad\/webhook\/?$/i;
+app.use("/api/squad/webhook", (req, res, next) => {
+  if (!squadLib.confere(squadLib.tokenDaRequisicao(req))) {
+    // Fica registrado (com freio). A tela de Requisições existe para responder "chegou
+    // alguma coisa?" — e o token errado é justamente o tropeço mais provável no dia de ligar
+    // a integração. Sem isto, a tela diria "nada chegou" enquanto as entregas batiam na porta.
+    try { squadLib.registrarRecusa(squadLib.clientIp(req), "O token apresentado não confere com o que está salvo em Configurações."); } catch (e) {}
+    console.warn("[squad] recusada na porta (token inválido) — de " + squadLib.clientIp(req));
+    return res.status(401).json({ ok: false, erro: "token inválido" });
+  }
+  next();
+}, express.json({ limit: "80mb" }));
+
 // 16mb: precisa acomodar upload de imagem em base64 (acervo de fotos). As rotas
 // validam o tamanho real da imagem (uploads.js limita a 10MB por arquivo).
 app.use(express.json({ limit: "16mb" }));
@@ -32,6 +60,12 @@ app.use((req, res, next) => {
   // sem else deixava um furo para qualquer cliente que simplesmente omitisse o header).
   if (req.method === "POST" || req.method === "PUT" || req.method === "DELETE" || req.method === "PATCH") {
     const bad = () => res.status(403).json({ error: "origem inválida", code: "E_BAD_ORIGIN" });
+    // Exceção única e explícita: o webhook do squad é servidor-para-servidor e não manda
+    // Origin nem Referer — nenhum servidor manda. Isto NÃO abre buraco de CSRF: o ataque de
+    // CSRF depende do navegador anexar o cookie de sessão da vítima, e esta rota não olha
+    // cookie nenhum; ela só aceita quem apresenta o token secreto, que um site de terceiro
+    // não tem como saber. Quem protege aqui é o token, conferido antes até do corpo.
+    if (CAMINHO_SQUAD.test(req.path)) return next();
     const src = req.headers.origin || req.headers.referer;
     if (!src) return bad();
     try { if (new URL(src).host !== req.headers.host) return bad(); }
@@ -62,6 +96,11 @@ require("./lib/credentials").loadIntoEnv();
 // --- Autenticacao do painel: login por pessoa + perfis (admin/membro) ---
 auth.bootstrap(); // garante um admin inicial (ADMIN_USERNAME/ADMIN_PASSWORD do .env)
 app.use("/api/auth", require("./routes/auth")); // login/logout/me — publico
+
+// Recebimento das artes do squad.4st.co — PÚBLICO por necessidade (quem chama é o servidor
+// deles, sem cookie), autenticado pelo token conferido lá em cima. Precisa ficar aqui, antes
+// do gate abaixo: o único mecanismo de rota pública neste painel é a ORDEM de registro.
+app.use("/api/squad", require("./routes/squad_webhook"));
 
 // Deste ponto em diante, TODAS as rotas /api exigem sessao valida.
 app.use("/api", (req, res, next) => {
@@ -143,6 +182,9 @@ app.use("/api/pexels", limitePexels, require("./routes/pexels"));
 app.post("/api/capture", limiteCapture);
 app.use("/api/capture", require("./routes/capture"));
 app.use("/api/publish", require("./routes/publish"));
+// O lado de dentro da integração com o squad: conexão em Configurações + tela de Requisições.
+// Mesmo prefixo do irmão público acima, mas só responde nos caminhos que ele não usa.
+app.use("/api/squad", require("./routes/squad"));
 
 // Disparador de agendamentos: publica as peças agendadas no horário (passando pelo gate).
 // O 2o argumento responde "esta peça já foi publicada?" — o worker pula quem já foi ao ar na

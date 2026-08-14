@@ -177,5 +177,12 @@ const API = (() => {
     setUserName: (username, name) => req("POST", "/api/users/" + encodeURIComponent(username) + "/name", { name }),
     setUsername: (username, newUsername) => req("POST", "/api/users/" + encodeURIComponent(username) + "/username", { username: newUsername }),
     createInvite: (username) => req("POST", "/api/users/" + encodeURIComponent(username) + "/invite", {}),
+    // sistema squad (artes prontas chegando de fora)
+    squadStatus: () => req("GET", "/api/squad"),
+    saveSquadToken: (payload) => req("POST", "/api/squad/token", payload),
+    removeSquadToken: () => req("DELETE", "/api/squad/token"),
+    squadRequests: () => req("GET", "/api/squad/requisicoes"),
+    squadRequest: (id) => req("GET", "/api/squad/requisicoes/" + encodeURIComponent(id)),
+    squadReprocess: (id) => req("POST", "/api/squad/requisicoes/" + encodeURIComponent(id) + "/reprocessar", {}),
   };
 })();

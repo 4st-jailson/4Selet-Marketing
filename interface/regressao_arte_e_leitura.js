@@ -531,6 +531,129 @@ function briefingLongo() {
   }
 
   // ------------------------------------------------------------------
+  secao("18. A porta do sistema squad (a ORDEM é o mecanismo)");
+  // Neste painel não existe lista de rotas públicas: o que torna uma rota pública é ela ser
+  // registrada ANTES do gate de sessão. Isso quer dizer que uma reordenação inocente do
+  // server.js fecha a porta do squad sem erro nenhum — as entregas passam a tomar 401 e
+  // ninguém descobre até alguém reclamar que a arte não chegou. Aqui a ordem é medida.
+  {
+    const srv = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
+    const pos = (s) => srv.indexOf(s);
+
+    const iParserSquad = pos('app.use("/api/squad/webhook"');
+    const iParserGlobal = pos('app.use(express.json({ limit: "16mb" }))');
+    const iRotaSquad = pos('app.use("/api/squad", require("./routes/squad_webhook"))');
+    const iGate = pos('if (!user) return res.status(401)');
+    const iAdmin = pos('app.use("/api/squad", require("./routes/squad"))');
+
+    checa(iParserSquad > -1, "existe um leitor de corpo próprio para a porta do squad");
+    checa(iParserSquad > -1 && iParserGlobal > -1 && iParserSquad < iParserGlobal,
+      "e ele vem ANTES do leitor global (senão o limite de 16 MB vale e a entrega de 32 MB é recusada)",
+      "próprio em " + iParserSquad + ", global em " + iParserGlobal);
+    checa(iRotaSquad > -1 && iGate > -1 && iRotaSquad < iGate,
+      "a rota que RECEBE está antes do gate de login (é o único jeito de ser pública aqui)");
+    checa(iAdmin > -1 && iAdmin > iGate,
+      "e a rota da TELA está depois do gate (essa exige login)");
+    checa(srv.indexOf("CAMINHO_SQUAD.test(req.path)") > -1,
+      "o anti-CSRF tem a exceção da porta do squad (servidor não manda Origin)");
+    // A exceção precisa ser exatamente do caminho do webhook, não do prefixo /api/squad
+    // inteiro: as rotas da TELA são mutações de verdade e continuam protegidas.
+    checa(srv.indexOf('req.path.startsWith("/api/squad")') === -1,
+      "e a exceção NÃO vale para o prefixo inteiro (a tela continua protegida contra CSRF)");
+    // O porteiro do token casa por PREFIXO (é como o app.use funciona). Se a exceção do
+    // anti-CSRF casasse de forma mais estreita, uma barra a mais no fim do endereço — o erro
+    // mais provável de quem digita a URL à mão — passaria pelo token e morreria depois em
+    // "origem inválida", sem virar linha na tela e sem conteúdo guardado.
+    const mCam = srv.match(/const CAMINHO_SQUAD = (\/[^\n;]+\/i?);/);
+    checa(!!mCam, "as duas checagens do caminho vêm da MESMA definição");
+    if (mCam) {
+      const re = eval(mCam[1]); // a própria expressão do server.js, não uma cópia
+      checa(re.test("/api/squad/webhook") && re.test("/api/squad/webhook/") && re.test("/API/SQUAD/WEBHOOK"),
+        "e ela aceita a barra no fim e a caixa diferente (o que o porteiro do token já aceita)");
+      checa(!re.test("/api/squad/webhook/x") && !re.test("/api/squad") && !re.test("/api/squad/token"),
+        "sem alargar para nada além da porta (a tela segue protegida)");
+    }
+    // O registro é a fonte da tela: lê-lo inteiro para mostrar poucas linhas travava o painel
+    // para TODOS os usuários (medido: 13 s com 10 mil entregas).
+    const libTxt = fs.readFileSync(path.join(__dirname, "lib/squad.js"), "utf8");
+    const corpoListar = (libTxt.match(/function listar\(limite\) \{[\s\S]*?\n\}/) || [""])[0];
+    const iCorte = corpoListar.indexOf("nomes.slice(0, limite)");
+    const iLeitura = corpoListar.indexOf("lerJson(");
+    checa(iCorte > -1 && iLeitura > -1 && iCorte < iLeitura,
+      "o registro é CORTADO antes de ser lido (não abre 10 mil arquivos para mostrar 60)");
+    checa(/MAX_REGISTROS/.test(libTxt), "e o registro tem teto de linhas (não cresce para sempre)");
+    // O token é conferido antes de ler o corpo: um anônimo não faz o painel bufferizar 80 MB.
+    checa(iParserSquad > -1 && srv.indexOf("squadLib.confere") > iParserSquad
+      && srv.indexOf("squadLib.confere") < iParserGlobal,
+      "o token é conferido ANTES de o corpo ser lido");
+
+    const lib = fs.readFileSync(path.join(__dirname, "lib/squad.js"), "utf8");
+    checa(/timingSafeEqual/.test(lib), "a conferência do token é em tempo constante");
+    checa(/createHash\("sha256"\)[\s\S]{0,400}timingSafeEqual/.test(lib),
+      "sobre hashes de tamanho fixo (timingSafeEqual explode com tamanhos diferentes)");
+    checa(/mode:\s*0o600|0o600/.test(lib), "o arquivo do token é gravado só para o dono (0600)");
+    // O log NÃO pode morar dentro da pasta da peça: hashDirectory varre a pasta inteira, e
+    // arquivo a mais lá dentro derruba a publicação com E_HASH_MISMATCH.
+    checa(/DIR_REQ\s*=\s*path\.join\(DATA_DIR/.test(lib),
+      "o registro das entregas mora em interface/data, fora das pastas das peças");
+
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
+    checa(/requisicoes:\s*viewRequisicoes/.test(app),
+      "a página Requisições está registrada no roteador (senão abre o Painel em silêncio)");
+    checa(/data-route="requisicoes"/.test(html), "e tem item de menu apontando para ela");
+
+    // Regra dura da casa: ícone é desenho, não emoji.
+    const novos = ["lib/squad.js", "routes/squad.js", "routes/squad_webhook.js"]
+      .map((f) => path.join(__dirname, f));
+    const comEmoji = [];
+    for (const arq of novos) {
+      const txt = fs.readFileSync(arq, "utf8");
+      // faixas de pictogramas/emoji (fora do BMP e símbolos comuns)
+      if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u.test(txt)) comEmoji.push(path.basename(arq));
+    }
+    checa(comEmoji.length === 0, "nenhum emoji nos arquivos novos", comEmoji.join(", ") || "0");
+
+    // Classes de CSS que a tela nova usa precisam existir de verdade (o painel já teve um
+    // badge "err" sem regra nenhuma, que simplesmente não pintava).
+    const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
+    const faltando = [".sq-erro", ".sq-aviso", ".sq-facts", ".sq-selo", ".sq-avisos", ".tag-origem", ".conn-item", ".key-locked", ".list-row"]
+      .filter((c) => css.indexOf(c) === -1);
+    checa(faltando.length === 0, "as classes de estilo da tela nova existem no CSS", faltando.join(", ") || "todas");
+    // Variável de cor que não existe pinta com a cor herdada, em silêncio — foi o que
+    // aconteceu com o `var(--muted)` que escrevi de cabeça (o projeto usa --text-dim).
+    // As declarações vêm de DUAS fontes: o CSS e o próprio JS, que injeta algumas por
+    // cssText — considerar só o CSS acusaria variáveis legítimas.
+    const declaradas = new Set(
+      ((css + app).match(/--[a-z0-9-]+\s*:/g) || []).map((v) => v.replace(/\s*:$/, "").trim())
+    );
+    const usadasNoSquad = ((css.match(/\.(sq-[a-z-]+|tag-origem)[^{]*\{[^}]*\}/g) || []).join(" ")
+      .match(/var\(--[a-z0-9-]+\)/g) || []).map((v) => v.slice(4, -1));
+    const inventadas = Array.from(new Set(usadasNoSquad.filter((v) => !declaradas.has(v))));
+    checa(inventadas.length === 0, "as cores da tela nova usam variáveis que existem de verdade",
+      inventadas.join(", ") || usadasNoSquad.length + " variável(is), todas declaradas");
+
+    // A arte que chega de fora: as duas leituras que, erradas, produzem arte quebrada APROVADA.
+    const sq = require("./lib/squad.js");
+    const comSelo = '<style>.selo{width:120px;height:120px}html,body{width:1080px;height:1350px}</style>';
+    const d1 = sq.dimensoesDoHtml(comSelo);
+    checa(d1.w === 1080 && d1.h === 1350,
+      "o tamanho da arte vem da regra da PÁGINA, não do primeiro width que aparecer", d1.w + "x" + d1.h);
+    const d2 = sq.dimensoesDoHtml('<style>.card{width:1080px;height:1920px}</style>');
+    checa(d2.w === 1080 && d2.h === 1920, "e reconhece outro formato quando o HTML declara", d2.w + "x" + d2.h);
+    const formas = [
+      ['<img src="file:///tmp/a.png">', "file:// com aspas"],
+      ["<img src=file:/tmp/a.png>", "file:/ sem aspas"],
+      ['<link rel=stylesheet href="https://x.com/a.css">', "folha de estilo externa"],
+      ["<style>.a{background:url(https://x.com/b.png)}</style>", "url() externa"],
+    ];
+    const cegas = formas.filter((f) => sq.refsExternas(f[0]).length === 0).map((f) => f[1]);
+    checa(cegas.length === 0, "toda referência a coisa de fora é percebida (senão a arte sai com buraco)", cegas.join(", ") || "nenhuma escapou");
+    checa(sq.refsExternas('<img src="data:image/png;base64,AAA">').length === 0,
+      "e imagem embutida NÃO é confundida com referência externa");
+  }
+
+  // ------------------------------------------------------------------
   secao("15. Comentário de CSS não pode engolir regra");
   // Escrevendo o comentário que explica o item 14, digitei "adv-*/ad-*" — e a dupla asterisco-barra
   // FECHOU o comentário no meio da frase. O resto virou lixo, e o interpretador engoliu a regra

@@ -159,6 +159,9 @@ function listTasks() {
         tags: Array.isArray(status.tags) ? status.tags : [],
         pillar: (typeof status.pillar === "string") ? status.pillar : null,
         imported: !!status.imported,
+        // De onde a peça veio, quando não nasceu aqui (hoje: o sistema squad). A lista precisa
+        // disso para mostrar a etiqueta — sem sair na lista, a marca de origem seria invisível.
+        origem: status.origem || null,
         kind: classifyKind(files, status),
         thumb: pickThumb(files),
       });
@@ -497,6 +500,28 @@ function setPublished(folder, meta) {
 
 // Marca a peça como IMPORTADA (imagens prontas trazidas de fora). O front usa a flag
 // para NÃO oferecer re-render/editor de arte (não há HTML/JSON de origem), só legenda.
+// De onde a peça veio, quando ela não nasceu aqui dentro (hoje: o sistema squad.4st.co).
+// Mora no status.json de propósito: é o ÚNICO arquivo da peça que fica de fora do cálculo
+// dos content_hashes. Qualquer arquivo novo dentro da pasta de uma peça aprovada derruba a
+// publicação com E_HASH_MISMATCH — então rastro de origem não pode virar arquivo separado.
+function setOrigem(folder, origem) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status) return false;
+  status.origem = origem || null;
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
+  return true;
+}
+function getOrigem(folder) {
+  const loc = findTask(folder);
+  if (!loc) return null;
+  const status = readJsonSafe(path.join(loc.path, "status.json"));
+  return (status && status.origem) || null;
+}
+
 function setImported(folder) {
   const loc = findTask(folder);
   if (!loc) return false;
@@ -623,5 +648,5 @@ function discardTask(folder) {
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, setImported, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, setImported, setOrigem, getOrigem, markViewed, setTags, generatePreview, promote, discardTask,
 };

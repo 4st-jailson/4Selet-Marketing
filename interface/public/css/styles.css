@@ -1308,7 +1308,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* Prévia da captura dentro do modal: mostra o que foi capturado ANTES de aplicar na peça. */
 .cap-prev { margin-top: var(--s4); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2); }
 .cap-prev img { display: block; width: 100%; max-height: 220px; object-fit: cover; object-position: top center; }
-.cap-prev-cap { display: block; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+.cap-prev-cap { display: block; padding: 8px 10px; font-size: 12px; color: var(--text-dim); }
 /* Busca de imagens (Pexels): grade de miniaturas */
 .px-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; }
 /* Dica/erro/"buscando…" ocupam a LINHA TODA do grid (senão o texto cabe em 1 coluna e quebra feio). */
@@ -1914,3 +1914,21 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .fato-chip-x:hover { opacity: 1; }
 /* Prestação de contas do filtro: sem isto o descarte é invisível e não dá para auditar. */
 .fatos-conta { margin-top: var(--s3); font-size: 12px; line-height: 1.6; }
+
+/* ===== Requisições (entregas do sistema squad) e a linha de conexão dele =====
+   Nada de layout novo: reusa .list/.list-row/.badge. Só o que não existia — o motivo do
+   erro em destaque, os avisos da entrega e o par rótulo/valor da conexão. */
+.sq-row .lr-meta a { color: var(--accent); text-decoration: none; }
+.sq-row .lr-meta a:hover { text-decoration: underline; }
+.sq-erro { color: var(--danger, #b4433a); }
+.sq-aviso { margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--text-dim); border-left: 2px solid var(--border); padding-left: 10px; }
+.sq-facts { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.sq-facts li { display: flex; justify-content: space-between; gap: var(--s3); padding: 6px 0; border-bottom: 1px solid var(--border); }
+.sq-facts li:last-child { border-bottom: none; }
+.sq-selo { margin-bottom: 4px; }
+.sq-facts span { color: var(--text-dim); }
+/* Etiqueta e cartão da arte que veio de fora (sistema squad). */
+.tag-origem { border-color: var(--accent); color: var(--accent); }
+.sq-origem-card { border-left: 3px solid var(--accent); }
+.sq-avisos { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--text-2); }
+.sq-avisos li { margin-bottom: 4px; }

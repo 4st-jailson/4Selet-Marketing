@@ -911,6 +911,7 @@ const Routes = {
   usuarios: viewUsers,
   publicacoes: viewPublications,
   agendados: viewSchedule,
+  requisicoes: viewRequisicoes,
 };
 
 // Skeleton de carregamento com o formato do destino — load parece intencional,
@@ -1247,6 +1248,30 @@ function suggestTitleFromBrief(brief) {
   s = s.replace(/\s+(?:no|na|nos|nas|do|da|dos|das|de|e|o|a|os|as|em|ao|aos|para|pra|com|que)$/i, "").trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+// A etiqueta de origem: sem ela, "veio do squad" ficava só gravado no arquivo da peça, e quem
+// abre o painel não tinha como saber que aquela arte não nasceu aqui.
+function origemTag(origem) {
+  if (!origem || origem.sistema !== "squad") return "";
+  return '<span class="cc-tag tag-origem" title="Arte gerada no sistema squad e entregue ao painel'
+    + (origem.id ? " (post " + esc(String(origem.id)) + ")" : "") + '">do squad</span>';
+}
+
+// O que o painel percebeu ao receber a arte de fora — por exemplo, que o desenho editável
+// dependia de um arquivo que não veio junto, ou que o formato não sai daqui sozinho. Fica na
+// própria peça, que é onde a pessoa está quando a dúvida aparece.
+function avisoDeOrigem(origem) {
+  if (!origem || origem.sistema !== "squad") return "";
+  const avisos = (origem.avisos || []).filter(Boolean);
+  const quando = origem.recebido_em ? fmtDateTime(origem.recebido_em) : "";
+  return `<div class="card mt sq-origem-card">
+    <h3>Esta arte veio do sistema squad</h3>
+    <p class="muted mt">Ela foi gerada fora do painel${origem.id ? " (post " + esc(String(origem.id)) + ")" : ""}${quando ? " e chegou aqui em " + esc(quando) : ""}.
+    Você pode revisar, editar e publicar normalmente${origem.pauta ? " — a pauta era: " + esc(origem.pauta) : ""}.</p>
+    ${avisos.length ? '<ul class="sq-avisos mt">' + avisos.map((a) => "<li>" + esc(a) + "</li>").join("") + "</ul>" : ""}
+    <p class="hint mt"><a href="#/requisicoes">Ver a entrega no registro de requisições</a></p>
+  </div>`;
+}
+
 function taskCard(t) {
   const hasThumb = t.thumb && t.thumb.rel;
   const previewable = hasThumb && (t.thumb.type === "video" || t.thumb.type === "image" || /\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i.test(t.thumb.rel));
@@ -1263,7 +1288,7 @@ function taskCard(t) {
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}</div>
       ${tagsHtml}
-      <div class="cc-foot">${statusBadge(effStatus(t.status, t.published_at))}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
+      <div class="cc-foot">${statusBadge(effStatus(t.status, t.published_at))}${origemTag(t.origem)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
     </div></a>`;
 }
 
@@ -2014,11 +2039,32 @@ function renderPanel(folder, task) {
   // Agora dá para escrever a receita que falta: a imagem vira a primeira camada de uma prancheta,
   // e o editor passa a abri-la como qualquer outra peça.
   if (task.status && task.status.imported) {
-    const jaPronta = (task.files || []).some((f) => /\.orig\.(png|jpe?g|webp)$/i.test(f.rel));
-    if (jaPronta) return "";   // já preparada: cai no painel de arte normal, com o botão de editar
+    const arquivos = task.files || [];
+    // A pergunta certa é "o editor tem o que abrir?", e a resposta é ter a RECEITA (.html) ao
+    // lado da arte. Procurar o arquivo .orig era um atalho que só valia para a imagem que o
+    // painel mesmo preparou: a arte que chega já com o desenho editável (é o caso do sistema
+    // squad) nunca gera .orig, e caía aqui oferecendo um botão que não tinha o que fazer.
+    const artes = arquivos.filter((f) => /(slides\/slide_0*\d+|story\/story_0*\d+|ads\/(ad|feed))\.(png|jpe?g|webp)$/i.test(f.rel));
+    const temReceita = (a) => arquivos.some((f) => f.rel.toLowerCase() === a.rel.replace(/\.[^./]+$/, ".html").toLowerCase());
+    const jaPronta = arquivos.some((f) => /\.orig\.(png|jpe?g|webp)$/i.test(f.rel))
+      || (artes.length > 0 && artes.every(temReceita));
+    if (jaPronta) return "";   // já dá para editar: cai no painel de arte normal
+    const doSquad = task.status.origem && task.status.origem.sistema === "squad";
+    // Preparar escreve arquivos na pasta da peça, e peça aprovada é selada. Oferecer o botão
+    // aqui levava a um erro técnico na cara de quem clicasse.
+    if (task.zone !== "active") {
+      return `<div class="card"><h3>Arte final</h3>
+        <p class="muted mt">${doSquad
+          ? "Esta arte chegou pronta do <strong>sistema squad</strong>, como imagem — sem as camadas que o editor precisa para abrir."
+          : "Esta arte foi <strong>importada por você</strong>, então ela chegou como imagem pronta — sem as camadas que o editor precisa para abrir."}</p>
+        <p class="muted mt">A peça está aprovada, e peça aprovada fica selada para não mudar depois de liberada. Para poder editar, use <strong>Reabrir para edição</strong> aqui em cima — depois o botão de preparar aparece.</p>
+      </div>`;
+    }
     return `<div class="card"><h3>Arte final</h3>
-      <p class="muted mt">Esta arte foi <strong>importada por você</strong>, então ela chegou como imagem pronta — sem as camadas que o editor precisa para abrir.</p>
-      <p class="muted mt">Preparando, a sua imagem vira a <strong>primeira camada</strong> de uma prancheta: você poderá escrever por cima, tampar um pedaço e acrescentar logo, formas e outras imagens. <strong>A imagem original fica guardada</strong> e dá para voltar a ela.</p>
+      <p class="muted mt">${doSquad
+        ? "Esta arte chegou pronta do <strong>sistema squad</strong>, como imagem — sem as camadas que o editor precisa para abrir."
+        : "Esta arte foi <strong>importada por você</strong>, então ela chegou como imagem pronta — sem as camadas que o editor precisa para abrir."}</p>
+      <p class="muted mt">Preparando, a imagem vira a <strong>primeira camada</strong> de uma prancheta: você poderá escrever por cima, tampar um pedaço e acrescentar logo, formas e outras imagens. <strong>A imagem original fica guardada</strong> e dá para voltar a ela.</p>
       <div class="mt"><button class="btn btn-primary" data-prep="${esc(folder)}">Preparar para editar</button></div>
       <p class="hint mt">Leva alguns segundos por imagem. A arte redesenhada fica um pouco mais pesada — é o preço de ela passar a ser editável.</p>
     </div>`;
@@ -3567,7 +3613,8 @@ async function viewTaskDetail(folder) {
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   State.task = task; // o "Editar" do lightbox usa a peça atual
   setView(`
-    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(effStatus(s.status, s.published_at))}${tag(kindLabel(task.kind))}${isImported ? tag("Importada") : ""}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
+    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(effStatus(s.status, s.published_at))}${tag(kindLabel(task.kind))}${(s.origem && s.origem.sistema === "squad") ? tag("Veio do squad") : (isImported ? tag("Importada") : "")}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
+    ${avisoDeOrigem(s.origem)}
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
       <div class="card">
@@ -6387,16 +6434,150 @@ function openCredentialsModal() {
   };
 }
 
+// ===== Requisições — o registro de tudo que o sistema squad entregou aqui =====
+// Existe para responder três perguntas sem precisar de ninguém: chegou? virou peça? se não
+// virou, por quê? A resposta "por quê" vem em português, e o corpo da entrega fica guardado
+// para dar outra chance sem incomodar o time do squad.
+const SQ_RESULTADOS = {
+  criada: { rotulo: "Virou peça", badge: "ok" },
+  ja_recebida: { rotulo: "Já tinha chegado", badge: "plain" },
+  erro: { rotulo: "Não virou peça", badge: "warn" },
+  montando: { rotulo: "Montando a peça", badge: "plain" },
+  recusada: { rotulo: "Recusada na porta", badge: "warn" },
+};
+// Uma entrega "montando" há muito tempo não está montando: o painel foi reiniciado no meio.
+// Sem isto a linha ficaria eternamente dizendo que está trabalhando.
+const SQ_MONTANDO_LIMITE_MS = 30 * 60 * 1000;
+let SQ_TIMER = null;
+function sqSituacao(r) {
+  if (r.resultado === "montando" && Date.now() - new Date(r.recebido_em).getTime() > SQ_MONTANDO_LIMITE_MS) {
+    return { rotulo: "Interrompida no meio", badge: "warn" };
+  }
+  return SQ_RESULTADOS[r.resultado] || { rotulo: r.resultado || "—", badge: "plain" };
+}
+
+async function viewRequisicoes() {
+  setTitle("Requisições");
+  let dados;
+  try { dados = await API.squadRequests(); }
+  catch (e) {
+    setView('<div class="card"><h3>Requisições</h3><p class="muted mt">Não consegui carregar o registro: '
+      + esc((e && e.data && e.data.error) || e.message || "erro") + "</p></div>");
+    return;
+  }
+  const reqs = (dados && dados.requisicoes) || [];
+  const st = (dados && dados.estado) || {};
+
+  const linhas = reqs.map((r) => {
+    const res = sqSituacao(r);
+    const oque = r.titulo ? esc(r.titulo) : (r.origem_id ? "Post " + esc(r.origem_id) : "Entrega sem título");
+    const detalhe = (r.resultado === "erro" || r.resultado === "recusada")
+      ? '<span class="sq-erro">' + esc(r.erro || "sem motivo registrado") + "</span>"
+      : (r.peca
+        ? '<a href="#/task/' + encodeURIComponent(r.peca) + '">abrir a peça</a>'
+        + (r.cards ? ' <span class="hint">' + r.cards + (r.cards > 1 ? " artes" : " arte") + (r.formato ? " · " + esc(r.formato) : "") + "</span>" : "")
+        : (r.resultado === "montando" ? '<span class="hint">o painel está desenhando as artes — isso leva um ou dois minutos</span>' : ""));
+    const avisos = (r.avisos && r.avisos.length)
+      ? '<div class="sq-aviso">' + r.avisos.map((a) => esc(a)).join("<br />") + "</div>" : "";
+    // O selo fica FORA do .lr-title de propósito: aquele estilo corta com reticências, e o
+    // selo é justamente a resposta que a pessoa veio buscar aqui.
+    return `<div class="list-row sq-row">
+      <div class="lr-main">
+        <div class="sq-selo"><span class="badge ${res.badge}">${esc(res.rotulo)}</span>${r.reprocessamento_de ? ' <span class="badge plain">reprocessada</span>' : ""}</div>
+        <div class="lr-title">${oque}</div>
+        <div class="lr-meta">${esc(fmtDateTime(r.recebido_em))}${r.origem_id ? " · post " + esc(r.origem_id) : ""}${r.bytes ? " · " + esc(fmtBytes(r.bytes)) : ""}</div>
+        <div class="lr-meta">${detalhe}</div>
+        ${avisos}
+      </div>
+      <div class="flex">
+        <button class="btn btn-sm btn-ghost" data-sqver="${esc(r.id)}">Detalhes</button>
+        ${r.payload_disponivel && State.user && State.user.role === "admin"
+          ? '<button class="btn btn-sm" data-sqrep="' + esc(r.id) + '">Reprocessar</button>'
+          : '<span class="hint" title="O conteúdo das entregas mais antigas é apagado para não encher o disco.">' + (r.payload_disponivel ? "" : "conteúdo não guardado") + "</span>"}
+      </div>
+    </div>`;
+  }).join("");
+
+  setView(`
+    <div class="card">
+      <div class="flex-between">
+        <h3>Requisições do sistema squad</h3>
+        <a class="btn btn-sm btn-ghost" href="#/settings">Configurar a conexão</a>
+      </div>
+      <p class="muted mt">Tudo que o sistema squad entregou aqui, na ordem de chegada. ${st.conectado
+        ? "A conexão está ligada e pronta para receber."
+        : "<strong>A conexão ainda não foi ligada</strong> — cadastre o token em Configurações para começar a receber."}</p>
+      ${reqs.length ? '<div class="list mt">' + linhas + "</div>"
+        : '<div class="empty mt">Nenhuma entrega ainda. Assim que o sistema squad enviar a primeira arte, ela aparece aqui.</div>'}
+    </div>`);
+
+  $$("[data-sqver]").forEach((b) => { b.onclick = () => abrirRequisicao(b.dataset.sqver); });
+  $$("[data-sqrep]").forEach((b) => {
+    b.onclick = async () => {
+      const id = b.dataset.sqrep;
+      // A pergunta vem ANTES do emVoo: envolver o modal fazia o botão anunciar "Reprocessando…"
+      // enquanto a pessoa ainda estava decidindo se queria.
+      const r = await uiModal({
+        title: "Montar esta peça de novo?",
+        message: "O painel refaz a peça do zero, a partir do que o squad enviou. A peça que já existe não é tocada — nasce uma nova, para você comparar e descartar a que não quiser.",
+        confirmText: "Montar de novo",
+      });
+      if (r === null) return;
+      // A chave nomeia o ESTADO que vai ser escrito, não o botão: clicar duas vezes na mesma
+      // entrega criaria duas peças.
+      emVoo("reprocessar:" + id, async () => {
+        try {
+          await API.squadReprocess(id);
+          toast("Comecei a montar. Isso leva um ou dois minutos — a linha se atualiza sozinha.", "success");
+          viewRequisicoes();
+        } catch (e) {
+          toast("Não consegui montar de novo: " + ((e && e.data && e.data.error) || e.message), "error");
+        }
+      }, { botao: b, rotulo: "Montando…" });
+    };
+  });
+
+  // Enquanto houver entrega sendo montada, a tela se atualiza sozinha: o trabalho acontece no
+  // servidor e ninguém deveria precisar apertar F5 para descobrir que terminou.
+  if (reqs.some((r) => r.resultado === "montando" && Date.now() - new Date(r.recebido_em).getTime() < SQ_MONTANDO_LIMITE_MS)) {
+    clearTimeout(SQ_TIMER);
+    SQ_TIMER = setTimeout(() => { if (location.hash.indexOf("requisicoes") > -1) viewRequisicoes(); }, 6000);
+  }
+}
+
+async function abrirRequisicao(id) {
+  let d;
+  try { d = await API.squadRequest(id); }
+  catch (e) { toast("Não consegui abrir: " + ((e && e.data && e.data.error) || e.message), "error"); return; }
+  const r = d.requisicao || {};
+  const passos = (r.logs || []).map((l) => "  " + fmtDateTime(l.em) + "  " + l.texto).join("\n") || "  (sem passos registrados)";
+  const sit = sqSituacao(r);
+  const corpo = d.resumo_payload
+    ? JSON.stringify(d.resumo_payload, null, 2)
+    : "O conteúdo desta entrega não está mais guardado.";
+  await uiModal({
+    title: "Entrega de " + fmtDateTime(r.recebido_em),
+    message: sit.rotulo + (r.erro ? " — " + r.erro : "") + (r.origem_ip ? " · veio de " + r.origem_ip : ""),
+    fields: [
+      { name: "passos", label: "O que o painel fez", type: "textarea", value: passos },
+      { name: "corpo", label: "O que o squad enviou (sem o conteúdo das imagens)", type: "textarea", value: corpo },
+    ],
+    confirmText: "Fechar",
+    noCancel: true,
+  });
+}
+
 async function viewSettings() {
   setTitle("Configurações");
-  // As 5 chamadas são independentes — dispara em PARALELO (a 1ª pintura espera 1 round-trip,
-  // não a soma de 5). Cada uma degrada sozinha; só API.settings() propaga p/ o catch do router.
-  const [s, provsRes, integRes, igRes, contentRes] = await Promise.all([
+  // As chamadas são independentes — dispara em PARALELO (a 1ª pintura espera 1 round-trip,
+  // não a soma de todas). Cada uma degrada sozinha; só API.settings() propaga p/ o catch do router.
+  const [s, provsRes, integRes, igRes, contentRes, sqRes] = await Promise.all([
     API.settings(),
     API.providers().catch(() => ({ providers: [] })),
     API.integrations().catch(() => ({ integrations: [] })),
     API.publishStatus().catch(() => ({ instagram: {} })),
     API.content().catch(() => ({ tasks: [] })),
+    API.squadStatus().catch(() => ({ conectado: false })),
   ]);
   State.settings = s;
   const provs = (provsRes && provsRes.providers) || [];
@@ -6406,6 +6587,10 @@ async function viewSettings() {
   const ig = (igRes && igRes.instagram) || {};
   const tav = integ.find((x) => x.id === "tavily") || {};
   const pex = integ.find((x) => x.id === "pexels") || {};
+  const sq = sqRes || {};
+  // O servidor sabe o endereço público de verdade; location.origin é só o que este navegador
+  // usou para chegar aqui, e pode ser um IP interno que não serve para ninguém de fora.
+  const enderecoSquad = sq.endereco || (location.origin + "/api/squad/webhook");
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
@@ -6542,6 +6727,46 @@ async function viewSettings() {
       <div class="field mt"><label>Chave Pexels</label><input id="pex-key" type="password" placeholder="${pex.configured ? "Cole uma nova chave para trocar…" : "Cole a chave aqui"}" /></div>
       <div class="flex"><button class="btn btn-primary" id="pex-save">Salvar chave</button><button class="btn" id="pex-test">Testar</button><span id="pex-out" class="muted"></span></div>
       <p class="hint mt">A chave é grátis: crie em pexels.com/api. Só administradores configuram.</p>`,
+      })}
+      ${conexao({
+        id: "squad",
+        name: "Sistema squad",
+        purpose: "Recebe as artes prontas feitas em squad.4st.co",
+        dot: sq.conectado ? "on" : "off",
+        badge: sq.conectado
+          ? (sq.ultimo_resultado === "erro"
+            ? '<span class="badge warn">última entrega falhou</span>'
+            : '<span class="badge ok">pronto para receber</span>')
+          : '<span class="badge paused">não conectado</span>',
+        body: `
+      <p class="muted">O sistema do squad envia as artes prontas para cá. Elas chegam em <strong>Aprovados</strong>, com a marca de que vieram de lá, prontas para você revisar, editar ou publicar.</p>
+      <div class="field mt"><label>Endereço de entrega</label>
+        <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar</button></div>
+        <p class="hint">O time do squad cadastra este endereço na integração <span class="codeblock">webhook_post</span> do sistema deles — <strong>com o token no fim</strong>, assim:
+        <span class="codeblock">${esc(enderecoSquad)}?token=SEU_TOKEN</span>. Se você gerar o token aqui, o painel já mostra o endereço completo, pronto para copiar.</p>
+      </div>
+      <hr class="sep" />
+      ${sq.conectado ? `
+      <div class="key-locked">
+        <svg class="key-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span class="key-mask">${esc(sq.token_dica || "")}</span>
+        <span class="badge ok">Ativo</span>
+      </div>
+      <ul class="sq-facts mt">
+        <li><span>Entregas recebidas</span><strong>${sq.total_requisicoes || 0}</strong></li>
+        <li><span>Última entrega</span><strong>${sq.ultima_requisicao ? esc(fmtDateTime(sq.ultima_requisicao)) : "nenhuma ainda"}</strong></li>
+      </ul>
+      <div class="flex mt"><button class="btn btn-primary" id="sq-req">Ver requisições</button><button class="btn" id="sq-trocar">Trocar token</button><button class="btn btn-danger" id="sq-off">Desconectar</button></div>
+      <div id="sq-edit" class="key-edit mt" style="display:none">
+        <div class="field"><label>Novo token</label><input id="sq-token" type="password" placeholder="Cole o token que o sistema do squad gerou" /></div>
+        <div class="flex"><button class="btn btn-primary" id="sq-save">Salvar token</button><button class="btn" id="sq-gerar">Gerar um aqui</button><button class="btn btn-ghost" id="sq-cancel" type="button">Cancelar</button></div>
+      </div>` : `
+      <div class="field"><label>Token de entrega</label>
+        <input id="sq-token" type="password" placeholder="Cole aqui o token que o sistema do squad gerou" />
+        <p class="hint">É a senha da porta: sem ela, nenhuma arte entra. Se o time do squad ainda não gerou uma, o painel pode gerar — e você repassa.</p>
+      </div>
+      <div class="flex"><button class="btn btn-primary" id="sq-save">Salvar token</button><button class="btn" id="sq-gerar">Gerar um aqui</button></div>`}
+      <p class="hint mt">Só administradores configuram esta conexão.</p>`,
       })}
       </div>
     </div>
@@ -6694,6 +6919,60 @@ async function viewSettings() {
     catch (e) { out.textContent = "Falhou: " + ((e && e.data && e.data.error) || (e && e.message) || "erro"); }
   };
   if ($("#cred-add")) $("#cred-add").onclick = openCredentialsModal;
+
+  // --- Conexão com o sistema squad ---
+  if ($("#sq-copy")) $("#sq-copy").onclick = () => {
+    const el = $("#sq-url"); el.select();
+    // navigator.clipboard só existe em contexto seguro; execCommand é o plano B do http local.
+    const copiou = (navigator.clipboard && navigator.clipboard.writeText(el.value).then(() => true).catch(() => false))
+      || Promise.resolve(document.execCommand && document.execCommand("copy"));
+    Promise.resolve(copiou).then((ok) => toast(ok ? "Endereço copiado." : "Selecione e copie o endereço.", ok ? "success" : "warn"));
+  };
+  if ($("#sq-req")) $("#sq-req").onclick = () => { location.hash = "#/requisicoes"; };
+  if ($("#sq-trocar")) $("#sq-trocar").onclick = () => { $("#sq-edit").style.display = ""; $("#sq-token").focus(); };
+  if ($("#sq-cancel")) $("#sq-cancel").onclick = () => { $("#sq-edit").style.display = "none"; };
+  if ($("#sq-save")) $("#sq-save").onclick = async () => {
+    const token = ($("#sq-token").value || "").trim();
+    if (token.length < 16) { toast("Cole um token com pelo menos 16 caracteres.", "warn"); return; }
+    try { await API.saveSquadToken({ token }); toast("Conexão do squad salva.", "success"); viewSettings(); }
+    catch (e) { toast("Não consegui salvar: " + ((e && e.data && e.data.error) || e.message), "error"); }
+  };
+  if ($("#sq-gerar")) $("#sq-gerar").onclick = async () => {
+    // Gerar um token novo INVALIDA o que o time do squad já cadastrou — as entregas param de
+    // entrar na hora. Trocar sem querer aqui sairia caro e silencioso.
+    if (sq.conectado) {
+      const ok = await uiModal({
+        title: "Trocar por um token novo?",
+        message: "O token que o sistema do squad usa hoje deixa de valer no mesmo instante, e as entregas passam a ser recusadas até alguém de lá cadastrar o novo. Só faça isso se for repassar o endereço agora.",
+        confirmText: "Gerar um novo", confirmKind: "danger",
+      });
+      if (ok === null) return;
+    }
+    try {
+      const r = await API.saveSquadToken({ gerar: true });
+      // O token completo aparece UMA vez só — depois daqui o painel guarda e nunca mais mostra.
+      // Por isso vai num modal, e não numa linha da tela: qualquer re-render apagaria.
+      await uiModal({
+        title: "Token criado",
+        message: "Este é o endereço completo para o time do squad cadastrar. Ele aparece só agora — copie antes de fechar.",
+        fields: [{ name: "url", label: "Endereço com o token", type: "textarea", value: enderecoSquad + "?token=" + r.token }],
+        confirmText: "Já copiei",
+        noCancel: true,
+      });
+      toast("Conexão do squad pronta para receber.", "success");
+      viewSettings();
+    } catch (e) { toast("Não consegui gerar: " + ((e && e.data && e.data.error) || e.message), "error"); }
+  };
+  if ($("#sq-off")) $("#sq-off").onclick = async () => {
+    const r = await uiModal({
+      title: "Desconectar o sistema squad?",
+      message: "As artes que já chegaram continuam onde estão. O que muda é que novas entregas passam a ser recusadas até você cadastrar um token de novo.",
+      confirmText: "Desconectar", confirmKind: "danger",
+    });
+    if (r === null) return;
+    try { await API.removeSquadToken(); toast("Conexão do squad removida.", "success"); viewSettings(); }
+    catch (e) { toast("Não consegui remover: " + ((e && e.data && e.data.error) || e.message), "error"); }
+  };
   // Abre/fecha uma conexão. Uma de cada vez: com duas abertas a página volta a ser a pilha de
   // campos que estamos justamente saindo. A altura é animada por CSS (grid 0fr -> 1fr), então
   // não há cálculo de pixel aqui — e o conteúdo continua no DOM mesmo fechado, para que os

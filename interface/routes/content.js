@@ -194,9 +194,15 @@ router.post("/:folder/preparar-edicao", async (req, res) => {
       E_SEM_ARTE: "Não encontrei nenhuma arte importada nesta peça para preparar.",
       E_SEM_DIMENSAO: "Não consegui ler o tamanho da imagem. Envie um PNG ou JPEG comum.",
       E_PRANCHETA: "Não consegui montar a prancheta desta arte.",
+      // requireActive lança E_NOT_EDITABLE, não E_NOT_ACTIVE: a tradução estava presa no código
+      // errado e a pessoa via a mensagem técnica crua ("renderizar exige zona active…").
+      E_NOT_EDITABLE: "Esta peça está aprovada, e peça aprovada fica selada. Use “Reabrir para edição” antes de preparar.",
       E_NOT_ACTIVE: "Esta peça está aprovada. Reabra para edição antes de preparar.",
     };
-    res.status(e.code === "E_SEM_ARTE" ? 409 : 500)
+    // 409 = "o estado não permite", não é falha do servidor: peça sem arte e peça aprovada
+    // são as duas situações em que o pedido faz sentido mas a hora está errada.
+    const conflito = e.code === "E_SEM_ARTE" || e.code === "E_NOT_EDITABLE" || e.code === "E_NOT_ACTIVE";
+    res.status(conflito ? 409 : 500)
       .json({ error: humano[e.code] || e.message, code: e.code || "E_PREPARAR" });
   }
 });
