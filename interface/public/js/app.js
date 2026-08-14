@@ -3692,7 +3692,7 @@ function workflowHint(s) {
 }
 function bindWorkflow(task) {
   // "Preparar para editar" na peca importada: escreve a receita que falta e recarrega a peca.
-  $("[data-prep]").forEach((b) => {
+  $$("[data-prep]").forEach((b) => {
     b.onclick = async () => {
       const f = b.getAttribute("data-prep");
       b.disabled = true; b.innerHTML = '<span class="spinner"></span> preparando…';
@@ -3700,15 +3700,22 @@ function bindWorkflow(task) {
       try {
         const r = await API.prepararEdicao(f);
         const n = (r.preparadas || []).length;
-        toast(n === 1 ? "Arte pronta para editar." : n + " artes prontas para editar.", "success");
-        await viewTask(f);
+        const ja = (r.ja_preparadas || []).length;
+        // "0 artes prontas para editar" era mentira com cara de sucesso: acontece quando a arte JÁ
+        // estava preparada (segundo clique, ou peça que já passou por aqui). O recado tem que
+        // distinguir "preparei agora" de "já estava pronta" — senão parece que não funcionou.
+        toast(n > 0
+          ? (n === 1 ? "Arte pronta para editar." : n + " artes prontas para editar.")
+          : (ja > 0 ? "Esta arte já estava pronta para editar." : "Não havia arte para preparar nesta peça."),
+        n > 0 || ja > 0 ? "success" : "warn");
+        await viewTaskDetail(f);
       } catch (e) {
         toast((e && e.message) || "Não consegui preparar a arte.", "error");
         b.disabled = false; b.textContent = "Preparar para editar";
       } finally { hideBusy(); }
     };
   });
-  $("#wf-actions [data-wf]").forEach((btn) => {
+  $$("#wf-actions [data-wf]").forEach((btn) => {
     btn.onclick = async () => {
       const wf = btn.dataset.wf;
       // "Publicar ou agendar" era o único deste bloco que saía por `return` ANTES do busy() logo

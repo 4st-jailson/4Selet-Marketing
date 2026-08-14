@@ -457,6 +457,32 @@ function briefingLongo() {
   }
 
   // ------------------------------------------------------------------
+  secao("16. Seletor de um x seletor de muitos");
+  // Aplicando um patch pelo shell, o escapamento comeu um cifrão e `$$("...")` virou `$("...")` em
+  // DUAS linhas — a minha nova e uma que já existia há meses, a que liga aprovar/publicar/reabrir.
+  // `$` devolve UM elemento; chamar `.forEach` nele estoura e derruba a montagem da página inteira.
+  // O Hugo viu "Erro ao carregar: $(...).forEach is not a function" na peça importada.
+  {
+    const front = ["public/js/app.js", "public/js/api.js"]
+      .map((f) => path.join(__dirname, f)).filter((f) => fs.existsSync(f));
+    const erradas = [];
+    for (const arq of front) {
+      fs.readFileSync(arq, "utf8").split("\n").forEach((linha, i) => {
+        // $ (um elemento) seguido de método de LISTA
+        if (/(^|[^$])\$\([^)]*\)\.(forEach|map|filter|some|every)\b/.test(linha)) {
+          erradas.push(path.basename(arq) + ":" + (i + 1));
+        }
+        // $$ (lista) seguido de propriedade de UM elemento
+        if (/\$\$\([^)]*\)\.(value|textContent|innerHTML|onclick|checked|disabled)\b/.test(linha)) {
+          erradas.push(path.basename(arq) + ":" + (i + 1) + " (lista usada como elemento)");
+        }
+      });
+    }
+    checa(erradas.length === 0, "nenhum seletor de UM elemento sendo usado como lista (nem o contrário)",
+      erradas.length ? erradas.slice(0, 4).join(", ") : "0 em " + front.length + " arquivos");
+  }
+
+  // ------------------------------------------------------------------
   secao("15. Comentário de CSS não pode engolir regra");
   // Escrevendo o comentário que explica o item 14, digitei "adv-*/ad-*" — e a dupla asterisco-barra
   // FECHOU o comentário no meio da frase. O resto virou lixo, e o interpretador engoliu a regra
