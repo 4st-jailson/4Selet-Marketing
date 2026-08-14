@@ -1715,8 +1715,29 @@ function fileRow(folder, f) {
     <div class="flex">${viewBtn}<a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar</a></div></div>`;
 }
 
+// Uma arte pode existir em MAIS DE UM arquivo ao mesmo tempo: a imagem que a pessoa
+// importou (slide_1.jpg), a cópia guardada do original (slide_1.orig.jpg) e o PNG que a
+// prancheta redesenha por cima (slide_1.png). É a MESMA arte — mas quem lista por extensão
+// contava cada uma como uma peça diferente, e o carrossel aparecia duplicado (5 slides
+// viravam 10) inclusive na hora de publicar. Aqui a arte volta a ser uma só por nome,
+// preferindo o PNG: é ele que o editor edita e que vai para o Instagram.
+function umaPorArte(files) {
+  const ordem = { png: 3, jpg: 2, jpeg: 2, webp: 1 };
+  const porNome = new Map();
+  for (const f of files || []) {
+    if (/\.orig\.[^.]+$/i.test(f.rel) || /\.bg\.png$/i.test(f.rel)) continue;
+    const ext = (f.rel.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
+    const nome = f.rel.replace(/\.[^.]+$/, "");
+    const atual = porNome.get(nome);
+    if (!atual || (ordem[ext] || 0) > (ordem[(atual.rel.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase()] || 0)) {
+      porNome.set(nome, f);
+    }
+  }
+  return Array.from(porNome.values());
+}
+
 function mediaGallery(folder, task) {
-  const imgs = task.files.filter((f) => f.isImage && !/\.bg\.png$/i.test(f.rel));
+  const imgs = umaPorArte(task.files.filter((f) => f.isImage));
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
   const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed" || task.kind === "media") && !(task.status && task.status.imported);
@@ -1729,8 +1750,7 @@ function mediaGallery(folder, task) {
 // #2 — Galeria única e ordenada dos slides de um carrossel (slide_1..n): cada slide
 // numerado, com ampliar e baixar. Substitui a "Arte gerada" p/ carrossel (evita duplicar).
 function carouselStrip(folder, task) {
-  const slides = task.files
-    .filter((f) => /slide_0*\d+\.(png|jpe?g)$/i.test(f.rel))
+  const slides = umaPorArte(task.files.filter((f) => /slide_0*\d+\.(png|jpe?g|webp)$/i.test(f.rel)))
     .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
     .sort((a, b) => a.n - b.n);
   if (slides.length < 2) return "";
@@ -2277,23 +2297,24 @@ function refineCard(task) {
 // Quais artes desta peca abrem no editor: carrossel -> 1 por slide; imagem/feed -> a arte principal.
 function editorTargets(task) {
   const files = (task && task.files) || [];
+  // A arte importada chega em JPEG. Enquanto isto aqui só olhava .png, a peça importada
+  // não tinha o que editar NEM o que publicar ("Esta peça não tem imagem publicável"),
+  // mesmo com os cinco slides ali na tela.
   if (task.kind === "story") {
-    return files
-      .filter((f) => /story_0*\d+\.png$/i.test(f.rel))
-      .map((f) => ({ f, n: parseInt((f.rel.match(/story_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+    return umaPorArte(files.filter((f) => /story_0*\d+\.(png|jpe?g|webp)$/i.test(f.rel)))
+      .map((f) => ({ f, n: parseInt((f.rel.match(/story_0*(\d+)\./i) || [])[1] || "0", 10) }))
       .sort((a, b) => a.n - b.n)
       .map((c) => ({ rel: c.f.rel, label: "Cartão " + c.n }));
   }
   if (task.kind === "carousel") {
-    return files
-      .filter((f) => /slide_0*\d+\.png$/i.test(f.rel))
-      .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\.png$/i) || [])[1] || "0", 10) }))
+    return umaPorArte(files.filter((f) => /slide_0*\d+\.(png|jpe?g|webp)$/i.test(f.rel)))
+      .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
       .sort((a, b) => a.n - b.n)
       .map((s) => ({ rel: s.f.rel, label: "Slide " + s.n }));
   }
-  const png = files.find((f) => f.isImage && /ads\/(ad|feed)\.png$/i.test(f.rel))
-    || files.find((f) => f.isImage && /\.png$/i.test(f.rel));
-  return png ? [{ rel: png.rel, label: kindLabel(task.kind) || "Arte" }] : [];
+  const unicas = umaPorArte(files.filter((f) => f.isImage));
+  const arte = unicas.find((f) => /ads\/(ad|feed)\.(png|jpe?g|webp)$/i.test(f.rel)) || unicas[0];
+  return arte ? [{ rel: arte.rel, label: kindLabel(task.kind) || "Arte" }] : [];
 }
 // ===== Editor HTML (item A / Opção 1): edita o HTML REAL da arte (pixel-perfect,
 // preserva accent/gradiente/fontes) e re-renderiza pra PNG via Playwright. =====
@@ -2307,6 +2328,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
   let curRel = rel || (targets[0] || {}).rel;
   if (!curRel) { toast("Não há arte para editar aqui.", "error"); return; }
   toast("Abrindo editor…", "info");
+  const imported = !!(task && task.status && task.status.imported);
   const multiSlide = targets.length > 1;
   let assetMaps = [], dirty = false, changed = false, current = null, curScale = 1; // [prefixo file://, token /url/]
   let selection = new Set(); // multi-seleção (Shift): conjunto de selecionados; 'current' = âncora (dita toolbar/alça)
@@ -2448,8 +2470,15 @@ async function openHtmlEditor(folder, task, rel, opts) {
     curRel = r2; dirty = false; current = null; hist = []; hi = -1;
     $("#he-piece").textContent = (targets.find((t) => t.rel === curRel) || {}).label || "Arte";
     updateNav();
-    API.taskFile(folder, curRel.replace(/\.png$/i, ".html")).then((raw) => {
-      if (!/<html/i.test(raw)) { toast("Esta peça não tem HTML editável (gere a arte de novo).", "error"); return; }
+    // Troca a extensão seja ela qual for: a arte importada é .jpg, e um replace preso
+    // em .png devolvia o próprio JPEG como se fosse a receita.
+    API.taskFile(folder, curRel.replace(/\.[^./]+$/i, ".html")).then((raw) => {
+      if (!/<html/i.test(raw)) {
+        toast(imported
+          ? "Esta arte ainda não foi preparada para edição. Volte à peça e clique em “Preparar para edição”."
+          : "Esta peça não tem HTML editável (gere a arte de novo).", "error");
+        return;
+      }
       // Reescreve assets file:// p/ URLs servidas (brand-assets = assets/ da marca;
       // uploads = fotos em interface/public/uploads/). Guarda p/ reverter ao salvar.
       assetMaps = [];

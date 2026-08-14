@@ -483,6 +483,54 @@ function briefingLongo() {
   }
 
   // ------------------------------------------------------------------
+  secao("17. Uma arte é UMA arte, não um arquivo por extensão");
+  // A arte importada chega em JPEG. Ao ser preparada para edição, o painel escreve o PNG
+  // redesenhado AO LADO do JPEG original — e quem listava por extensão passava a ver a mesma
+  // arte duas vezes: os 5 slides do carrossel do Hugo viraram 10 na tela. Pelo outro lado,
+  // quem só olhava .png não achava arte NENHUMA na peça importada ("Esta peça não tem imagem
+  // publicável"). São o mesmo defeito. Aqui a conta é feita com a lógica real do painel.
+  {
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const pub = fs.readFileSync(path.join(__dirname, "lib/publish.js"), "utf8");
+
+    // executa a função de verdade que a tela usa, extraída do arquivo
+    const corpo = (app.match(/function umaPorArte\(files\) \{[\s\S]*?\n\}/) || [""])[0];
+    checa(!!corpo, "a tela tem a regra de uma arte por nome (umaPorArte)");
+    const umaPorArte = new Function(corpo + "; return umaPorArte;")();
+
+    // o estado real de um carrossel importado JÁ preparado para edição
+    const arquivos = [];
+    for (let n = 1; n <= 5; n++) {
+      arquivos.push({ rel: "slides/slide_" + n + ".jpg", isImage: true });
+      arquivos.push({ rel: "slides/slide_" + n + ".orig.jpg", isImage: true });
+      arquivos.push({ rel: "slides/slide_" + n + ".png", isImage: true });
+      arquivos.push({ rel: "slides/slide_" + n + ".bg.png", isImage: true });
+    }
+    const unicas = umaPorArte(arquivos.filter((f) => /slide_0*\d+\.(png|jpe?g|webp)$/i.test(f.rel)));
+    checa(unicas.length === 5, "5 slides importados e preparados continuam sendo 5 na tela", unicas.length + " arte(s)");
+    checa(unicas.every((f) => /\.png$/i.test(f.rel)), "e a versão que fica é o PNG redesenhado (o que o editor edita)");
+    checa(!unicas.some((f) => /\.orig\./i.test(f.rel)), "a cópia guardada do original não aparece como peça");
+
+    // e antes de preparar (só JPEG) tem que haver arte para editar E para publicar
+    const soJpeg = umaPorArte([1, 2, 3, 4, 5].map((n) => ({ rel: "slides/slide_" + n + ".jpg", isImage: true })));
+    checa(soJpeg.length === 5, "carrossel importado ainda em JPEG tem 5 artes (não zero)", soJpeg.length + " arte(s)");
+
+    // os três lugares que liam por extensão precisam aceitar JPEG
+    checa(app.indexOf("story_0*\\d+\\.(png|jpe?g|webp)$") > -1, "o editor enxerga cartão de story em JPEG");
+    checa(app.indexOf("slide_0*\\d+\\.(png|jpe?g|webp)$") > -1, "o editor e a galeria enxergam slide em JPEG");
+    checa(app.indexOf('curRel.replace(/\\.[^./]+$/i, ".html")') > -1,
+      "o editor troca a extensão seja ela qual for para achar a receita .html");
+
+    // publicação: nunca mandar o mesmo slide duas vezes para o Instagram
+    const corpoPub = (pub.match(/function umaPorSlide\(nomes\) \{[\s\S]*?\n\}/) || [""])[0];
+    checa(!!corpoPub, "a publicação tem a regra de um arquivo por slide (umaPorSlide)");
+    const umaPorSlide = new Function(corpoPub + "; return umaPorSlide;")();
+    const publicaveis = umaPorSlide(["slide_1.jpg", "slide_1.png", "slide_2.jpg", "slide_2.png", "slide_3.png"]);
+    checa(publicaveis.length === 3, "o carrossel vai ao Instagram sem slide repetido", publicaveis.join(", "));
+    checa(publicaveis[0] === "slide_1.png", "e na ordem certa, com o PNG redesenhado", publicaveis[0]);
+  }
+
+  // ------------------------------------------------------------------
   secao("15. Comentário de CSS não pode engolir regra");
   // Escrevendo o comentário que explica o item 14, digitei "adv-*/ad-*" — e a dupla asterisco-barra
   // FECHOU o comentário no meio da frase. O resto virou lixo, e o interpretador engoliu a regra

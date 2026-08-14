@@ -239,14 +239,28 @@ function assertApproved(folder) {
 }
 
 // Descobre as imagens a publicar (na ordem) a partir da pasta aprovada.
+// Depois que uma arte importada é preparada para edição, o slide passa a existir em dois
+// arquivos ao mesmo tempo (slide_1.jpg trazido pela pessoa + slide_1.png redesenhado).
+// Sem esta escolha, o carrossel ia para o Instagram com CADA slide publicado duas vezes.
+// Fica o PNG, que é a versão redesenhada e editável.
+function umaPorSlide(nomes) {
+  const ordem = { png: 3, jpg: 2, jpeg: 2, webp: 1 };
+  const porNumero = new Map();
+  for (const f of nomes) {
+    const n = parseInt((f.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10);
+    const ext = (f.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
+    const atual = porNumero.get(n);
+    const extAtual = atual ? (atual.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase() : "";
+    if (!atual || (ordem[ext] || 0) > (ordem[extAtual] || 0)) porNumero.set(n, f);
+  }
+  return Array.from(porNumero.entries()).sort((a, b) => a[0] - b[0]).map((e) => e[1]);
+}
 function pickImages(dir, kind) {
   const slidesDir = path.join(dir, "slides");
   if (fs.existsSync(slidesDir)) {
-    const slides = fs.readdirSync(slidesDir)
-      .filter((f) => /^slide_0*\d+\.(png|jpe?g)$/i.test(f))
-      .map((f) => ({ f, n: parseInt((f.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
-      .sort((a, b) => a.n - b.n)
-      .map((s) => path.join(slidesDir, s.f));
+    const slides = umaPorSlide(fs.readdirSync(slidesDir)
+      .filter((f) => /^slide_0*\d+\.(png|jpe?g|webp)$/i.test(f)))
+      .map((f) => path.join(slidesDir, f));
     if (slides.length) return slides;
   }
   const ads = path.join(dir, "ads");
