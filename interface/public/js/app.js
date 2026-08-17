@@ -6607,6 +6607,10 @@ async function viewSettings() {
   // O servidor sabe o endereço público de verdade; location.origin é só o que este navegador
   // usou para chegar aqui, e pode ser um IP interno que não serve para ninguém de fora.
   const enderecoSquad = sq.endereco || (location.origin + "/api/squad/webhook");
+  // As duas metades do cartão têm de contar a MESMA história. Só "colado" é afirmativo: token
+  // guardado antes de o painel registrar a origem (ou por outro caminho) cai no lado de cá,
+  // que é o que descreve o painel como quem gerou — e é o caso de quem clicou em criar aqui.
+  const tokenColado = sq.como_veio === "colado";
   const models = [
     { id: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilíbrio — recomendado)" },
     { id: "claude-opus-4-7", label: "Opus 4.7 (máxima qualidade)" },
@@ -6763,10 +6767,10 @@ async function viewSettings() {
         <span class="key-mask">${esc(sq.token_dica || "")}</span>
         <span class="badge ok">Ativo</span>
       </div>
-      <p class="hint mt">${sq.como_veio === "colado"
+      <p class="hint mt">${tokenColado
         ? "Este token veio do time do squad e foi colado aqui."
         : "Este token nasceu aqui no painel — o time do squad precisa tê-lo cadastrado do lado deles."}${sq.criado_em ? " Guardado em " + esc(fmtDateTime(sq.criado_em)) + "." : ""}</p>
-      ${sq.como_veio === "gerado" ? `
+      ${!tokenColado ? `
       <div class="field mt"><label>Endereço para enviar ao time do squad</label>
         <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}?token=…" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar endereço</button></div>
         <p class="hint">Por segurança o painel não mostra o token de novo depois de guardado. Se você não anotou o endereço completo, use “Definir outro token” abaixo e gere um novo — aí ele aparece inteiro mais uma vez.</p>
