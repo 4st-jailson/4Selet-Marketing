@@ -1944,3 +1944,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .sq-caminho-tit { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
 .sq-caminho .hint { margin: 0 0 8px; }
 .sq-caminho input { width: 100%; }
+/* Estilo que depende de um dado que a peça não tem: continua escolhível (a pessoa pode querer
+   preencher o dado depois), mas diz o que falta em vez de entregar outro desenho em silêncio. */
+.tpl-opt.tpl-sem-dado { opacity: .72; }
+.tpl-falta { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; color: var(--text-dim); font-style: italic; }

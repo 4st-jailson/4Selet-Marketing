@@ -2123,11 +2123,26 @@ function renderPanel(folder, task) {
 // Templates visuais disponiveis para pecas estaticas (image/feed/carousel).
 // "Foto" faltava aqui: numa peça salva com esse estilo, nenhum rádio ficava marcado e qualquer
 // clique trocava o estilo sem caminho de volta.
+// Os quatro primeiros são os templates clássicos: valem para QUALQUER peça, com ou sem dado.
+// Os demais são os desenhos que nasceram do estudo do Instagram e que o motor já sabia fazer
+// (ARQ_PECA em interface/lib/render.js) — até aqui eles só apareciam quando a IA os escolhia
+// sozinha, e não havia como pedir. `dado` diz de que informação o desenho depende, para a tela
+// avisar antes em vez de entregar um editorial silencioso.
 const VISUAL_TEMPLATES = [
   { id: "editorial", name: "Editorial", desc: "Gradiente azul, dots, headline à esquerda" },
   { id: "bold", name: "Destaque", desc: "Fundo escuro centralizado, número em evidência" },
   { id: "split", name: "Dividido", desc: "Faixa clara (logo) + faixa escura (título)" },
   { id: "photo", name: "Foto", desc: "Imagem de fundo com véu de leitura e texto por cima" },
+  { id: "palavra", name: "Palavra gigante", desc: "Uma palavra só, ocupando a arte inteira", dado: "word" },
+  { id: "numero", name: "Um número só", desc: "Um número enorme sozinho, com a explicação embaixo", dado: "stats1" },
+  { id: "stat_grid", name: "Grade de números", desc: "Vários números em cartões grandes", dado: "stats" },
+  { id: "list", name: "Lista de pontos", desc: "Tópicos um embaixo do outro, com marcador", dado: "items" },
+  { id: "flow", name: "Passo a passo", desc: "Etapas ligadas em sequência, com ícones", dado: "flow" },
+  { id: "comparacao", name: "Comparação", desc: "Dois lados frente a frente", dado: "versus" },
+  { id: "citacao", name: "Citação", desc: "Uma frase em destaque, com o autor embaixo", dado: "citacao" },
+  { id: "medidor", name: "Medidor", desc: "Uma barra mostrando onde o número cai na escala", dado: "gauge" },
+  { id: "mapa", name: "Mapa de caminhos", desc: "Um ponto que se abre em ramos", dado: "tree" },
+  { id: "dialogo", name: "Conversa", desc: "Balões de mensagem, como um aplicativo", dado: "dialog" },
 ];
 
 // A rotação do estilo MUDOU DE LADO: hoje ela mora no servidor (pickTemplate, lib/render.js), que
@@ -2267,12 +2282,23 @@ function templatePicker(task) {
     </div>`;
   }
   const current = task.template || autoVariant(task.folder);
-  const opts = VISUAL_TEMPLATES.map((t) => `
-    <label class="tpl-opt${t.id === current ? " is-active" : ""}" data-tpl="${t.id}">
+  // O conceito da peça é o que diz se o desenho tem o dado de que precisa. Sem ele o motor cai
+  // no editorial — então a tela marca esses estilos como "precisa de X" em vez de deixar a
+  // pessoa escolher e receber outra coisa.
+  // Sem conceito conhecido não dá para afirmar que falta dado — nesse caso não marca nada, em
+  // vez de acusar falta em todos os estilos.
+  const conceito = (task.concept && typeof task.concept === "object") ? task.concept : null;
+  const opts = VISUAL_TEMPLATES.map((t) => {
+    const regra = t.dado && LAYOUT_DADO[t.dado];
+    const semDado = !!(regra && conceito && !regra.tem(conceito));
+    return `
+    <label class="tpl-opt${t.id === current ? " is-active" : ""}${semDado ? " tpl-sem-dado" : ""}" data-tpl="${t.id}"${semDado ? ' title="Este estilo precisa de ' + esc(regra.falta) + ' no conteúdo da peça"' : ""}>
       <input type="radio" name="render-tpl" value="${t.id}"${t.id === current ? " checked" : ""} />
       <span class="tpl-name">${esc(t.name)}</span>
       <span class="tpl-desc">${esc(t.desc)}</span>
-    </label>`).join("");
+      ${semDado ? '<span class="tpl-falta">precisa de ' + esc(regra.falta) + "</span>" : ""}
+    </label>`;
+  }).join("");
   const logoOpts = montaOpcoes(LOGO_OPCOES, task.logo);
   const wmOpts = montaOpcoes(MARCA_DAGUA_OPCOES, task.watermark);
   const fontOpts = montaOpcoes(TIPOGRAFIA_OPCOES, task.font);
@@ -5638,23 +5664,101 @@ function seCtrls(i, total) {
 
 // [valor, nome curto, descrição em linguagem de leigo]. O nome aparece no seletor; a descrição
 // e a miniatura (layoutThumb) explicam o que cada layout faz — sem jargão.
+// Os desenhos que o slide pode ter. Esta lista precisa acompanhar SLIDE_ARCHETYPES em
+// interface/lib/render.js — e por muito tempo não acompanhou: o motor aprendeu dez desenhos
+// novos (palavra gigante, número solo, comparação, citação, medidor, mapa, diálogo, fluxo,
+// série e print em aparelho) e nenhum deles aparecia aqui. Na prática eles só saíam quando a
+// IA resolvia usá-los sozinha; pedir à mão era impossível. Era a causa da sensação de que
+// "escolhi variar e saiu tudo igual".
+//
+// A 4ª coluna diz de que DADO o desenho depende. Serve para o aviso honesto logo abaixo do
+// seletor: escolher um desenho sem o dado dele não quebra a arte (o motor cai em texto), mas a
+// pessoa precisa saber disso ANTES de gerar.
 const SLIDE_LAYOUTS = [
-  ["", "Automático", "A IA escolhe o layout que melhor combina com o texto deste slide"],
-  ["cover", "Capa de destaque", "Título grande de abertura, como a capa do carrossel"],
-  ["text", "Texto explicativo", "Um parágrafo para desenvolver a ideia com calma"],
-  ["stat_grid", "Número em destaque", "Destaca números em cartões grandes (ex.: 95%). Precisa de números no slide."],
-  ["list", "Lista de pontos", "Vários itens em lista com marcador. Precisa de itens no slide."],
-  ["cta", "Chamada final", "Frase de fechamento com um botão de ação"],
+  ["", "Automático", "A IA escolhe o desenho que melhor combina com o texto deste slide", null],
+  ["cover", "Capa de destaque", "Título grande de abertura, como a capa do carrossel", null],
+  ["text", "Texto explicativo", "Um parágrafo para desenvolver a ideia com calma", null],
+  ["palavra", "Palavra gigante", "Uma única palavra ocupando a arte inteira, para dar um soco visual", "word"],
+  ["numero", "Um número só", "Um número enorme sozinho, com a explicação embaixo", "stats1"],
+  ["stat_grid", "Grade de números", "Vários números em cartões grandes (ex.: 95% e D+10)", "stats"],
+  ["list", "Lista de pontos", "Vários itens um embaixo do outro, com marcador", "items"],
+  ["flow", "Passo a passo", "Etapas ligadas em sequência, com ícones", "flow"],
+  ["comparacao", "Comparação lado a lado", "Dois lados frente a frente (ex.: 4Selet contra o mercado)", "versus"],
+  ["citacao", "Citação", "Uma frase em destaque com o autor embaixo", "citacao"],
+  ["medidor", "Medidor", "Uma barra mostrando onde um número cai numa escala", "gauge"],
+  ["mapa", "Mapa de caminhos", "Um ponto que se abre em ramos (ex.: uma decisão e seus desdobramentos)", "tree"],
+  ["dialogo", "Conversa", "Balões de mensagem, como uma conversa de aplicativo", "dialog"],
+  ["serie", "Parte de uma série", "Marca o slide como “2 de 5”, para uma sequência numerada", "serie"],
+  ["device", "Print em aparelho", "Uma imagem dentro da tela de um celular, notebook ou navegador", "image"],
+  ["cta", "Chamada final", "Frase de fechamento com um botão de ação", null],
 ];
 function layoutName(v) { const f = SLIDE_LAYOUTS.find((x) => x[0] === String(v || "")); return f ? f[1] : SLIDE_LAYOUTS[0][1]; }
 // Aviso/dica sob o seletor de layout: alerta quando o layout escolhido PRECISA de um dado que o
 // slide não tem (stat_grid→números, list→itens) — nesse caso o render cai em texto (não quebra).
+// De que dado cada desenho precisa, e como dizer isso em português. A chave bate com a 4ª
+// coluna de SLIDE_LAYOUTS — assim acrescentar um desenho novo lá já traz o aviso junto.
+// ATENÇÃO: cada teste aqui espelha uma guarda REAL do motor (interface/lib/render.js —
+// temDadoProprio, versusValido/parVersus, escalaValida). Se divergirem, a tela promete um
+// desenho que o motor recusa, e a pessoa recebe um parágrafo sem entender por quê. A bateria
+// de regressão compara os dois lados com slides de exemplo, justamente para não divergirem.
+const SEP_VERSUS_UI = /\s+(?:vs\.?|versus|x|×|contra|>)\s+/i;
+function parVersusUI(s) {
+  const v = s && s.versus;
+  if (v && typeof v === "object" && v.a && v.b) return { a: String(v.a).trim(), b: String(v.b).trim() };
+  const bruto = String((typeof v === "string" ? v : "") || s.title || "").trim();
+  if (!bruto) return null;
+  const partes = bruto.split(SEP_VERSUS_UI).map((x) => x.trim()).filter(Boolean);
+  if (partes.length !== 2) return null;                       // três partes é passo a passo
+  if (partes.some((p) => !p.length || p.length > 28)) return null;
+  return { a: partes[0], b: partes[1] };
+}
+function escalaValidaUI(g) {
+  const bruto = String((g && g.value) == null ? "" : g.value).trim();
+  const num = parseFloat(bruto.replace(/\./g, "").replace(",", "."));
+  if (!isFinite(num)) return false;
+  return /%/.test(bruto) || Number(g.max) > 0;
+}
+const LAYOUT_DADO = {
+  // Os textos de `falta` completam a frase "Este desenho precisa de ___" — por isso todos
+  // começam por substantivo ou artigo indefinido, e nenhum por "a/as/os".
+  word: { tem: (s) => !!String(s.word || "").trim(), falta: "uma palavra escolhida" },
+  stats1: { tem: (s) => (Array.isArray(s.stats) ? s.stats : []).length >= 1, falta: "um número" },
+  stats: { tem: (s) => (Array.isArray(s.stats) ? s.stats : []).length >= 2, falta: "pelo menos dois números" },
+  items: { tem: (s) => (Array.isArray(s.items) ? s.items : []).length >= 1, falta: "itens de lista" },
+  flow: { tem: (s) => (Array.isArray(s.flow) ? s.flow : []).length >= 1, falta: "etapas para o passo a passo" },
+  versus: { tem: (s) => !!parVersusUI(s), falta: "dois lados para comparar (três vira passo a passo)" },
+  citacao: {
+    tem: (s) => !!(s.citacao && (typeof s.citacao === "string" ? s.citacao.trim() : String(s.citacao.text || "").trim())),
+    falta: "uma frase para citar",
+  },
+  gauge: { tem: (s) => !!(s.gauge && escalaValidaUI(s.gauge)), falta: "um valor com escala (porcentagem, ou um máximo)" },
+  tree: {
+    tem: (s) => !!(s.tree && s.tree.root && Array.isArray(s.tree.branches) && s.tree.branches.length >= 2),
+    falta: "um ponto de partida e pelo menos dois ramos",
+  },
+  dialog: { tem: (s) => (Array.isArray(s.dialog) ? s.dialog : []).length >= 1, falta: "falas para a conversa" },
+  serie: { tem: (s) => !!(s.serie && Number(s.serie.n) >= 1), falta: "uma posição na série (ex.: 2 de 5)" },
+  image: { tem: (s) => !!String(s.image || "").trim(), falta: "uma imagem (o print)" },
+};
+// Aviso sob o seletor: alerta quando o desenho escolhido PRECISA de um dado que o slide não
+// tem. Não quebra nada — o motor cai em texto —, mas escolher "Comparação" e receber um
+// parágrafo sem entender por quê é exatamente o tipo de surpresa que a tela deve evitar.
 function layoutDataHint(layout, s) {
   s = s || {};
+  const linha = SLIDE_LAYOUTS.find((x) => x[0] === String(layout || ""));
+  const chave = linha && linha[3];
+  const regra = chave && LAYOUT_DADO[chave];
+  if (regra && !regra.tem(s)) {
+    // Números e itens o painel sabe inserir de exemplo; para os demais, o caminho é o editor avançado.
+    const atalho = (chave === "stats" || chave === "stats1")
+      ? ' <button type="button" class="se-lay-fix" data-lay-fix="stats">Inserir números</button>'
+      : (chave === "items" ? ' <button type="button" class="se-lay-fix" data-lay-fix="items">Inserir itens</button>' : "");
+    return '<span class="se-rich se-warn">Este desenho precisa de ' + esc(regra.falta)
+      + ' — sem isso o slide sai como texto.' + atalho + "</span>";
+  }
   const nStats = (Array.isArray(s.stats) ? s.stats : []).length;
   const nItems = (Array.isArray(s.items) ? s.items : []).length;
-  if (layout === "stat_grid" && !nStats) return '<span class="se-rich se-warn">Sem números neste slide — vai aparecer como texto. <button type="button" class="se-lay-fix" data-lay-fix="stats">Inserir números</button></span>';
-  if (layout === "list" && !nItems) return '<span class="se-rich se-warn">Sem itens neste slide — vai aparecer como texto. <button type="button" class="se-lay-fix" data-lay-fix="items">Inserir itens</button></span>';
+  if (regra) return '<span class="se-rich">com o dado que este desenho precisa</span>';
   if (nStats) return '<span class="se-rich">grade: ' + nStats + ' números (edite no JSON)</span>';
   if (nItems) return '<span class="se-rich">lista: ' + nItems + ' itens (edite no JSON)</span>';
   return "";

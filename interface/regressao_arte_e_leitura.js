@@ -531,6 +531,64 @@ function briefingLongo() {
   }
 
   // ------------------------------------------------------------------
+  secao("19. O que o motor desenha, a tela deixa escolher");
+  // O balanço dos 241 pedidos mostrou que quase todo item "entregue pela metade" tinha a MESMA
+  // causa: o motor aprendeu desenhos novos e a tela não. Eles só saíam quando a IA resolvia
+  // usá-los; pedir à mão era impossível. Aqui as duas listas são comparadas de verdade.
+  {
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const src = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
+
+    const blocoMotor = (src.match(/const SLIDE_ARCHETYPES = \{[\s\S]*?\n\};/) || [""])[0];
+    const doMotor = Array.from(blocoMotor.matchAll(/(\w+):\s*slide/g)).map((m) => m[1]);
+    const blocoTela = (app.match(/const SLIDE_LAYOUTS = \[[\s\S]*?\n\];/) || [""])[0];
+    const daTela = Array.from(blocoTela.matchAll(/\["([a-z_]*)"/g)).map((m) => m[1]).filter(Boolean);
+
+    checa(doMotor.length > 0 && daTela.length > 0, "achei as duas listas (motor e tela)",
+      doMotor.length + " no motor, " + daTela.length + " na tela");
+    // "cover" é a capa, tratada fora do mapa de arquétipos — some do motor mas existe na tela.
+    const presos = doMotor.filter((x) => daTela.indexOf(x) === -1);
+    checa(presos.length === 0, "nenhum desenho fica preso no motor sem aparecer na tela",
+      presos.length ? "inalcançáveis: " + presos.join(", ") : doMotor.length + " desenhos, todos escolhíveis");
+    const inventados = daTela.filter((x) => x !== "cover" && doMotor.indexOf(x) === -1);
+    checa(inventados.length === 0, "e a tela não oferece desenho que o motor não sabe fazer",
+      inventados.join(", ") || "0");
+
+    // O AVISO de dado precisa concordar com a guarda do motor. Se divergirem, a tela promete um
+    // desenho que o motor recusa — e a pessoa recebe um parágrafo sem entender por quê.
+    const render = require("./lib/render.js");
+    const front = new Function(
+      (app.match(/const SEP_VERSUS_UI[\s\S]*?\nconst LAYOUT_DADO = \{[\s\S]*?\n\};/) || [""])[0]
+      + "; return LAYOUT_DADO;")();
+    const AMOSTRAS = [
+      { nome: "palavra com word", slide: { word: "Selet" }, chave: "word", arq: "palavra" },
+      { nome: "palavra sem word", slide: { title: "x" }, chave: "word", arq: null },
+      { nome: "comparação de 2 lados", slide: { versus: { a: "4Selet", b: "Mercado" } }, chave: "versus", arq: "comparacao" },
+      { nome: "3 partes NÃO é comparação", slide: { title: "Cadastro > Aprovação > Repasse" }, chave: "versus", arq: null },
+      { nome: "citação com texto", slide: { citacao: { text: "Uma frase" } }, chave: "citacao", arq: "citacao" },
+      { nome: "medidor com escala", slide: { gauge: { value: "95%" } }, chave: "gauge", arq: "medidor" },
+      { nome: "medidor SEM escala", slide: { gauge: { value: "D+10" } }, chave: "gauge", arq: null },
+      { nome: "mapa com 2 ramos", slide: { tree: { root: "PIX", branches: ["a", "b"] } }, chave: "tree", arq: "mapa" },
+      { nome: "mapa com 1 ramo só", slide: { tree: { root: "PIX", branches: ["a"] } }, chave: "tree", arq: null },
+      { nome: "conversa com falas", slide: { dialog: [{ de: "a", txt: "oi" }] }, chave: "dialog", arq: "dialogo" },
+      { nome: "série 2 de 5", slide: { serie: { n: 2, de: 5 } }, chave: "serie", arq: "serie" },
+    ];
+    const divergiram = [];
+    AMOSTRAS.forEach((a) => {
+      const telaAcha = !!(front[a.chave] && front[a.chave].tem(a.slide));
+      const motorAcha = render.arquetipoDoDado(a.slide) === a.arq && a.arq !== null;
+      // quando a amostra NÃO tem o dado, o motor devolve outro arquétipo (ou nada): os dois
+      // precisam concordar sobre a EXISTÊNCIA do dado, que é o que o aviso comunica.
+      const esperado = a.arq !== null;
+      if (telaAcha !== esperado || motorAcha !== esperado) {
+        divergiram.push(a.nome + " (tela=" + telaAcha + ", motor=" + motorAcha + ", esperado=" + esperado + ")");
+      }
+    });
+    checa(divergiram.length === 0, "o aviso da tela concorda com a guarda do motor em todos os casos",
+      divergiram.slice(0, 3).join(" · ") || AMOSTRAS.length + " amostras conferidas");
+  }
+
+  // ------------------------------------------------------------------
   secao("18. A porta do sistema squad (a ORDEM é o mecanismo)");
   // Neste painel não existe lista de rotas públicas: o que torna uma rota pública é ela ser
   // registrada ANTES do gate de sessão. Isso quer dizer que uma reordenação inocente do

@@ -228,6 +228,10 @@ function getTask(folder) {
       const rp = readJsonSafe(path.join(loc.path, "render.json"));
       return (rp && typeof rp.template === "string") ? rp.template : null;
     })(),
+    // O conceito da peça de imagem, para a TELA saber de que dado ela dispõe. Sem isto o
+    // seletor de estilo não tem como avisar que "Comparação" precisa de dois lados — ele
+    // deixaria escolher e o motor cairia no editorial, sem explicação.
+    concept: (function () { return readJsonSafe(path.join(loc.path, "ads", "concept.json")) || null; })(),
     logo: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.logo === "string") ? rp.logo : null; })(),
     watermark: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.watermark === "string") ? rp.watermark : null; })(),
     font: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.font === "string") ? rp.font : null; })(),
