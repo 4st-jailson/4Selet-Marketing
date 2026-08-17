@@ -4531,6 +4531,15 @@ async function viewCreate(arg, query) {
           </div>
           <div class="field art-only"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
             <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option><option value="photo">Foto — imagem enviada + texto por cima</option></select>
+            <div class="fundo-pick mt" id="g-fundo-pick">
+              <span class="fundo-lab">Fundo das artes</span>
+              <input type="hidden" id="g-fundo" value="" />
+              <div class="fundo-opts">${FUNDOS_UI.map(([v, nome, desc]) => `
+                <button type="button" class="fundo-opt${v === "" ? " on" : ""}" data-fundo="${esc(v)}" title="${esc(desc)}">
+                  ${fundoThumb(v)}<span class="fundo-nome">${esc(nome)}</span>
+                </button>`).join("")}</div>
+              <p class="hint">A superfície de todos os slides desta peça. Cada slide ainda pode ter o seu, depois — isto é o padrão.</p>
+            </div>
           </div>
           <div class="row art-only">
             <div class="field"><label>Logo <span class="hint">(no Automático, entra o logo que combina com o fundo da arte)</span></label>
@@ -4720,6 +4729,18 @@ async function viewCreate(arg, query) {
     }; });
   }
   if ($("#g-style")) $("#g-style").addEventListener("change", updPhotoRow);
+
+  // Escolha do FUNDO na criacao: marca o botao e guarda no campo escondido.
+
+  $$("#g-fundo-pick [data-fundo]").forEach((b) => { b.onclick = () => {
+
+    $$("#g-fundo-pick [data-fundo]").forEach((o) => o.classList.remove("on"));
+
+    b.classList.add("on");
+
+    if ($("#g-fundo")) $("#g-fundo").value = b.dataset.fundo || "";
+
+  }; });
   // Escolher tipografia fora da identidade pergunta antes (modal centralizado, Sim/Não).
   ligaConfirmacaoDeFonte($("#g-font"));
   ligaFatosDeMercado();
@@ -5295,6 +5316,10 @@ async function geraComPayload(prog) {
     extra: $("#g-extra").value.trim() || undefined,
     research_accepted: (FATOS_ACEITOS && FATOS_ACEITOS.length) ? FATOS_ACEITOS : undefined,
     template_variant: ($("#g-style") && $("#g-style").value) || undefined,
+
+    // A superficie escolhida na criacao vale como padrao de TODOS os slides da peca.
+
+    fundo: ($("#g-fundo") && $("#g-fundo").value) || undefined,
     logo: ($("#g-logo") && $("#g-logo").value) || undefined,
     watermark: ($("#g-wm") && $("#g-wm").value) || undefined,
     font: ($("#g-font") && $("#g-font").value) || undefined,
@@ -5812,8 +5837,59 @@ function layoutThumb(v) {
       return wrap(`<circle cx="8" cy="7" r="1.6" fill="${SK}"/>` + [16, 24, 32, 40].map((y) => `<path d="M7 ${y - 2.2} l3 2.2 l-3 2.2 z" fill="${SK}"/><rect x="13" y="${y - 1.4}" width="20" height="2.6" rx="1.3" fill="${WH}"/>`).join(""));
     case "cta":
       return wrap(`<rect x="9" y="15" width="22" height="4.5" rx="2.25" fill="${WH}"/><rect x="12" y="23" width="16" height="2.6" rx="1.3" fill="${MI}"/><rect x="9" y="33" width="22" height="8.5" rx="4.25" fill="${SK}"/>`);
+    // Os dez desenhos que nasceram do estudo do Instagram. Sem miniatura própria eles caíam
+    // todos na estrelinha do "automático" — dez opções na lista, uma cara só, e a escolha
+    // virava adivinhação. A miniatura é o que faz o seletor responder "como isso fica?".
+    case "palavra":
+      return wrap(`<circle cx="8" cy="7" r="1.6" fill="${SK}"/><text x="20" y="30" font-family="Inter,sans-serif" font-size="15" font-weight="800" fill="${SK}" opacity=".55" text-anchor="middle">Aa</text><rect x="9" y="36" width="22" height="2.4" rx="1.2" fill="${WH}"/>`);
+    case "numero":
+      return wrap(`<circle cx="8" cy="7" r="1.6" fill="${SK}"/><text x="20" y="30" font-family="Inter,sans-serif" font-size="18" font-weight="800" fill="${WH}" text-anchor="middle">95</text><rect x="11" y="36" width="18" height="2.2" rx="1.1" fill="${MI}"/>`);
+    case "flow":
+      return wrap(`<circle cx="8" cy="6" r="1.5" fill="${SK}"/>` + [13, 24, 35].map((y, i) =>
+        `<rect x="9" y="${y}" width="22" height="7" rx="2" fill="none" stroke="${SK}" stroke-width="1"/><rect x="12" y="${y + 2.6}" width="12" height="2" rx="1" fill="${WH}"/>`
+        + (i < 2 ? `<path d="M20 ${y + 7.6} l0 2.6 M18.6 ${y + 9} l1.4 1.4 l1.4-1.4" stroke="${MI}" stroke-width="1" fill="none"/>` : "")).join(""));
+    case "comparacao":
+      return wrap(`<rect x="7" y="16" width="11" height="16" rx="2" fill="${SK}" opacity=".5"/><rect x="22" y="16" width="11" height="16" rx="2" fill="none" stroke="${MI}" stroke-width="1"/><text x="20" y="26" font-family="Inter,sans-serif" font-size="7" font-weight="800" fill="${WH}" text-anchor="middle">&gt;</text><rect x="11" y="38" width="18" height="2" rx="1" fill="${MI}"/>`);
+    case "citacao":
+      return wrap(`<text x="8" y="20" font-family="Georgia,serif" font-size="16" font-weight="700" fill="${SK}">&#8220;</text><rect x="8" y="24" width="24" height="2.4" rx="1.2" fill="${WH}"/><rect x="8" y="29" width="20" height="2.4" rx="1.2" fill="${WH}"/><rect x="8" y="38" width="12" height="2" rx="1" fill="${MI}"/>`);
+    case "medidor":
+      return wrap(`<path d="M10 30 A10 10 0 0 1 30 30" stroke="${SK}" stroke-width="3.2" fill="none" stroke-linecap="round"/><text x="20" y="36" font-family="Inter,sans-serif" font-size="8" font-weight="800" fill="${WH}" text-anchor="middle">95%</text>`);
+    case "mapa":
+      return wrap(`<rect x="13" y="13" width="14" height="6" rx="3" fill="${SK}"/><path d="M20 19 v4 M11 23 h18 M11 23 v4 M20 23 v4 M29 23 v4" stroke="${MI}" stroke-width="1" fill="none"/>`
+        + [7, 16, 25].map((x) => `<rect x="${x}" y="27" width="8" height="7" rx="2" fill="none" stroke="${SK}" stroke-width="1"/>`).join(""));
+    case "dialogo":
+      return wrap(`<rect x="7" y="14" width="19" height="7" rx="3.5" fill="${MI}" opacity=".6"/><rect x="14" y="24" width="19" height="7" rx="3.5" fill="${SK}"/><rect x="7" y="34" width="15" height="7" rx="3.5" fill="${MI}" opacity=".6"/>`);
+    case "serie":
+      return wrap(`<text x="30" y="34" font-family="Inter,sans-serif" font-size="22" font-weight="800" fill="${SK}" opacity=".28" text-anchor="middle">02</text><rect x="7" y="20" width="20" height="3.4" rx="1.7" fill="${WH}"/><rect x="7" y="27" width="14" height="2.2" rx="1.1" fill="${MI}"/>`);
+    case "device":
+      return wrap(`<rect x="12" y="12" width="16" height="26" rx="3" fill="none" stroke="${SK}" stroke-width="1.2"/><rect x="14" y="15" width="12" height="18" rx="1" fill="${MI}" opacity=".55"/><rect x="17.5" y="35" width="5" height="1.2" rx=".6" fill="${SK}"/>`);
     default: // automático
       return wrap(`<path d="M20 13 l1.9 4.6 l4.9 .4 l-3.7 3.2 l1.1 4.8 l-4.2-2.6 l-4.2 2.6 l1.1-4.8 l-3.7-3.2 l4.9-.4 z" fill="${SK}"/><rect x="10" y="35" width="20" height="2" rx="1" fill="${MI}"/><rect x="13" y="40" width="14" height="2" rx="1" fill="${MI}"/>`);
+  }
+}
+
+// Miniatura do FUNDO — a superfície, não o arranjo. Mesma moldura das outras para as duas
+// escolhas (layout e fundo) se lerem lado a lado.
+function fundoThumb(v) {
+  const NA = "#003554", DK = "#07212B", SK = "#5499B5", CL = "#D9DCD6", MI = "#AFBCC9";
+  const moldura = (fundo, inner) => `<svg class="lt-svg" viewBox="0 0 40 50" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${fundo}${inner || ""}</svg>`;
+  switch (String(v || "")) {
+    case "grade":
+      return moldura(`<rect width="40" height="50" rx="4" fill="${NA}"/>`,
+        [10, 20, 30].map((x) => `<line x1="${x}" y1="0" x2="${x}" y2="50" stroke="${SK}" stroke-width=".7" opacity=".55"/>`).join("")
+        + [10, 20, 30, 40].map((y) => `<line x1="0" y1="${y}" x2="40" y2="${y}" stroke="${SK}" stroke-width=".7" opacity=".55"/>`).join(""));
+    case "solido":
+      return moldura(`<rect width="40" height="50" rx="4" fill="${DK}"/>`);
+    case "papel":
+      return moldura(`<rect width="40" height="50" rx="4" fill="${CL}"/>`,
+        [14, 22, 30].map((y) => `<line x1="6" y1="${y}" x2="34" y2="${y}" stroke="${NA}" stroke-width=".7" opacity=".28"/>`).join("")
+        + `<path d="M40 38 L28 50 L40 50 Z" fill="${MI}"/>`);
+    case "vinheta":
+      return moldura(`<rect width="40" height="50" rx="4" fill="${NA}"/><rect width="40" height="50" rx="4" fill="url(#vg)"/>`
+        + `<defs><radialGradient id="vg" cx="50%" cy="50%" r="62%"><stop offset="42%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".62"/></radialGradient></defs>`);
+    default:
+      return moldura(`<rect width="40" height="50" rx="4" fill="${NA}"/>`,
+        [8, 20, 32].map((y) => [8, 20, 32].map((x) => `<circle cx="${x}" cy="${y}" r="1.1" fill="${SK}" opacity=".45"/>`).join("")).join(""));
   }
 }
 // Linha "Foto de fundo" de um slide: mostra a miniatura + trocar/remover quando há foto,

@@ -10,6 +10,7 @@ const prompts = require("../lib/prompts");
 const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
 const capaFoto = require("../lib/capa_foto");
+const numerosDoBrief = require("../lib/numeros_do_brief");
 const paletaAviso = require("../lib/paleta_aviso");
 const researchLib = require("../lib/research");
 const render = require("../lib/render");
@@ -309,6 +310,12 @@ router.post("/", async (req, res, next) => {
       // Imagem do acervo (estilo "Foto"): injeta no conceito p/ o template Foto compor.
       if (body.image) parsed.image = String(body.image);
     }
+    // A SUPERFÍCIE escolhida na criação vale como padrão de todos os slides da peça. Fica no
+    // conceito (e não no render.json) porque é o carrossel que a lê, slide a slide — e assim
+    // cada slide ainda pode ter o seu depois, sobrescrevendo este.
+    if (body.fundo && render.FUNDO_IDS.indexOf(String(body.fundo)) >= 0 && parsed && typeof parsed === "object") {
+      parsed.fundo = String(body.fundo);
+    }
     const fotosInventadas = limpaFotosInventadas(parsed);
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
     const limitacoes = avisaLimitacoes(gov, parsed);
@@ -317,6 +324,17 @@ router.post("/", async (req, res, next) => {
     // se a janela vai mesmo abrir.
     const pendencias = pendenciasDeImagem(body.content_type, fotosInventadas, limitacoes);
     if (pendencias.length) avisaFotosInventadas(gov, fotosInventadas);
+
+    // NÚMERO QUE SOME. Se a pessoa citou um valor no pedido ("PIX em D+10", "95%", "R$ 1,99") e
+    // ele não aparece em slide nenhum nem na legenda, a peça saiu falando do assunto sem dizer o
+    // número — e some em silêncio, porque só quem lembra do que pediu percebe a falta.
+    // Diferente da governança, que barra número ERRADO: aqui o número está certo e não chegou.
+    const sumidos = numerosDoBrief.numerosQueSumiram(body.brief, parsed);
+    const avisoNum = numerosDoBrief.avisoDeNumeros(sumidos);
+    if (avisoNum) {
+      if (!Array.isArray(gov.warnings)) gov.warnings = [];
+      gov.warnings.push(avisoNum);
+    }
 
     res.json({
       simulated: result.simulated,

@@ -633,6 +633,27 @@ function briefingLongo() {
     // Retrato: a capa é 1080x1350; foto deitada, recortada, perde o assunto.
     const escolhida = capa.melhorFoto([{ full: "deitada", width: 1600, height: 900 }, { full: "retrato", width: 900, height: 1600 }]);
     checa(escolhida && escolhida.full === "retrato", "prefere foto em retrato para a capa", escolhida && escolhida.full);
+
+    // NÚMERO QUE SOME. Pedido do Hugo: "caso no prompt informado tenha essa citação, é necessário
+    // que na respectiva criação seja apresentado esse mesmo valor". A peça que fala do assunto
+    // sem dizer o número ("prazo curto" no lugar de "D+10") some em silêncio.
+    const num = require("./lib/numeros_do_brief.js");
+    const briefNum = "PIX em D+10, cartão em D+30, 95% de aprovação e R$ 1,99 por transação";
+    checa(num.numerosDoBrief(briefNum).length === 4, "acha os quatro números do pedido",
+      num.numerosDoBrief(briefNum).map((x) => x.valor).join(", "));
+    checa(num.numerosDoBrief("faça 6 slides sobre migração").length === 0,
+      "e não confunde instrução (“6 slides”) com número da peça");
+    const faltando = num.numerosQueSumiram(briefNum, { slides: [{ title: "Prazos curtos", body: "alta aprovação" }] });
+    checa(faltando.length === 4, "acusa os números que não chegaram na arte", faltando.map((x) => x.valor).join(", "));
+    checa(num.numerosQueSumiram(briefNum, {
+      slides: [{ stats: [{ value: "95%", label: "aprovação" }] }, { flow: [{ label: "PIX", sub: "D+10" }, { label: "Cartão", sub: "D+30" }] }],
+      caption: "R$ 1,99 por transação",
+    }).length === 0, "e fica quieto quando todos aparecem (em qualquer campo)");
+    const ger2 = fs.readFileSync(path.join(__dirname, "routes/generate.js"), "utf8");
+    checa(/numerosDoBrief\.numerosQueSumiram/.test(ger2), "a geração REALMENTE confere isso");
+    const prm = fs.readFileSync(path.join(__dirname, "lib/prompts.js"), "utf8");
+    checa(/NUMERO QUE A PESSOA CITOU NO PEDIDO TEM QUE APARECER/.test(prm),
+      "e o prompt manda usar o número, em vez de só avisar depois");
   }
 
   // ------------------------------------------------------------------
