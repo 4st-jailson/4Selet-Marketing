@@ -1805,7 +1805,16 @@ function fundoCss(id, tema) {
           background-size: 100% 58px; background-position: 0 92px; }
         .card::after { content:""; position:absolute; right:0; bottom:0; width:132px; height:132px;
           z-index:1; pointer-events:none; background:${PALETTE.mist}; opacity:.8;
-          clip-path: polygon(100% 0, 0 100%, 100% 100%); }`;
+          clip-path: polygon(100% 0, 0 100%, 100% 100%); }
+        /* Rede de segurança do papel: alguns arquétipos fixam a cor do texto de apoio no claro
+           da paleta (pensado para fundo escuro), e sobre a folha ele quase some. Aqui esses
+           textos voltam a ser escuros. Descoberto olhando o carrossel pronto, não por teste —
+           na miniatura o slide parecia certo. */
+        /* SÓ o texto que fica direto sobre a folha. Nada que viva DENTRO de um cartão escuro
+           (.node-s, .fr-s, .st-label) entra aqui: pintá-los de azul-escuro sobre cartão navy
+           os faz sumir — foi o que aconteceu na primeira tentativa desta correção. */
+        .s-body, .flow-note, .fnote span:last-child, .pageno { color:${PALETTE.navy} !important; }
+        .card, .mid { color:${PALETTE.darker}; }`;
     case "vinheta":
       return `.card { background:${t.bg}; }
         .card::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
