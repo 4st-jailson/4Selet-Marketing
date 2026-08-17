@@ -611,6 +611,28 @@ function briefingLongo() {
     const cs = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
     checa(/fundoDoSlide === "papel"[\s\S]{0,120}theme: "light"/.test(cs),
       "o fundo de papel força o tema claro (senão o texto some na folha)");
+
+    // A CAPA com foto coerente com o assunto. O pedido do Hugo: "está sendo citado tecnologia,
+    // procure uma imagem de circuito; está falando da plataforma 4Selet, apresente a imagem da
+    // própria plataforma". As três peças existiam separadas e nunca tinham sido ligadas.
+    const capa = require("./lib/capa_foto.js");
+    const prompts = fs.readFileSync(path.join(__dirname, "lib/prompts.js"), "utf8");
+    checa(/"capa_foto"/.test(prompts), "o prompt PEDE à IA o termo de busca da capa");
+    checa(/propria[\s\S]{0,400}4SELET|4Selet[\s\S]{0,200}propria/i.test(prompts),
+      "e ensina a NÃO usar foto de banco quando a capa pede a tela da 4Selet");
+    const ger = fs.readFileSync(path.join(__dirname, "routes/generate.js"), "utf8");
+    checa(/capaFoto\.buscarCapa/.test(ger), "e a geração REALMENTE vai buscar (o campo não fica morto)");
+
+    checa(capa.pedidoDeCapa({ capa_foto: { busca: "circuit board", fonte: "banco" } }).fonte === "banco",
+      "lê o pedido de foto da capa");
+    checa(capa.pedidoDeCapa({ foto_busca: "server room" }).fonte === "banco",
+      "e aceita o campo antigo, que estava morto no prompt desde sempre");
+    checa(capa.pedidoDeCapa({ capa_foto: { fonte: "propria" } }).fonte === "propria",
+      "reconhece quando a capa pede a própria plataforma");
+    checa(capa.pedidoDeCapa({}).fonte === "nenhuma", "e não inventa foto quando ninguém pediu");
+    // Retrato: a capa é 1080x1350; foto deitada, recortada, perde o assunto.
+    const escolhida = capa.melhorFoto([{ full: "deitada", width: 1600, height: 900 }, { full: "retrato", width: 900, height: 1600 }]);
+    checa(escolhida && escolhida.full === "retrato", "prefere foto em retrato para a capa", escolhida && escolhida.full);
   }
 
   // ------------------------------------------------------------------

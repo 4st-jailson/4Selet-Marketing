@@ -50,6 +50,21 @@ const SCHEMAS = {
   //   PRINT DE TELA -> device (exige image real)   ·   FRASE FORTE SEM DADO -> text
   // RITMO: intercale 1 ou 2 slides com theme:"light" no meio dos escuros — e o principal recurso de respiro da marca.
   // Capa (gancho, pode ter foto no campo image) -> desenvolvimento -> CTA. Escolha o layout que melhor comunica; nem todo slide precisa de items/stats/flow. Esta lista e SUGESTAO, nao cerca: se o pedido descreve algo que nenhum layout atende, NAO troque em silencio por outro — declare em "limitacoes".
+  "capa_foto": { "busca": "2 a 4 palavras em INGLES para achar a foto da CAPA num banco de imagens", "fonte": "banco|propria|nenhuma", "porque": "1 frase: por que essa imagem combina com o assunto" },
+  // A CAPA do carrossel ganha uma foto coerente com o ASSUNTO, escolhida por voce. Nao e enfeite:
+  // e o que faz a primeira arte parar o dedo de quem rola. Pense no que o assunto EVOCA:
+  //   tecnologia/infraestrutura -> "circuit board macro", "server room dark", "fiber optic light"
+  //   pessoas/decisao/lideranca -> "executive portrait dark", "business meeting candid"
+  //   dinheiro/pagamento        -> "credit card closeup dark", "financial district night"
+  //   tempo/prazo               -> "clock macro dark", "hourglass minimal"
+  // REGRAS DURAS:
+  //  - fonte "propria" quando a capa pede a TELA DA 4SELET (checkout, area de membros, dashboard):
+  //    nao existe foto de banco da nossa plataforma, e usar a de outra empresa seria mentira.
+  //    Nesse caso deixe "busca" vazio — o painel vai pedir o print a quem opera.
+  //  - fonte "nenhuma" quando a capa e sobre DADO (numero, comparacao, medidor): foto atras de
+  //    numero atrapalha a leitura.
+  //  - a busca vai em INGLES porque o banco de imagens responde muito melhor assim.
+  //  - NUNCA descreva pessoa por etnia, idade ou aparencia fisica.
   "caption": "caption que acompanha o post",
   "hashtags": ["#4Selet", "..."],
   "cta": "CTA aprovado",

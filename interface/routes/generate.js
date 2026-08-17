@@ -9,6 +9,7 @@ const ai = require("../lib/ai"); // dispatcher multi-provedor (Claude / OpenAI /
 const prompts = require("../lib/prompts");
 const campaigns = require("../lib/campaigns");
 const content = require("../lib/content");
+const capaFoto = require("../lib/capa_foto");
 const paletaAviso = require("../lib/paleta_aviso");
 const researchLib = require("../lib/research");
 const render = require("../lib/render");
@@ -634,6 +635,20 @@ router.post("/save", async (req, res, next) => {
       content.setMediaMeta(folder, { print: body.media_print, url: body.media_url, vehicle: body.media_vehicle, headline: body.media_headline, model: body.media_model, sizes: body.media_sizes });
     }
 
+    // 2f) A CAPA do carrossel ganha uma foto coerente com o assunto, buscada sozinha. A IA já
+    // dizia o que procurar (o campo existia no prompt e ninguém lia); aqui o painel vai atrás.
+    // Falhar aqui NÃO derruba a geração: a peça sai igual, só sem a foto — e com o motivo.
+    let capa = null;
+    if (body.content_type === "instagram_carousel" && parsed && Array.isArray(parsed.slides)) {
+      try {
+        capa = await capaFoto.buscarCapa(parsed, { nome: body.task_name });
+        if (capa && capa.ok) capaFoto.aplicarNaCapa(parsed, capa);
+      } catch (e) {
+        capa = { ok: false, motivo: "erro", explica: "Não consegui buscar a foto da capa: " + e.message };
+        console.error("[capa] falhou:", e && e.message);
+      }
+    }
+
     // 3) grava o arquivo de conteudo
     const text = formatContentFile(ct, parsed, body.raw);
     let rel;
@@ -643,7 +658,7 @@ router.post("/save", async (req, res, next) => {
       return res.status(e.code === "E_NOT_EDITABLE" ? 409 : 500).json({ error: e.message, code: e.code });
     }
 
-    res.json({ ok: true, folder, file: rel, governance: gov, task: content.getTask(folder) });
+    res.json({ ok: true, folder, file: rel, governance: gov, capa, task: content.getTask(folder) });
   } catch (e) { next(e); }
 });
 

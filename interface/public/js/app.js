@@ -6466,6 +6466,27 @@ function showSaveBanner(folder) {
   }, 1000);
 }
 
+// A capa do carrossel busca sozinha uma foto que combine com o assunto. Isso PRECISA aparecer:
+// foto que entra sem ninguém saber de onde veio é o tipo de mágica que assusta — e o crédito do
+// fotógrafo é obrigação, não gentileza. Quando não deu para buscar, o motivo vem junto com a
+// saída (anexar print, capturar o site, ou conectar o banco de imagens).
+function capaHtml(capa) {
+  if (!capa) return "";
+  if (capa.ok) {
+    return `<div class="gov-item capa-box">
+      <strong>Capa com foto</strong> — procurei <em>${esc(capa.busca || "")}</em> no banco de imagens${capa.porque ? " porque " + esc(capa.porque) : ""}.
+      ${capa.autor ? "Foto de " + esc(capa.autor) + "." : ""}
+      <span class="hint">Não gostou? Abra a peça e troque a foto do primeiro slide.</span>
+    </div>`;
+  }
+  if (capa.motivo === "sem_foto") return "";   // capa de dado não leva foto: nada a dizer
+  return `<div class="gov-item capa-box capa-pendente">
+    <strong>A capa ficou sem foto</strong> — ${esc(capa.explica || "não consegui buscar a imagem.")}
+    ${capa.motivo === "propria" ? '<span class="hint">Abra a peça e use “Buscar imagem” para anexar o print, ou capture a tela do site.</span>' : ""}
+    ${capa.motivo === "sem_chave" ? '<span class="hint">Configurações › Banco de imagens.</span>' : ""}
+  </div>`;
+}
+
 async function saveGenerated() {
   if (!LAST_GEN) return;
   const title = ($("#g-title") && $("#g-title").value.trim()) || "";
@@ -6494,7 +6515,7 @@ async function saveGenerated() {
   let saved = false;
   try {
     const r = await API.save(payload);
-    $("#g-gov").innerHTML = govHtml(r.governance);
+    $("#g-gov").innerHTML = govHtml(r.governance) + capaHtml(r.capa);
     saved = true;
     const regen = $("#g-regen"); if (regen) regen.style.display = "none";
     // Renderiza a arte automaticamente ao salvar (feed/imagem/carrossel): a peça já nasce
