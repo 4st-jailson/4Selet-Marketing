@@ -29,12 +29,24 @@ const squadLib = require("./lib/squad");
 // virar linha na tela, sem conteúdo guardado, e com uma mensagem que aponta para o lugar errado.
 const CAMINHO_SQUAD = /^\/api\/squad\/webhook\/?$/i;
 app.use("/api/squad/webhook", (req, res, next) => {
-  if (!squadLib.confere(squadLib.tokenDaRequisicao(req))) {
+  const apresentado = squadLib.tokenDaRequisicao(req);
+  if (!squadLib.confere(apresentado)) {
     // Fica registrado (com freio). A tela de Requisições existe para responder "chegou
     // alguma coisa?" — e o token errado é justamente o tropeço mais provável no dia de ligar
     // a integração. Sem isto, a tela diria "nada chegou" enquanto as entregas batiam na porta.
-    try { squadLib.registrarRecusa(squadLib.clientIp(req), "O token apresentado não confere com o que está salvo em Configurações."); } catch (e) {}
-    console.warn("[squad] recusada na porta (token inválido) — de " + squadLib.clientIp(req));
+    //
+    // Os dois casos pedem providências opostas, então a mensagem os separa: SEM token quase
+    // sempre é alguém varrendo a internet e não exige nada de ninguém; COM token errado é
+    // quase sempre a integração mal cadastrada, e aí vale conferir o endereço com o time.
+    const semToken = !apresentado;
+    const conectado = squadLib.estado().conectado;
+    const motivo = semToken
+      ? (conectado
+        ? "Alguém bateu nesta porta sem apresentar token nenhum. Costuma ser varredura automática da internet, e não exige nada de você — a porta continuou fechada."
+        : "Bateram nesta porta, mas ainda não há token cadastrado aqui. Se era o time do squad, gere o token em Configurações e passe o endereço a eles.")
+      : "Uma entrega chegou com um token que não confere com o que está salvo em Configurações. Confira com o time do squad se eles cadastraram o endereço certo.";
+    try { squadLib.registrarRecusa(squadLib.clientIp(req), motivo); } catch (e) {}
+    console.warn("[squad] recusada na porta (" + (semToken ? "sem token" : "token não confere") + ") — de " + squadLib.clientIp(req));
     return res.status(401).json({ ok: false, erro: "token inválido" });
   }
   next();
