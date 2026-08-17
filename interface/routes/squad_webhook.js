@@ -56,10 +56,38 @@ router.post("/webhook", async (req, res) => {
     return res.json({ ok: false, erro: e.message, requisicao: reg.id });
   }
   reg.titulo = lido.titulo; reg.formato = lido.formato; reg.cards = lido.cards.length;
+  reg.evento = lido.evento;
+
+  // Etapa 1.5 — os avisos que NÃO trazem arte se resolvem aqui mesmo, sem criar nada.
+  if (lido.evento === "teste") {
+    reg.resultado = "teste"; reg.logs = logs;
+    log("Teste de conexão: o token está certo e a porta está aberta. Nada foi criado.");
+    reg.logs = logs; squad.atualizar(reg);
+    return res.json({ ok: true, teste: true, pronto_para_receber: true, requisicao: reg.id });
+  }
+  if (lido.evento === "post.cancelado") {
+    const r = squad.cancelar(lido.origem_id, lido.motivo);
+    reg.resultado = r.ok ? "cancelado" : "erro";
+    reg.peca = r.peca;
+    if (!r.ok) reg.erro = "O squad avisou que o post " + (lido.origem_id || "?") + " foi cancelado, mas " + r.motivo + ".";
+    log(r.ok
+      ? "O squad cancelou este post. Marquei a peça " + r.peca + " — nada foi apagado."
+      : "O squad cancelou o post " + (lido.origem_id || "?") + ", mas não achei peça correspondente.");
+    reg.logs = logs; squad.atualizar(reg);
+    return res.json({ ok: true, cancelado: true, peca: r.peca, requisicao: reg.id });
+  }
 
   // Etapa 2 — já recebemos este post? Reenviar não pode virar peça duplicada.
+  // Mas "refez a arte" é outra história: aí a entrega NOVA tem que entrar (ver abaixo).
   const anterior = squad.entradaDeOrigem(lido.origem_id);
-  if (anterior) {
+  if (anterior && lido.evento === "post.atualizado") {
+    // Solta a reserva para a arte nova poder entrar, e guarda de qual peça ela é a versão nova.
+    squad.liberarReserva(lido.origem_id);
+    reg.substitui = anterior.folder || null;
+    log(anterior.folder
+      ? "O squad refez este post. Vou criar uma peça nova; a anterior (" + anterior.folder + ") continua intacta."
+      : "O squad refez este post.");
+  } else if (anterior) {
     const aindaExiste = anterior.folder && require("../lib/content").findTask(anterior.folder);
     if (aindaExiste || anterior.estado === "montando") {
       reg.resultado = "ja_recebida"; reg.peca = anterior.folder || null; reg.logs = logs;
@@ -82,7 +110,7 @@ router.post("/webhook", async (req, res) => {
   res.json({ ok: true, recebido: true, requisicao: reg.id, cards: lido.cards.length, formato: lido.formato });
 
   // Etapa 4 — montar, sem ninguém esperando.
-  squad.receber(corpo, { log, jaLido: lido }).then((r) => {
+  squad.receber(corpo, { log, jaLido: lido, substitui: reg.substitui || null }).then((r) => {
     reg.resultado = "criada";
     reg.peca = r.peca; reg.formato = r.formato; reg.cards = r.cards;
     reg.avisos = r.avisos || []; reg.logs = logs;

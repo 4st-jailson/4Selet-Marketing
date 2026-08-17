@@ -34,7 +34,7 @@ router.post("/token", adminOnly, (req, res) => {
   const b = req.body || {};
   try {
     const token = b.gerar ? squad.gerarToken() : String(b.token || "").trim();
-    squad.salvarToken(token, req.user.username);
+    squad.salvarToken(token, req.user.username, b.gerar ? "gerado" : "colado");
     // O valor completo volta UMA vez, só quando o painel acabou de gerar: é a única
     // chance de copiá-lo. Token colado pela pessoa ela já tem, então não repetimos.
     res.json({ ok: true, token: b.gerar ? token : null, estado: squad.estado() });

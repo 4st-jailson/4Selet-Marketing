@@ -1263,10 +1263,22 @@ function avisoDeOrigem(origem) {
   if (!origem || origem.sistema !== "squad") return "";
   const avisos = (origem.avisos || []).filter(Boolean);
   const quando = origem.recebido_em ? fmtDateTime(origem.recebido_em) : "";
+  // Cancelado LÁ não apaga nada AQUI: a peça pode já ter sido editada, agendada ou publicada.
+  // O painel avisa e deixa a decisão com quem opera — inclusive a de não fazer nada.
+  const cancelado = origem.cancelado_em ? `
+    <div class="sq-cancelado mt">
+      <strong>O time do squad cancelou este post</strong> em ${esc(fmtDateTime(origem.cancelado_em))}${origem.cancelado_motivo ? " — " + esc(origem.cancelado_motivo) : "."}
+      <br />Nada foi apagado por aqui. Se você concorda, descarte a peça; se ela já foi publicada, o cancelamento não desfaz a publicação.
+    </div>` : "";
+  const substitui = origem.substitui ? `
+    <p class="muted mt">Esta é uma <strong>versão refeita</strong>. A anterior continua no painel:
+    <a href="#/task/${encodeURIComponent(origem.substitui)}">abrir a versão anterior</a>.</p>` : "";
   return `<div class="card mt sq-origem-card">
     <h3>Esta arte veio do sistema squad</h3>
+    ${cancelado}
     <p class="muted mt">Ela foi gerada fora do painel${origem.id ? " (post " + esc(String(origem.id)) + ")" : ""}${quando ? " e chegou aqui em " + esc(quando) : ""}.
     Você pode revisar, editar e publicar normalmente${origem.pauta ? " — a pauta era: " + esc(origem.pauta) : ""}.</p>
+    ${substitui}
     ${avisos.length ? '<ul class="sq-avisos mt">' + avisos.map((a) => "<li>" + esc(a) + "</li>").join("") + "</ul>" : ""}
     <p class="hint mt"><a href="#/requisicoes">Ver a entrega no registro de requisições</a></p>
   </div>`;
@@ -6444,6 +6456,8 @@ const SQ_RESULTADOS = {
   erro: { rotulo: "Não virou peça", badge: "warn" },
   montando: { rotulo: "Montando a peça", badge: "plain" },
   recusada: { rotulo: "Recusada na porta", badge: "warn" },
+  teste: { rotulo: "Teste de conexão", badge: "plain" },
+  cancelado: { rotulo: "Post cancelado lá", badge: "warn" },
 };
 // Uma entrega "montando" há muito tempo não está montando: o painel foi reiniciado no meio.
 // Sem isto a linha ficaria eternamente dizendo que está trabalhando.
@@ -6473,7 +6487,9 @@ async function viewRequisicoes() {
     const oque = r.titulo ? esc(r.titulo) : (r.origem_id ? "Post " + esc(r.origem_id) : "Entrega sem título");
     const detalhe = (r.resultado === "erro" || r.resultado === "recusada")
       ? '<span class="sq-erro">' + esc(r.erro || "sem motivo registrado") + "</span>"
-      : (r.peca
+      : (r.resultado === "teste"
+        ? '<span class="hint">a conexão respondeu; nada foi criado</span>'
+        : r.peca
         ? '<a href="#/task/' + encodeURIComponent(r.peca) + '">abrir a peça</a>'
         + (r.cards ? ' <span class="hint">' + r.cards + (r.cards > 1 ? " artes" : " arte") + (r.formato ? " · " + esc(r.formato) : "") + "</span>" : "")
         : (r.resultado === "montando" ? '<span class="hint">o painel está desenhando as artes — isso leva um ou dois minutos</span>' : ""));
@@ -6740,11 +6756,6 @@ async function viewSettings() {
           : '<span class="badge paused">não conectado</span>',
         body: `
       <p class="muted">O sistema do squad envia as artes prontas para cá. Elas chegam em <strong>Aprovados</strong>, com a marca de que vieram de lá, prontas para você revisar, editar ou publicar.</p>
-      <div class="field mt"><label>Endereço de entrega</label>
-        <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar</button></div>
-        <p class="hint">O time do squad cadastra este endereço na integração <span class="codeblock">webhook_post</span> do sistema deles — <strong>com o token no fim</strong>, assim:
-        <span class="codeblock">${esc(enderecoSquad)}?token=SEU_TOKEN</span>. Se você gerar o token aqui, o painel já mostra o endereço completo, pronto para copiar.</p>
-      </div>
       <hr class="sep" />
       ${sq.conectado ? `
       <div class="key-locked">
@@ -6752,20 +6763,56 @@ async function viewSettings() {
         <span class="key-mask">${esc(sq.token_dica || "")}</span>
         <span class="badge ok">Ativo</span>
       </div>
+      <p class="hint mt">${sq.como_veio === "colado"
+        ? "Este token veio do time do squad e foi colado aqui."
+        : "Este token nasceu aqui no painel — o time do squad precisa tê-lo cadastrado do lado deles."}${sq.criado_em ? " Guardado em " + esc(fmtDateTime(sq.criado_em)) + "." : ""}</p>
+      ${sq.como_veio === "gerado" ? `
+      <div class="field mt"><label>Endereço para enviar ao time do squad</label>
+        <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}?token=…" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar endereço</button></div>
+        <p class="hint">Por segurança o painel não mostra o token de novo depois de guardado. Se você não anotou o endereço completo, use “Definir outro token” abaixo e gere um novo — aí ele aparece inteiro mais uma vez.</p>
+      </div>` : `
+      <div class="field mt"><label>Endereço que o time do squad deve usar</label>
+        <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar</button></div>
+        <p class="hint">Eles cadastram este endereço na integração <span class="codeblock">webhook_post</span>, acrescentando <span class="codeblock">?token=</span> e o token que eles mesmos geraram.</p>
+      </div>`}
       <ul class="sq-facts mt">
         <li><span>Entregas recebidas</span><strong>${sq.total_requisicoes || 0}</strong></li>
         <li><span>Última entrega</span><strong>${sq.ultima_requisicao ? esc(fmtDateTime(sq.ultima_requisicao)) : "nenhuma ainda"}</strong></li>
       </ul>
-      <div class="flex mt"><button class="btn btn-primary" id="sq-req">Ver requisições</button><button class="btn" id="sq-trocar">Trocar token</button><button class="btn btn-danger" id="sq-off">Desconectar</button></div>
-      <div id="sq-edit" class="key-edit mt" style="display:none">
-        <div class="field"><label>Novo token</label><input id="sq-token" type="password" placeholder="Cole o token que o sistema do squad gerou" /></div>
-        <div class="flex"><button class="btn btn-primary" id="sq-save">Salvar token</button><button class="btn" id="sq-gerar">Gerar um aqui</button><button class="btn btn-ghost" id="sq-cancel" type="button">Cancelar</button></div>
+      <div class="flex mt"><button class="btn btn-primary" id="sq-req">Ver requisições</button><button class="btn" id="sq-trocar">Definir outro token</button><button class="btn btn-danger" id="sq-off">Desconectar</button></div>
+      <div id="sq-edit" class="sq-caminhos mt" style="display:none">
+        <p class="muted">O token que vale é um só. Escolha de onde vem o novo:</p>
+        <div class="sq-caminho">
+          <div class="sq-caminho-tit">O time do squad me passou um token</div>
+          <p class="hint">Cole aqui o que eles enviaram. Eles já sabem qual é — não precisam de mais nada de você.</p>
+          <input id="sq-token" type="password" placeholder="Cole o token que eles enviaram" />
+          <div class="flex mt"><button class="btn btn-primary" id="sq-save">Salvar este token</button></div>
+        </div>
+        <div class="sq-caminho">
+          <div class="sq-caminho-tit">Prefiro criar um aqui e enviar para eles</div>
+          <p class="hint">O painel cria o token e mostra o endereço completo <strong>uma única vez</strong>, para você copiar e repassar.</p>
+          <div class="flex"><button class="btn" id="sq-gerar">Criar token e mostrar o endereço</button></div>
+        </div>
+        <div class="flex"><button class="btn btn-ghost" id="sq-cancel" type="button">Cancelar</button></div>
       </div>` : `
-      <div class="field"><label>Token de entrega</label>
-        <input id="sq-token" type="password" placeholder="Cole aqui o token que o sistema do squad gerou" />
-        <p class="hint">É a senha da porta: sem ela, nenhuma arte entra. Se o time do squad ainda não gerou uma, o painel pode gerar — e você repassa.</p>
+      <div class="field"><label>Endereço de entrega</label>
+        <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar</button></div>
+        <p class="hint">É para cá que as artes vêm. O time do squad cadastra este endereço na integração <span class="codeblock">webhook_post</span> do sistema deles, com o token no fim.</p>
       </div>
-      <div class="flex"><button class="btn btn-primary" id="sq-save">Salvar token</button><button class="btn" id="sq-gerar">Gerar um aqui</button></div>`}
+      <p class="muted mt">Falta o <strong>token</strong>: é a senha desta porta, e sem ele nenhuma arte entra. Ele pode vir de dois lugares — escolha o que se aplica:</p>
+      <div class="sq-caminhos">
+        <div class="sq-caminho">
+          <div class="sq-caminho-tit">O time do squad já me passou um token</div>
+          <p class="hint">Cole aqui o que eles enviaram. Eles já cadastraram esse token do lado deles.</p>
+          <input id="sq-token" type="password" placeholder="Cole o token que eles enviaram" />
+          <div class="flex mt"><button class="btn btn-primary" id="sq-save">Salvar este token</button></div>
+        </div>
+        <div class="sq-caminho">
+          <div class="sq-caminho-tit">Ainda não temos um token</div>
+          <p class="hint">O painel cria um e mostra o endereço completo <strong>uma única vez</strong>, para você copiar e enviar a eles.</p>
+          <div class="flex"><button class="btn" id="sq-gerar">Criar token e mostrar o endereço</button></div>
+        </div>
+      </div>`}
       <p class="hint mt">Só administradores configuram esta conexão.</p>`,
       })}
       </div>
@@ -6942,9 +6989,9 @@ async function viewSettings() {
     // entrar na hora. Trocar sem querer aqui sairia caro e silencioso.
     if (sq.conectado) {
       const ok = await uiModal({
-        title: "Trocar por um token novo?",
-        message: "O token que o sistema do squad usa hoje deixa de valer no mesmo instante, e as entregas passam a ser recusadas até alguém de lá cadastrar o novo. Só faça isso se for repassar o endereço agora.",
-        confirmText: "Gerar um novo", confirmKind: "danger",
+        title: "Criar um token novo?",
+        message: "O token de agora deixa de valer no mesmo instante, e as entregas do squad passam a ser recusadas até alguém de lá cadastrar o novo endereço. Só siga se você for repassar o endereço para eles agora.",
+        confirmText: "Criar mesmo assim", confirmKind: "danger",
       });
       if (ok === null) return;
     }
@@ -6953,13 +7000,13 @@ async function viewSettings() {
       // O token completo aparece UMA vez só — depois daqui o painel guarda e nunca mais mostra.
       // Por isso vai num modal, e não numa linha da tela: qualquer re-render apagaria.
       await uiModal({
-        title: "Token criado",
-        message: "Este é o endereço completo para o time do squad cadastrar. Ele aparece só agora — copie antes de fechar.",
-        fields: [{ name: "url", label: "Endereço com o token", type: "textarea", value: enderecoSquad + "?token=" + r.token }],
-        confirmText: "Já copiei",
+        title: "Token criado — copie agora",
+        message: "Este é o endereço completo que o time do squad deve cadastrar na integração webhook_post. O token aparece só desta vez: depois de fechar, o painel guarda e não mostra mais.",
+        fields: [{ name: "url", label: "Endereço completo, com o token", type: "textarea", value: enderecoSquad + "?token=" + r.token }],
+        confirmText: "Copiei e vou enviar",
         noCancel: true,
       });
-      toast("Conexão do squad pronta para receber.", "success");
+      toast("Conexão pronta para receber. Falta o time do squad cadastrar o endereço.", "success");
       viewSettings();
     } catch (e) { toast("Não consegui gerar: " + ((e && e.data && e.data.error) || e.message), "error"); }
   };

@@ -1932,3 +1932,16 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .sq-origem-card { border-left: 3px solid var(--accent); }
 .sq-avisos { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--text-2); }
 .sq-avisos li { margin-bottom: 4px; }
+/* Aviso de cancelamento vindo do outro sistema: chama atenção sem gritar, e sem parecer erro
+   do painel (não é — é uma informação de fora que a pessoa precisa considerar). */
+.sq-cancelado { font-size: 13px; line-height: 1.7; padding: 10px 12px; border-radius: 8px;
+  background: var(--warn-bg, rgba(212,160,23,.10)); border: 1px solid var(--warn-bd, rgba(212,160,23,.35)); }
+/* Os dois caminhos do token: o que o squad nos passa e o que criamos para eles. Ficam lado a
+   lado e nomeados pelo que a pessoa está fazendo — antes eram dois botões soltos e ninguém
+   sabia qual era qual. */
+.sq-caminhos { display: grid; gap: var(--s3); margin-top: var(--s3); }
+@media (min-width: 720px) { .sq-caminhos { grid-template-columns: 1fr 1fr; align-items: start; } }
+.sq-caminho { border: 1px solid var(--border); border-radius: 10px; padding: var(--s3); }
+.sq-caminho-tit { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.sq-caminho input { width: 100%; }
+.sq-caminhos > .flex { grid-column: 1 / -1; }

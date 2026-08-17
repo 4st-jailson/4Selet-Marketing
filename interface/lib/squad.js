@@ -60,7 +60,9 @@ function gerarToken() {
 function lerConfig() {
   return lerJson(ARQ_TOKEN, {}) || {};
 }
-function salvarToken(token, quem) {
+// `comoVeio` distingue as DUAS direções possíveis, que a tela precisa contar sem ambiguidade:
+// "colado" = o time do squad gerou e nos passou; "gerado" = nasceu aqui e nós passamos a eles.
+function salvarToken(token, quem, comoVeio) {
   const t = String(token || "").trim();
   if (t.length < 16) { const e = new Error("o token precisa ter pelo menos 16 caracteres"); e.code = "E_TOKEN_CURTO"; throw e; }
   const cfg = lerConfig();
@@ -68,6 +70,7 @@ function salvarToken(token, quem) {
     token: t,
     criado_em: new Date().toISOString(),
     criado_por: quem || null,
+    como_veio: comoVeio === "gerado" ? "gerado" : "colado",
     ultima_requisicao: cfg.ultima_requisicao || null,
   }, 0o600);
   return true;
@@ -85,6 +88,7 @@ function estado() {
     token_dica: cfg.token ? ("…" + String(cfg.token).slice(-4)) : null,
     criado_em: cfg.criado_em || null,
     criado_por: cfg.criado_por || null,
+    como_veio: cfg.como_veio || null,
     ultima_requisicao: cfg.ultima_requisicao || null,
     ultimo_resultado: reqs.length ? reqs[0].resultado : null,
     total_requisicoes: contarRequisicoes(),
@@ -372,9 +376,44 @@ const FORMATOS = {
 
 // Lê o que veio e devolve uma forma única, aceitando as DUAS versões do payload deles.
 // Erros aqui são de leitura do pedido: viram mensagem clara na tela de Requisições.
+// Os avisos que o sistema do squad pode mandar. Sem `evento` declarado vale "post.pronto",
+// que é o que o emissor deles faz hoje — ninguém precisa mexer em nada para continuar
+// funcionando. Esta lista é fechada de propósito: aviso desconhecido é recusado com uma
+// mensagem que diz o que é aceito, em vez de ser tratado como "pronto" e criar peça errada.
+const EVENTOS = {
+  "post.pronto": { arte: true, rotulo: "Arte pronta" },
+  "post.atualizado": { arte: true, rotulo: "Arte refeita" },
+  "post.cancelado": { arte: false, rotulo: "Post cancelado" },
+  "teste": { arte: false, rotulo: "Teste de conexão" },
+};
+const EVENTO_ALIAS = {
+  "": "post.pronto", "post": "post.pronto", "pronto": "post.pronto", "post.criado": "post.pronto",
+  "atualizado": "post.atualizado", "post.refeito": "post.atualizado", "refeito": "post.atualizado",
+  "cancelado": "post.cancelado", "post.cancelamento": "post.cancelado",
+  "ping": "teste", "teste.conexao": "teste", "test": "teste",
+};
+
 function normalizar(payload) {
   const p = payload && typeof payload === "object" ? payload : {};
   const erro = (msg, code) => { const e = new Error(msg); e.code = code || "E_PAYLOAD"; throw e; };
+
+  const bruto = String(p.evento || p.event || p.tipo || "").toLowerCase().trim();
+  const evento = EVENTOS[bruto] ? bruto : (EVENTO_ALIAS[bruto] || null);
+  if (!evento) {
+    erro("não conheço o aviso \"" + bruto.slice(0, 40) + "\". Os aceitos são: "
+      + Object.keys(EVENTOS).join(", ") + ".", "E_EVENTO");
+  }
+
+  // Aviso que não traz arte para sem depender da lista de cards.
+  if (!EVENTOS[evento].arte) {
+    return {
+      evento,
+      origem_id: p.post_id != null ? String(p.post_id) : (p.id != null ? String(p.id) : null),
+      motivo: String(p.motivo || p.razao || "").trim() || null,
+      titulo: String(p.titulo || p.title || "").trim() || null,
+      cards: [], hashtags: [], legenda: "", formato: null, pauta: null,
+    };
+  }
 
   const brutos = Array.isArray(p.cards) ? p.cards : (Array.isArray(p.artes) ? p.artes : null);
   if (!brutos) erro("o corpo da requisição não trouxe a lista de cards (campo \"cards\")");
@@ -428,9 +467,11 @@ function normalizar(payload) {
     || "Arte recebida do squad";
 
   return {
+    evento,
     origem_id: p.post_id != null ? String(p.post_id) : (p.id != null ? String(p.id) : null),
     titulo, formato, legenda, hashtags, cards,
     pauta: String(p.pauta || p.foco || p.justificativa || "").trim() || null,
+    motivo: String(p.motivo || p.razao || "").trim() || null,
   };
 }
 
@@ -545,9 +586,14 @@ async function receberAgora(payload, opcoes) {
     content.setOrigem(folder, {
       sistema: "squad",
       id: p.origem_id,
+      evento: p.evento || "post.pronto",
       formato: p.formato,
       pauta: p.pauta,
       recebido_em: new Date().toISOString(),
+      // Quando o squad refaz um post que já tinha mandado, a arte nova vira uma peça NOVA e
+      // guarda o endereço da anterior. Sobrescrever a antiga seria pior: ela pode já ter sido
+      // editada, agendada ou publicada — e a decisão de qual vale é de quem opera, não nossa.
+      substitui: op.substitui || null,
       avisos,
     });
 
@@ -598,6 +644,24 @@ async function receberAgora(payload, opcoes) {
   }
 }
 
+// O squad avisa que desistiu de um post. O painel NÃO apaga nada: a peça pode já ter sido
+// editada, agendada ou até publicada, e apagar por ordem de outro sistema seria destruir
+// trabalho sem ninguém decidir. Fica a marca na peça e a linha no registro; quem descarta,
+// se quiser, é quem opera.
+function cancelar(origemId, motivo) {
+  const content = require("./content");
+  const entrada = entradaDeOrigem(origemId);
+  const folder = entrada && entrada.folder;
+  if (!folder || !content.findTask(folder)) {
+    return { ok: false, motivo: "não encontrei nenhuma peça vinda deste post por aqui", peca: null };
+  }
+  const origem = content.getOrigem(folder) || {};
+  origem.cancelado_em = new Date().toISOString();
+  origem.cancelado_motivo = motivo || null;
+  content.setOrigem(folder, origem);
+  return { ok: true, peca: folder };
+}
+
 // Grava a arte a partir do HTML: escreve a receita e desenha o PNG a partir DELA (não da
 // imagem que veio pronta) — assim o que se vê é exatamente o que o editor edita.
 async function gravarDeHtml(render, content, folder, base, c, log, avisos, n, obrigatorio) {
@@ -628,7 +692,7 @@ async function gravarDeHtml(render, content, folder, base, c, log, avisos, n, ob
 module.exports = {
   gerarToken, salvarToken, removerToken, estado, confere, marcarRequisicao, tokenDaRequisicao, clientIp,
   registrar, registrarRecusa, atualizar, guardarPayload, lerPayload, listar, obter, podar,
-  normalizar, receber, refsExternas, dimensoesDoHtml,
+  normalizar, receber, cancelar, refsExternas, dimensoesDoHtml,
   entradaDeOrigem, reservar, concluirReserva, liberarReserva,
-  MAX_CARDS,
+  EVENTOS, MAX_CARDS,
 };

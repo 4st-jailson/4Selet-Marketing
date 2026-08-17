@@ -651,6 +651,24 @@ function briefingLongo() {
     checa(cegas.length === 0, "toda referência a coisa de fora é percebida (senão a arte sai com buraco)", cegas.join(", ") || "nenhuma escapou");
     checa(sq.refsExternas('<img src="data:image/png;base64,AAA">').length === 0,
       "e imagem embutida NÃO é confundida com referência externa");
+
+    // Os avisos que o outro sistema pode mandar. A lista é FECHADA: aviso desconhecido tem de
+    // ser recusado, nunca tratado como "arte pronta" (criaria peça a partir de outra coisa).
+    const eventos = Object.keys(sq.EVENTOS);
+    checa(eventos.indexOf("post.pronto") > -1 && eventos.indexOf("post.atualizado") > -1
+      && eventos.indexOf("post.cancelado") > -1 && eventos.indexOf("teste") > -1,
+      "os quatro avisos combinados com o time do squad existem", eventos.join(", "));
+    const semEvento = sq.normalizar({ post_id: 1, evento: "teste" });
+    checa(semEvento.evento === "teste", "o painel entende o aviso declarado");
+    let recusou = false;
+    try { sq.normalizar({ post_id: 1, evento: "inventado", cards: ["x"] }); }
+    catch (e) { recusou = e.code === "E_EVENTO"; }
+    checa(recusou, "e RECUSA aviso desconhecido em vez de tratá-lo como arte pronta");
+    // Regra dura: ordem de outro sistema não apaga trabalho de ninguém aqui.
+    const corpoCancelar = (libTxt.match(/function cancelar\(origemId, motivo\) \{[\s\S]*?\n\}/) || [""])[0];
+    checa(!!corpoCancelar && corpoCancelar.indexOf("discardTask") === -1
+      && corpoCancelar.indexOf("rmSync") === -1 && corpoCancelar.indexOf("unlink") === -1,
+      "cancelar NUNCA apaga peça — só marca (a peça pode já estar editada ou publicada)");
   }
 
   // ------------------------------------------------------------------
