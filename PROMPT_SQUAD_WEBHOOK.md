@@ -1,8 +1,13 @@
 # Integração squad.4st.co → Painel de Marketing 4Selet
 
-**Para:** time que mantém o `radar-api` / `squad.4st.co`
-**Assunto:** entregar os posts gerados por vocês direto no painel de marketing
+**Para:** quem mantém o `radar-api` / `squad.4st.co`
+**Assunto:** entregar os posts gerados lá direto no painel de marketing
 **Esforço estimado:** o mínimo é cadastrar uma URL (zero código). O ideal são ~4 linhas em `postgen.py` e `main.py`.
+
+> **Como este documento foi escrito:** os dois sistemas rodam no mesmo servidor, então tudo que
+> está afirmado aqui sobre o `radar-api` foi **lido no código** em `/home/sysadmin/ai-squad/repo/`,
+> com arquivo e linha citados. Onde houver divergência entre este texto e o código de vocês, o
+> código manda — e vale avisar, porque foi nele que eu me baseei.
 
 ---
 
@@ -41,9 +46,10 @@ A arte chega em Aprovados justamente porque a revisão já aconteceu do lado de 
 
 ---
 
-## 2. A boa notícia: o emissor já existe
+## 2. A boa notícia: o emissor já existe no código
 
-Vocês já construíram isto. Em `radar-api/app/main.py`:
+Não é preciso construir o envio — ele já está escrito, e desligado. Em
+`radar-api/app/main.py`, linha 1143 (verificado no servidor em 17/08/2026):
 
 ```python
 @app.post("/api/pautas4selet/posts/{post_id}/enviar")
@@ -55,7 +61,10 @@ def pauta_enviar(post_id: int, user=Depends(auth.get_current_user)):
     ...
 ```
 
-Ele responde `"webhook ainda nao configurado"` porque a integração `webhook_post` está vazia.
+Ele responde `"webhook ainda nao configurado"` porque a integração `webhook_post` não está
+cadastrada — conferido no banco do radar: existem `apify`, `claude`, `elevenlabs`, `gemini` e
+`magnific`, e nenhuma `webhook_post`.
+
 **Cadastrar a URL já liga tudo.**
 
 ---
@@ -86,7 +95,7 @@ Hoje o payload leva só o PNG. Com a imagem, o Hugo mexe **em cima** da arte (mo
 texto, logo, formas), mas não mexe **dentro** dela — não dá para corrigir uma palavra do título
 ou trocar um número, porque virou pixel.
 
-E vocês **já têm o HTML**: em `postgen.py`, `_prep()` retorna `(html, agente, custo)`, o `gerar()`
+E o HTML **já existe lá dentro**: em `postgen.py`, `_prep()` retorna `(html, agente, custo)`, o `gerar()`
 usa esse html para renderizar o PNG — e depois **descarta**. Basta levá-lo junto:
 
 ```python
