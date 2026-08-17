@@ -2169,7 +2169,7 @@ function slideFlow(slide, ctx) {
   if (String(slide.orient || "").toLowerCase() === "row") {
     const cells = nodes.map((nd, i) => {
       const label = typeof nd === "string" ? nd : (nd && nd.label) || "";
-      const sub = (nd && nd.sub) || "";
+      const sub = subDoNo(nd);
       const hi = !!(nd && nd.mark);
       const ic = flowIcon((nd && nd.icon) || "");
       return (i > 0 ? '<div class="fr-arrow">&#8594;</div>' : "")
@@ -2195,7 +2195,7 @@ function slideFlow(slide, ctx) {
   // Vertical (padrao): cartoes empilhados ligados por seta descendente.
   const nodeHtml = nodes.map((nd, i) => {
     const label = typeof nd === "string" ? nd : (nd && nd.label) || "";
-    const sub = (nd && nd.sub) || "";
+    const sub = subDoNo(nd);
     const hi = !!(nd && nd.mark);
     const ic = flowIcon((nd && nd.icon) || "") || (hi ? toneIcon : "");
     return (i > 0 ? '<div class="arrow">&#8595;</div>' : "")
@@ -2565,7 +2565,7 @@ function slideMapa(slide, ctx) {
     : { caixa: PALETTE.navy, borda: PALETTE.blue + "40", tx: "#FFFFFF", sub: PALETTE.mist, linha: PALETTE.sky, forte: PALETTE.blue };
   const noHtml = (nd, destaque) => {
     const label = String(typeof nd === "string" ? nd : nd.label || "").trim();
-    const sub = String((nd && nd.sub) || "").trim();
+    const sub = subDoNo(nd);
     const ic = flowIcon((nd && nd.icon) || "");
     return `<div class="tr-no${destaque ? " hi" : ""}">${ic ? `<div class="tr-ic">${ic}</div>` : ""}`
       + `<div class="tr-l">${esc(label)}</div>${sub ? `<div class="tr-s">${esc(sub)}</div>` : ""}</div>`;
@@ -2635,7 +2635,12 @@ function slideDialogo(slide, ctx) {
     ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
   const bolhas = falas.map((f) => {
     const txt = String(typeof f === "string" ? f : f.text).trim();
-    const resp = String((f && f.side) || "") === "resposta";
+    // De que lado a bolha fica. `side:"resposta"` é o contrato, mas o modelo inventa variante
+    // com frequência ("eu", "nos", "mine") — e quando inventa, TODA bolha caía do mesmo lado e
+    // a conversa deixava de parecer conversa. Aceitar os apelidos custa uma linha.
+    const lado = String((f && (f.side || f.lado || f.de || f.from)) || "").toLowerCase().trim();
+    const resp = /^(resposta|resp|eu|nos|n[óo]s|mine|me|4selet|marca)$/.test(lado)
+      || !!(f && (f.eu === true || f.mine === true || f.resposta === true));
     const pensa = !!(f && f.think);
     return `<div class="dlg-b ${resp ? "dlg-r" : "dlg-p"}${pensa ? " dlg-t" : ""}">${highlightHeadline(txt)}</div>`
       + (pensa ? '<div class="dlg-pts"><i></i><i></i><i></i></div>' : "");
@@ -2687,6 +2692,15 @@ const CAMPOS_PROPRIOS = ["word", "versus", "citacao", "serie", "gauge", "tree", 
 // partes, caía em texto — layout anunciado e desenho entregue tinham que ser a mesma coisa, senão
 // a peça única grava um template que não corresponde ao que está na tela.
 // O título NÃO entra aqui de propósito: um título com ">" não pode sequestrar o slide.
+// O sublabel de um nó de fluxo/mapa. Parece bobo ter uma função para isto, mas `nd.sub` numa
+// STRING não é undefined: é `String.prototype.sub`, um método legado do JavaScript que existe,
+// é truthy, e foi parar DENTRO da arte como o texto "function sub() { [native code] }" — em
+// todo passo a passo e todo mapa cujos itens viessem como texto simples, que é justamente o
+// formato mais provável de a IA devolver. Descoberto ao gerar uma arte de cada layout e olhar.
+function subDoNo(nd) {
+  if (!nd || typeof nd !== "object") return "";
+  return String(nd.sub == null ? "" : nd.sub).trim();
+}
 function versusValido(slide) {
   if (!slide || !slide.versus) return false;
   return !!parVersus({ versus: slide.versus, title: "" });
