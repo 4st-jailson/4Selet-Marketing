@@ -1948,3 +1948,7 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    preencher o dado depois), mas diz o que falta em vez de entregar outro desenho em silêncio. */
 .tpl-opt.tpl-sem-dado { opacity: .72; }
 .tpl-falta { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; color: var(--text-dim); font-style: italic; }
+/* Fundo do slide: fica logo abaixo do layout, porque são as duas escolhas que definem a cara
+   da arte — uma diz onde o texto fica, a outra em que superfície ele fica. */
+.se-fundo { display: flex; align-items: center; gap: var(--s2); margin-top: 8px; flex-wrap: wrap; }
+.se-fundo select { flex: 1; min-width: 240px; }

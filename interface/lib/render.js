@@ -1746,6 +1746,75 @@ const THEME_LIGHT = {
 };
 function resolveTheme(v) { return String(v || "").toLowerCase() === "light" ? THEME_LIGHT : THEME_DARK; }
 
+// ---- FUNDO: a superfície da arte, escolhível e independente do layout -------------------
+// O estudo das 63 publicações do @4selet catalogou 20 famílias visuais, e boa parte da variedade
+// que a marca de fato usa está no FUNDO, não no arranjo do texto: quadriculado de gráfico (F20),
+// papel com canto dobrado (F18), editorial claro (F02). Até aqui o painel tinha UMA superfície —
+// degradê azul com os Selet Dots — em todos os 14 layouts. Trocar de layout mudava onde o texto
+// fica; a arte continuava com a mesma cara.
+//
+// Fundo é uma dimensão SEPARADA de propósito: qualquer layout pode vestir qualquer fundo, então
+// 14 layouts × 5 fundos é o que a pessoa passa a alcançar, sem escrever 70 desenhos.
+const FUNDOS = {
+  padrao: { rotulo: "Padrão", desc: "Degradê azul com os pontos da marca" },
+  grade: { rotulo: "Quadriculado", desc: "Malha de gráfico com brilho, como as artes de dado" },
+  solido: { rotulo: "Azul chapado", desc: "Sem degradê e sem textura — o mais silencioso" },
+  papel: { rotulo: "Papel", desc: "Folha clara com canto dobrado, para regras e princípios" },
+  vinheta: { rotulo: "Foco no centro", desc: "Bordas escurecidas, atenção no meio da arte" },
+};
+const FUNDO_IDS = Object.keys(FUNDOS);
+function resolveFundo(v) {
+  const id = String(v || "").toLowerCase().trim();
+  return FUNDOS[id] ? id : "padrao";
+}
+// O CSS de cada superfície. Recebe o tema já resolvido para respeitar claro/escuro onde faz
+// sentido — só o "papel" impõe a própria cor, porque papel escuro não é papel.
+function fundoCss(id, tema) {
+  // Sem tema declarado vale o escuro, que é o padrão da marca. Deixar isto quebrar significaria
+  // uma arte a menos por um argumento esquecido — e o erro apareceria só na hora do render.
+  const t = tema || THEME_DARK;
+  const linha = t === THEME_LIGHT ? PALETTE.navy + "1a" : PALETTE.sky + "1c";
+  const forte = t === THEME_LIGHT ? PALETTE.navy + "2e" : PALETTE.sky + "2e";
+  switch (resolveFundo(id)) {
+    case "grade":
+      // Malha de gráfico: linhas finas a cada 60px, uma linha forte a cada 5, e um brilho no
+      // alto — é o fundo das artes de dado do perfil (F20).
+      return `.card { background:${t.bg}; }
+        .dots { display:none; }
+        .card::before { content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+          background-image:
+            linear-gradient(${linha} 1px, transparent 1px),
+            linear-gradient(90deg, ${linha} 1px, transparent 1px),
+            linear-gradient(${forte} 1.6px, transparent 1.6px),
+            linear-gradient(90deg, ${forte} 1.6px, transparent 1.6px);
+          background-size: 60px 60px, 60px 60px, 300px 300px, 300px 300px; }
+        .card::after { content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+          background: radial-gradient(90% 60% at 70% 0%, ${PALETTE.blue}3d 0%, transparent 62%); }`;
+    case "solido":
+      return `.card { background:${t === THEME_LIGHT ? PALETTE.cloud : PALETTE.darker}; }
+        .dots { display:none; }`;
+    case "papel":
+      // Folha pautada sobre a mesa, com o canto dobrado (F18 do estudo). Quem chama já força o
+      // tema claro, então as cores do conteúdo vêm certas do próprio arquétipo — aqui só entram
+      // a superfície, a pauta e o canto. A marca d'água sai: sobre papel ela vira sujeira.
+      return `.card { background:linear-gradient(155deg, #F5F4EF 0%, ${PALETTE.cloud} 58%, #DDE1DB 100%); }
+        .dots { display:none; }
+        .wm, .watermark { display:none !important; }
+        .card::before { content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+          background-image: linear-gradient(${PALETTE.navy}14 1px, transparent 1px);
+          background-size: 100% 58px; background-position: 0 92px; }
+        .card::after { content:""; position:absolute; right:0; bottom:0; width:132px; height:132px;
+          z-index:1; pointer-events:none; background:${PALETTE.mist}; opacity:.8;
+          clip-path: polygon(100% 0, 0 100%, 100% 100%); }`;
+    case "vinheta":
+      return `.card { background:${t.bg}; }
+        .card::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+          background: radial-gradient(120% 84% at 50% 50%, transparent 34%, rgba(0,0,0,.52) 100%); }`;
+    default:
+      return "";   // padrão: o que carBase já desenha
+  }
+}
+
 // Marca d'agua tipografica: palavra display gigante transbordando a direita, ATRAS
 // do conteudo. Profundidade editorial que tira o "achatado/duro" das artes.
 // Estilos: "word" (palavra display, padrao), "outline" (palavra vazada/contorno),
@@ -1835,7 +1904,9 @@ function carDoc(ctx, extraCss, bodyInner) {
     photo = `<div class="s-photo" style="background-image:url('${escAttr(resolveImage(ctx.image))}')"></div><div class="s-scrim" style="background:${scrim}"></div>`;
   }
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>${fontHead()}
-<style>${carBase(ctx.width, ctx.height, ctx.theme)}${extraCss || ""}</style></head>
+${/* ordem importa: a base, depois a SUPERFÍCIE escolhida, e por último o CSS do próprio
+     arquétipo — assim o layout ainda consegue ajustar o que precisar sobre o fundo. */ ""}
+<style>${carBase(ctx.width, ctx.height, ctx.theme)}${fundoCss(ctx.fundo, ctx.theme)}${extraCss || ""}</style></head>
 <body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots" style="background-position:${offX}px 0;"></div>${wm}${bodyInner}${dotsBar(ctx.n, ctx.total, ctx.theme)}</div></body></html>`;
 }
 function carTop(ctx) {
@@ -2817,7 +2888,9 @@ async function renderImage(folder, opts) {
   if (arq) {
     const htmlArq = SLIDE_ARCHETYPES[arq](
       Object.assign({}, concept, { title: concept.headline || concept.title || "", body: concept.subtext || concept.body || "" }),
-      { width: 1080, height: 1080, n: 1, total: 1, cta: concept.cta || "", logo: logoV, wmStyle: wmV, image: concept.image || (opts && opts.image) || "" }
+      { width: 1080, height: 1080, n: 1, total: 1, cta: concept.cta || "", logo: logoV, wmStyle: wmV,
+        image: concept.image || (opts && opts.image) || "",
+        fundo: resolveFundo(concept.fundo || (opts && opts.fundo)) }
     );
     fs.writeFileSync(htmlPath, htmlArq, "utf8");
     const rr = await htmlToPng(htmlPath, outPng, 1080, 1080, RENDER_SCALE);
@@ -2935,12 +3008,22 @@ function carouselSlidesHtml(concept, buildCover, opts) {
         logo: logoV, watermark: wmV,
       });
     } else {
-      html = SLIDE_ARCHETYPES[arch](s, {
+      // Papel é uma superfície CLARA: se o slide não pediu tema, ele passa a valer como claro.
+      // Sem isto a folha ficava creme e o texto continuava com as cores do fundo escuro — a arte
+      // saía legível só de perto, que é o pior tipo de defeito (parece certo na miniatura).
+      const fundoDoSlide = resolveFundo((s && s.fundo) || concept.fundo);
+      const sAjustado = (fundoDoSlide === "papel" && !(s && s.theme))
+        ? Object.assign({}, s, { theme: "light" })
+        : s;
+      html = SLIDE_ARCHETYPES[arch](sAjustado, {
         width: 1080, height: 1350, n: n, total: total,
         cta: arch === "cta" ? (concept.cta || "") : "",
         footer: concept.footer,
         tagline: arch === "cta",
         image: (s && s.image) || "", // foto de fundo por-slide (opcional) — o carDoc a desenha sob o conteudo
+        // A SUPERFÍCIE do slide: por slide, ou a do carrossel inteiro. É o que dá variedade de
+        // FUNDO (quadriculado, papel, chapado), e não só de arranjo do texto.
+        fundo: fundoDoSlide,
         logo: logoV, wmStyle: wmV,
       });
     }
@@ -3870,5 +3953,6 @@ module.exports = {
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, PECA_IDS, ARQ_PECA, LOGO_IDS, WATERMARK_IDS,
   slideArchetype, arquetipoDoDado,   // puras: o roteador de layout, testavel sem render
+  FUNDOS, FUNDO_IDS, resolveFundo, fundoCss,   // a SUPERFÍCIE da arte, independente do layout
   FAMILIAS, FAMILIA_IDS,   // lista fechada de tipografia (a tela monta o seletor a partir daqui)
 };

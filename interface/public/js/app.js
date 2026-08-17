@@ -6115,7 +6115,9 @@ function slideItem(s, i, total) {
   // Preserva campos não editáveis aqui (items, stats) para não perdê-los no
   // sync do JSON. O layout é exposto no seletor abaixo.
   const extra = {};
-  Object.keys(s || {}).forEach((k) => { if (k !== "title" && k !== "body" && k !== "layout") extra[k] = s[k]; });
+  // title/body/layout/fundo têm campo próprio na tela; o resto viaja em data-extra. Deixar o
+  // fundo nos dois lugares faria a escolha do seletor ser sobrescrita pelo valor antigo.
+  Object.keys(s || {}).forEach((k) => { if (k !== "title" && k !== "body" && k !== "layout" && k !== "fundo") extra[k] = s[k]; });
   const extraAttr = Object.keys(extra).length ? ` data-extra="${esc(JSON.stringify(extra)).replace(/"/g, "&quot;")}"` : "";
   const cur = String(s.layout || "");
   const layoutOpts = SLIDE_LAYOUTS.map(([v, name, desc]) => `<button type="button" class="lay-opt${v === cur ? " on" : ""}" data-lay="${v}"><span class="lay-thumb">${layoutThumb(v)}</span><span class="lay-txt"><span class="lay-name">${esc(name)}</span><span class="lay-desc">${esc(desc)}</span></span></button>`).join("");
@@ -6127,9 +6129,30 @@ function slideItem(s, i, total) {
     <div class="se-layout"><span class="se-layout-lab">Layout do slide</span>
       <input type="hidden" data-k="layout" value="${esc(cur)}" />
       <details class="ed-menu lay-menu"><summary class="lay-sum"><span class="lay-thumb">${layoutThumb(cur)}</span><span class="lay-name">${esc(layoutName(cur))}</span><span class="lay-caret" aria-hidden="true"></span></summary><div class="ed-pop lay-pop">${layoutOpts}</div></details><span class="se-lay-hint">${richHint}</span></div>
+    ${fundoRow(s.fundo)}
     ${slidePhotoRow(s.image)}
   </div>`;
 }
+// O FUNDO do slide — a superfície da arte, escolhida à parte do layout. Vem do estudo das 63
+// publicações do @4selet: boa parte da variedade que a marca usa está no fundo (quadriculado de
+// gráfico, papel, azul chapado), não em onde o texto fica. Como é uma dimensão separada, cada
+// layout pode vestir qualquer fundo — é o que multiplica a variedade sem escrever mais desenhos.
+const FUNDOS_UI = [
+  ["", "Padrão", "Degradê azul com os pontos da marca"],
+  ["grade", "Quadriculado", "Malha de gráfico com brilho, como as artes de dado do perfil"],
+  ["solido", "Azul chapado", "Sem degradê e sem textura — o mais silencioso"],
+  ["papel", "Papel", "Folha clara pautada, com canto dobrado (o texto fica escuro)"],
+  ["vinheta", "Foco no centro", "Bordas escurecidas, atenção no meio da arte"],
+];
+function fundoName(v) { const f = FUNDOS_UI.find((x) => x[0] === String(v || "")); return f ? f[1] : FUNDOS_UI[0][1]; }
+function fundoRow(atual) {
+  const cur = String(atual || "");
+  const opts = FUNDOS_UI.map(([v, nome, desc]) =>
+    `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(nome)} — ${esc(desc)}</option>`).join("");
+  return `<div class="se-fundo"><span class="se-layout-lab">Fundo do slide</span>
+    <select class="se-f" data-k="fundo">${opts}</select></div>`;
+}
+
 // Campo de hashtags compartilhado pelos editores estruturados. Pré-preenche com as tags
 // que a IA devolveu (parsed.hashtags). A marca pede 3-5 + #4Selet — o hint reforça, sem travar.
 function hashtagsField(p) {
@@ -6197,6 +6220,10 @@ function structToParsed() {
       const slide = Object.assign({}, extra, { title: val(it, "title"), body: val(it, "body") });
       const layout = val(it, "layout");
       if (layout) slide.layout = layout; else delete slide.layout;
+      // O fundo é a superfície do slide, escolhida à parte do layout. "" = padrão, e nesse caso
+      // o campo sai do JSON em vez de ir vazio (senão toda peça carregaria um fundo:"" inútil).
+      const fundo = val(it, "fundo");
+      if (fundo) slide.fundo = fundo; else delete slide.fundo;
       return slide;
     });
     base.cta = (ed.querySelector(".se-cta") || {}).value || "";

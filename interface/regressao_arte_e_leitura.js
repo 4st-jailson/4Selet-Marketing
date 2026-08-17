@@ -586,6 +586,31 @@ function briefingLongo() {
     });
     checa(divergiram.length === 0, "o aviso da tela concorda com a guarda do motor em todos os casos",
       divergiram.slice(0, 3).join(" · ") || AMOSTRAS.length + " amostras conferidas");
+
+    // O FUNDO é a outra metade da variedade. O Hugo cobrou exatamente isto: "quando pedi para
+    // analisar as postagens do Instagram foi justamente para ter variações de FUNDO, não só o
+    // posicionamento de cada texto". Mesma regra do layout: o que o motor sabe, a tela oferece.
+    const fundosMotor = render.FUNDO_IDS;
+    const blocoFundoUI = (app.match(/const FUNDOS_UI = \[[\s\S]*?\n\];/) || [""])[0];
+    const fundosTela = Array.from(blocoFundoUI.matchAll(/\["([a-z]*)"/g)).map((m) => m[1] || "padrao");
+    checa(fundosMotor.length >= 4, "o motor tem superfícies além do degradê de sempre", fundosMotor.join(", "));
+    const presosF = fundosMotor.filter((f) => fundosTela.indexOf(f) === -1);
+    checa(presosF.length === 0, "e todas aparecem no seletor de fundo da tela",
+      presosF.length ? "inalcançáveis: " + presosF.join(", ") : fundosTela.join(", "));
+
+    // Cada superfície precisa MESMO mudar o desenho — senão é só um nome no seletor.
+    const base = render.fundoCss("padrao", null);
+    const distintos = fundosMotor.filter((f) => f !== "padrao").filter((f) => {
+      const css = render.fundoCss(f, null);
+      return css && css.length > 40 && css !== base;
+    });
+    checa(distintos.length === fundosMotor.length - 1, "e cada uma muda de verdade a superfície",
+      distintos.length + " de " + (fundosMotor.length - 1));
+    // Papel é superfície CLARA: se o texto continuasse com as cores do fundo escuro, a arte
+    // sairia ilegível — e ilegível de um jeito que a miniatura esconde.
+    const cs = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
+    checa(/fundoDoSlide === "papel"[\s\S]{0,120}theme: "light"/.test(cs),
+      "o fundo de papel força o tema claro (senão o texto some na folha)");
   }
 
   // ------------------------------------------------------------------
