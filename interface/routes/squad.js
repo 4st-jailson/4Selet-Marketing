@@ -44,7 +44,7 @@ router.post("/token", adminOnly, (req, res) => {
 });
 
 router.delete("/token", adminOnly, (req, res) => {
-  squad.removerToken();
+  squad.removerToken(req.user.username);
   res.json({ ok: true, estado: squad.estado() });
 });
 

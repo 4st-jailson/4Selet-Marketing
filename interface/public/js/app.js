@@ -369,7 +369,13 @@ function uiModal(opts) {
       const sugg = (f.suggestions && f.suggestions.length)
         ? `<div class="sugg-row" data-msug="${i}">${f.suggestLabel ? '<span class="hint">' + esc(f.suggestLabel) + "</span>" : ""}${f.suggestions.map((s) => '<button type="button" class="sugg-chip" data-sugg="' + esc(s) + '">' + esc(s) + "</button>").join("")}</div>`
         : "";
-      return `<div class="field"><label>${esc(f.label || "")}</label>${ctrl}${sugg}</div>`;
+      // Campo que existe para ser LEVADO daqui (um endereço, uma chave que só aparece uma vez)
+      // ganha o botão de copiar ao lado. Selecionar à mão um texto longo dentro de um modal é
+      // onde a pessoa erra e leva metade.
+      const copiar = f.copiavel
+        ? `<div class="flex mt"><button type="button" class="btn btn-sm" data-mcopy="${i}">Copiar</button><span class="hint" data-mcopyout="${i}"></span></div>`
+        : "";
+      return `<div class="field"><label>${esc(f.label || "")}</label>${ctrl}${copiar}${sugg}</div>`;
     }).join("");
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
       <h3>${esc(opts.title || "")}</h3>
@@ -383,6 +389,22 @@ function uiModal(opts) {
     fields.forEach((f, i) => { if (String(f.inputType) === "password") wirePasswordEye(ov.querySelector('[data-mf="' + i + '"]')); });
     // Grupos de checkbox (type:"checks"): realça a "pílula" ao marcar, como no formulário de campanha.
     ov.querySelectorAll(".checks[data-mf]").forEach((box) => box.addEventListener("change", (e) => { const lab = e.target.closest(".check"); if (lab) lab.classList.toggle("on", e.target.checked); }));
+    // Botão de copiar do campo copiável. Dá retorno ali do lado (e não por toast) porque o
+    // modal cobre a tela: um aviso atrás dele não seria visto.
+    ov.querySelectorAll("[data-mcopy]").forEach((b) => b.addEventListener("click", () => {
+      const i = b.getAttribute("data-mcopy");
+      const campo = ov.querySelector('[data-mf="' + i + '"]');
+      const saida = ov.querySelector('[data-mcopyout="' + i + '"]');
+      if (!campo) return;
+      const dizer = (ok) => { if (saida) { saida.textContent = ok ? "Copiado." : "Não consegui copiar — selecione e use Ctrl+C."; setTimeout(() => { if (saida) saida.textContent = ""; }, 4000); } };
+      campo.focus(); campo.select();
+      // navigator.clipboard só existe em contexto seguro (https); execCommand é o plano B.
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(campo.value).then(() => dizer(true)).catch(() => dizer(!!(document.execCommand && document.execCommand("copy"))));
+      } else {
+        dizer(!!(document.execCommand && document.execCommand("copy")));
+      }
+    }));
     document.body.classList.add("no-scroll");
     requestAnimationFrame(() => ov.classList.add("open"));
     const opener = document.activeElement;
@@ -6458,6 +6480,7 @@ const SQ_RESULTADOS = {
   recusada: { rotulo: "Recusada na porta", badge: "warn" },
   teste: { rotulo: "Teste de conexão", badge: "plain" },
   cancelado: { rotulo: "Post cancelado lá", badge: "warn" },
+  conexao: { rotulo: "Mudança na conexão", badge: "plain" },
 };
 // Uma entrega "montando" há muito tempo não está montando: o painel foi reiniciado no meio.
 // Sem isto a linha ficaria eternamente dizendo que está trabalhando.
@@ -6485,7 +6508,10 @@ async function viewRequisicoes() {
   const linhas = reqs.map((r) => {
     const res = sqSituacao(r);
     const oque = r.titulo ? esc(r.titulo) : (r.origem_id ? "Post " + esc(r.origem_id) : "Entrega sem título");
-    const detalhe = (r.resultado === "erro" || r.resultado === "recusada")
+    const detalhe = r.resultado === "conexao"
+      ? '<span class="hint">' + (r.por ? "por " + esc(r.por) : "autor não registrado")
+        + (r.erro ? " · " + esc(r.erro) : "") + "</span>"
+      : (r.resultado === "erro" || r.resultado === "recusada")
       ? '<span class="sq-erro">' + esc(r.erro || "sem motivo registrado") + "</span>"
       : (r.resultado === "teste"
         ? '<span class="hint">a conexão respondeu; nada foi criado</span>'
@@ -7006,7 +7032,7 @@ async function viewSettings() {
       await uiModal({
         title: "Token criado — copie agora",
         message: "Este é o endereço completo que o time do squad deve cadastrar na integração webhook_post. O token aparece só desta vez: depois de fechar, o painel guarda e não mostra mais.",
-        fields: [{ name: "url", label: "Endereço completo, com o token", type: "textarea", value: enderecoSquad + "?token=" + r.token }],
+        fields: [{ name: "url", label: "Endereço completo, com o token", type: "textarea", copiavel: true, value: enderecoSquad + "?token=" + r.token }],
         confirmText: "Copiei e vou enviar",
         noCancel: true,
       });

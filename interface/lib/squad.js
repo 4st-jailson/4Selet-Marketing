@@ -73,10 +73,32 @@ function salvarToken(token, quem, comoVeio) {
     como_veio: comoVeio === "gerado" ? "gerado" : "colado",
     ultima_requisicao: cfg.ultima_requisicao || null,
   }, 0o600);
+  // Fica registrado QUEM mexeu e QUANDO. Um token sumiu em produção sem deixar rastro e não
+  // houve como reconstituir o que aconteceu: o painel guardava o token, mas não guardava a
+  // história dele. Agora guarda — e a linha aparece na mesma tela de Requisições.
+  registrar({
+    resultado: "conexao",
+    erro: null,
+    titulo: cfg.token
+      ? (comoVeio === "gerado" ? "Token substituído por um criado no painel" : "Token substituído por um vindo do squad")
+      : (comoVeio === "gerado" ? "Token criado no painel" : "Token do squad guardado"),
+    por: quem || null,
+    logs: [],
+  });
   return true;
 }
-function removerToken() {
+function removerToken(quem) {
+  const tinha = !!lerConfig().token;
   try { fs.unlinkSync(ARQ_TOKEN); } catch (e) {}
+  if (tinha) {
+    registrar({
+      resultado: "conexao",
+      titulo: "Conexão desligada — o token foi removido",
+      erro: "A partir daqui as entregas do squad são recusadas até um token novo ser cadastrado.",
+      por: quem || null,
+      logs: [],
+    });
+  }
   return true;
 }
 // O valor NUNCA volta inteiro para o navegador — mesma regra do resto do painel.
