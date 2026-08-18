@@ -5218,6 +5218,34 @@ function pintaAvisosLeitura(itens, faltou) {
   }
   if (primeiro && campoVisivel(primeiro)) primeiro.scrollIntoView({ block: "center", behavior: "smooth" });
 }
+// Aviso de campo que a pessoa REALMENTE recebe. A validação de "Salvar peça" escrevia a frase
+// dentro do #e-title, lá em cima na coluna da esquerda, enquanto quem clicou está na direita e
+// rolado até o fim: o clique sumia no vazio e o botão parecia quebrado. Agora o aviso faz as
+// quatro coisas — marca o campo, escreve a frase, avisa por cima (toast) e leva a pessoa até lá.
+// Se o campo estiver dentro de um bloco recolhido, abre o bloco antes; se estiver escondido de
+// vez (o identificador, para quem não é administrador), não tenta rolar para o nada.
+function avisaCampo(seletorCampo, seletorErro, frase) {
+  const campo = $(seletorCampo), alvo = $(seletorErro);
+  if (alvo) alvo.textContent = frase;
+  if (campo) { campo.classList.add("invalid"); campo.setAttribute("aria-invalid", "true"); }
+  toast(frase, "error");
+  if (!campo || !campoVisivel(campo)) {
+    const det = campo && campo.closest("details:not([open])");
+    if (det) det.setAttribute("open", "");
+    else return;
+  }
+  campo.scrollIntoView({ block: "center", behavior: "smooth" });
+  campo.focus({ preventScroll: true });
+  if (campo.select) campo.select();
+}
+// Some com o aviso quando a pessoa vai tentar de novo. A versão antiga limpava o texto e o
+// aria-invalid mas NUNCA tirava a classe "invalid" — a borda vermelha ficava presa mesmo depois
+// de corrigir o campo.
+function limpaAviso(seletorCampo, seletorErro) {
+  const campo = $(seletorCampo), alvo = $(seletorErro);
+  if (alvo) alvo.textContent = "";
+  if (campo) { campo.classList.remove("invalid"); campo.removeAttribute("aria-invalid"); }
+}
 function mostraAviso(campo) {
   const h = $(ALVO_AVISO[campo]); if (!h) return;
   const det = h.closest("details:not([open])"); if (det) det.setAttribute("open", "");
@@ -5609,7 +5637,15 @@ function renderGenResult(r, opts) {
       <button class="btn btn-sm mt" id="g-refine-btn">Aplicar ajuste</button>
     </div>
     <div class="flex mt"><button class="btn btn-primary" id="g-save">Salvar peça</button><button class="btn btn-ghost" id="g-regen" title="Descarta este resultado e gera outra versão do zero">Começar do zero</button></div>`;
-  $("#g-regen").onclick = runGenerate;
+  // Perguntar antes: o clique descarta o texto gerado E qualquer ajuste feito no editor, e não
+  // existe desfazer. O uiConfirm é o padrão da casa para isto (o mesmo da cor e da tipografia).
+  $("#g-regen").onclick = async () => {
+    const ok = await uiConfirm(
+      "Isto descarta o conteúdo que está na tela — inclusive o que você editou — e gera outra versão do zero. Não dá para voltar atrás.",
+      { title: "Começar do zero?", confirmText: "Sim, gerar outra versão", cancelText: "Não, manter" }
+    );
+    if (ok) runGenerate();
+  };
   $("#g-save").onclick = saveGenerated;
   $("#g-refine-btn").onclick = refineGenerated;
   if (structHtml) {
@@ -5695,11 +5731,12 @@ async function renderArtPreview(contentType, kind) {
   const font = doCampo("#g-font", LAST_GEN && LAST_GEN.req && LAST_GEN.req.font);
   // Mesma regra da tipografia, pelo mesmo motivo: a prévia sai na MESMA superfície da arte final.
   const fundo = doCampo("#g-fundo", LAST_GEN && LAST_GEN.req && LAST_GEN.req.fundo);
-  if (!template) {
-    const task = ($("#g-task") && $("#g-task").value) || slugify(($("#g-title") && $("#g-title").value) || "");
-    const date = ($("#g-date") && $("#g-date").value) || todayISO();
-    template = autoVariant(task + "_" + date);
-  }
+  // No "Automático" a tela NÃO escolhe mais: manda vazio + o nome da peça, e o servidor resolve
+  // pela MESMA cascata do render final (dado → foto → rotação por nome). Enquanto ela resolvia
+  // aqui, mandava um dos 4 clássicos e escondia a troca por arquétipo: a peça de Imagem com
+  // números mostrava Editorial na prévia e salvava Grade de números no arquivo.
+  const pastaDaPeca = (($("#g-task") && $("#g-task").value) || slugify(($("#g-title") && $("#g-title").value) || ""))
+    + "_" + (($("#g-date") && $("#g-date").value) || todayISO());
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> montando…';
   box.innerHTML = ""; box.classList.remove("is-stale"); btn.classList.remove("attn");
   showBusy(ct && ct.kind === "carousel" ? "Desenhando os slides…" : "Desenhando a arte…");
@@ -5711,7 +5748,7 @@ async function renderArtPreview(contentType, kind) {
       const slides = []; let tpl2 = template;
       for (let i = 0; i < total; i++) {
         setBusyMsg("Desenhando o slide " + (i + 1) + " de " + total + "…");
-        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, only: i });
+        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, folder: pastaDaPeca, only: i });
         if (!r || !r.slides || !r.slides[0]) throw new Error((r && r.error) || "falha ao renderizar a prévia");
         slides.push(r.slides[0]);
         if (r.template) tpl2 = r.template;
@@ -5719,7 +5756,7 @@ async function renderArtPreview(contentType, kind) {
       }
       out = { ok: true, slides, template: tpl2, kind: "carousel", width: 1080, height: 1350 };
     } else {
-      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo });
+      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, folder: pastaDaPeca });
     }
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     if (out.slides && out.slides.length) {
@@ -6814,12 +6851,17 @@ async function saveGenerated() {
   const title = ($("#g-title") && $("#g-title").value.trim()) || "";
   let task = $("#g-task").value.trim();
   const date = $("#g-date").value;
-  if ($("#e-title")) $("#e-title").textContent = "";
-  if ($("#g-title")) $("#g-title").removeAttribute("aria-invalid");
-  $("#e-task").textContent = ""; $("#g-task").removeAttribute("aria-invalid");
-  if (title.length < 3) { if ($("#g-title")) { $("#g-title").classList.add("invalid"); $("#g-title").setAttribute("aria-invalid", "true"); } if ($("#e-title")) $("#e-title").textContent = "Dê um título à peça (mín. 3 caracteres)."; return; }
+  limpaAviso("#g-title", "#e-title");
+  limpaAviso("#g-task", "#e-task");
+  if (title.length < 3) { avisaCampo("#g-title", "#e-title", "Dê um título à peça — é por ele que você acha a peça depois."); return; }
   if (!task) task = slugify(title).slice(0, 40);
-  if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) { $("#g-task").classList.add("invalid"); $("#g-task").setAttribute("aria-invalid", "true"); $("#e-task").textContent = "Identificador inválido (use só a-z, 0-9, _ ou -)."; return; }
+  if (!/^[a-z0-9][a-z0-9_\-]*$/.test(task)) {
+    // O identificador vive num bloco recolhido e só de administrador. Para quem não o vê, o
+    // caminho é arrumar o TÍTULO, que é de onde ele nasce.
+    if (campoVisivel($("#g-task"))) avisaCampo("#g-task", "#e-task", "Identificador inválido — use só letras minúsculas, números, _ ou -.");
+    else avisaCampo("#g-title", "#e-title", "Não consegui montar um nome de pasta a partir deste título. Escreva um título com letras e números.");
+    return;
+  }
   if (!date) { toast("Informe a data.", "error"); return; }
   const ct = metaType(LAST_GEN.req.content_type);
   const editVal = $("#g-edit").value;
@@ -6899,9 +6941,21 @@ async function saveGenerated() {
     // Identificador já usado: o conteúdo gerado continua na tela, então basta trocar o nome e
     // salvar de novo. Levamos o foco para o campo do identificador para deixar isso óbvio.
     else if (e.status === 409 && e.code === "E_EXISTS") {
-      toast(e.message, "error");
-      const campo = $("#g-task") || $("#g-name") || $("#g-slug");
-      if (campo) { campo.focus(); if (campo.select) campo.select(); }
+      // A mensagem antiga mandava "mude o identificador ou a data" — dois campos que a pessoa não
+      // vê: eles moram num bloco recolhido, escondido para quem não é administrador. E o foco ia
+      // para um campo invisível, que é um não-evento. O identificador NASCE do título; só deixa
+      // de nascer se um administrador o editou à mão. Então o caminho normal é o título.
+      // `dataset.auto` fica no identificador enquanto ele é DERIVADO do título; some no instante
+      // em que alguém digita nele (app.js, no listener de input). Só nesse caso mexer no título
+      // não resolveria — e aí sim o aviso aponta para o identificador.
+      const idEditadoAMao = !!($("#g-task") && campoVisivel($("#g-task")) && !$("#g-task").dataset.auto && $("#g-task").value);
+      const idNasceDoTitulo = !idEditadoAMao;
+      const msg = idNasceDoTitulo
+        ? "Já existe uma peça com este nome na data de hoje. Mude o título — pode ser só um detalhe, como “(carrossel)” no fim."
+        : "Já existe uma peça com este identificador nesta data. Mude o identificador, em “Identificador técnico e data”.";
+      toast(msg, "error");
+      if (idNasceDoTitulo) avisaCampo("#g-title", "#e-title", msg);
+      else avisaCampo("#g-task", "#e-task", msg);
     }
     else if (e.data && e.data.errors) { e.data.errors.forEach((x) => toast(x, "error")); }
     else toast(e.message, "error");

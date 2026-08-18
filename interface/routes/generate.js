@@ -447,6 +447,7 @@ router.post("/preview", async (req, res, next) => {
       watermark: body.watermark,
       font: body.font, // tipografia da peça: a prévia sai na MESMA família da arte final
       fundo: body.fundo, // superfície da arte: a prévia sai no MESMO fundo do render final
+      folder: body.folder, // nome da peça: a rotação do "Automático" é por nome, e tem que bater
       only: body.only, // renderiza só o slide desse índice (progresso "slide N de M" no carrossel)
       media: body.media, // metadados da "4Selet na Mídia" (print/modelo/veículo) p/ a prévia do mockup
     });

@@ -3681,12 +3681,25 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo, folder } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   // A prévia aceita os mesmos 14 arranjos do render final. Enquanto só os 4 passavam por aqui,
   // escolher um arquétipo mostrava editorial na tela e salvava outra coisa no arquivo.
-  const tplId = arranjoConhecido(template) ? template : "editorial";
+  //
+  // E no "Automático" ela precisa resolver do MESMO jeito que o renderImage: primeiro o desenho
+  // que o DADO pede (grade de números, lista, passo a passo...), depois a foto, e só então a
+  // rotação por nome. Sem isto, uma peça de Imagem com números mostrava Editorial na tela e
+  // salvava Grade de números no arquivo — medido: a pessoa aprovava uma arte e recebia outra.
+  const semEscolha = !arranjoConhecido(template);
+  let tplId = semEscolha ? "editorial" : template;
+  if (semEscolha && ct.kind === "image") {
+    const p = parsed || {};
+    const arqDoDado = arquetipoPorDado(p);
+    tplId = arqDoDado
+      || ((p.image && TEMPLATES.photo) ? "photo"
+        : TEMPLATES_ROTACAO[hashDoNome(String(folder || "")) % TEMPLATES_ROTACAO.length]);
+  }
   const tplEhArq = ehArquetipoDePeca(tplId);
   const logoV = LOGO_IDS.indexOf(logo) >= 0 ? logo : "";
   const wmV = WATERMARK_IDS.indexOf(watermark) >= 0 ? watermark : "";

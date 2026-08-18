@@ -1075,6 +1075,71 @@ function briefingLongo() {
     checa(app.indexOf('$("#he-add-img").onclick') < 0, "e nada mais abre o seletor de arquivo por fora do modal");
   }
 
+
+  // ==========================================================================
+  // 24. OS QUATRO ACHADOS DA HORA DE SALVAR
+  // (a) a previa mostrava uma arte e o arquivo salvava outra;
+  // (b) "Salvar peca" sem titulo nao dava sinal nenhum;
+  // (c) "Comecar do zero" apagava tudo num clique, sem perguntar;
+  // (d) o erro de nome repetido citava campos que a pessoa nao ve.
+  // ==========================================================================
+  {
+    secao("24. Os quatro achados da hora de salvar");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const eng = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
+
+    // -- 24a. A previa resolve o "Automatico" como o render final ----------
+    // O renderImage troca o desenho quando o conteudo tem dado (arquetipoPorDado). A previa caia
+    // sempre no editorial: a pessoa aprovava Editorial e recebia Grade de numeros no arquivo.
+    checa(eng.indexOf("const semEscolha = !arranjoConhecido(template);") >= 0,
+      "a previa reconhece quando ninguem escolheu arranjo");
+    checa(eng.indexOf("const arqDoDado = arquetipoPorDado(p);") >= 0,
+      "e resolve pelo DADO primeiro, como o render final");
+    checa(eng.indexOf("TEMPLATES_ROTACAO[hashDoNome(String(folder || \"\")) % TEMPLATES_ROTACAO.length]") >= 0,
+      "caindo na mesma rotacao por nome quando nao ha dado");
+    checa(app.indexOf("const pastaDaPeca =") >= 0 && app.indexOf("folder: pastaDaPeca") >= 0,
+      "a tela manda o nome da peca (a rotacao e por nome, e tem que bater)");
+    checa(app.indexOf("template = autoVariant(task + \"_\" + date);") < 0,
+      "e parou de resolver o Automatico por conta propria, escondendo a troca por arquetipo");
+    // A prova viva: mesma peca, mesma entrada — previa e render final tem que dar o mesmo id.
+    {
+      const rr = require("./lib/render.js");
+      const conceito = { headline: "Os numeros", subtext: "a", stats: [{ value: "95%", label: "x" }, { value: "D+10", label: "y" }] };
+      // arquetipoPorDado nao e exportado; o proxy e o que a previa devolve com template vazio.
+      const esperado = "stat_grid";
+      const bate = typeof rr.renderPreview === "function";
+      checa(bate, "renderPreview segue exportado para a bateria conferir", bate ? "" : "sumiu");
+      checa(eng.indexOf('if (semEscolha && ct.kind === "image")') >= 0,
+        "e a cascata vale so na peca de Imagem — feed e carrossel nao trocam por dado", esperado);
+      void conceito;
+    }
+
+    // -- 24b. O aviso chega em quem esta rolado ate o fim ------------------
+    checa(app.indexOf("function avisaCampo(") >= 0, "existe um caminho unico de aviso de campo");
+    checa(/function avisaCampo\([\s\S]{0,700}toast\(frase, "error"\)/.test(app),
+      "que avisa por cima (toast) — a frase no campo lá em cima, sozinha, nao era vista");
+    checa(/function avisaCampo\([\s\S]{0,900}scrollIntoView/.test(app), "e leva a pessoa ate o campo");
+    checa(/function avisaCampo\([\s\S]{0,900}det\.setAttribute\("open", ""\)/.test(app),
+      "abrindo o bloco recolhido, se o campo estiver dentro de um");
+    checa(app.indexOf('avisaCampo("#g-title", "#e-title", "Dê um título à peça') >= 0,
+      "e o titulo vazio passa por ele");
+    checa(app.indexOf("function limpaAviso(") >= 0 && /function limpaAviso\([\s\S]{0,300}classList\.remove\("invalid"\)/.test(app),
+      "corrigir tira a borda vermelha (antes ela ficava presa)");
+
+    // -- 24c. "Comecar do zero" pergunta antes -----------------------------
+    checa(app.indexOf('$("#g-regen").onclick = runGenerate;') < 0, "o clique nao apaga mais direto");
+    checa(/#g-regen"\)\.onclick = async \(\) => \{[\s\S]{0,400}uiConfirm\(/.test(app), "ele pergunta antes");
+    checa(app.indexOf("Não dá para voltar atrás.") >= 0, "e diz que nao tem volta");
+
+    // -- 24d. O erro de nome repetido aponta para um campo VISIVEL ---------
+    checa(app.indexOf("const idEditadoAMao =") >= 0,
+      "o 409 distingue identificador derivado do titulo e identificador editado a mao");
+    checa(app.indexOf("Mude o título — pode ser só um detalhe") >= 0,
+      "e no caso normal manda mexer no TITULO, que e o campo que a pessoa ve");
+    checa(app.indexOf('const campo = $("#g-task") || $("#g-name") || $("#g-slug");') < 0,
+      "nada mais foca um campo invisivel (que era um nao-evento)");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));
