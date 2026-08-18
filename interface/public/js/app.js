@@ -4595,7 +4595,10 @@ async function viewCreate(arg, query) {
   setCampMap(campaigns);
   let providerList = [];
   try { providerList = (await API.providers()).providers || []; } catch (e) { /* usa padrao do servidor */ }
-  const providerOpts = providerList.map((p) => '<option value="' + esc(p.id) + '"' + (p.is_default ? " selected" : "") + ">" + esc(p.label) + (p.configured ? "" : " — indisponível (falta configurar)") + "</option>").join("");
+  // Sem chave, a geração sai SIMULADA — texto de mentira com cara de peça pronta. Em
+  // Configurações a opção já vinha desabilitada; aqui não, e dava para escolher e receber uma
+  // peça falsa sem nada avisar. As duas telas passam a se comportar igual.
+  const providerOpts = providerList.map((p) => '<option value="' + esc(p.id) + '"' + (p.is_default ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — indisponível (falta configurar)") + "</option>").join("");
   const preCamp = (query && query.campaign) || "";
   const preType = (query && query.type) || State.meta.content_types[0].id;
   const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}" ${c.id === preCamp ? "selected" : ""}>${esc(c.name)}</option>`).join("");
