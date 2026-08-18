@@ -196,6 +196,16 @@
 
 /* ---- reset ---- */
 *, *::before, *::after { box-sizing: border-box; }
+/* O atributo `hidden` do HTML tem que esconder. SEMPRE.
+   O navegador o implementa como `[hidden] { display: none }` — estilo de agente do usuário, que
+   QUALQUER regra de classe declarando `display` derruba. Toda vez que um componente ganhava
+   `display: flex/inline-flex/grid`, o `hidden` dele virava decoração: o elemento continuava
+   desenhado, vazio, num canto da tela. Isso já foi remendado caso a caso seis vezes neste arquivo
+   (.busy-ov, .ai-note, .back-btn, .pub-publishing, .he-dims, .tpl-mais) e ainda apareceu de novo
+   — a caixinha vazia sobre a arte no editor era o mostrador de medidas "escondido".
+   O `!important` é deliberado e é o lugar certo para ele: nenhum estilo deve poder revogar uma
+   ordem de esconder. Quem quiser animar a saída de um elemento usa uma classe, não o `hidden`. */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -1121,6 +1131,12 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    isso começa em 944px de janela, que é uma largura comum. A barra ocupa 40px a partir de 18, então
    66px deixa as medidas livres em qualquer largura. */
 .he-dims { position: fixed; left: 18px; bottom: 66px; z-index: 20; display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; background: rgba(6,20,26,.86); border: 1px solid var(--border); border-radius: 8px; font-size: 11.5px; line-height: 1.35; color: var(--text-2); pointer-events: none; font-variant-numeric: tabular-nums; box-shadow: var(--shadow-sm); }
+/* `display:flex` numa CLASSE vence o `[hidden] { display:none }` do navegador, que é estilo de
+   agente do usuário. Sem esta linha o readout NUNCA some: vazio, ele vira uma caixinha escura
+   sem nada dentro no canto inferior esquerdo do palco — e o botão "Medidas" parece não fazer
+   nada. Mesmo defeito que já apareceu no "Ver mais" dos arranjos: em toda regra que declara
+   `display`, o [hidden] precisa ser reafirmado. */
+.he-dims[hidden] { display: none; }
 .he-dims b { color: var(--text); font-weight: 700; }
 .he-dims .hed-sel { color: var(--accent-strong); }
 

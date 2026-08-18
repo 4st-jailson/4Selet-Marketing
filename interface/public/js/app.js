@@ -2622,8 +2622,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +     '<button data-mark="4selet">"4SELET" (ao fundo)</button>'
     +     '<button data-mark="outline">"SELET" contornado</button>'
     +   "</div></details>"
-    +   '<button class="btn btn-sm" id="he-add-img" title="Enviar uma imagem do seu computador">+ Enviar imagem</button>'
-    +   '<button class="btn btn-sm" id="he-search-img" title="Inserir imagem: capturar de um site, enviar um arquivo ou buscar foto de banco">+ Inserir imagem</button>'
+    +   '<button class="btn btn-sm" id="he-search-img" title="Inserir imagem: buscar foto de banco, capturar de um site ou enviar um arquivo do seu computador">+ Imagem</button>'
     +   '<details class="ed-menu" id="he-block-menu"><summary class="btn btn-sm" title="Inserir um elemento pronto da marca: CTA, rodapé ou selo">+ Elemento pronto</summary><div class="ed-pop">'
     +     '<button data-block="cta">CTA WhatsApp</button>'
     +     '<button data-block="footer">Rodapé @4selet</button>'
@@ -3153,7 +3152,8 @@ async function openHtmlEditor(folder, task, rel, opts) {
   };
   $("#he-logo-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addImgNode(b.dataset.src, { width: Math.round((frame.contentDocument.querySelector(".card") || {}).offsetWidth * (parseFloat(b.dataset.w) || 0.3)), top: 80 }); $("#he-logo-menu").removeAttribute("open"); }; });
   $("#he-mark-menu").querySelectorAll("button").forEach((b) => { b.onclick = () => { addMark(b.dataset.mark); $("#he-mark-menu").removeAttribute("open"); }; });
-  $("#he-add-img").onclick = () => $("#he-file").click();
+  // #he-file continua servindo o caminho "Enviar um arquivo" DENTRO do modal de origem — o que
+  // saiu foi o botão irmão que fazia isso direto, e que era a mesma coisa com outro nome.
   $("#he-file").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => addImgNode(rd.result, { top: 120 }); rd.readAsDataURL(f); e.target.value = ""; };
   // Buscar foto de banco (Pexels) → baixa SÓ a escolhida pro /uploads/ e insere como imagem editável.
   // Inserir imagem no editor: pergunta a ORIGEM antes de ir ao banco de fotos. O print de uma tela

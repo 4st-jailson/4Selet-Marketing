@@ -1036,6 +1036,45 @@ function briefingLongo() {
       "e a saida continua dita: como trocar a foto");
   }
 
+
+  // ==========================================================================
+  // 23. CANTOS MORTOS: escondido tem que esconder, e escolha repetida nao existe
+  // O Hugo apontou uma caixinha VAZIA flutuando sobre a arte no editor. Era o mostrador de
+  // medidas: com `hidden=true` o updateDims() retorna SEM preencher (app.js), so que a caixa
+  // continuava desenhada porque `.he-dims` declara `display:flex` numa CLASSE — e classe vence o
+  // `[hidden] { display:none }` do navegador, que e estilo de agente do usuario.
+  // Isso ja tinha sido remendado caso a caso SEIS vezes neste CSS. A regra global mata a familia.
+  // ==========================================================================
+  {
+    secao("23. Cantos mortos: escondido esconde, escolha repetida some");
+    const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const semComentCss = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    // -- 23a. A regra global, e no lugar certo (antes de tudo que declara display) ----
+    checa(/\[hidden\]\s*\{\s*display:\s*none\s*!important\s*;?\s*\}/.test(semComentCss),
+      "existe a regra global que faz o `hidden` do HTML sempre esconder");
+    const posGlobal = semComentCss.search(/\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+    const posPrimeiroDisplay = semComentCss.search(/\.[a-z][\w-]*\s*\{[^}]*display:\s*(flex|grid|inline-flex|inline-grid)/);
+    checa(posGlobal >= 0 && (posPrimeiroDisplay < 0 || posGlobal < posPrimeiroDisplay + 4000),
+      "e ela vem no topo, junto do reset — nao perdida no meio do arquivo");
+
+    // -- 23b. O caso que apareceu na tela ---------------------------------
+    checa(/\.he-dims\s*\{[^}]*display:\s*flex/.test(semComentCss),
+      "o mostrador de medidas segue declarando display (por isso precisava da regra)");
+    checa(app.indexOf('const box = ov.querySelector("#he-dims"); if (!box || box.hidden) return;') >= 0,
+      "e ele so se preenche quando esta ligado — desenhado escondido, ficaria VAZIO");
+
+    // -- 23c. Escolha repetida: dois botoes para o mesmo caminho ----------
+    checa(app.indexOf('id="he-add-img"') < 0,
+      "o botao que so enviava arquivo saiu do editor (era a opcao 3 do modal, com outro nome)");
+    checa(app.indexOf('id="he-search-img"') >= 0, "e sobrou um so, que pergunta a origem");
+    checa(app.indexOf("$(\"#he-file\").onchange") >= 0,
+      "o campo de arquivo continua vivo — quem o usa agora e o caminho 'Enviar um arquivo' do modal");
+    // O antigo abria o seletor de arquivo direto; se voltar, volta a escolha falsa.
+    checa(app.indexOf('$("#he-add-img").onclick') < 0, "e nada mais abre o seletor de arquivo por fora do modal");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));
