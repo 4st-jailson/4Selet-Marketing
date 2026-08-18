@@ -994,6 +994,48 @@ function briefingLongo() {
     checa(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(trecho), "nenhum emoji no seletor (o chevron e desenhado em CSS)");
   }
 
+
+  // ==========================================================================
+  // 22. A NOTA DA FOTO DE CAPA
+  // Ela nunca teve estilo proprio: herdava o `display:flex` do .gov-item e, como o conteudo era
+  // texto solto, CADA pedaco da frase virava uma COLUNA — "Capa | — | procurei | open book dark |
+  // no banco..." em tres colunas espremidas, quebrando palavras no meio. E a nota DESCREVIA a
+  // foto em vez de mostra-la, com o `url` no payload desde sempre.
+  // ==========================================================================
+  {
+    secao("22. A nota da foto de capa");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
+    const semComentCss = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    // -- 22a. O texto volta a ser texto -----------------------------------
+    checa(/\.capa-box\s*\{[^}]*align-items/.test(semComentCss), "a caixa da capa tem estilo proprio (antes so herdava o flex)");
+    checa(/\.capa-txt\s*\{[^}]*flex:\s*1[^}]*min-width:\s*0/.test(semComentCss),
+      "o texto vive num bloco que ocupa a largura e pode quebrar dentro do flex");
+    checa(app.indexOf('<div class="capa-txt">') >= 0, "e a nota o envolve de verdade");
+
+    // -- 22b. Mostra a foto em vez de descreve-la -------------------------
+    checa(app.indexOf('class="capa-thumb"') >= 0, "a foto escolhida aparece na nota");
+    checa(app.indexOf('onerror="this.remove()"') >= 0,
+      "e uma foto apagada do acervo some, em vez de derramar o texto alternativo");
+    checa(/\.capa-thumb\s*\{[^}]*object-fit:\s*cover/.test(semComentCss), "a miniatura recorta em vez de deformar");
+
+    // -- 22c. A frase sai limpa -------------------------------------------
+    checa(app.indexOf('capa.autor ? `<span class="capa-credito">Foto: ') >= 0,
+      "o autor vira CREDITO (o nome vem do banco em minuscula e no meio da frase parecia erro)");
+    checa(app.indexOf("cru.charAt(0).toUpperCase()") >= 0, "o motivo, em linha propria, comeca em maiuscula");
+    checa(/\.capa-motivo\s*\{[^}]*display:\s*block/.test(semComentCss),
+      "e tem linha propria — emendado na frase virava dois travessoes numa linha so");
+    checa(/\.capa-credito \+ \.hint::before\s*\{[^}]*content/.test(semComentCss),
+      "credito e dica separados por um ponto (encostados liam como uma frase so)");
+
+    // -- 22d. Nada de emoji, nem jargao -----------------------------------
+    const trecho = app.slice(app.indexOf("function capaHtml("), app.indexOf("async function saveGenerated("));
+    checa(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(trecho), "nenhum emoji na nota (regra dura da casa)");
+    checa(trecho.indexOf("Não gostou? Abra a peça e troque a foto do primeiro slide.") >= 0,
+      "e a saida continua dita: como trocar a foto");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

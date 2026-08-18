@@ -6760,20 +6760,52 @@ function showSaveBanner(folder) {
 // foto que entra sem ninguém saber de onde veio é o tipo de mágica que assusta — e o crédito do
 // fotógrafo é obrigação, não gentileza. Quando não deu para buscar, o motivo vem junto com a
 // saída (anexar print, capturar o site, ou conectar o banco de imagens).
+// A nota da foto de capa. Duas coisas estavam erradas aqui, e a segunda escondia a primeira:
+//
+// 1) `.gov-item` é `display:flex`, então CADA pedaço solto do texto virava uma COLUNA. O
+//    resultado na tela era "Capa | — | procurei | open book dark | no banco de imagens..." em
+//    três colunas espremidas, com as palavras quebrando no meio. O texto agora vive num bloco
+//    só, e o flex passa a servir para o que ele é bom: a miniatura ao lado.
+//
+// 2) A nota DESCREVIA a foto em vez de mostrá-la — e o payload traz a `url` desde sempre. Ver a
+//    imagem responde num segundo a pergunta que o parágrafo tentava responder em três linhas.
+//
+// E o crédito: o nome do autor vem do banco em texto livre, quase sempre em minúscula
+// ("night of the light"). Escrito no meio da frase virava "Foto de night of the light." e parecia
+// erro. Com o rótulo "Foto:" na frente, a minúscula lê como o apelido que é.
 function capaHtml(capa) {
   if (!capa) return "";
   if (capa.ok) {
+    // O motivo vem do modelo e quase sempre JÁ tem travessão dentro ("remete a X — postura de
+    // quem Y"). Emendá-lo na frase com outro travessão produzia dois numa linha só, e a frase
+    // virava um trem. Ele ganha a própria linha, no tom secundário, com a pontuação do modelo
+    // preservada — só o ponto final duplicado sai.
+    // Em linha própria ele é uma FRASE, então começa em maiúscula — o modelo devolve tanto
+    // "Remete a..." quanto "tecnologia como...", e a segunda forma virava um fragmento solto.
+    const cru = String(capa.porque || "").trim().replace(/\s*[.]+$/, "");
+    const motivo = cru ? cru.charAt(0).toUpperCase() + cru.slice(1) : "";
+    const termo = String(capa.busca || "").trim();
     return `<div class="gov-item capa-box">
-      <strong>Capa com foto</strong> — procurei <em>${esc(capa.busca || "")}</em> no banco de imagens${capa.porque ? " porque " + esc(capa.porque) : ""}.
-      ${capa.autor ? "Foto de " + esc(capa.autor) + "." : ""}
-      <span class="hint">Não gostou? Abra a peça e troque a foto do primeiro slide.</span>
+      ${/* onerror: a foto mora em /uploads e pode ter sido apagada. Sem isto, a imagem quebrada
+             derrama o texto alternativo para fora da moldura — foi o que apareceu ao olhar. */ ""}
+      ${capa.url ? `<img class="capa-thumb" src="${esc(capa.url)}" alt="" onerror="this.remove()" />` : ""}
+      <div class="capa-txt">
+        <strong>A capa ganhou uma foto.</strong>${termo ? ` Procurei <span class="capa-termo">${esc(termo)}</span> no banco de imagens.` : ""}
+        ${motivo ? `<span class="capa-motivo">${esc(motivo)}.</span>` : ""}
+        <span class="capa-rodape">
+          ${capa.autor ? `<span class="capa-credito">Foto: ${esc(capa.autor)}</span>` : ""}
+          <span class="hint">Não gostou? Abra a peça e troque a foto do primeiro slide.</span>
+        </span>
+      </div>
     </div>`;
   }
   if (capa.motivo === "sem_foto") return "";   // capa de dado não leva foto: nada a dizer
   return `<div class="gov-item capa-box capa-pendente">
-    <strong>A capa ficou sem foto</strong> — ${esc(capa.explica || "não consegui buscar a imagem.")}
-    ${capa.motivo === "propria" ? '<span class="hint">Abra a peça e use “Buscar imagem” para anexar o print, ou capture a tela do site.</span>' : ""}
-    ${capa.motivo === "sem_chave" ? '<span class="hint">Configurações › Banco de imagens.</span>' : ""}
+    <div class="capa-txt">
+      <strong>A capa ficou sem foto.</strong> ${esc(capa.explica || "não consegui buscar a imagem.")}
+      ${capa.motivo === "propria" ? '<span class="capa-rodape"><span class="hint">Abra a peça e use “Buscar imagem” para anexar o print, ou capture a tela do site.</span></span>' : ""}
+      ${capa.motivo === "sem_chave" ? '<span class="capa-rodape"><span class="hint">A chave do banco de imagens fica em Configurações › Banco de imagens.</span></span>' : ""}
+    </div>
   </div>`;
 }
 
