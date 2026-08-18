@@ -234,8 +234,13 @@ router.post("/:folder/render", async (req, res) => {
   // Tipografia da peça: lista FECHADA (render.FAMILIA_IDS) + "auto" p/ voltar à identidade da marca.
   const reqFont = String((req.query.font || (req.body && req.body.font) || "").trim());
   const font = (render.FAMILIA_IDS.includes(reqFont) || reqFont === "auto") ? reqFont : undefined;
+  // Superfície da peça: lista FECHADA (render.FUNDO_IDS). É o que permite corrigir um fundo
+  // escolhido errado na criação sem refazer a peça inteira.
+  const reqFundo = String((req.query.fundo || (req.body && req.body.fundo) || "").trim());
+  const fundo = (render.FUNDO_IDS.includes(reqFundo) || reqFundo === "auto") ? reqFundo : undefined;
   try {
-    const r = await render.render(req.params.folder, kind, { template, logo, watermark, font });
+    if (fundo) content.setRenderPref(req.params.folder, { fundo: fundo });
+    const r = await render.render(req.params.folder, kind, { template, logo, watermark, font, fundo: fundo === "auto" ? "" : fundo });
     const task = content.getTask(req.params.folder);
     const payload = Object.assign({ kind, task }, r);
     // Sem isto, uma falha de render (r.ok=false) chegava ao front como "HTTP 400" cru

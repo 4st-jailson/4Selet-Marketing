@@ -235,6 +235,9 @@ function getTask(folder) {
     logo: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.logo === "string") ? rp.logo : null; })(),
     watermark: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.watermark === "string") ? rp.watermark : null; })(),
     font: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.font === "string") ? rp.font : null; })(),
+    // A superfície escolhida na peça. Sem expor, o painel de ajustes abria sempre em "Padrão" e
+    // dizia à pessoa que a peça era azul quando ela estava em papel — o campo contradizendo a arte.
+    fundo: (function () { const rp = readJsonSafe(path.join(loc.path, "render.json")); return (rp && typeof rp.fundo === "string") ? rp.fundo : null; })(),
     pillar: (status && typeof status.pillar === "string") ? status.pillar : null,
   };
 }
@@ -418,6 +421,9 @@ const VALID_WATERMARKS = ["word", "symbol", "outline", "none", "canto", "padrao"
 // Tipografia da peça — ESPELHO de FAMILIAS em lib/render.js. Lista fechada: o id vira URL do Google
 // Fonts e vira CSS lá dentro, então família livre seria injeção.
 const VALID_FONTS = ["playfair", "dmserif", "montserrat", "poppins", "oswald", "bebas", "spacegrotesk"];
+// A SUPERFÍCIE da peça (fundo). Mesma família de logo/marca d'água: escolha de arte que precisa
+// sobreviver ao "Gerar arte final". "padrao" é o azul da marca e também o valor de volta.
+const VALID_FUNDOS = ["padrao", "grade", "solido", "papel", "vinheta"];
 function setRenderPref(folder, patch) {
   const loc = findTask(folder);
   if (!loc || !patch) return false;
@@ -433,6 +439,8 @@ function setRenderPref(folder, patch) {
   // isto a foto escolhida na criação aparecia na prévia e sumia ao salvar. Só aceita caminho do
   // acervo servido pelo painel: nada de URL externa (o editor re-renderiza com a rede bloqueada) e
   // nada de subir a árvore de diretórios.
+  if (patch.fundo === "auto" || patch.fundo === "") delete cur.fundo;
+  else if (VALID_FUNDOS.includes(String(patch.fundo))) cur.fundo = String(patch.fundo);
   if (patch.image === "auto" || patch.image === "") delete cur.image;
   else if (typeof patch.image === "string" && /^\/(uploads|assets)\/[\w./-]+$/.test(patch.image) && patch.image.indexOf("..") < 0) {
     cur.image = patch.image;

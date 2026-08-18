@@ -446,6 +446,7 @@ router.post("/preview", async (req, res, next) => {
       logo: body.logo,
       watermark: body.watermark,
       font: body.font, // tipografia da peça: a prévia sai na MESMA família da arte final
+      fundo: body.fundo, // superfície da arte: a prévia sai no MESMO fundo do render final
       only: body.only, // renderiza só o slide desse índice (progresso "slide N de M" no carrossel)
       media: body.media, // metadados da "4Selet na Mídia" (print/modelo/veículo) p/ a prévia do mockup
     });
@@ -642,7 +643,7 @@ router.post("/save", async (req, res, next) => {
     // 2c.2) variante de LOGO + estilo de MARCA D'ÁGUA escolhidos no brief (render.json, merge).
     // A foto entra aqui junto: no FEED ela não cabe no arquivo de conteúdo (é .txt), então o
     // render.json é o único lugar onde ela sobrevive ao salvamento.
-    if (body.logo || body.watermark || body.image || body.font) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark, image: body.image, font: body.font });
+    if (body.logo || body.watermark || body.image || body.font || body.fundo) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark, image: body.image, font: body.font, fundo: body.fundo });
 
     // 2d) grava o pilar de conteudo (eixo tematico) escolhido no brief.
     // Validado na taxonomia fechada; pilar invalido/ausente e ignorado.

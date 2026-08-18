@@ -2302,21 +2302,49 @@ function templatePicker(task) {
   const logoOpts = montaOpcoes(LOGO_OPCOES, task.logo);
   const wmOpts = montaOpcoes(MARCA_DAGUA_OPCOES, task.watermark);
   const fontOpts = montaOpcoes(TIPOGRAFIA_OPCOES, task.font);
+  const fundoAtual = String(task.fundo || "");
   return `<div class="tpl-picker mt">
-    <div class="muted" style="font-size:13px;margin-bottom:8px">Estilo visual da arte</div>
+    <div class="muted" style="font-size:13px;margin-bottom:8px">Arranjo do texto</div>
     <div class="tpl-grid">${opts}</div>
+    <div class="fundo-pick mt" id="pick-fundo-box">
+      <span class="fundo-lab">Superfície da arte</span>
+      <input type="hidden" id="pick-fundo" value="${esc(fundoAtual)}" />
+      <div class="fundo-opts">${FUNDOS_UI.map(([v, nome, desc]) => `
+        <button type="button" class="fundo-opt${v === fundoAtual ? " on" : ""}" data-fundo="${esc(v)}" title="${esc(desc)}">
+          ${fundoThumb(v)}<span class="fundo-nome">${esc(nome)}</span>
+        </button>`).join("")}</div>
+    </div>
     <div class="tpl-extra">
       <label class="tpl-sel">Logo <select id="pick-logo">${logoOpts}</select></label>
       <label class="tpl-sel">Marca d’água <select id="pick-wm">${wmOpts}</select></label>
       <label class="tpl-sel">Tipografia <select id="pick-font">${fontOpts}</select></label>
     </div>
-    <p class="hint" style="margin-top:8px;font-size:12px">O estilo, a logo, a marca d’água e a tipografia entram na arte ao clicar em <strong>“Gerar arte final”</strong>.</p>
+    <p class="hint" style="margin-top:8px;font-size:12px">O arranjo, a superfície, a logo, a marca d’água e a tipografia entram na arte ao clicar em <strong>“Gerar arte final”</strong>.</p>
   </div>`;
 }
 
 function selectedTemplate() {
   const el = document.querySelector('input[name="render-tpl"]:checked');
   return el ? el.value : undefined;
+}
+// As miniaturas de superfície da PEÇA PRONTA. Ligadas na hora em que a tela é montada (o painel
+// de ajustes é remontado a cada abertura), pelo mesmo caminho do seletor da criação.
+function ligaFundoDaPeca() {
+  document.querySelectorAll("#pick-fundo-box [data-fundo]").forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll("#pick-fundo-box [data-fundo]").forEach((o) => o.classList.remove("on"));
+      b.classList.add("on");
+      const h = document.getElementById("pick-fundo");
+      if (h) h.value = b.dataset.fundo || "";
+    };
+  });
+}
+function selectedFundo() {
+  const el = document.getElementById("pick-fundo");
+  if (!el) return undefined;
+  // "" na tela = a primeira miniatura, "Padrão — Degradê azul". É uma ESCOLHA, não um "sem
+  // escolha": mandar a sentinela de limpar devolveria a superfície carimbada na geração.
+  return el.value || "padrao";
 }
 // value "" (opção "Automático/Padrão") → sentinela "auto" p/ LIMPAR a escolha salva no re-render.
 function selectedLogo() { const el = document.getElementById("pick-logo"); return el ? (el.value || "auto") : undefined; }
@@ -3434,7 +3462,7 @@ async function doRestore(folder, file, id, task) {
   toast("Restaurando…", "info");
   try {
     await API.restoreVersion(folder, file, id);
-    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont());
+    if (autoRenders(task.kind)) await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont(), selectedFundo());
     toast("Versão restaurada.", "success");
     router();
   } catch (e) { toast((e && e.message) || "Erro ao restaurar.", "error"); }
@@ -3461,7 +3489,7 @@ async function refineTask(folder, task) {
     });
     if (autoRenders(task.kind)) {
       btn.innerHTML = '<span class="spinner"></span> atualizando a arte…'; showBusy("Atualizando a arte…");
-      const rr = await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont());
+      const rr = await API.renderMedia(folder, task.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont(), selectedFundo());
       if (!rr.ok) toast("Ajustado, mas falhou a geração da arte: " + (rr.stderr || rr.error || "erro"), "warn");
       else toast("Ajustado e arte atualizada", "success");
     } else if (task.kind === "video") {
@@ -3740,15 +3768,19 @@ async function viewTaskDetail(folder) {
       const btn = $("#btn-render"); const out = $("#render-out");
       btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> gerando arte…';
       out.textContent = task.kind === "video" ? "isto pode levar alguns minutos…" : "";
-      showBusy(task.kind === "video" ? "Renderizando o vídeo… (pode levar alguns minutos)" : "Gerando a arte…");
+      showBusy(task.kind === "video" ? "Montando o vídeo… (pode levar alguns minutos)" : "Gerando a arte…");
       try {
-        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont());
+        const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont(), selectedFundo());
         if (!r.ok) throw new Error(r.stderr || r.error || "falha ao gerar a arte");
         hideBusy(); toast("Arte gerada", "success"); router();
       } catch (e) { hideBusy(); toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }
     };
     // Logo/marca d'água/tipografia: trocar o seletor DESTACA "Gerar arte final" — é onde a escolha entra na arte.
     $$("#pick-logo, #pick-wm, #pick-font").forEach((el) => { el.onchange = () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }; });
+    // As miniaturas de superfície: mesmo realce do botão, para a escolha não ficar parada na tela
+    // sem virar arte (é o "Gerar arte final" que a aplica).
+    ligaFundoDaPeca();
+    $$("#pick-fundo-box [data-fundo]").forEach((el) => { el.addEventListener("click", () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }); });
     // Sair da identidade da marca pergunta antes (modal centralizado, Sim/Não).
     ligaConfirmacaoDeFonte($("#pick-font"));
   }
@@ -4440,12 +4472,12 @@ async function viewCreate(arg, query) {
   setCampMap(campaigns);
   let providerList = [];
   try { providerList = (await API.providers()).providers || []; } catch (e) { /* usa padrao do servidor */ }
-  const providerOpts = providerList.map((p) => '<option value="' + esc(p.id) + '"' + (p.is_default ? " selected" : "") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("");
+  const providerOpts = providerList.map((p) => '<option value="' + esc(p.id) + '"' + (p.is_default ? " selected" : "") + ">" + esc(p.label) + (p.configured ? "" : " — indisponível (falta configurar)") + "</option>").join("");
   const preCamp = (query && query.campaign) || "";
   const preType = (query && query.type) || State.meta.content_types[0].id;
   const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}" ${c.id === preCamp ? "selected" : ""}>${esc(c.name)}</option>`).join("");
   const prePillar = (query && query.pillar) || "";
-  const pillarOpts = '<option value="">— a IA decide pelo tema da peça —</option>' + (State.meta.content_pillars || []).map((p) => `<option value="${esc(p.id)}" ${p.id === prePillar ? "selected" : ""} title="${esc(p.description)}">${esc(p.label)}</option>`).join("");
+  const pillarOpts = '<option value="">— deixar a IA escolher —</option>' + (State.meta.content_pillars || []).map((p) => `<option value="${esc(p.id)}" ${p.id === prePillar ? "selected" : ""} title="${esc(p.description)}">${esc(p.label)}</option>`).join("");
   const typeCards = State.meta.content_types.map((c) => `
     <button type="button" class="type-card ${c.id === preType ? "on" : ""}" data-type="${esc(c.id)}" title="${esc(c.description)}">
       <span class="tc-icon">${typeIconHtml(c)}</span>
@@ -4456,13 +4488,13 @@ async function viewCreate(arg, query) {
     <div class="grid grid-2">
       <div class="card">
         <h3>Descreva a peça</h3>
-        <p class="muted create-lead">Você descreve uma vez. A IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing faria.</p>
+        <p class="muted create-lead">Você descreve uma vez. A IA escreve no tom da 4Selet e confere a identidade da marca — como sua equipe de marketing faria. Quer um dado recente do mercado dentro da peça? Use <strong>Fatos de mercado</strong>, logo acima do botão de gerar: você lê o que ela achou e escolhe o que entra.</p>
 
         <div class="form-section">
           <div class="form-section-head"><span class="fs-num">1</span><h4>Sobre a peça</h4></div>
-          <div class="field"><label>Tema / objetivo da peça <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: carrossel sobre a Taxa Zero para produtores que faturam 50k+, tom editorial, com chamada para falar com o time" aria-describedby="e-brief"></textarea><div class="hint" style="margin-top:4px">Descreva a peça do seu jeito: assunto, formato, para quem, se quer chamada. Eu leio e preencho o que der.</div><div class="field-error" id="e-brief" role="alert"></div><div class="leitura" id="g-leitura" style="display:none"></div></div>
+          <div class="field"><label>O que você quer publicar <span class="hint" id="g-brief-count" aria-live="polite"></span></label><textarea id="g-brief" rows="3" placeholder="ex.: carrossel sobre a Taxa Zero para produtores que faturam 50k+, tom editorial, com chamada para falar com o time" aria-describedby="e-brief"></textarea><div class="hint" style="margin-top:4px">Descreva a peça do seu jeito: assunto, formato, para quem, se quer chamada. Eu leio e preencho o que der.</div><div class="field-error" id="e-brief" role="alert"></div><div class="leitura" id="g-leitura" style="display:none"></div></div>
           <div class="field"><label>Título da peça <span class="hint">(nome só pra você achar depois — sugerimos a partir do tema)</span></label><input id="g-title" placeholder="Taxa Zero para produtores estabelecidos" aria-describedby="e-title" /><div class="field-error" id="e-title" role="alert"></div></div>
-          <div class="field"><label>Assunto da peça <span class="hint">(o tema editorial — ex.: Taxa Zero, Educacional, Prova. Deixe em branco que a IA decide)</span></label>
+          <div class="field"><label>Em que assunto a peça se encaixa <span class="hint">(a prateleira de conteúdo da marca — ex.: Taxa Zero, Educacional, Prova da plataforma. Em branco, a IA escolhe pelo que você escreveu acima)</span></label>
             <select id="g-pillar">${pillarOpts}</select>
             <div class="hint" id="g-pillar-desc"></div>
             <div class="ai-note" id="g-note-pillar" hidden></div>
@@ -4519,26 +4551,28 @@ async function viewCreate(arg, query) {
         <details class="mais-opcoes">
           <summary>Criação avançada — orientação, tom, oferta, estilo e referências</summary>
           <p class="muted mais-lead">Tudo opcional. Sem nada aqui, a IA decide com bom senso no padrão da 4Selet. Use para dar liberdade de expressão e não deixar o sistema adivinhar.</p>
-          <div class="field"><label>IA que vai gerar <span class="hint">(provedor; o modelo de cada um fica em Configurações — o padrão já funciona)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
+          <div class="field"><label>IA que vai gerar <span class="hint">(qual inteligência escreve esta peça. A do padrão já funciona — só troque se quiser comparar o resultado)</span></label><select id="g-provider">${providerOpts || '<option value="">Padrão</option>'}</select></div>
           <div class="field"><label>Orientação na postagem — chamada para ação (CTA) <span class="hint">(padrão: sem CTA; oriente a IA aqui — o CTA final você ajusta no resultado)</span></label>
             <input id="g-cta" placeholder="ex.: Solicitar convite — deixe vazio para a peça não trazer chamada" />
             <div class="sugg-row" id="g-cta-sugg">${["Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Falar com o time", "Calcular minha economia", "Migrar minha operação", "Acessar o material", "Ver como funciona"].map((c) => `<button type="button" class="sugg-chip" data-cta="${esc(c)}">${esc(c)}</button>`).join("")}</div>
             <div class="ai-note" id="g-note-cta" hidden></div>
           </div>
           <div class="row">
-            <div class="field"><label>Tom (opcional)</label><input id="g-tone" placeholder="ex.: editorial, direto" /></div>
-            <div class="field"><label>Oferta/número a destacar</label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
+            <div class="field"><label>Tom do texto (opcional) <span class="hint">(como a legenda soa. Não muda o desenho da arte — isso é a Cara da arte, logo abaixo)</span></label><input id="g-tone" placeholder="ex.: direto e sóbrio" /></div>
+            <div class="field"><label>Oferta/número a destacar <span class="hint">(o número que você quer ver em evidência — ex.: 0% por 3 meses, 95% de aprovação. Em branco, a IA usa o que estiver no seu texto)</span></label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
           </div>
-          <div class="field art-only"><label>Estilo visual da arte (opcional) <span class="hint">(para Feed/Carrossel/Imagem — “Automático” varia a cada peça para o feed não ficar monótono)</span></label>
-            <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — gradiente azul, headline à esquerda</option><option value="bold">Destaque — fundo escuro, número em evidência</option><option value="split">Dividido — faixa clara (logo) + faixa escura</option><option value="photo">Foto — imagem enviada + texto por cima</option></select>
+          <div class="field art-only" id="g-cara-arte"><label>Cara da arte (opcional) <span class="hint">(duas escolhas independentes: onde o texto fica, e o que aparece atrás dele)</span></label>
+            <div class="arranjo-lab" id="g-style-lab">Arranjo do texto <span class="hint" id="g-style-hint">(onde ficam o título, o apoio e o logo. “Automático” sorteia entre Editorial, Destaque e Dividido, para o feed não ficar monótono)</span></div>
+            <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — título à esquerda, apoio embaixo</option><option value="bold">Destaque — tudo centralizado, número em evidência</option><option value="split">Dividido — faixa do logo em cima, título embaixo</option><option value="photo">Foto — sua imagem ao fundo, texto por cima</option></select>
+            <p class="hint" id="g-style-story" hidden>O Story monta cada cartão no desenho que combina com o conteúdo dele (frase, número, passo a passo) — por isso não há arranjo único a escolher aqui. A superfície abaixo vale para todos os cartões.</p>
             <div class="fundo-pick mt" id="g-fundo-pick">
-              <span class="fundo-lab">Fundo das artes</span>
+              <span class="fundo-lab">Superfície da arte</span>
               <input type="hidden" id="g-fundo" value="" />
               <div class="fundo-opts">${FUNDOS_UI.map(([v, nome, desc]) => `
                 <button type="button" class="fundo-opt${v === "" ? " on" : ""}" data-fundo="${esc(v)}" title="${esc(desc)}">
                   ${fundoThumb(v)}<span class="fundo-nome">${esc(nome)}</span>
                 </button>`).join("")}</div>
-              <p class="hint">A superfície de todos os slides desta peça. Cada slide ainda pode ter o seu, depois — isto é o padrão.</p>
+              <p class="hint" id="g-fundo-hint">A textura por trás do texto. Vale para <strong>toda a arte desta peça</strong> — capa inclusive. No arranjo <strong>Foto</strong> quem manda é a sua imagem, e a superfície não entra. Depois de gerar, cada slide ainda pode trocar o seu.</p>
             </div>
           </div>
           <div class="row art-only">
@@ -4567,7 +4601,7 @@ async function viewCreate(arg, query) {
             <input type="hidden" id="g-image" value="" />
           </div>
           <div class="field mood-field"><label>Referência visual / clima (opcional) <span class="hint">(clima, estilo ou referência a evocar — vale para arte e vídeo, sempre dentro da marca)</span></label><textarea id="g-mood" rows="2" placeholder="ex.: editorial sóbrio, foco em prova de número, sensação de exclusividade convidativa"></textarea></div>
-          <div class="field"><label>Observações extras (opcional)</label><textarea id="g-extra" rows="2"></textarea></div>
+          <div class="field"><label>Observações extras (opcional) <span class="hint">(qualquer coisa que não coube acima: o que evitar, um detalhe da oferta, um pedido de estrutura. Vai como orientação para a IA — não é publicado)</span></label><textarea id="g-extra" rows="2" placeholder="ex.: não citar prazo de saque; terminar com uma pergunta"></textarea></div>
         </details>
           <details class="mais-opcoes"${(State.user && State.user.role === "admin") ? "" : ' style="display:none"'}>
             <summary>Identificador técnico e data (avançado)</summary>
@@ -4597,7 +4631,7 @@ async function viewCreate(arg, query) {
       <div class="card create-result">
         <div class="flex-between"><h3>Revisão da peça</h3><span id="g-flag"></span></div>
         <p class="muted" style="margin:0 0 6px;font-size:12.5px">Revise o texto e o <strong>layout</strong> de cada slide. A prévia da arte aparece abaixo — a versão final é gerada ao salvar.</p>
-        <div id="g-result"><div class="empty">Descreva a peça e clique em <strong>Gerar com IA</strong>. Sua equipe de IA pesquisa o tema, escreve no tom da 4Selet e confere a identidade da marca.</div></div>
+        <div id="g-result"><div class="empty">Descreva a peça e clique em <strong>Gerar com IA</strong>. Ela escreve no tom da 4Selet e confere a identidade da marca. Notícia de mercado só entra na peça se você aceitar em <strong>Fatos de mercado</strong>.</div></div>
       </div>
     </div>`);
 
@@ -4685,6 +4719,12 @@ async function viewCreate(arg, query) {
     const isMedia = !!(ct && ct.id === "media_mention");
     // .art-only (estilo Editorial/Destaque/Split/Foto) vale p/ imagem — MENOS Mídia, que tem device próprio.
     $$(".art-only").forEach((el) => { el.style.display = (media === "image" && !isMedia) ? "" : "none"; });
+    // O Story monta cada cartão no arquétipo dele (frase, número, passo) e não usa os 4 arranjos —
+    // oferecer a escolha ali era pedir um clique que não mudava um pixel. A superfície continua.
+    const ehStory = !!(ct && ct.kind === "story");
+    ["#g-style", "#g-style-lab"].forEach((sel) => { const el = $(sel); if (el) el.style.display = ehStory ? "none" : ""; });
+    const aviso = $("#g-style-story");
+    if (aviso) aviso.hidden = !ehStory;
     $$(".mood-field").forEach((el) => { el.style.display = ((media === "image" || media === "video") && !isMedia) ? "" : "none"; });
     $$(".media-only").forEach((el) => { el.style.display = isMedia ? "" : "none"; });
   };
@@ -4739,8 +4779,12 @@ async function viewCreate(arg, query) {
     b.classList.add("on");
 
     if ($("#g-fundo")) $("#g-fundo").value = b.dataset.fundo || "";
+    markArtStale();   // trocar a superfície muda a arte: a prévia na tela deixa de valer
 
   }; });
+  // A prévia também deixa de valer quando muda o arranjo, o logo, a marca d'água ou a tipografia.
+  // Sem isto, a pessoa trocava, olhava a imagem antiga ainda na tela, e concluía que não mudou nada.
+  $$("#g-style, #g-logo, #g-wm, #g-font").forEach((el) => { el.addEventListener("change", markArtStale); });
   // Escolher tipografia fora da identidade pergunta antes (modal centralizado, Sim/Não).
   ligaConfirmacaoDeFonte($("#g-font"));
   ligaFatosDeMercado();
@@ -4751,8 +4795,8 @@ async function viewCreate(arg, query) {
       const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(f); });
       const r = await fetch("/api/uploads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, dataUrl }) }).then((x) => x.json());
       if (r && r.url) { $("#g-image").value = r.url; await loadPhotoGallery(r.url); if (hint) hint.textContent = "imagem enviada"; toast("Imagem adicionada ao acervo", "success"); }
-      else { if (hint) hint.textContent = "falha no envio"; toast((r && r.error) || "falha no envio", "error"); }
-    } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
+      else { if (hint) hint.textContent = "não consegui enviar"; toast(motivoDoEnvio(r, "essa imagem"), "error"); }
+    } catch (err) { if (hint) hint.textContent = "não consegui enviar"; toast(motivoDoEnvio(null, "essa imagem"), "error"); }
     e.target.value = "";
   });
   // Buscar foto de banco (Pexels) para a arte "Foto": abre o modal, baixa SÓ a escolhida pro acervo e a seleciona.
@@ -4774,8 +4818,8 @@ async function viewCreate(arg, query) {
       const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(f); });
       const r = await fetch("/api/uploads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, dataUrl }) }).then((x) => x.json());
       if (r && r.url) { $("#g-media-image").value = r.url; const pv = $("#g-media-prev"); if (pv) pv.innerHTML = '<img src="' + esc(r.url) + '" alt="print da matéria"/>'; if (hint) hint.textContent = "print enviado"; checkMediaAspect(); markArtStale(); }
-      else { if (hint) hint.textContent = "falha no envio"; toast((r && r.error) || "falha no envio", "error"); }
-    } catch (err) { if (hint) hint.textContent = "falha no envio"; toast("falha no envio", "error"); }
+      else { if (hint) hint.textContent = "não consegui enviar"; toast(motivoDoEnvio(r, "esse print"), "error"); }
+    } catch (err) { if (hint) hint.textContent = "não consegui enviar"; toast(motivoDoEnvio(null, "esse print"), "error"); }
     e.target.value = "";
   });
   // "Capturar do link": na peça de Mídia o print É o conteúdo, e o link da matéria quase sempre já
@@ -4808,7 +4852,7 @@ async function viewCreate(arg, query) {
   }; });
   pintaPreviewModelo(($("#g-media-model") || {}).value || MEDIA_MODELS[0].id); // estado inicial
   const pillarById = (id) => (State.meta.content_pillars || []).find((p) => p.id === id);
-  const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem pilar fixo — a IA define o ângulo a partir do tema acima."; };
+  const updPillarDesc = () => { const pp = pillarById($("#g-pillar").value); $("#g-pillar-desc").textContent = pp ? pp.description : "Sem assunto fixo — a IA escolhe o ângulo a partir do que você escreveu lá em cima."; };
   // Sugere o pilar de conteúdo a partir da campanha (ex.: campanha "Taxa Zero" -> pilar "Campanha Taxa Zero").
   // Casa por palavra-chave do nome/ângulo/objetivo; o usuário pode sobrescrever a qualquer momento.
   const suggestPillarFromCamp = (c) => {
@@ -5402,7 +5446,7 @@ function renderGenResult(r, opts) {
   const visualKind = ct.kind === "feed" || ct.kind === "image" || ct.kind === "carousel" || ct.kind === "media" || ct.kind === "story";
   const artDesc = ct.kind === "media"
     ? "Monta o mockup da aparição: o print da matéria no dispositivo escolhido, na identidade 4Selet. Não salva nada — confira antes de salvar."
-    : `Renderiza a imagem final ${ct.kind === "carousel" ? "de TODOS os slides " : ""}com o estilo visual escolhido nos ajustes. Não salva nada — confira e baixe se quiser (rascunho rápido).`;
+    : `Monta a imagem final ${ct.kind === "carousel" ? "de todos os slides " : ""}com a cara da arte escolhida nos ajustes. Não salva nada — confira e baixe se quiser.`;
   const artHtml = visualKind
     ? `<details class="art-preview-box mt" open><summary>Prévia da arte</summary>
          <p class="muted" style="font-size:12px;margin:8px 0">${artDesc}</p>
@@ -5475,7 +5519,7 @@ async function renderArtPreview(contentType, kind) {
       model: ($("#g-media-model") && $("#g-media-model").value) || "tablet",
       sizes: Array.prototype.slice.call(document.querySelectorAll("#g-media-sizes input:checked")).map((x) => x.value),
     };
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> renderizando…';
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> montando…';
     box.innerHTML = ""; box.classList.remove("is-stale"); btn.classList.remove("attn");
     showBusy("Montando o mockup da aparição…");
     try {
@@ -5504,21 +5548,30 @@ async function renderArtPreview(contentType, kind) {
   }
   // Foto do acervo/Pexels (estilo "Foto"): garante a foto na PRÉVIA (o structToParsed pode não preservá-la).
   if (parsed && typeof parsed === "object" && ($("#g-style") && $("#g-style").value) === "photo" && $("#g-image") && $("#g-image").value) parsed.image = $("#g-image").value;
+  // Superfície: o conceito gerado carrega a escolha ANTIGA e ela vence a da chamada. Quem troca
+  // depois de gerar precisa que a troca chegue — aqui o conceito é atualizado antes de desenhar.
+  if (parsed && typeof parsed === "object" && $("#g-fundo")) {
+    const f = $("#g-fundo").value;
+    if (f) parsed.fundo = f; else delete parsed.fundo;
+  }
   // Template: estilo escolhido no brief; se "Automático", a mesma variação por slug usada no salvamento.
-  let template = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
-  const logo = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
-  const watermark = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";
+  const doCampo = (sel, congelado) => { const el = $(sel); return el ? el.value : (congelado || ""); };
+  let template = doCampo("#g-style", LAST_GEN && LAST_GEN.req && LAST_GEN.req.template_variant);
+  const logo = doCampo("#g-logo", LAST_GEN && LAST_GEN.req && LAST_GEN.req.logo);
+  const watermark = doCampo("#g-wm", LAST_GEN && LAST_GEN.req && LAST_GEN.req.watermark);
   // A prévia tem que sair na MESMA tipografia da arte final: mostrar Inter aqui e salvar outra
   // família seria a armadilha de sempre (a tela mostra uma coisa, o arquivo sai outra).
-  const font = (LAST_GEN && LAST_GEN.req && LAST_GEN.req.font) || ($("#g-font") && $("#g-font").value) || "";
+  const font = doCampo("#g-font", LAST_GEN && LAST_GEN.req && LAST_GEN.req.font);
+  // Mesma regra da tipografia, pelo mesmo motivo: a prévia sai na MESMA superfície da arte final.
+  const fundo = doCampo("#g-fundo", LAST_GEN && LAST_GEN.req && LAST_GEN.req.fundo);
   if (!template) {
     const task = ($("#g-task") && $("#g-task").value) || slugify(($("#g-title") && $("#g-title").value) || "");
     const date = ($("#g-date") && $("#g-date").value) || todayISO();
     template = autoVariant(task + "_" + date);
   }
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> renderizando…';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> montando…';
   box.innerHTML = ""; box.classList.remove("is-stale"); btn.classList.remove("attn");
-  showBusy(ct && ct.kind === "carousel" ? "Renderizando os slides…" : "Renderizando a prévia da arte…");
+  showBusy(ct && ct.kind === "carousel" ? "Desenhando os slides…" : "Desenhando a arte…");
   try {
     let out;
     if (ct && ct.kind === "carousel") {
@@ -5526,8 +5579,8 @@ async function renderArtPreview(contentType, kind) {
       let total = (parsed && Array.isArray(parsed.slides) ? parsed.slides.length : 0) || 1;
       const slides = []; let tpl2 = template;
       for (let i = 0; i < total; i++) {
-        setBusyMsg("Renderizando slide " + (i + 1) + " de " + total + "…");
-        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, only: i });
+        setBusyMsg("Desenhando o slide " + (i + 1) + " de " + total + "…");
+        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, only: i });
         if (!r || !r.slides || !r.slides[0]) throw new Error((r && r.error) || "falha ao renderizar a prévia");
         slides.push(r.slides[0]);
         if (r.template) tpl2 = r.template;
@@ -5535,17 +5588,17 @@ async function renderArtPreview(contentType, kind) {
       }
       out = { ok: true, slides, template: tpl2, kind: "carousel", width: 1080, height: 1350 };
     } else {
-      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font });
+      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo });
     }
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     if (out.slides && out.slides.length) {
       // Carrossel: mostra TODOS os slides na ordem, cada um com número e baixar.
       box.innerHTML = `<div class="art-slides-strip">${out.slides.map((s) => `<div class="art-slide"><span class="slide-num">${s.n}</span><img class="art-img art-slide-img" src="${s.dataUrl}" alt="Slide ${s.n}" title="Clique para ampliar" onclick="openArtLightbox(this)" /><a class="art-slide-dl" href="${s.dataUrl}" download="slide-${s.n}.png" title="Baixar slide ${s.n}">baixar</a></div>`).join("")}</div>
-        <div class="flex mt" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.slides.length} slides · ${out.width}×${out.height}</span></div>`;
+        <div class="flex mt" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="muted" style="font-size:12px">Arranjo: <strong>${esc(templateName(out.template))}</strong>${escolhaAutomatica() ? " (escolhido automaticamente)" : ""} · ${out.slides.length} slides · ${out.width}×${out.height}</span></div>`;
     } else {
       box.innerHTML = `<img class="art-img" src="${out.dataUrl}" alt="Prévia da arte" title="Clique para ampliar" onclick="openArtLightbox(this)" />
         <div class="flex flex-between mt" style="align-items:center;gap:10px;flex-wrap:wrap">
-          <span class="muted" style="font-size:12px">Estilo: <strong>${esc(out.template)}</strong> · ${out.width}×${out.height} · clique para ampliar</span>
+          <span class="muted" style="font-size:12px">Arranjo: <strong>${esc(templateName(out.template))}</strong>${escolhaAutomatica() ? " (escolhido automaticamente)" : ""} · ${out.width}×${out.height} · clique para ampliar</span>
           <a class="btn btn-sm btn-ghost" href="${out.dataUrl}" download="${esc(fname)}">Baixar imagem</a>
         </div>`;
     }
@@ -5718,6 +5771,23 @@ const SLIDE_LAYOUTS = [
   ["cta", "Chamada final", "Frase de fechamento com um botão de ação", null],
 ];
 function layoutName(v) { const f = SLIDE_LAYOUTS.find((x) => x[0] === String(v || "")); return f ? f[1] : SLIDE_LAYOUTS[0][1]; }
+// O motor devolve o id cru do arranjo ("bold", "stat_grid"). A tela mostrava esse id embaixo da
+// prévia — a pessoa escolhia "Destaque" e lia "Estilo: bold", um nome que não existe em lugar
+// nenhum da interface. VISUAL_TEMPLATES já cobre os 14; layoutName é a rede para o que sobrar.
+function templateName(v) {
+  const t = VISUAL_TEMPLATES.find((x) => x.id === String(v || ""));
+  return t ? t.name : layoutName(v);
+}
+// A escolha foi da pessoa ou do sorteio? Sem isso, um nome aparece embaixo da prévia sem que ela
+// tenha escolhido nada, e não há como ligar aquele nome de volta à lista.
+function escolhaAutomatica() { const el = $("#g-style"); return !!el && !el.value; }
+// Erro de envio tem que dizer o que houve E o que fazer. O motivo do servidor, quando existe,
+// vem primeiro — é ele que explica o caso real (arquivo grande, formato recusado).
+function motivoDoEnvio(r, oQue) {
+  const motivo = r && r.error ? String(r.error).trim() : "";
+  return (motivo ? motivo + " " : "Não consegui enviar " + oQue + ". Pode ser o tamanho do arquivo ou a conexão. ")
+    + "Tente de novo, ou escolha uma imagem menor (até uns 5 MB, em JPG ou PNG).";
+}
 // Aviso/dica sob o seletor de layout: alerta quando o layout escolhido PRECISA de um dado que o
 // slide não tem (stat_grid→números, list→itens) — nesse caso o render cai em texto (não quebra).
 // De que dado cada desenho precisa, e como dizer isso em português. A chave bate com a 4ª
@@ -6187,7 +6257,7 @@ function pedeTextoModal(o) {
 // exatamente o que já se esperava ver. Vale para TODO <input> do editor estruturado — o subtexto da
 // cena de vídeo e a headline do anúncio sofriam do mesmo jeito. Os <textarea> preservam \n e ficam fora.
 const esc1 = (v) => esc(String(v == null ? "" : v).replace(/[ \t]*[\r\n]+[ \t]*/g, " "));
-function slideItem(s, i, total) {
+function slideItem(s, i, total, fundoDaPeca) {
   // Preserva campos não editáveis aqui (items, stats) para não perdê-los no
   // sync do JSON. O layout é exposto no seletor abaixo.
   const extra = {};
@@ -6205,7 +6275,7 @@ function slideItem(s, i, total) {
     <div class="se-layout"><span class="se-layout-lab">Layout do slide</span>
       <input type="hidden" data-k="layout" value="${esc(cur)}" />
       <details class="ed-menu lay-menu"><summary class="lay-sum"><span class="lay-thumb">${layoutThumb(cur)}</span><span class="lay-name">${esc(layoutName(cur))}</span><span class="lay-caret" aria-hidden="true"></span></summary><div class="ed-pop lay-pop">${layoutOpts}</div></details><span class="se-lay-hint">${richHint}</span></div>
-    ${fundoRow(s.fundo)}
+    ${fundoRow(s.fundo, fundoDaPeca)}
     ${slidePhotoRow(s.image)}
   </div>`;
 }
@@ -6214,19 +6284,32 @@ function slideItem(s, i, total) {
 // gráfico, papel, azul chapado), não em onde o texto fica. Como é uma dimensão separada, cada
 // layout pode vestir qualquer fundo — é o que multiplica a variedade sem escrever mais desenhos.
 const FUNDOS_UI = [
-  ["", "Padrão", "Degradê azul com os pontos da marca"],
+  ["", "Padrão", "Degradê azul com os pontos da marca"],   // na CRIAÇÃO, "" = o padrão da marca
+
   ["grade", "Quadriculado", "Malha de gráfico com brilho, como as artes de dado do perfil"],
   ["solido", "Azul chapado", "Sem degradê e sem textura — o mais silencioso"],
   ["papel", "Papel", "Folha clara pautada, com canto dobrado (o texto fica escuro)"],
   ["vinheta", "Foco no centro", "Bordas escurecidas, atenção no meio da arte"],
 ];
 function fundoName(v) { const f = FUNDOS_UI.find((x) => x[0] === String(v || "")); return f ? f[1] : FUNDOS_UI[0][1]; }
-function fundoRow(atual) {
+// O fundo da peça, lido da própria tela (o editor não guarda o conceito depois de montado). Serve
+// para o slide recém-adicionado dizer a mesma herança que os irmãos dele dizem.
+function fundoDaPecaNaTela(ed) {
+  const opt = ed && ed.querySelector('.se-f[data-k="fundo"] option[value=""]');
+  if (!opt) return "";
+  const achado = FUNDOS_UI.find(([, nome]) => opt.textContent.indexOf(nome) >= 0);
+  return achado ? achado[0] : "";
+}
+function fundoRow(atual, fundoDaPeca) {
   const cur = String(atual || "");
-  const opts = FUNDOS_UI.map(([v, nome, desc]) =>
+  // A primeira opção diz DE ONDE vem o fundo quando o slide não tem o seu — e a segunda devolve o
+  // azul da marca de propósito, que antes não tinha como escolher (o "" caía na herança).
+  const herda = `<option value=""${cur === "" ? " selected" : ""}>Igual ao da peça — ${esc(fundoName(fundoDaPeca))}</option>`;
+  const opts = FUNDOS_UI.filter(([v]) => v !== "").map(([v, nome, desc]) =>
     `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(nome)} — ${esc(desc)}</option>`).join("");
-  return `<div class="se-fundo"><span class="se-layout-lab">Fundo do slide</span>
-    <select class="se-f" data-k="fundo">${opts}</select></div>`;
+  const azul = `<option value="padrao"${cur === "padrao" ? " selected" : ""}>Degradê azul da marca — o fundo padrão, só neste slide</option>`;
+  return `<div class="se-fundo"><span class="se-layout-lab">Fundo deste slide</span>
+    <select class="se-f" data-k="fundo">${herda}${azul}${opts}</select></div>`;
 }
 
 // Campo de hashtags compartilhado pelos editores estruturados. Pré-preenche com as tags
@@ -6242,7 +6325,7 @@ function splitTags(v) {
 function carouselEditor(p) {
   const slides = (Array.isArray(p.slides) && p.slides.length) ? p.slides : [{ title: "", body: "" }];
   return `<div class="struct-ed" data-type="instagram_carousel">
-    <div class="se-list">${slides.map((s, i) => slideItem(s, i, slides.length)).join("")}</div>
+    <div class="se-list">${slides.map((s, i) => slideItem(s, i, slides.length, p.fundo)).join("")}</div>
     <button class="btn btn-ghost btn-sm mt" data-se-add="slide" type="button">+ Adicionar slide</button>
     <div class="field mt"><label>CTA <span class="hint">(último slide)</span></label><input class="se-cta" placeholder="ex.: Solicitar convite" value="${esc1(p.cta || "")}" /></div>
     ${hashtagsField(p)}
@@ -6394,7 +6477,7 @@ function bindStructuredEditor() {
       const list = ed.querySelector(".se-list");
       const tmp = document.createElement("div");
       tmp.innerHTML = add.dataset.seAdd === "slide"
-        ? slideItem({ title: "", body: "" }, list.children.length, list.children.length + 1)
+        ? slideItem({ title: "", body: "" }, list.children.length, list.children.length + 1, fundoDaPecaNaTela(ed))
         : sceneItem({ type: "benefit", text: "", subtitle: "", visual: "" }, list.children.length, list.children.length + 1);
       list.appendChild(tmp.firstElementChild);
       seRenumber(ed); syncJsonMirror();
@@ -6586,6 +6669,20 @@ async function saveGenerated() {
   if ($("#g-style") && $("#g-style").value === "photo") {
     payload.image = ($("#g-image") && $("#g-image").value) || undefined;
   }
+  // Estilo, superfície, logo, marca d'água e tipografia seguem a mesma regra da foto: o que está na
+  // tela AGORA é o que vale. undefined (não "") quando em Automático — mandar vazio faz o servidor
+  // cair em editorial, que é a divergência prévia-vs-peça que já custou caro aqui.
+  const daTela = (sel) => { const el = $(sel); return el ? (el.value || undefined) : undefined; };
+  payload.template_variant = daTela("#g-style");
+  payload.logo = daTela("#g-logo");
+  payload.watermark = daTela("#g-wm");
+  payload.font = daTela("#g-font");
+  payload.fundo = daTela("#g-fundo");
+  // E o conceito do carrossel/imagem carrega a superfície antiga: sem atualizar, a peça salva sai
+  // no fundo velho mesmo com a preferência certa gravada.
+  if (parsed && typeof parsed === "object") {
+    if (payload.fundo) parsed.fundo = payload.fundo; else delete parsed.fundo;
+  }
   const btn = $("#g-save"); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> salvando…';
   showBusy("Salvando o conteúdo…");
   let saved = false;
@@ -6604,10 +6701,16 @@ async function saveGenerated() {
         // Vazio de propósito quando ninguém escolheu: quem decide o "Automático" é o servidor, que
         // grava a escolha. Antes o front mandava "" e o servidor caía em editorial — e a prévia,
         // que usava a rotação, mostrava outra coisa. Prévia e peça salva passam a bater.
-        const tpl = (LAST_GEN.req && LAST_GEN.req.template_variant) || ($("#g-style") && $("#g-style").value) || "";
-        const lg = (LAST_GEN.req && LAST_GEN.req.logo) || ($("#g-logo") && $("#g-logo").value) || "";
-        const wmk = (LAST_GEN.req && LAST_GEN.req.watermark) || ($("#g-wm") && $("#g-wm").value) || "";
-        await API.renderMedia(r.folder, ct.kind, tpl, lg, wmk);
+        const doCampo2 = (sel, congelado) => { const el = $(sel); return el ? el.value : (congelado || ""); };
+        const tpl = doCampo2("#g-style", LAST_GEN.req && LAST_GEN.req.template_variant);
+        const lg = doCampo2("#g-logo", LAST_GEN.req && LAST_GEN.req.logo);
+        const wmk = doCampo2("#g-wm", LAST_GEN.req && LAST_GEN.req.watermark);
+        // Tipografia e superfície NUNCA chegavam aqui: a chamada tinha 5 argumentos e a assinatura
+        // tem 7. A tipografia sobrevivia por viajar no payload; a superfície, só por estar carimbada
+        // no conceito do carrossel — no feed e na imagem ela se perdia em silêncio.
+        const fnt = doCampo2("#g-font", LAST_GEN.req && LAST_GEN.req.font);
+        const fnd = doCampo2("#g-fundo", LAST_GEN.req && LAST_GEN.req.fundo);
+        await API.renderMedia(r.folder, ct.kind, tpl, lg, wmk, fnt, fnd);
         toast("Peça salva e arte gerada", "success");
       } catch (e) {
         toast('Peça salva. A arte não renderizou agora — gere em "Gerar arte final" na peça.', "warn");
@@ -6954,7 +7057,7 @@ async function viewSettings() {
         badge: `<span class="badge plain">${esc(provLabel)}</span>`,
         body: `
       <p class="muted">Vale quando você não escolhe outra na hora de gerar. Na tela de criação dá para trocar por peça.</p>
-      <div class="field mt"><select id="def-provider" style="max-width:320px">${provs.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === defProv ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — sem chave") + "</option>").join("")}</select></div>`,
+      <div class="field mt"><select id="def-provider" style="max-width:320px">${provs.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === defProv ? " selected" : "") + (p.configured ? "" : " disabled") + ">" + esc(p.label) + (p.configured ? "" : " — indisponível (falta configurar)") + "</option>").join("")}</select></div>`,
       })}
       ${conexao({
         id: "instagram",

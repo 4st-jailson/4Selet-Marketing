@@ -1956,6 +1956,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    em vez de exigir imaginação. Mesma moldura das miniaturas de layout, para as duas escolhas
    (arranjo e superfície) se lerem lado a lado. */
 .fundo-lab { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+/* Rótulo da 1a metade do bloco "Cara da arte" — mesma tipografia da 2a (.fundo-lab), para as duas
+   perguntas lerem como par. Sem isto o arranjo virava texto solto acima do select. */
+.arranjo-lab { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
 .fundo-opts { display: flex; gap: var(--s2); flex-wrap: wrap; }
 .fundo-opt { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 10px;
   border: 1px solid var(--border); border-radius: 10px; background: transparent; cursor: pointer;

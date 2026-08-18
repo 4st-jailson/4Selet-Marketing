@@ -255,7 +255,7 @@ function fatorPilha(p) {
 }
 
 // 1) Editorial — radial azul, dots, logo no topo, headline a esquerda, CTA embaixo.
-function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
+function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle, fundo }) {
   const n = headlineLen(headline);
   const headlineSize = Math.round((n > 36 ? 100 : n > 22 ? 120 : 168) * fatorPilha({ eyebrow, subtext, cta, badge }));
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
@@ -289,10 +289,11 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
   .cta { font-weight:800; font-size:36px;
     background:${PALETTE.blue}; color:#FFFFFF; padding:26px 48px; border-radius:999px; }
   .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
+  ${fundoNoTemplate("editorial", fundo)}
 </style></head>
 <body><div class="card"><div class="dots"></div>${wm}
   <div class="top">
-    <img class="logo" src="${logoSrc(logo, LOGO_LIGHT)}" alt="4Selet"/>
+    <img class="logo" src="${logoSrc(logo, logoDoFundo(fundo))}" alt="4Selet"/>
     ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
   </div>
   <div class="mid">
@@ -309,7 +310,7 @@ function tplEditorial({ width, height, eyebrow, headline, subtext, cta, badge, f
 
 // 2) Bold — fundo Darker solido, simbolo "4" como marca d'agua, tudo centralizado.
 // Pensado p/ headlines curtas number-forward (ex.: "0%", "95%", "Os 4 numeros").
-function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
+function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle, fundo }) {
   const n = headlineLen(headline);
   const headlineSize = Math.round((n > 40 ? 88 : n > 26 ? 104 : n > 16 ? 132 : n > 8 ? 168 : 196) * fatorPilha({ eyebrow, subtext, cta, badge }));
   const wm = wmStyle ? watermark({ style: wmStyle }, THEME_DARK) : "";
@@ -341,10 +342,11 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
   .cta { font-weight:800; font-size:38px;
     background:${PALETTE.blue}; color:#FFFFFF; padding:28px 56px; border-radius:999px; }
   .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
+  ${fundoNoTemplate("bold", fundo)}
 </style></head>
 <body><div class="card">
   ${wmStyle ? wm : '<img class="mark" src="' + SIMBOLO + '" alt=""/>'}
-  <img class="logo" src="${logoSrc(logo, LOGO_LIGHT)}" alt="4Selet"/>
+  <img class="logo" src="${logoSrc(logo, logoDoFundo(fundo))}" alt="4Selet"/>
   <div class="mid">
     ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
     ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ""}
@@ -360,7 +362,7 @@ function tplBold({ width, height, eyebrow, headline, subtext, cta, badge, footer
 
 // 3) Split — banda superior clara (Cloud, logo dark + eyebrow) + banda inferior
 // escura (Navy/Darker) com headline e CTA. Contraste editorial.
-function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle }) {
+function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, footer, dots, logo, watermark: wmStyle, fundo }) {
   // Em formato quadrado (1080x1080) a banda inferior e mais curta — reduz a
   // tipografia e o padding para o subtexto e o CTA nao serem cortados.
   const square = height < 1200;
@@ -402,6 +404,8 @@ function tplSplit({ width, height, eyebrow, headline, subtext, cta, badge, foote
   .cta { font-weight:800; font-size:36px;
     background:${PALETTE.blue}; color:#FFFFFF; padding:26px 48px; border-radius:999px; }
   .footer { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
+  ${/* a faixa de cima é a identidade do Dividido e não muda; a superfície veste a de baixo */ ""}
+  ${fundoNoTemplate("split", fundo)}
 </style></head>
 <body><div class="card">
   <div class="band-top"><div class="dots"></div>
@@ -1577,6 +1581,15 @@ function resolveTemplate(id) { return TEMPLATES[id] || tplEditorial; }
 const LOGO_IDS = ["light", "dark", "symbol"];
 const WATERMARK_IDS = ["word", "symbol", "outline", "none", "canto", "padrao"];
 function readRenderJson(loc) { return readJson(path.join(loc.path, "render.json")) || {}; }
+// A superfície da peça: o que a request pediu agora, senão o que ficou gravado. Quando a pessoa
+// escolhe na tela, a escolha é gravada aqui — assim "Gerar arte final" repete a mesma superfície
+// em vez de voltar ao azul padrão.
+function fundoDaPeca(loc, opts) {
+  const pedido = opts && opts.fundo;
+  if (pedido) { writeRenderPref(loc, { fundo: resolveFundo(pedido) }); return resolveFundo(pedido); }
+  const gravado = readRenderJson(loc).fundo;
+  return gravado ? resolveFundo(gravado) : "";
+}
 function readRenderPref(loc) {
   const j = readRenderJson(loc);
   if (typeof j.template !== "string") return null;
@@ -1617,7 +1630,8 @@ function writeRenderPref(loc, patch) {
     // "image" entra aqui porque a peça de FEED não tem onde guardar a foto: o arquivo dela é um
     // .txt puro. A foto escolhida aparecia na prévia e sumia ao salvar — render.json é o lugar
     // certo, é a mesma família de template/logo/marca d'água (preferência de arte da peça).
-    ["template", "logo", "watermark", "image", "font"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
+    // "fundo" entra pela mesma razão: é preferência de ARTE da peça, e a de feed não tem JSON.
+    ["template", "logo", "watermark", "image", "font", "fundo"].forEach((k) => { if (patch[k] != null && patch[k] !== "") cur[k] = patch[k]; });
     fs.writeFileSync(p, JSON.stringify(cur, null, 2) + "\n", "utf8");
   } catch (e) {}
 }
@@ -1822,6 +1836,39 @@ function fundoCss(id, tema) {
     default:
       return "";   // padrão: o que carBase já desenha
   }
+}
+
+// A mesma superfície, agora vestindo os 4 templates de arte (Editorial/Destaque/Dividido/Foto).
+// Antes o fundo escolhido só chegava nos slides de CONTEÚDO do carrossel: a capa, o feed, o story
+// e a peça de Imagem o descartavam em silêncio — a pessoa escolhia "Papel", olhava a arte, e via
+// o azul de sempre. Medido: com fundo=grade, o slide 2 saía quadriculado e o slide 1 não.
+// Aqui a superfície é traduzida para a estrutura de cada template.
+function fundoNoTemplate(tplId, fundo) {
+  const id = resolveFundo(fundo);
+  if (id === "padrao") return "";     // padrão = o desenho que o próprio template já traz
+  // Na Foto a superfície É a foto. Cobri-la com papel ou quadriculado apagaria a imagem que a
+  // pessoa escolheu — o oposto do que ela pediu ao anexar a foto.
+  if (tplId === "photo") return "";
+  const claro = id === "papel";
+  let css = fundoCss(id, claro ? THEME_LIGHT : THEME_DARK);
+  // No Dividido a superfície veste a BANDA DE BAIXO. A faixa clara de cima com o logo é a
+  // identidade do layout — trocá-la faria "Dividido" deixar de ser dividido. Os pontos da marca
+  // vivem lá em cima, então a regra que os esconde também é reescoparada para baixo (onde não há
+  // pontos): sem isto, escolher Quadriculado apagava a textura da faixa clara.
+  if (tplId === "split") css = css.replace(/\.dots\b/g, ".band-bot .dots").replace(/\.card\b/g, ".band-bot");
+  if (!claro) return css;
+  // Papel é folha CLARA e os quatro templates pintam o texto para fundo escuro (branco, Mist,
+  // Sky). Sem esta correção o título sai branco sobre creme: a arte parece certa na miniatura e
+  // some no tamanho real — o mesmo defeito que o carrossel já teve.
+  return css + `
+    .headline, .headline .accent, .s-title { color:${PALETTE.navy} !important; }
+    .subtext, .footer, .eyebrow { color:${PALETTE.blue} !important; opacity:1 !important; }
+    .card, .band-bot { color:${PALETTE.darker}; }
+    .mark { display:none; }`;
+}
+// Sobre papel o logo claro desaparece. Quem monta o template pergunta aqui qual variante usar.
+function logoDoFundo(fundo) {
+  return resolveFundo(fundo) === "papel" ? LOGO_DARK : LOGO_LIGHT;
 }
 
 // Marca d'agua tipografica: palavra display gigante transbordando a direita, ATRAS
@@ -2899,7 +2946,7 @@ async function renderImage(folder, opts) {
       Object.assign({}, concept, { title: concept.headline || concept.title || "", body: concept.subtext || concept.body || "" }),
       { width: 1080, height: 1080, n: 1, total: 1, cta: concept.cta || "", logo: logoV, wmStyle: wmV,
         image: concept.image || (opts && opts.image) || "",
-        fundo: resolveFundo(concept.fundo || (opts && opts.fundo)) }
+        fundo: fundoDaPeca(loc, opts) || resolveFundo(concept.fundo) }   // pedido/gravado primeiro; o carimbo da geração é o último recurso
     );
     fs.writeFileSync(htmlPath, htmlArq, "utf8");
     const rr = await htmlToPng(htmlPath, outPng, 1080, 1080, RENDER_SCALE);
@@ -2918,6 +2965,9 @@ async function renderImage(folder, opts) {
     cta: concept.cta || "",
     badge: concept.badge || "",
     image: concept.image || (opts && opts.image) || "",
+    // A superfície vale aqui também. Antes ela só chegava no ramo do arquétipo (logo acima), o
+    // que tornava Estilo e Fundo mutuamente exclusivos na peça de Imagem sem nada avisar.
+    fundo: fundoDaPeca(loc, opts) || resolveFundo(concept.fundo),
     logo: logoV, watermark: wmV,
   });
   fs.writeFileSync(htmlPath, html, "utf8");
@@ -2933,6 +2983,9 @@ async function renderFeed(folder, opts) {
   const fotoSalva = readRenderJson(loc).image;
   const foto = (opts && opts.image) || (imagemExiste(fotoSalva) ? fotoSalva : "");
   if (opts && opts.image) writeRenderPref(loc, { image: opts.image });
+  // A peça de feed é um .txt: não existe JSON onde guardar a superfície escolhida. Ela mora no
+  // render.json, junto do logo e da marca d'água — senão a escolha da criação sumia ao salvar.
+  const fundoV = fundoDaPeca(loc, opts);
   const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!foto });
   // Le a caption salva (txt) e usa a 1a linha forte como headline.
   let caption = "";
@@ -2969,6 +3022,7 @@ async function renderFeed(folder, opts) {
     cta: "",
     badge: "",
     image: foto,
+    fundo: fundoV,
     logo: logoV, watermark: wmV,
   });
   fs.writeFileSync(htmlPath, html, "utf8");
@@ -3014,13 +3068,17 @@ function carouselSlidesHtml(concept, buildCover, opts) {
         titleOffsetY: s && s.titleOffsetY, // ajuste fino de posicao do titulo (camadas)
         titleOffsetX: s && s.titleOffsetX,
         titleScale: s && s.titleScale,
+        // A capa recebe a MESMA superfície dos outros slides. Sem esta linha, escolher
+        // "Quadriculado" saía quadriculado do slide 2 em diante e a capa vinha azul — a peça
+        // parecia montada por duas pessoas diferentes.
+        fundo: resolveFundo((s && s.fundo) || (opts && opts.fundo) || concept.fundo),
         logo: logoV, watermark: wmV,
       });
     } else {
       // Papel é uma superfície CLARA: se o slide não pediu tema, ele passa a valer como claro.
       // Sem isto a folha ficava creme e o texto continuava com as cores do fundo escuro — a arte
       // saía legível só de perto, que é o pior tipo de defeito (parece certo na miniatura).
-      const fundoDoSlide = resolveFundo((s && s.fundo) || concept.fundo);
+      const fundoDoSlide = resolveFundo((s && s.fundo) || (opts && opts.fundo) || concept.fundo);
       const sAjustado = (fundoDoSlide === "papel" && !(s && s.theme))
         ? Object.assign({}, s, { theme: "light" })
         : s;
@@ -3104,7 +3162,8 @@ function storyDoc(ctx, extraCss, bodyInner) {
   // de especificidade. Com a constante crua, a pessoa escolhia Playfair, confirmava o aviso de que
   // estava saindo da identidade, e a arte saia em Inter.
   return `<!doctype html><html><head><meta charset="utf-8"/>${fontHead()}
-  <style>${storyBase(ctx.theme)}${extraCss || ""}</style></head>
+  ${/* mesma ordem do carDoc: base, superfície escolhida, e por último o CSS do arquétipo */ ""}
+  <style>${storyBase(ctx.theme)}${fundoCss(ctx.fundo, ctx.theme)}${extraCss || ""}</style></head>
   <body><div class="card${temFoto ? " has-photo" : ""}">${photo}<div class="dots"></div>${wm}${bodyInner}</div></body></html>`;
 }
 
@@ -3314,9 +3373,16 @@ function storyCardsHtml(concept, opts) {
     const card = cards[i];
     const arq = storyArchetype(card, i, total);
     const desenha = STORY_ARCHETYPES[arq] || storyText;
-    const html = desenha(card, {
+    // Papel é superfície CLARA: cartão sem tema declarado passa a valer como claro, igual ao
+    // carrossel. Sem isto a folha ficava creme com o texto ainda pintado para fundo escuro.
+    const fundoDoCard = resolveFundo((card && card.fundo) || (opts && opts.fundo) || concept.fundo);
+    const cardAjustado = (fundoDoCard === "papel" && !(card && card.theme))
+      ? Object.assign({}, card, { theme: "light" })
+      : card;
+    const html = desenha(cardAjustado, {
       width: S.w, height: S.h, n: i + 1, total: total,
       cta: concept.cta || "", logo: logoV, wmStyle: wmV, image: (card && card.image) || "",
+      fundo: fundoDoCard,
     });
     out.push({ n: i + 1, html: html, arquetipo: arq });
   }
@@ -3331,7 +3397,7 @@ async function renderStory(folder, opts) {
   const dir = path.join(loc.path, "story");
   fs.mkdirSync(dir, { recursive: true });
   const S = STORY_SAFE;
-  const built = storyCardsHtml(concept, { logo: logoV, watermark: wmV });
+  const built = storyCardsHtml(concept, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, opts) });
   const rels = [];
   let lastErr = null;
   for (const item of built) {
@@ -3414,7 +3480,7 @@ async function renderCarousel(folder, opts) {
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
-  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV });
+  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, opts) });
   const total = built.length;
   const rels = [];
   let lastErr = null;
@@ -3441,7 +3507,7 @@ async function renderCarouselSlide(folder, n) {
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
-  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV });
+  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, null) });
   FAMILIA_ATUAL = "";   // documento já montado: devolve a identidade antes de qualquer espera
   const item = built.find((b) => b.n === n);
   if (!item) { const e = new Error("slide " + n + " nao existe no carrossel"); e.code = "E_NO_SLIDE"; throw e; }
@@ -3568,12 +3634,15 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   const tplId = (template && TEMPLATES[template]) ? template : "editorial";
   const logoV = LOGO_IDS.indexOf(logo) >= 0 ? logo : "";
   const wmV = WATERMARK_IDS.indexOf(watermark) >= 0 ? watermark : "";
+  // A superfície escolhida na tela vale na PRÉVIA também. Enquanto ela não chegava aqui, a pessoa
+  // trocava o fundo, olhava a prévia, via a mesma arte, e concluía que o botão estava quebrado.
+  const fundoV = fundo ? resolveFundo(fundo) : "";
   // A prévia tem que sair na MESMA tipografia da arte final — senão a tela mostra uma coisa e o
   // arquivo salvo sai outra, que é o erro que já custou caro aqui (foto/logo sumindo no render).
   FAMILIA_ATUAL = FAMILIA_IDS.indexOf(font) >= 0 ? font : "";
@@ -3594,7 +3663,7 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   // arte" — em jargao e sem acento —, e a pessoa so via a arte depois de salvar e renderizar tudo.
   if (ct.kind === "story") {
     const S = STORY_SAFE;
-    const cartoes = storyCardsHtml(parsed || {}, { logo: logoV, watermark: wmV });
+    const cartoes = storyCardsHtml(parsed || {}, { logo: logoV, watermark: wmV, fundo: fundoV });
     FAMILIA_ATUAL = "";
     if (only != null && cartoes.length) {
       const i = Math.max(0, Math.min(cartoes.length - 1, Number(only) || 0));
@@ -3613,7 +3682,7 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   // Carrossel: a previa mostra TODOS os slides (nao so a capa) — renderiza cada um in-memory,
   // com a MESMA montagem do render final (carouselSlidesHtml).
   if (ct.kind === "carousel") {
-    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId], { logo: logoV, watermark: wmV });
+    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId], { logo: logoV, watermark: wmV, fundo: fundoV });
     FAMILIA_ATUAL = "";   // idem: todos os slides já estão montados
     // "only" = renderiza SO o slide desse indice (o carrossel inteiro e montado p/ preservar o contexto
     // de posicao — 1o=capa, ultimo=cta). O frontend chama slide-a-slide p/ mostrar "slide N de M".
@@ -3633,7 +3702,7 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   }
   const fields = previewFields(ct, parsed);
   if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
-  const doc = resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV }));
+  const doc = resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV, fundo: fundoV }));
   FAMILIA_ATUAL = "";
   const png = await htmlStringToPngDataUrl(doc, fields.width, fields.height);
   if (!png.ok) return { ok: false, error: png.error, template: tplId };
@@ -3954,7 +4023,10 @@ async function render(folder, kind, opts) {
 
 module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
-  carouselSlidesHtml, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
+  carouselSlidesHtml,
+  // Os 4 templates de arte e a tradução da superfície para eles: exportados para a bateria de
+  // regressão conseguir montar UMA capa e olhar o HTML, sem escrever um carrossel inteiro em disco.
+  TEMPLATES, fundoNoTemplate, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   storyCardsHtml, storyArchetype,   // idem, para o story
   prepararImportada, dimensoesDeImagem,   // arte importada -> prancheta editavel
   htmlToPng, sanitizeArtHtml,   // usados pelo recebimento do squad: HTML de FORA vira PNG (limpo + sem rede)

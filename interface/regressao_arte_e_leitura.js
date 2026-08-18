@@ -831,6 +831,82 @@ function briefingLongo() {
     checa(/\.mais-opcoes\s*\{[^}]*border:/.test(semComentarios), "e tem regra de borda ativa");
   }
 
+
+
+  // ==========================================================================
+  // 20. A APARENCIA DA ARTE: o que a tela promete e o que o motor faz
+  // Nasceu de uma revisao da tela de criacao (31 achados confirmados). Os tres defeitos
+  // estruturais eram: (a) a superficie escolhida so chegava nos slides de CONTEUDO do carrossel
+  // — capa, feed, story e imagem a descartavam em silencio; (b) o valor congelado na geracao
+  // vencia o campo da tela, entao trocar depois de gerar nao fazia nada; (c) a tela prometia
+  // coisas que o motor nao cumpria. Cada um tem verificacao aqui.
+  // As checagens de TEXTO usam indexOf de proposito: expressao regular escrita a mao neste
+  // arquivo ja quebrou por escape, e aqui o que interessa e a presenca da frase.
+  // ==========================================================================
+  {
+    secao("20. A aparência da arte: a tela promete, o motor cumpre");
+    const rr = require("./lib/render.js");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const temGrade = (h) => h.indexOf("background-size: 60px 60px") >= 0;
+    const temPapel = (h) => h.indexOf("F5F4EF") >= 0;
+    const temVinheta = (h) => h.indexOf("rgba(0,0,0,.52)") >= 0;
+
+    // -- 20a. A superficie chega em TODOS os caminhos de arte ---------------
+    ["editorial", "bold", "split"].forEach((tpl) => {
+      const capa = rr.carouselSlidesHtml(
+        { fundo: "grade", slides: [{ layout: "cover", title: "Capa" }, { layout: "text", title: "B" }] },
+        rr.TEMPLATES[tpl], {})[0].html;
+      checa(temGrade(capa), "a CAPA do carrossel recebe a superfície escolhida (" + tpl + ")");
+    });
+    checa(temGrade(rr.storyCardsHtml({ fundo: "grade", cards: [{ title: "Um" }] }, {})[0].html),
+      "o cartão de Story recebe a superfície escolhida");
+    checa(temVinheta(rr.TEMPLATES.editorial({ width: 1080, height: 1350, headline: "x", fundo: "vinheta" })),
+      "a peça única (feed/imagem) recebe a superfície escolhida");
+
+    // -- 20b. Papel e folha CLARA: o texto nao pode sumir -------------------
+    const capaPapel = rr.carouselSlidesHtml(
+      { fundo: "papel", slides: [{ layout: "cover", title: "T", body: "b" }] }, rr.TEMPLATES.editorial, {})[0].html;
+    checa(capaPapel.indexOf("color:#003554 !important") >= 0, "sobre papel o título vira tinta escura");
+    checa(capaPapel.indexOf("logo-4selet-light") < 0, "e o logo troca para a versão escura (o claro sumiria na folha)");
+
+    // -- 20c. Na Foto a superficie NAO cobre a imagem da pessoa -------------
+    checa(!temPapel(rr.TEMPLATES.photo({ width: 1080, height: 1350, headline: "x", fundo: "papel" })),
+      "no arranjo Foto a superfície não entra (a foto é a superfície)");
+
+    // -- 20d. Sem escolher nada, nada muda ---------------------------------
+    const semNada = rr.TEMPLATES.editorial({ width: 1080, height: 1350, headline: "x" });
+    checa(!temGrade(semNada) && !temPapel(semNada) && !temVinheta(semNada),
+      "sem superfície escolhida, a arte sai como sempre saiu");
+
+    // -- 20e. O campo da TELA vence o valor congelado na geracao ------------
+    // Era "LAST_GEN.req.X || campo": quem gerava com um estilo e trocava depois via a MESMA
+    // imagem, e a peca salva saia no estilo velho. A ordem invertida e a correcao.
+    checa(app.indexOf('LAST_GEN.req.template_variant) || ($("#g-style")') < 0,
+      "o valor congelado na geração NÃO vence mais o campo da tela");
+    checa(app.indexOf("const doCampo = (sel, congelado)") >= 0,
+      "e a regra é 'existe o controle na tela?', não 'o valor é vazio?'");
+    checa(app.indexOf('payload.fundo = daTela("#g-fundo")') >= 0, "ao salvar, a superfície é relida da tela");
+    checa(app.indexOf("API.renderMedia(r.folder, ct.kind, tpl, lg, wmk, fnt, fnd)") >= 0,
+      "e o render pós-salvamento leva tipografia e superfície (antes ia com 5 dos 7 argumentos)");
+
+    // -- 20f. A tela nao promete o que nao acontece -------------------------
+    checa(app.indexOf("IA pesquisa o tema") < 0, "a tela não promete mais que a IA pesquisa sozinha");
+    checa(app.indexOf("A superfície de todos os slides desta peça") < 0, "nem a promessa antiga sobre 'todos os slides'");
+    checa(app.indexOf("Estilo: <strong>${esc(out.template)}") < 0, "a prévia não mostra mais o id cru do motor");
+    checa(app.indexOf("function templateName(") >= 0, "e existe a tradução do id para o nome que a pessoa escolheu");
+    checa(app.indexOf("falha no envio") < 0, "erro de envio deixou de ser 'falha no envio' sem saída");
+    checa(app.indexOf("function motivoDoEnvio(") >= 0, "e passou a dizer o motivo e o que fazer");
+    // Só o que a PESSOA lê. Comentário de código pode falar "renderizando" à vontade — é
+    // vocabulário de quem mantém o arquivo, e trocá-lo ali não muda nada para quem usa.
+    const semComent = app.split("\n").filter((l) => l.trim().indexOf("//") !== 0).join("\n");
+    const jargao = (semComent.match(/[Rr]enderizando/g) || []).length;
+    checa(jargao === 0, "nenhum 'renderizando' sobrou na tela (é palavra de quem construiu)", jargao + " ocorrência(s)");
+
+    // -- 20g. O seletor por slide nao mente sobre a heranca ------------------
+    checa(app.indexOf("Igual ao da peça") >= 0, "o seletor do slide diz de ONDE vem o fundo quando ele não tem o seu");
+    checa(app.indexOf("Degradê azul da marca") >= 0, "e existe caminho de volta explícito para o azul da marca");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));
