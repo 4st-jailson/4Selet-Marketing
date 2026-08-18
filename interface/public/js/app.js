@@ -2145,6 +2145,75 @@ const VISUAL_TEMPLATES = [
   { id: "dialogo", name: "Conversa", desc: "Balões de mensagem, como um aplicativo", dado: "dialog" },
 ];
 
+// Quantos arranjos aparecem antes de expandir: uma fileira cheia da grade de três colunas.
+const ARRANJOS_VISIVEIS = 3;
+
+// ---------------------------------------------------------------------------
+// O SELETOR DE ARRANJO, num lugar só. Ele aparece em DUAS telas — na criação e na peça — e
+// enquanto cada uma montava o seu, a criação oferecia 4 opções num campo de texto e a peça
+// oferecia 14 com miniatura. Quem aprendia num lugar errava no outro. Agora é a mesma lista,
+// a mesma ordem e o mesmo recolhimento nos dois.
+//
+// A ORDEM não é palpite: medida no acervo em 2026-08-18. Das 46 peças que já tiveram um arranjo
+// gravado, 45 usaram um dos quatro que vestem qualquer conteúdo (Destaque 21, Editorial 14,
+// Dividido 9, Foto 1) e exatamente UMA usou um arquétipo. Isso mede a AUSÊNCIA deles na tela,
+// não a qualidade: dentro do carrossel, onde o motor os escolhe pelo dado, eles são a maioria
+// (Grade de números 32, Lista 18, Um número só 14, Passo a passo 14...). Daí a ordem: os quatro
+// de sempre primeiro, depois os dez por uso real — com os que o conteúdo NÃO alimenta no fim.
+// ---------------------------------------------------------------------------
+const USO_MEDIDO_ARRANJOS = ["stat_grid", "list", "numero", "flow", "palavra", "citacao", "medidor", "dialogo", "comparacao", "mapa"];
+// O que falta no conteúdo para este desenho existir ("" = nada falta, ou não dá para saber).
+function faltaDoArranjo(t, conceito) {
+  const regra = t.dado && LAYOUT_DADO[t.dado];
+  return (regra && conceito && !regra.tem(conceito)) ? regra.falta : "";
+}
+function ordenaArranjos(conceito) {
+  return VISUAL_TEMPLATES.slice().sort((a, b) => {
+    const base = (t) => (t.dado ? 1 : 0);
+    if (base(a) !== base(b)) return base(a) - base(b);
+    if (!a.dado) return 0;   // os quatro de sempre já vêm na ordem de uso na constante
+    const fa = faltaDoArranjo(a, conceito) ? 1 : 0, fb = faltaDoArranjo(b, conceito) ? 1 : 0;
+    if (fa !== fb) return fa - fb;
+    const ia = USO_MEDIDO_ARRANJOS.indexOf(a.id), ib = USO_MEDIDO_ARRANJOS.indexOf(b.id);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+// Monta a grade + o controle "Ver mais". `automatico` acrescenta o cartão de sorteio (só existe
+// na criação: peça salva já tem um arranjo resolvido). `name` é o do rádio, para as duas telas
+// poderem conviver sem uma roubar a seleção da outra.
+function arranjoPicker({ name, current, conceito, automatico, idGrade, idBotao }) {
+  const lista = ordenaArranjos(conceito);
+  const itens = automatico
+    ? [{ id: "", name: "Automático", desc: "o painel varia a cada peça, para o feed não ficar monótono" }].concat(lista)
+    : lista;
+  const cartao = (t) => {
+    const falta = faltaDoArranjo(t, conceito);
+    const marcado = String(t.id) === String(current || "");
+    return `
+    <label class="tpl-opt${marcado ? " is-active" : ""}${falta ? " tpl-sem-dado" : ""}" data-tpl="${esc(t.id)}"${falta ? ' title="Este desenho precisa de ' + esc(falta) + ' no conteúdo da peça"' : ""}>
+      <input type="radio" name="${esc(name)}" value="${esc(t.id)}"${marcado ? " checked" : ""} />
+      <span class="tpl-name">${esc(t.name)}</span>
+      <span class="tpl-desc">${esc(t.desc)}</span>
+      ${falta ? '<span class="tpl-falta">precisa de ' + esc(falta) + "</span>" : ""}
+    </label>`;
+  };
+  // Se a escolha atual ficaria escondida, a grade nasce inteira: senão o cartão marcado sumiria
+  // da tela e a pessoa concluiria que a escolha dela se perdeu.
+  const escondida = itens.findIndex((t) => String(t.id) === String(current || "")) >= ARRANJOS_VISIVEIS;
+  const faltam = itens.length - ARRANJOS_VISIVEIS;
+  // Só conta quem DEPENDE de dado e tem o dado: dizer que "Foto" combina com o conteúdo seria
+  // informação vazia, e inflaria o número.
+  const combinam = conceito ? itens.slice(ARRANJOS_VISIVEIS).filter((t) => t.dado && !faltaDoArranjo(t, conceito)).length : 0;
+  return `${/* O controle vem DEPOIS da grade inteira, nunca no meio dela: aberto, fica embaixo do
+        último cartão; fechado, logo abaixo dos três. Em nenhum dos dois estados ele parte as
+        artes em dois blocos — que era o problema da primeira versão, com <details>. */ ""}
+    <div class="tpl-grid${escondida ? "" : " tpl-recolhido"}" id="${esc(idGrade)}">${itens.map(cartao).join("")}</div>
+    <button type="button" class="tpl-mais" id="${esc(idBotao)}">
+      <span class="tpl-mais-abrir">Ver mais ${faltam} arranjos${combinam ? `<span class="tpl-mais-tag">${combinam} ${combinam === 1 ? "combina" : "combinam"} com o conteúdo desta peça</span>` : ""}</span>
+      <span class="tpl-mais-fechar">Ver menos</span>
+    </button>`;
+}
+
 // A rotação do estilo MUDOU DE LADO: hoje ela mora no servidor (pickTemplate, lib/render.js), que
 // grava a escolha no render.json na primeira renderização. Aqui ficou só o espelho para a tela
 // conseguir marcar o rádio certo ANTES de existir render.json — a conta é a mesma, e tem que
@@ -2288,24 +2357,13 @@ function templatePicker(task) {
   // Sem conceito conhecido não dá para afirmar que falta dado — nesse caso não marca nada, em
   // vez de acusar falta em todos os estilos.
   const conceito = (task.concept && typeof task.concept === "object") ? task.concept : null;
-  const opts = VISUAL_TEMPLATES.map((t) => {
-    const regra = t.dado && LAYOUT_DADO[t.dado];
-    const semDado = !!(regra && conceito && !regra.tem(conceito));
-    return `
-    <label class="tpl-opt${t.id === current ? " is-active" : ""}${semDado ? " tpl-sem-dado" : ""}" data-tpl="${t.id}"${semDado ? ' title="Este estilo precisa de ' + esc(regra.falta) + ' no conteúdo da peça"' : ""}>
-      <input type="radio" name="render-tpl" value="${t.id}"${t.id === current ? " checked" : ""} />
-      <span class="tpl-name">${esc(t.name)}</span>
-      <span class="tpl-desc">${esc(t.desc)}</span>
-      ${semDado ? '<span class="tpl-falta">precisa de ' + esc(regra.falta) + "</span>" : ""}
-    </label>`;
-  }).join("");
   const logoOpts = montaOpcoes(LOGO_OPCOES, task.logo);
   const wmOpts = montaOpcoes(MARCA_DAGUA_OPCOES, task.watermark);
   const fontOpts = montaOpcoes(TIPOGRAFIA_OPCOES, task.font);
   const fundoAtual = String(task.fundo || "");
   return `<div class="tpl-picker mt">
     <div class="muted" style="font-size:13px;margin-bottom:8px">Arranjo do texto</div>
-    <div class="tpl-grid">${opts}</div>
+    ${arranjoPicker({ name: "render-tpl", current: current, conceito: conceito, automatico: false, idGrade: "tpl-grid", idBotao: "tpl-mais" })}
     <div class="fundo-pick mt" id="pick-fundo-box">
       <span class="fundo-lab">Superfície da arte</span>
       <input type="hidden" id="pick-fundo" value="${esc(fundoAtual)}" />
@@ -2327,6 +2385,41 @@ function selectedTemplate() {
   const el = document.querySelector('input[name="render-tpl"]:checked');
   return el ? el.value : undefined;
 }
+// "Ver mais N arranjos" / "Ver menos": completa a MESMA grade, e o controle vive SEMPRE abaixo
+// dela — nunca entre as fileiras. É o que resolve as duas coisas ao mesmo tempo: a lista não
+// chega extensa, as artes não aparecem partidas em dois blocos, e existe caminho de volta.
+// Serve às DUAS telas (criação e peça), por isso recebe os ids.
+function ligaVerMaisArranjos(idGrade, idBotao) {
+  const btn = document.getElementById(idBotao || "tpl-mais");
+  const grade = document.getElementById(idGrade || "tpl-grid");
+  if (!btn || !grade) return;
+  const cartoes = () => Array.prototype.slice.call(grade.querySelectorAll(".tpl-opt"));
+  const indiceEscolhido = () => {
+    const m = grade.querySelector('input[name="render-tpl"]:checked');
+    return m ? cartoes().indexOf(m.closest(".tpl-opt")) : -1;
+  };
+  // Recolher esconderia o cartão marcado quando a escolha está fora dos primeiros — e a pessoa
+  // concluiria que perdeu a escolha. Nesse caso o caminho de volta simplesmente não é oferecido.
+  const atualiza = () => {
+    const recolhido = grade.classList.contains("tpl-recolhido");
+    btn.hidden = !recolhido && indiceEscolhido() >= ARRANJOS_VISIVEIS;
+  };
+  btn.onclick = () => {
+    const abrindo = grade.classList.contains("tpl-recolhido");
+    grade.classList.toggle("tpl-recolhido");
+    atualiza();
+    if (abrindo) {
+      // O foco vai para o primeiro cartão que acabou de aparecer, senão quem navega por teclado
+      // fica sem referência do que mudou na tela.
+      const primeiro = cartoes()[ARRANJOS_VISIVEIS];
+      const alvo = primeiro && primeiro.querySelector("input");
+      if (alvo) alvo.focus();
+    }
+  };
+  grade.addEventListener("change", atualiza);
+  atualiza();
+}
+
 // As miniaturas de superfície da PEÇA PRONTA. Ligadas na hora em que a tela é montada (o painel
 // de ajustes é remontado a cada abertura), pelo mesmo caminho do seletor da criação.
 function ligaFundoDaPeca() {
@@ -2339,6 +2432,35 @@ function ligaFundoDaPeca() {
     };
   });
 }
+// Na CRIAÇÃO o arranjo mora num campo oculto (#g-style), porque o resto do arquivo lê `.value`
+// e ouve `change` desde sempre. Clicar num cartão escreve nesse campo e dispara o `change` na
+// mão — senão a prévia não ficaria marcada como desatualizada e a foto do estilo "Foto" não
+// apareceria. `defineArranjo` é o mesmo caminho para o clique e para a escolha programática.
+function defineArranjo(v) {
+  const campo = document.getElementById("g-style");
+  if (!campo) return;
+  const val = String(v == null ? "" : v);
+  campo.value = val;
+  const grade = document.getElementById("g-style-grid");
+  if (grade) {
+    grade.querySelectorAll(".tpl-opt").forEach((el) => {
+      const igual = String(el.dataset.tpl || "") === val;
+      el.classList.toggle("is-active", igual);
+      const r = el.querySelector("input"); if (r) r.checked = igual;
+    });
+  }
+  campo.dispatchEvent(new Event("change", { bubbles: true }));
+}
+function ligaArranjoDaCriacao() {
+  const grade = document.getElementById("g-style-grid");
+  if (!grade) return;
+  grade.addEventListener("change", (ev) => {
+    const r = ev.target && ev.target.closest ? ev.target.closest(".tpl-opt") : null;
+    if (r) defineArranjo(r.dataset.tpl || "");
+  });
+  ligaVerMaisArranjos("g-style-grid", "g-style-mais");
+}
+
 function selectedFundo() {
   const el = document.getElementById("pick-fundo");
   if (!el) return undefined;
@@ -3779,6 +3901,7 @@ async function viewTaskDetail(folder) {
     $$("#pick-logo, #pick-wm, #pick-font").forEach((el) => { el.onchange = () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }; });
     // As miniaturas de superfície: mesmo realce do botão, para a escolha não ficar parada na tela
     // sem virar arte (é o "Gerar arte final" que a aplica).
+    ligaVerMaisArranjos();
     ligaFundoDaPeca();
     $$("#pick-fundo-box [data-fundo]").forEach((el) => { el.addEventListener("click", () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }); });
     // Sair da identidade da marca pergunta antes (modal centralizado, Sim/Não).
@@ -4562,8 +4685,15 @@ async function viewCreate(arg, query) {
             <div class="field"><label>Oferta/número a destacar <span class="hint">(o número que você quer ver em evidência — ex.: 0% por 3 meses, 95% de aprovação. Em branco, a IA usa o que estiver no seu texto)</span></label><input id="g-offer" placeholder="ex.: 0% por 3 meses" /></div>
           </div>
           <div class="field art-only" id="g-cara-arte"><label>Cara da arte (opcional) <span class="hint">(duas escolhas independentes: onde o texto fica, e o que aparece atrás dele)</span></label>
-            <div class="arranjo-lab" id="g-style-lab">Arranjo do texto <span class="hint" id="g-style-hint">(onde ficam o título, o apoio e o logo. “Automático” sorteia entre Editorial, Destaque e Dividido, para o feed não ficar monótono)</span></div>
-            <select id="g-style"><option value="">Automático (varia por peça)</option><option value="editorial">Editorial — título à esquerda, apoio embaixo</option><option value="bold">Destaque — tudo centralizado, número em evidência</option><option value="split">Dividido — faixa do logo em cima, título embaixo</option><option value="photo">Foto — sua imagem ao fundo, texto por cima</option></select>
+            <div class="arranjo-lab" id="g-style-lab">Arranjo do texto <span class="hint" id="g-style-hint">(onde ficam o título, o apoio e o logo. Os que dependem de um dado — números, itens, etapas, uma frase — só desenham se o conteúdo tiver esse dado)</span></div>
+            ${/* MESMO seletor da página da peça (arranjoPicker), pela mesma função. Aqui a lista
+                  era um campo de texto com 4 opções enquanto a peça oferecia 14 com miniatura:
+                  quem aprendia num lugar errava no outro. O #g-style vira campo OCULTO para todo
+                  o resto do arquivo continuar lendo `$("#g-style").value` como sempre leu. */ ""}
+            <div id="g-style-box">
+              <input type="hidden" id="g-style" value="" />
+              ${arranjoPicker({ name: "g-style-opt", current: "", conceito: null, automatico: true, idGrade: "g-style-grid", idBotao: "g-style-mais" })}
+            </div>
             <p class="hint" id="g-style-story" hidden>O Story monta cada cartão no desenho que combina com o conteúdo dele (frase, número, passo a passo) — por isso não há arranjo único a escolher aqui. A superfície abaixo vale para todos os cartões.</p>
             <div class="fundo-pick mt" id="g-fundo-pick">
               <span class="fundo-lab">Superfície da arte</span>
@@ -4722,7 +4852,7 @@ async function viewCreate(arg, query) {
     // O Story monta cada cartão no arquétipo dele (frase, número, passo) e não usa os 4 arranjos —
     // oferecer a escolha ali era pedir um clique que não mudava um pixel. A superfície continua.
     const ehStory = !!(ct && ct.kind === "story");
-    ["#g-style", "#g-style-lab"].forEach((sel) => { const el = $(sel); if (el) el.style.display = ehStory ? "none" : ""; });
+    ["#g-style-box", "#g-style-lab"].forEach((sel) => { const el = $(sel); if (el) el.style.display = ehStory ? "none" : ""; });
     const aviso = $("#g-style-story");
     if (aviso) aviso.hidden = !ehStory;
     $$(".mood-field").forEach((el) => { el.style.display = ((media === "image" || media === "video") && !isMedia) ? "" : "none"; });
@@ -4785,6 +4915,7 @@ async function viewCreate(arg, query) {
   // A prévia também deixa de valer quando muda o arranjo, o logo, a marca d'água ou a tipografia.
   // Sem isto, a pessoa trocava, olhava a imagem antiga ainda na tela, e concluía que não mudou nada.
   $$("#g-style, #g-logo, #g-wm, #g-font").forEach((el) => { el.addEventListener("change", markArtStale); });
+  ligaArranjoDaCriacao();
   // Escolher tipografia fora da identidade pergunta antes (modal centralizado, Sim/Não).
   ligaConfirmacaoDeFonte($("#g-font"));
   ligaFatosDeMercado();
@@ -6160,7 +6291,7 @@ async function resolvePendenciasDeImagem(r) {
       }
     } else {
       const img = $("#g-image");
-      if (img) { img.value = url; const st = $("#g-style"); if (st && st.value !== "photo") st.value = "photo"; }
+      if (img) { img.value = url; if ($("#g-style") && $("#g-style").value !== "photo") defineArranjo("photo"); }
       const mimg = $("#g-media-image"); if (mimg) mimg.value = url;
       if (LAST_GEN && LAST_GEN.res && LAST_GEN.res.parsed) LAST_GEN.res.parsed.image = url;
       markArtStale();

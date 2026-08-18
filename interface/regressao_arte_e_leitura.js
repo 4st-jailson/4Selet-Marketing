@@ -907,6 +907,93 @@ function briefingLongo() {
     checa(app.indexOf("Degradê azul da marca") >= 0, "e existe caminho de volta explícito para o azul da marca");
   }
 
+
+
+  // ==========================================================================
+  // 21. O SELETOR DE ARRANJO: um so, nas duas telas, com tres de cara
+  // Tres coisas que ja custaram caro e nao podem voltar:
+  //   (a) UM SELETOR SO. A criacao oferecia 4 opcoes num campo de texto e a peca oferecia 14 com
+  //       miniatura — quem aprendia num lugar errava no outro.
+  //   (b) UMA GRADE SO. Com <details>, o "Ver menos" e o texto de orientacao ficavam cravados
+  //       entre as fileiras e partiam as artes em dois blocos.
+  //   (c) ESCOLHA VIVA. Peca que ja usa um arranjo escondido nasce com a grade inteira, senao o
+  //       cartao marcado some e a pessoa conclui que a escolha dela se perdeu.
+  // E a invariante de motor: os 14 tem que VALER em todo formato. Enquanto so a peca de Imagem
+  // conhecia os arquetipos, escolher "Grade de numeros" num feed era clique sem efeito.
+  // ==========================================================================
+  {
+    secao("21. O seletor de arranjo: um so, nas duas telas");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
+    const semComentCss = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const appSemComent = app.split("\n").filter((l) => l.trim().indexOf("//") !== 0).join("\n");
+    const rr = require("./lib/render.js");
+
+    // -- 21a. Um seletor so, montado num lugar so --------------------------
+    checa(app.indexOf("function arranjoPicker(") >= 0, "existe UMA funcao que monta o seletor");
+    checa(app.indexOf('arranjoPicker({ name: "render-tpl"') >= 0, "a pagina da peca usa ela");
+    checa(app.indexOf('arranjoPicker({ name: "g-style-opt"') >= 0, "e a tela de criacao tambem");
+    checa(appSemComent.indexOf('<select id="g-style">') < 0, "a criacao nao tem mais o campo de texto com 4 opcoes");
+    checa(app.indexOf('<input type="hidden" id="g-style"') >= 0,
+      "e o #g-style virou campo oculto (o resto do arquivo segue lendo .value)");
+    checa(app.indexOf("function defineArranjo(") >= 0, "com um caminho unico para escrever nele e avisar quem escuta");
+
+    // -- 21b. Tres de cara, e o esconderijo comeca no 4o -------------------
+    checa(app.indexOf("const ARRANJOS_VISIVEIS = 3;") >= 0, "sao tres cartoes na tela antes de expandir");
+    checa(/\.tpl-grid\.tpl-recolhido\s*>\s*\.tpl-opt:nth-child\(n \+ 4\)\s*\{[^}]*display:\s*none/.test(semComentCss),
+      "e a regra que esconde comeca no 4o cartao");
+
+    // -- 21c. UMA grade so: nada partindo as artes -------------------------
+    checa(appSemComent.indexOf('<details class="tpl-mais"') < 0, "o seletor nao usa <details> (o resumo dele nunca sai da tela)");
+    checa(appSemComent.indexOf("tpl-mais-lead") < 0, "nao existe texto de orientacao entre as fileiras");
+    checa(app.indexOf('<button type="button" class="tpl-mais"') >= 0, "o controle e um <button> (foco pelo teclado)");
+    // O botao e o irmao IMEDIATO da grade: e o que garante que ele fica embaixo dela nos dois estados.
+    checa(/<\/div>\s*<button type="button" class="tpl-mais"/.test(app),
+      "e vem logo DEPOIS da grade, nunca no meio dela");
+    checa(/\.tpl-grid:not\(\.tpl-recolhido\)\s*\+\s*\.tpl-mais/.test(semComentCss),
+      "o rotulo/seta trocam pelo estado da GRADE (um estado so, sem espelho em JavaScript)");
+    checa(/\.tpl-mais\[hidden\]\s*\{[^}]*display:\s*none/.test(semComentCss),
+      "e o [hidden] funciona apesar do display na classe (senao btn.hidden nao esconde nada)");
+
+    // -- 21d. Escolha viva -------------------------------------------------
+    checa(app.indexOf('itens.findIndex((t) => String(t.id) === String(current || "")) >= ARRANJOS_VISIVEIS') >= 0,
+      "escolha fora dos tres primeiros faz a grade nascer inteira");
+    checa(app.indexOf("btn.hidden = !recolhido && indiceEscolhido() >= ARRANJOS_VISIVEIS") >= 0,
+      "e recolher nao e oferecido quando isso esconderia a escolha");
+    checa(app.indexOf("cartoes()[ARRANJOS_VISIVEIS]") >= 0, "ao revelar, o foco vai para o primeiro cartao que apareceu");
+    checa(app.indexOf("filter((t) => t.dado && !faltaDoArranjo(t, conceito)).length") >= 0,
+      "a etiqueta 'combinam com o conteudo' ignora quem nao depende de dado (Foto)");
+
+    // -- 21e. O MOTOR aceita os 14 em todo formato -------------------------
+    // Sem isto o seletor novo seria dez escolhas mortas: o id do arquetipo caia fora do
+    // `TEMPLATES[requested]` do pickTemplate e a arte saia no editorial de sempre.
+    const eng = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
+    checa(eng.indexOf("function ehArquetipoDePeca(") >= 0, "o motor reconhece arquetipo como arranjo de peca");
+    checa(eng.indexOf("const pedido = arranjoConhecido(requested) ? requested : null;") >= 0,
+      "e o pickTemplate deixou de descartar os arquetipos em silencio");
+    checa(eng.indexOf("function montaArquetipoDePeca(") >= 0, "com um so ponto que os desenha (feed, capa e imagem)");
+    // A prova, no HTML gerado: a capa em Grade de numeros tem que sair EM grade.
+    const capaArq = rr.carouselSlidesHtml(
+      { stats: [{ value: "95%", label: "a" }, { value: "D+10", label: "b" }],
+        slides: [{ layout: "cover", title: "Capa" }] },
+      rr.TEMPLATES.editorial, { templateId: "stat_grid" })[0].html;
+    checa(capaArq.indexOf('class="stat-v"') >= 0, "e a CAPA do carrossel sai mesmo em Grade de numeros");
+    const capaPadrao = rr.carouselSlidesHtml({ slides: [{ layout: "cover", title: "Capa" }] }, rr.TEMPLATES.editorial, {})[0].html;
+    checa(capaPadrao.indexOf('class="stat-v"') < 0, "sem pedido, a capa continua sendo a de sempre");
+    const inventado = rr.carouselSlidesHtml({ slides: [{ layout: "cover", title: "Capa" }] }, rr.TEMPLATES.editorial, { templateId: "nao_existe" })[0].html;
+    checa(inventado.indexOf("radial-gradient(120% 120% at 80% 10%") >= 0, "arranjo inventado cai no Editorial, sem erro");
+
+    // -- 21f. O celular continua com uma coluna ----------------------------
+    checa(!/\.tpl-picker\s*>\s*\.tpl-grid\s*\{[^}]*grid-template-columns/.test(semComentCss),
+      "nenhuma regra de coluna com especificidade maior que a do celular");
+    checa(/@media \(max-width: 560px\) \{ \.tpl-grid \{ grid-template-columns: 1fr/.test(semComentCss),
+      "e a regra do celular continua la");
+
+    // -- 21g. A regra dura da casa -----------------------------------------
+    const trecho = app.slice(app.indexOf("function arranjoPicker("), app.indexOf("function templatePicker("));
+    checa(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(trecho), "nenhum emoji no seletor (o chevron e desenhado em CSS)");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

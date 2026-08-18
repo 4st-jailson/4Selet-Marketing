@@ -1666,8 +1666,17 @@ function hashDoNome(s) {
   h ^= h >>> 16;
   return h >>> 0;
 }
+// Um arranjo pedido pela tela pode ser um dos 4 TEMPLATES (que vestem qualquer conteúdo) ou um
+// dos 10 ARQUÉTIPOS (que desenham a partir de um dado: números, itens, etapas, uma frase).
+// Este é o ponto ÚNICO que reconhece os dois. Antes só a peça de Imagem sabia dos arquétipos:
+// no feed e na capa do carrossel um id de arquétipo caía fora do `TEMPLATES[requested]` e era
+// descartado em silêncio — a pessoa escolhia "Grade de números" e recebia o editorial de sempre.
+function ehArquetipoDePeca(id) {
+  return !!(id && SLIDE_ARCHETYPES[id] && ARQ_PECA.indexOf(id) >= 0);
+}
+function arranjoConhecido(id) { return !!(id && (TEMPLATES[id] || ehArquetipoDePeca(id))); }
 function pickTemplate(loc, requested, extra) {
-  const pedido = (requested && TEMPLATES[requested]) ? requested : null;
+  const pedido = arranjoConhecido(requested) ? requested : null;
   let id = pedido || readRenderPref(loc);
   if (!id) {
     id = (extra && extra.temFoto && TEMPLATES.photo)
@@ -1676,7 +1685,23 @@ function pickTemplate(loc, requested, extra) {
     writeRenderPref(loc, { template: id });   // grava na PRIMEIRA vez: a peça não muda de cara depois
   }
   if (pedido) writeRenderPref(loc, { template: pedido });
-  return { id, build: resolveTemplate(id) };
+  // `arquetipo` diz a quem chama que o desenho tem OUTRA assinatura — (slide, ctx) em vez dos
+  // campos soltos do template. Quem ignorar isto vai passar os argumentos errados.
+  return { id, build: resolveTemplate(id), arquetipo: ehArquetipoDePeca(id) };
+}
+// Desenha uma peça ÚNICA (feed 4:5, imagem 1:1) ou a CAPA do carrossel num arquétipo, a partir
+// do conceito. O arquétipo lê o dado direto do conceito (stats, items, flow, citacao...), então
+// o objeto vai inteiro — só title/body são normalizados, que é como o renderImage já fazia.
+function montaArquetipoDePeca(arq, conceito, ctx) {
+  const dados = Object.assign({}, conceito, {
+    title: conceito.headline || conceito.title || "",
+    body: conceito.subtext || conceito.body || "",
+  });
+  // Papel é superfície CLARA: sem forçar o tema, o arquétipo desenha com as cores do fundo
+  // escuro e o texto quase some na folha. Mesma regra dos slides do carrossel.
+  const ajustado = (resolveFundo(ctx.fundo) === "papel" && !dados.theme)
+    ? Object.assign({}, dados, { theme: "light" }) : dados;
+  return SLIDE_ARCHETYPES[arq](ajustado, ctx);
 }
 // Remove uma chave do render.json (usado pra "voltar ao padrão do estilo").
 function deleteRenderPref(loc, key) {
@@ -3014,17 +3039,28 @@ async function renderFeed(folder, opts) {
   const htmlPath = path.join(loc.path, "ads", "feed.html");
   const outPng = path.join(loc.path, "ads", "feed.png");
   fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
-  const html = tpl.build({
-    width: 1080, height: 1350,
-    eyebrow: "",
-    headline: highlightHeadline(headline),
-    subtext: subtexto,
-    cta: "",
-    badge: "",
-    image: foto,
-    fundo: fundoV,
-    logo: logoV, watermark: wmV,
+  // O feed lê a legenda (.txt), então o dado dos arquétipos vem do render.json — a peça de feed
+  // não tem JSON de conceito. Sem dado, o próprio arquétipo cai no desenho de texto: é o mesmo
+  // comportamento que a peça de Imagem já tem quando alguém força um arranjo sem o dado.
+  const conceitoFeed = Object.assign({}, readRenderJson(loc).dados || {}, {
+    headline: headline, subtext: subtexto, eyebrow: "",
   });
+  const html = tpl.arquetipo
+    ? montaArquetipoDePeca(tpl.id, conceitoFeed, {
+        width: 1080, height: 1350, n: 1, total: 1, cta: "",
+        image: foto, fundo: fundoV, logo: logoV, wmStyle: wmV,
+      })
+    : tpl.build({
+        width: 1080, height: 1350,
+        eyebrow: "",
+        headline: highlightHeadline(headline),
+        subtext: subtexto,
+        cta: "",
+        badge: "",
+        image: foto,
+        fundo: fundoV,
+        logo: logoV, watermark: wmV,
+      });
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
   return Object.assign(r, { rel: "ads/feed.png", template: tpl.id });
@@ -3055,6 +3091,17 @@ function carouselSlidesHtml(concept, buildCover, opts) {
       // miniatura, e a arte saía sem foto nenhuma. Se há foto de verdade, a capa usa o layout que
       // sabe desenhá-la; sem foto, nada muda.
       const capaImg = (s && s.image) || concept.image || "";
+      const fundoCapa = resolveFundo((s && s.fundo) || concept.fundo || (opts && opts.fundo));
+      // A capa também aceita um arquétipo — antes só os 4 templates chegavam aqui, e escolher
+      // "Grade de números" numa peça de carrossel não mudava um pixel.
+      const arqCapa = (opts && opts.templateId && ehArquetipoDePeca(opts.templateId)) ? opts.templateId : null;
+      if (arqCapa && !(capaImg && imagemExiste(capaImg))) {
+        out.push({ n: n, html: montaArquetipoDePeca(arqCapa, Object.assign({}, concept, s || {}), {
+          width: 1080, height: 1350, n: n, total: total, cta: "",
+          image: "", fundo: fundoCapa, logo: logoV, wmStyle: wmV,
+        }) });
+        continue;
+      }
       const desenha = (capaImg && imagemExiste(capaImg)) ? resolveTemplate("photo") : buildCover;
       html = desenha({
         width: 1080, height: 1350,
@@ -3480,7 +3527,7 @@ async function renderCarousel(folder, opts) {
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
-  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, opts) });
+  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, opts), templateId: tpl.id });
   const total = built.length;
   const rels = [];
   let lastErr = null;
@@ -3507,7 +3554,7 @@ async function renderCarouselSlide(folder, n) {
   const concept = readJson(path.join(loc.path, "copy", "instagram_carousel.json")) || {};
   const dir = path.join(loc.path, "slides");
   fs.mkdirSync(dir, { recursive: true });
-  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, null) });
+  const built = carouselSlidesHtml(concept, tpl.build, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, null), templateId: tpl.id });
   FAMILIA_ATUAL = "";   // documento já montado: devolve a identidade antes de qualquer espera
   const item = built.find((b) => b.n === n);
   if (!item) { const e = new Error("slide " + n + " nao existe no carrossel"); e.code = "E_NO_SLIDE"; throw e; }
@@ -3637,7 +3684,10 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
 async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
-  const tplId = (template && TEMPLATES[template]) ? template : "editorial";
+  // A prévia aceita os mesmos 14 arranjos do render final. Enquanto só os 4 passavam por aqui,
+  // escolher um arquétipo mostrava editorial na tela e salvava outra coisa no arquivo.
+  const tplId = arranjoConhecido(template) ? template : "editorial";
+  const tplEhArq = ehArquetipoDePeca(tplId);
   const logoV = LOGO_IDS.indexOf(logo) >= 0 ? logo : "";
   const wmV = WATERMARK_IDS.indexOf(watermark) >= 0 ? watermark : "";
   // A superfície escolhida na tela vale na PRÉVIA também. Enquanto ela não chegava aqui, a pessoa
@@ -3682,7 +3732,7 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   // Carrossel: a previa mostra TODOS os slides (nao so a capa) — renderiza cada um in-memory,
   // com a MESMA montagem do render final (carouselSlidesHtml).
   if (ct.kind === "carousel") {
-    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId], { logo: logoV, watermark: wmV, fundo: fundoV });
+    const built = carouselSlidesHtml(parsed || {}, TEMPLATES[tplId] || TEMPLATES.editorial, { logo: logoV, watermark: wmV, fundo: fundoV, templateId: tplId });
     FAMILIA_ATUAL = "";   // idem: todos os slides já estão montados
     // "only" = renderiza SO o slide desse indice (o carrossel inteiro e montado p/ preservar o contexto
     // de posicao — 1o=capa, ultimo=cta). O frontend chama slide-a-slide p/ mostrar "slide N de M".
@@ -3702,7 +3752,12 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   }
   const fields = previewFields(ct, parsed);
   if (!fields) return { ok: false, error: "este tipo nao tem previa de arte" };
-  const doc = resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV, fundo: fundoV }));
+  const doc = tplEhArq
+    ? montaArquetipoDePeca(tplId, Object.assign({}, parsed || {}, {
+        headline: fields.headline, subtext: fields.subtext, eyebrow: fields.eyebrow,
+      }), { width: fields.width, height: fields.height, n: 1, total: 1, cta: fields.cta || "",
+            image: fields.image || "", fundo: fundoV, logo: logoV, wmStyle: wmV })
+    : resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV, fundo: fundoV }));
   FAMILIA_ATUAL = "";
   const png = await htmlStringToPngDataUrl(doc, fields.width, fields.height);
   if (!png.ok) return { ok: false, error: png.error, template: tplId };
