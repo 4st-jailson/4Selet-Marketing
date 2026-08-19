@@ -397,6 +397,66 @@ function connectionState() {
 }
 
 // Orquestra a publicação de uma peça aprovada. dryRun (ou não-configurado) = simula.
+// ---- Apagar um post do Instagram ---------------------------------------------------------
+// A Meta APAGA de verdade: DELETE /<IG_MEDIA_ID>. Vale para post comum, Story, Reel e álbum de
+// carrossel INTEIRO (não dá para tirar um slide de dentro do carrossel). Exige a permissão
+// `instagram_manage_contents` no app — que é DIFERENTE da que publica (`instagram_content_publish`).
+// Conferido em 19/08/2026: o token da conta tem instagram_basic + instagram_content_publish e NÃO
+// tem manage_contents, então a chamada volta com erro de permissão. Por isso o erro é traduzido
+// aqui: sem isso a pessoa recebe "(#200) Requires ... permission" e não tem como saber o que fazer.
+async function deleteMedia(postId) {
+  const id = String(postId || "").trim();
+  if (!id) { const e = new Error("Este registro não guardou o identificador do post no Instagram, então o painel não sabe qual apagar. Apague pelo aplicativo e use “Tirar do histórico”."); e.code = "E_SEM_POST_ID"; throw e; }
+  if (!isConfigured()) { const e = new Error("Instagram não conectado — cole o token em Configurações › Publicação Instagram."); e.code = "E_NO_TOKEN"; throw e; }
+  const c = ig();
+  const token = String(c.access_token || "").replace(/\s+/g, "");
+  let r;
+  try {
+    r = await fetch(GRAPH + "/" + encodeURIComponent(id), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token },
+      signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
+    });
+  } catch (e) {
+    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) throw graphTimeoutError("apagar o post no Instagram");
+    throw e;
+  }
+  const body = await r.json().catch(() => ({}));
+  const v = leituraDoApagar(r.status, body, id);
+  if (v.ok) { recordCheck(true); return v; }
+  if (v.code === "E_TOKEN") recordCheck(false, v.message);
+  const e = new Error(v.message); e.code = v.code; throw e;
+}
+
+// A LEITURA da resposta da Meta, separada da chamada de rede — assim dá para conferir cada
+// resposta possível na bateria sem bater na Meta de verdade (apagar não é coisa que se testa
+// com chamada real). Devolve {ok:true,...} ou {ok:false, code, message}.
+function leituraDoApagar(status, body, id) {
+  if (status >= 200 && status < 300 && body && (body.success === true || body.deleted_id)) {
+    return { ok: true, deleted_id: body.deleted_id || id };
+  }
+  const err = (body && body.error) || {};
+  const msg = String(err.message || "");
+  const cod = Number(err.code || 0);
+  // Falta a permissão: é o caso ESPERADO hoje (o token da conta tem instagram_basic e
+  // instagram_content_publish, não tem manage_contents), e o único que a pessoa resolve sozinha.
+  if (cod === 200 || cod === 10 || /permission|manage_contents/i.test(msg)) {
+    return { ok: false, code: "E_SEM_PERMISSAO_APAGAR", message:
+      "O app da Meta ainda não tem permissão para apagar posts. "
+      + "Em developers.facebook.com › app “Painel 4Selet Marketing” › Permissões e recursos, adicione "
+      + "instagram_manage_contents, gere um token novo e cole em Configurações › Publicação Instagram. "
+      + "Enquanto isso, apague pelo aplicativo e use “Só tirar desta lista” aqui." };
+  }
+  // O post já não existe (apagado pelo celular antes): não é erro, é o resultado que se queria.
+  if (cod === 100 && /does not exist|Unsupported|cannot be loaded|nonexisting/i.test(msg)) {
+    return { ok: true, deleted_id: id, ja_nao_existia: true };
+  }
+  if (cod === 190) {
+    return { ok: false, code: "E_TOKEN", message: "A conexão com o Instagram expirou. Cole um token novo em Configurações e tente de novo." };
+  }
+  return { ok: false, code: "E_APAGAR", message: "O Instagram recusou apagar este post: " + (msg || ("erro " + status)) + "." };
+}
+
 // O tipo da peça, lido da peça. `require` preguiçoso de propósito: content.js é o módulo grande
 // do painel e carregá-lo no topo daqui amarra os dois em ciclo na primeira vez que alguém fizer
 // content.js falar com a publicação. Se por qualquer motivo não der para classificar, devolve ""
@@ -482,4 +542,5 @@ module.exports = {
   // decisão precisa ser verificável sem chamar a Meta.
   pickImages,
   inspecionaToken, tornarPermanente,   // diz o QUE o token e e ate quando vale; e deriva o da Pagina
+  deleteMedia, leituraDoApagar,         // apaga um post publicado; a leitura da resposta e testavel sem rede
 };

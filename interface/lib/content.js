@@ -105,13 +105,30 @@ function classifyKind(files, status) {
   return "other";
 }
 
+// A MESMA arte pode existir em mais de um formato: o .jpg que a pessoa importou e o .png que a
+// prancheta redesenhou ao salvar a edição. A varredura da pasta devolve em ordem alfabética, então
+// "slide_1.jpg" vinha antes de "slide_1.png" e o cartão da biblioteca ficava congelado na arte
+// ANTIGA depois de editar — quem olhava a biblioteca concluía que tinha perdido o trabalho.
+// Mesma preferência que a galeria da peça e a publicação já aplicam: png > jpg > webp.
+const ORDEM_ARTE = { png: 3, jpg: 2, jpeg: 2, webp: 1 };
+function extDe(rel) { return (String(rel).match(/\.([^.]+)$/) || [, ""])[1].toLowerCase(); }
+function melhorVersao(rel, rels) {
+  const base = String(rel).replace(/\.[^.]+$/, "");
+  let melhor = rel, nota = ORDEM_ARTE[extDe(rel)] || 0;
+  for (const r of rels) {
+    if (r === rel || String(r).replace(/\.[^.]+$/, "") !== base) continue;
+    const n = ORDEM_ARTE[extDe(r)] || 0;
+    if (n > nota) { nota = n; melhor = r; }
+  }
+  return melhor;
+}
 // Primeiro arquivo de imagem (thumbnail) ou video, para preview na biblioteca.
 function pickThumb(files) {
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
   // Ignora *.bg.png (camada de FUNDO do editor, sem o print/artigo — deixava a
   // miniatura da biblioteca branca nas peças de mídia). Prefere a arte final.
   const img = rels.find((r) => /slide_0*1\.(png|jpe?g)$/i.test(r)) || rels.find((r) => isImage(r) && !/\.bg\.png$/i.test(r));
-  if (img) return { rel: img, type: "image" };
+  if (img) return { rel: melhorVersao(img, rels), type: "image" };
   const vid = rels.find(isVideo);
   if (vid) return { rel: vid, type: "video" };
   return null;
@@ -521,6 +538,29 @@ function setPublished(folder, meta) {
   return true;
 }
 
+// TIRA a marca de publicada. Usado quando o post é apagado do Instagram (pelo painel ou pelo
+// celular): sem isto o botão de publicar segue apagado dizendo "já publicado" para um post que
+// não existe mais, e a peça fica travada para sempre. Guarda o rastro em `previous_publication`
+// — mesmo campo que a reabertura da peça usa — para o histórico não sumir sem deixar registro.
+function clearPublished(folder, motivo) {
+  const loc = findTask(folder);
+  if (!loc) return false;
+  const p = path.join(loc.path, "status.json");
+  const status = readJsonSafe(p);
+  if (!status || !status.published_at) return false;
+  status.previous_publication = {
+    published_at: status.published_at,
+    published_by: status.published_by || null,
+    last_post_id: status.last_post_id || null,
+    cleared_at: new Date().toISOString(),
+    motivo: motivo || null,
+  };
+  delete status.published_at; delete status.published_by; delete status.last_post_id;
+  writeJsonAtomic(p, status);
+  invalidateTasksCache();
+  return true;
+}
+
 // Marca a peça como IMPORTADA (imagens prontas trazidas de fora). O front usa a flag
 // para NÃO oferecer re-render/editor de arte (não há HTML/JSON de origem), só legenda.
 // De onde a peça veio, quando ela não nasceu aqui dentro (hoje: o sistema squad.4st.co).
@@ -671,5 +711,5 @@ function discardTask(folder) {
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, setImported, setOrigem, getOrigem, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, clearPublished, setImported, setOrigem, getOrigem, markViewed, setTags, generatePreview, promote, discardTask,
 };

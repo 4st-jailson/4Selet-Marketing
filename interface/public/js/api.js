@@ -146,6 +146,8 @@ const API = (() => {
     markPublished: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/mark-published", payload || {}),
     listSchedule: () => req("GET", "/api/publish/schedule"),
     publications: () => req("GET", "/api/publish/publications"),
+    // noInstagram=true apaga o post na conta; false só limpa a linha do histórico do painel.
+    removePublication: (id, noInstagram) => req("DELETE", "/api/publish/publications/" + encodeURIComponent(id) + (noInstagram ? "?no_instagram=1" : "")),
     cancelSchedule: (id) => req("DELETE", "/api/publish/schedule/" + encodeURIComponent(id)),
     // generate
     generate: (payload) => req("POST", "/api/generate", payload),

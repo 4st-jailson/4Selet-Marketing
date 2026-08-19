@@ -502,11 +502,12 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
   position: relative; aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden;
   background: #000; box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
 }
-/* CONTAIN, nunca cover. Uma arte 4:5 mandada ao Story aparecia com as laterais cortadas na
-   prévia — o texto sumia pela borda e a pessoa aprovava um enquadramento que não é o que sai.
-   Com contain, arte 9:16 preenche igual (contain e cover coincidem) e arte de outro formato
-   aparece inteira, com a sobra em volta, que é o que o Instagram faz. */
-.ig-st-media .ig-post-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* COVER, e de propósito: é o que o Instagram faz. Um Story de 1080x1350 postado em 19/08/2026
+   saiu com as laterais cortadas no aparelho — o app ESCALA a arte até preencher os 9:16 e corta
+   o que sobra, não deixa borda. Cheguei a trocar isso por `contain` achando que ele completava
+   com borda; o post real provou o contrário. A prévia tem que cortar igual, e o aviso ao lado
+   é que diz quanto se perde. */
+.ig-st-media .ig-post-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ig-st-bars { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 2; }
 .ig-st-bar { flex: 1 1 0; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, .38); }
 .ig-st-bar.on { background: #fff; }
@@ -521,6 +522,21 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 }
 .ig-story .ig-nav { z-index: 3; }
 .ig-st-leg { margin: 8px 0 0; text-align: center; }
+
+/* ---- "Tirar do ar": escolher entre apagar no Instagram e só limpar a lista ---- */
+.tirar-op {
+  display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+  margin-bottom: 10px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2);
+  transition: border-color var(--tr), background var(--tr);
+}
+.tirar-op:hover { border-color: var(--brand-sky); }
+.tirar-op:has(input:checked) { border-color: var(--accent); background: var(--surface-3); }
+.tirar-op input { margin-top: 3px; flex: 0 0 auto; }
+.tirar-op .hint { margin: 2px 0 0; }
+/* Sem identificador do post não dá para apagar lá: a opção fica visível (explica o porquê) e travada. */
+.tirar-op.off { opacity: .55; cursor: not-allowed; }
+.tirar-op.off:hover { border-color: var(--border); }
 /* Arte que não é 9:16 indo para o Story: aviso, não erro — o post sai, só não preenche a tela. */
 .aviso-formato {
   margin: 8px 0 0; padding: 9px 12px; border-radius: var(--r-sm);

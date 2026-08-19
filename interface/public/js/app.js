@@ -2665,7 +2665,20 @@ async function openHtmlEditor(folder, task, rel, opts) {
   let pendingUp = null; // último 'mouseup' de arraste armado em document — evita acúmulo de closures entre cliques
   let hist = [], hi = -1; // desfazer/refazer: pilha de innerHTML do .card
   let artW = 1080, artH = 1080, fitScale = 1; // dimensões da arte + zoom "ajustar à tela"
-  const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;} [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;} .he-marquee{position:absolute;z-index:2147483000;border:2px solid #5499B5;background:rgba(84,153,181,.14);box-sizing:border-box;pointer-events:none;}";
+  // O clique tem que chegar em QUEM DÁ PARA MOVER, e não na primeira camada decorativa que
+  // estiver por cima. Medido na peça "infraestrutura_checkout": no meio da foto, a pilha sob o
+  // cursor era .scrim > .wash > img.photo — os dois véus de leitura, ambos sem [data-he] e ambos
+  // capturando o clique. O arrasto ia parar no .card, que interpreta clique-no-vazio como LAÇO
+  // de seleção: a foto ficava selecionada (dava para escolher pela lista de camadas) e simplesmente
+  // não andava. Aqui tudo que não é editável deixa o clique passar, e o que é editável volta a
+  // recebê-lo. O .card em si continua recebendo (não é atingido por ".card *"), então o laço no
+  // vazio segue funcionando. Texto em edição reativa a subárvore, senão o cursor não entra num
+  // <span> de destaque dentro da frase.
+  const SEL_CSS = "[data-he]:hover{outline:1px dashed rgba(84,153,181,.75);outline-offset:2px;cursor:move;}"
+    + " [data-he-sel]{outline:2px solid #5499B5 !important;outline-offset:2px;}"
+    + " .he-marquee{position:absolute;z-index:2147483000;border:2px solid #5499B5;background:rgba(84,153,181,.14);box-sizing:border-box;pointer-events:none;}"
+    + " .card *:not([data-he]){pointer-events:none;} [data-he]{pointer-events:auto;}"
+    + " [data-he][contenteditable=\"true\"] *{pointer-events:auto;}";
   const FONTS = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap">';
 
   const ov = document.createElement("div");
@@ -4171,10 +4184,11 @@ function instagramStoryPreview(imgUrls, username) {
     <p class="aviso-formato" id="ig-st-formato" hidden></p>
   </div>`;
 }
-// A arte cabe no Story? Story é 9:16. Uma arte de feed (4:5) ou quadrada mandada pro Story
-// aparece com sobra em cima e embaixo — o Instagram não corta, mas também não preenche.
-// Isso se descobria DEPOIS de postar; agora a janela mede a arte de verdade (o próprio
-// arquivo, pelo naturalWidth) e diz antes.
+// A arte cabe no Story? Story é 9:16 (1080×1920). Arte de outro formato NÃO ganha borda: o
+// Instagram amplia até preencher a tela e CORTA o que sobra. Um Story de 1080×1350 postado em
+// 19/08/2026 saiu com o texto cortado nas laterais, e isso só se descobriu no aparelho, depois
+// de publicado. Aqui a janela mede o arquivo de verdade (naturalWidth/naturalHeight), faz a
+// mesma conta que o app faz, e diz QUANTOS PIXELS somem — antes do clique.
 function avisaFormatoDoStory(root) {
   const img = root.querySelector(".ig-st-media .ig-post-img");
   const alvo = root.querySelector("#ig-st-formato");
@@ -4182,11 +4196,18 @@ function avisaFormatoDoStory(root) {
   const medir = () => {
     const w = img.naturalWidth, h = img.naturalHeight;
     if (!w || !h) return;
-    const prop = w / h, story = 9 / 16;
-    if (Math.abs(prop - story) < 0.02) { alvo.hidden = true; return; }
-    alvo.textContent = prop > story
-      ? "Esta arte é mais larga que o Story (" + w + "×" + h + "). Ela vai aparecer inteira, com sobra em cima e embaixo — não cortada."
-      : "Esta arte é mais alta que o Story (" + w + "×" + h + "). Ela vai aparecer inteira, com sobra nas laterais.";
+    const prop = w / h, STORY = 9 / 16;
+    if (Math.abs(prop - STORY) < 0.02) { alvo.hidden = true; return; }
+    // A mesma conta do "cover": escala até cobrir os dois lados, e o excedente é cortado.
+    const escala = Math.max(1080 / w, 1920 / h);
+    const cortaLado = Math.round((w * escala - 1080) / 2);
+    const cortaTopo = Math.round((h * escala - 1920) / 2);
+    alvo.innerHTML = "<strong>Esta arte não é 9:16</strong> — ela é " + w + "×" + h + ", e o Story é 1080×1920. "
+      + "O Instagram amplia até preencher a tela e corta o resto: "
+      + (cortaLado > 0
+        ? "vão sumir cerca de <strong>" + cortaLado + " px de cada lado</strong>. Texto encostado na borda esquerda ou direita some."
+        : "vão sumir cerca de <strong>" + cortaTopo + " px em cima e embaixo</strong>.")
+      + " Para sair inteira, crie a peça como <strong>Story Instagram</strong>.";
     alvo.hidden = false;
   };
   if (img.complete) medir(); else img.addEventListener("load", medir, { once: true });
@@ -4604,7 +4625,7 @@ async function viewPublications(arg, query) {
       <td><strong>${esc(p.label || p.folder)}</strong><div class="muted">${esc(p.folder)}</div></td>
       <td>${esc(fmt(p.published_at))}</td>
       <td>${selosDe(p)}${p.scheduled_at ? '<div class="hint">agendada</div>' : (p.manual ? '<div class="hint">registrada por você</div>' : "")}</td>
-      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}</td>
+      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}<button class="btn btn-sm btn-danger" data-tirar="${esc(p.id)}">Tirar do ar</button></td>
     </tr>`).join("") : '<tr><td colspan="4" class="utable-vazio">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
     body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Destino</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
@@ -4614,6 +4635,57 @@ async function viewPublications(arg, query) {
     try { await API.cancelSchedule(b.dataset.cancel); toast("Agendamento cancelado.", "ok"); viewPublications(arg, query); }
     catch (e) { toast((e && e.message) || "Erro ao cancelar.", "error"); }
   }; });
+  // "Tirar do ar": DUAS coisas diferentes, e confundir as duas é caro. Apagar no Instagram
+  // não tem volta; tirar do histórico não mexe no que está no ar. A janela pergunta qual.
+  $$("[data-tirar]").forEach((b) => { b.onclick = () => {
+    const p = pubs.find((x) => x.id === b.dataset.tirar); if (!p) return;
+    abreTirarDoAr(p, () => viewPublications(arg, query));
+  }; });
+}
+// A janela do "Tirar do ar". Fica separada porque a escolha é a parte importante: apagar de
+// verdade no Instagram, ou só limpar a lista de um post que você já apagou pelo celular.
+function abreTirarDoAr(p, aoTerminar) {
+  const ov = document.createElement("div"); ov.className = "modal-ov";
+  const quando = fmtDateTime(p.published_at);
+  const semId = !p.post_id;
+  ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+    <h3>Tirar do ar</h3>
+    <p class="hint mb"><strong>${esc(p.label || p.folder)}</strong> — publicada em ${esc(quando)}.</p>
+    <label class="tirar-op${semId ? " off" : ""}">
+      <input type="radio" name="tirar-modo" value="instagram"${semId ? " disabled" : " checked"}>
+      <span><strong>Apagar do Instagram</strong><br><span class="hint">O painel apaga a publicação na conta @4selet. ${semId ? "Indisponível: este registro não guardou o identificador do post." : "Não tem como desfazer."}</span></span>
+    </label>
+    <label class="tirar-op">
+      <input type="radio" name="tirar-modo" value="lista"${semId ? " checked" : ""}>
+      <span><strong>Só tirar desta lista</strong><br><span class="hint">Para quando você já apagou pelo aplicativo. O que estiver no Instagram fica como está.</span></span>
+    </label>
+    <p class="hint">Nos dois casos a peça continua salva no painel e volta a poder ser publicada.</p>
+    <div class="modal-actions">
+      <button class="btn" data-x="cancel">Voltar</button>
+      <button class="btn btn-danger" data-x="ok">Tirar do ar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const close = () => { ov.classList.remove("open"); setTimeout(() => ov.remove(), 160); };
+  ov.querySelector("[data-x='cancel']").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.querySelector("[data-x='ok']").onclick = async () => {
+    const modo = (ov.querySelector("input[name='tirar-modo']:checked") || {}).value || "lista";
+    const noIg = modo === "instagram";
+    if (noIg && !await uiConfirm("Apagar esta publicação de @4selet no Instagram? Isso não tem como desfazer.", { confirmText: "Apagar do Instagram", confirmKind: "danger" })) return;
+    const btn = ov.querySelector("[data-x='ok']");
+    btn.disabled = true; btn.textContent = noIg ? "Apagando…" : "Tirando…";
+    try {
+      const r = await API.removePublication(p.id, noIg);
+      close();
+      toast(r && r.aviso ? r.aviso : (noIg ? "Publicação apagada do Instagram." : "Tirei da lista. O que está no Instagram não foi tocado."), "ok");
+      if (aoTerminar) aoTerminar();
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "Tirar do ar";
+      toast((e && e.message) || "Não consegui tirar do ar.", "error");
+    }
+  };
 }
 // Compat: rota antiga #/agendados abre a aba Agendados.
 function viewSchedule(arg, query) { return viewPublications(arg, Object.assign({ tab: "agendados" }, query || {})); }
@@ -7413,6 +7485,17 @@ const SQ_RESULTADOS = {
   cancelado: { rotulo: "Post cancelado lá", badge: "warn" },
   conexao: { rotulo: "Mudança na conexão", badge: "plain" },
 };
+// Espelho de ehLinhaDeEntrega (lib/squad.js). O contador do cartão de Configurações conta a
+// linha ANTIGA — a que nasceu antes de existir o campo `tipo` — pelo desfecho dela; a tela
+// filtrava só por `tipo === "entrega"` e deixava todas essas de fora. Medido aqui: o cartão
+// dizia 14 entregas falhas e a lista filtrada mostrava 2. Quem clica no atalho vê o número
+// mudar embaixo do dedo e não tem como saber qual dos dois é verdade.
+const SQ_RESULTADO_NAO_ENTREGA = ["recusada", "conexao", "teste", "cancelado"];
+function ehLinhaDeEntrega(r) {
+  if (!r) return false;
+  if (r.tipo) return r.tipo === "entrega";
+  return SQ_RESULTADO_NAO_ENTREGA.indexOf(r.resultado) === -1;
+}
 // Uma entrega "montando" há muito tempo não está montando: o painel foi reiniciado no meio.
 // Sem isto a linha ficaria eternamente dizendo que está trabalhando.
 const SQ_MONTANDO_LIMITE_MS = 30 * 60 * 1000;
@@ -7440,7 +7523,7 @@ async function viewRequisicoes() {
   // ele manda já filtrado: chegar numa lista de 40 linhas para achar as 3 que importam é o
   // mesmo que não ter o atalho. Só ENTREGA conta (tipo), e só a que morreu (resultado).
   const soFalhas = /[?&]filtro=falhas/.test(location.hash);
-  const falhas = todas.filter((r) => r.tipo === "entrega" && r.resultado === "erro");
+  const falhas = todas.filter((r) => ehLinhaDeEntrega(r) && r.resultado === "erro");
   const reqs = soFalhas ? falhas : todas;
 
   const linhas = reqs.map((r) => {

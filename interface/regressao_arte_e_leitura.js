@@ -1280,6 +1280,116 @@ function briefingLongo() {
       "sem a legenda o rodape sobe (senao fica meia tela de vazio)");
     checa(/bn\.disabled = soManual/.test(app),
       "e destino que o painel nao publica nem deixa clicar em publicar");
+
+    // -- 26e. O TIPO vem da PECA, nao do que a tela mandou -----------------
+    // A tela chama publicar sem `kind` (sempre chamou). Enquanto a trava lia opts.kind cru ela
+    // recebia vazio, nao achava esse vazio em destino nenhum e recusava TUDO com "Uma peca de
+    // conteudo nao vai para o Story" — inclusive a peca certa no destino certo.
+    checa(/const kind = String\(opts\.kind \|\| ""\) \|\| kindDaPeca\(folder\)/.test(pubSrc),
+      "sem kind na chamada, o servidor pergunta a PECA qual e o tipo");
+    checa(/content\.getTask\(folder\)/.test(pubSrc), "usando a mesma conta que a tela usa");
+    checa(!/publicaSozinho\(destino, opts\.kind\)/.test(pubSrc),
+      "e a trava nao le mais opts.kind cru (era isso que recusava tudo)");
+
+    // -- 26f. A arte que nao e 9:16 avisa ANTES do clique -------------------
+    // Um Story 1080x1350 saiu com o texto cortado no aparelho em 19/08. O Instagram AMPLIA ate
+    // preencher e corta — nao deixa borda. A previa corta igual, e o aviso diz quanto se perde.
+    checa(/object-fit: cover/.test((css.match(/\.ig-st-media \.ig-post-img \{[^}]*\}/) || [""])[0]),
+      "a previa do Story CORTA como o Instagram corta (nao finge que cabe)");
+    checa(/function avisaFormatoDoStory\(/.test(app), "e existe o aviso de formato");
+    checa(/Math\.max\(1080 \/ w, 1920 \/ h\)/.test(app), "que faz a MESMA conta do app (cover)");
+    checa(/px de cada lado/.test(app), "dizendo quantos pixels somem");
+    checa(/crie a peça como <strong>Story Instagram/i.test(app), "e o que fazer para sair inteira");
+  }
+
+  // ============================================================================
+  // 27. A arte de Story não desenha a barra do Instagram
+  // ----------------------------------------------------------------------------
+  // A arte desenhava a própria barra de progresso. O Instagram desenha a DELE por cima de todo
+  // Story — saíam duas. A contagem "2/5" fica: o app mostra segmentos, não números.
+  // ============================================================================
+  {
+    secao("27. A arte de Story não repete a barra do Instagram");
+    const rr = require("./lib/render");
+    const cards = [{ title: "Um" }, { title: "Dois" }, { title: "Tres" }];
+    const feitos = rr.storyCardsHtml({ cards: cards }, {});
+    checa(feitos.length === 3, "gerou os tres cartoes", feitos.length + " cartoes");
+    checa(feitos.every((c) => c.html.indexOf('class="barra"') < 0),
+      "nenhum cartao desenha barra de progresso (quem desenha e o Instagram)");
+    checa(feitos.every((c) => c.html.indexOf(".barra") < 0),
+      "e o CSS da barra saiu junto (senao o proximo arquetipo a ressuscita)");
+    checa(feitos.every((c) => /class="conta"/.test(c.html)),
+      "a contagem 2/5 FICA — o app mostra segmentos, nao numeros");
+    // Cartao unico nao tem sequencia: nem barra, nem contagem.
+    const um = rr.storyCardsHtml({ cards: [{ title: "So um" }] }, {});
+    checa(um.length === 1 && um[0].html.indexOf('class="conta"') < 0,
+      "story de um cartao so nao mostra contagem de nada");
+    // A altura util nao pode ter mudado: a zona segura e geometria, nao recomendacao.
+    checa(feitos.every((c) => /padding:250px 96px 250px/.test(c.html) || /padding:250px/.test(c.html)),
+      "e a zona segura do aplicativo segue intacta");
+  }
+
+  // ============================================================================
+  // 28. Editor: o clique chega em quem dá para mover
+  // ----------------------------------------------------------------------------
+  // Medido na peça "infraestrutura_checkout": no meio da foto, a pilha sob o cursor era
+  // .scrim > .wash > img.photo. Os dois véus capturavam o clique, o arrasto caía no .card e
+  // virava LAÇO — a foto ficava selecionada e não andava.
+  // ============================================================================
+  {
+    secao("28. Editor: o clique chega em quem da para mover");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    checa(/\.card \*:not\(\[data-he\]\)\{pointer-events:none;\}/.test(app),
+      "camada decorativa nao captura mais o clique");
+    checa(/\[data-he\]\{pointer-events:auto;\}/.test(app),
+      "e o que da para mover volta a receber");
+    // O .card em si NAO pode entrar na regra: e ele que recebe o clique no vazio (laco).
+    checa(!/[^*]\.card\{pointer-events:none/.test(app),
+      "o proprio cartao continua recebendo (senao o laco no vazio morre)");
+    // indexOf, e nao regex: no fonte do app.js esta regra mora dentro de uma string com as
+    // aspas escapadas (contenteditable=\"true\"), e escapar isso de novo num regex so confunde.
+    checa(app.indexOf('[data-he][contenteditable=\\"true\\"] *{pointer-events:auto;}') >= 0,
+      "e o <span> de destaque dentro do texto recebe clique enquanto se edita");
+  }
+
+  // ============================================================================
+  // 29. Tirar do ar: apagar no Instagram OU só limpar a lista
+  // ============================================================================
+  {
+    secao("29. Tirar do ar: apagar no Instagram ou so limpar a lista");
+    const pub = require("./lib/publish");
+    const pubs = require("./lib/publications");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const rota = fs.readFileSync(path.join(__dirname, "routes/publish.js"), "utf8");
+    const cnt = require("./lib/content");
+
+    // -- 29a. A leitura de cada resposta da Meta, sem tocar na rede --------
+    const L = pub.leituraDoApagar;
+    checa(L(200, { success: true, deleted_id: "9" }, "9").deleted_id === "9", "apagou: devolve o id");
+    const sp = L(400, { error: { code: 200, message: "(#200) Requires instagram_manage_contents permission" } }, "1");
+    checa(sp.code === "E_SEM_PERMISSAO_APAGAR", "sem permissao tem codigo proprio", sp.code);
+    checa(/instagram_manage_contents/.test(sp.message), "e a frase NOMEIA a permissao que falta");
+    checa(/Permissões e recursos/.test(sp.message), "dizendo onde adicionar");
+    const jaFoi = L(400, { error: { code: 100, message: "Object with ID '1' does not exist" } }, "1");
+    checa(jaFoi.ok && jaFoi.ja_nao_existia, "post ja apagado pelo celular nao e erro, e o resultado");
+    checa(L(400, { error: { code: 190, message: "expired" } }, "1").code === "E_TOKEN", "token vencido tem saida propria");
+
+    // -- 29b. Os dois caminhos existem, e sao diferentes -------------------
+    const api = fs.readFileSync(path.join(__dirname, "public/js/api.js"), "utf8");
+    checa(/no_instagram=1/.test(rota) && /no_instagram=1/.test(api),
+      "a tela e a rota falam o mesmo idioma sobre APAGAR LA vs so tirar da lista");
+    checa(/return res\.status\(e\.code === "E_SEM_PERMISSAO_APAGAR" \? 403 : 502\)/.test(rota),
+      "se o Instagram recusou, a linha NAO some da lista (o post segue no ar)");
+    checa(/Apagar do Instagram/.test(app) && /Só tirar desta lista/.test(app),
+      "e a janela obriga a escolher qual dos dois");
+    checa(/Não tem como desfazer|não tem como desfazer/.test(app), "avisando que apagar nao volta");
+
+    // -- 29c. A peca volta a poder ser publicada ---------------------------
+    checa(typeof cnt.clearPublished === "function", "existe o caminho que tira a marca de publicada");
+    checa(/content\.clearPublished\(item\.folder/.test(rota),
+      "e a rota o usa (senao a peca fica travada em 'ja publicado' para sempre)");
+    checa(typeof pubs.remove === "function" && typeof pubs.get === "function",
+      "e o historico sabe achar e tirar uma linha");
   }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });

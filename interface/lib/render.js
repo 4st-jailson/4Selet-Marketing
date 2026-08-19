@@ -2471,9 +2471,29 @@ function slideNumero(slide, ctx) {
   if (len > 8) return slideText(slide, ctx);
   const util = (Number(ctx.width) || 1080) - 184;
   const pesoTotal = len + String(sufixo).length * 0.42;
-  const tam = Math.min(460, Math.floor((util + (len - 1) * 16 - (sufixo ? 14 : 0)) / (pesoTotal * 0.6)));
+  let tam = Math.min(460, Math.floor((util + (len - 1) * 16 - (sufixo ? 14 : 0)) / (pesoTotal * 0.6)));
+  // A conta acima olha só a LARGURA — e enquanto a chamada era um texto de 16px sem estilo isso
+  // bastava. Com a pílula de verdade (44px de respiro + 103px de altura) o cartão QUADRADO não tem
+  // mais essa folga: medido em 1080x1080 com rótulo do topo, título de duas linhas, rótulo do número
+  // e apoio, a pílula terminava 78px FORA da borda e saía cortada ao meio na arte publicável.
+  // Quem cede é o número, que é o único bloco aqui com sobra: ele devolve exatamente o que a
+  // chamada custa, então a peça COM chamada passa a ocupar a mesma altura da peça SEM chamada.
+  // Peça sem chamada e slide de carrossel (1350 de altura) não mudam nada.
+  const quadradoNum = Number(ctx && ctx.height) > 0 && Number(ctx.height) < 1200;
+  if (quadradoNum && String((ctx && ctx.cta) || "").trim()) {
+    // 147 = 44 de margin-top + 103 de altura da pílula; /0.88 porque o bloco do número mede
+    // ~0,88 do corpo da fonte (line-height .82 mais a linha de base do sufixo). Medido.
+    tam = Math.max(120, tam - Math.ceil(147 / 0.88));
+  }
   // Numero que so caberia minusculo nao e mais um numero gigante: melhor sair como texto.
   if (tam < 120) return slideText(slide, ctx);
+  // A emenda de -16px foi calibrada para o numero GRANDE (a -16px em 460px o aperto e de 3,5%).
+  // Como pixel fixo, ela nao acompanha quando o numero encolhe — e o desconto da pilula acima faz
+  // exatamente isso. Medido: "R$ 1,99" com chamada cai para 120px e -16px vira 13% de aperto; os
+  // glifos se sobrepoem e a arte sai ilegivel ("R$1,99" com o cifrao dentro do 1). O mesmo numero
+  // sem chamada fica em 236px (aperto de 6,8%) e sai limpo. Entao o aperto passa a ter TETO
+  // proporcional: 6,8% do corpo, nunca mais que os 16px de hoje. De 236px para cima nada muda.
+  const emenda = Math.min(16, Math.round(tam * 0.068));
   const corVal = light ? PALETTE.darker : "#FFFFFF";
   const corUn = light ? PALETTE.blue : PALETTE.sky;
   const corLab = light ? PALETTE.navy : PALETTE.mist;
@@ -2481,7 +2501,7 @@ function slideNumero(slide, ctx) {
     ? `.s-title span, .n-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }`
     : "";
   const css = `.n-wrap { display:flex; align-items:baseline; gap:14px; margin-top:26px; }
-    .n-val { font-weight:900; font-size:${tam}px; line-height:.82; letter-spacing:-16px; color:${corVal}; }
+    .n-val { font-weight:900; font-size:${tam}px; line-height:.82; letter-spacing:-${emenda}px; color:${corVal}; }
     .n-un { font-weight:800; font-size:${Math.round(tam * 0.42)}px; color:${corUn}; letter-spacing:-2px; }
     .n-lab { margin-top:22px; font-size:46px; font-weight:700; color:${corLab}; max-width:88%; line-height:1.24; }
     .n-body { margin-top:22px; font-size:38px; line-height:1.42; color:${corLab}; max-width:88%; }
@@ -2687,11 +2707,21 @@ function slideMedidor(slide, ctx) {
   const corVal = light ? PALETTE.darker : "#FFFFFF";
   const corLab = light ? PALETTE.navy : PALETTE.mist;
   const rot = String(g.label || (slide.stats && slide.stats[0] && slide.stats[0].label) || "").trim();
-  const css = `.gz { display:flex; flex-direction:column; align-items:center; margin-top:20px; }
-    .gz svg { width:${v0(ctx)}px; height:auto; display:block; }
-    .gz-val { margin-top:-58px; font-weight:900; font-size:132px; line-height:1; letter-spacing:-6px; color:${corVal}; }
+  // O medidor nasceu para o slide de carrossel, onde a chamada não existe. Como PEÇA ÚNICA
+  // (quadrado) ele já perdia 270px de altura, e a pílula de chamada de verdade — 44px de respiro
+  // mais 103px de altura — não cabia: medido, ela terminava 29px FORA do cartão e saía cortada.
+  // Enquanto a chamada era texto de 16px sem estilo isso não aparecia. Quem cede é o arco (que é
+  // desenho, não informação) junto com o número e a própria pílula; sem chamada, ou no carrossel,
+  // nada muda.
+  const apertaMed = Number(ctx && ctx.height) > 0 && Number(ctx.height) < 1200
+    && !!String((ctx && ctx.cta) || "").trim();
+  const larguraArco = apertaMed ? 360 : v0(ctx);
+  const css = `.gz { display:flex; flex-direction:column; align-items:center; margin-top:${apertaMed ? 12 : 20}px; }
+    .gz svg { width:${larguraArco}px; height:auto; display:block; }
+    .gz-val { margin-top:${apertaMed ? -42 : -58}px; font-weight:900; font-size:${apertaMed ? 112 : 132}px; line-height:1; letter-spacing:-6px; color:${corVal}; }
     .gz-lab { margin-top:18px; font-size:38px; line-height:1.3; color:${corLab}; text-align:center; max-width:80%; }
-    .gz-body { margin-top:30px; font-size:36px; line-height:1.42; color:${corLab}; max-width:88%; }
+    .gz-body { margin-top:${apertaMed ? 22 : 30}px; font-size:36px; line-height:1.42; color:${corLab}; max-width:88%; }
+    ${apertaMed ? ".ac-cta { margin-top:30px; font-size:32px; padding:20px 44px; }" : ""}
     ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
   const arco = `<svg viewBox="0 0 200 118" xmlns="http://www.w3.org/2000/svg">
       <defs><linearGradient id="gz" x1="0" y1="0" x2="1" y2="0">
@@ -3221,12 +3251,7 @@ function storyBase(theme) {
   .s-title { font-weight:900; font-size:104px; line-height:1.04; letter-spacing:-.03em; }
   .s-title .accent { color:${t.eyebrow}; }
   .s-body { margin-top:36px; font-size:46px; line-height:1.4; }
-  .rodape { position:relative; z-index:2; display:flex; align-items:center; justify-content:center; }
-  /* Barra de progresso da sequencia, no alto da area util: e o que o proprio Instagram desenha,
-     e repetir isso dentro da arte dá continuidade quando a pessoa avanca os cartoes. */
-  .barra { position:relative; z-index:2; display:flex; gap:8px; margin-bottom:30px; }
-  .barra i { flex:1; height:6px; border-radius:3px; background:${t.dot}; }
-  .barra i.on { background:${t.dotOn}; }`;
+  .rodape { position:relative; z-index:2; display:flex; align-items:center; justify-content:center; }`;
 }
 
 function storyDoc(ctx, extraCss, bodyInner) {
@@ -3256,13 +3281,19 @@ function storyDoc(ctx, extraCss, bodyInner) {
 
 // Cabecalho comum: logo e a contagem "2/5". Fica DENTRO da caixa com recuo — nunca em
 // position:absolute no topo, que e onde a interface do aplicativo passa por cima.
+//
+// A arte NAO desenha barra de progresso. Ela desenhava, e o argumento era "dar continuidade
+// quando a pessoa avanca os cartoes" — mas o Instagram desenha a barra DELE por cima de todo
+// Story, entao saiam duas: a do app no alto da tela e a nossa logo abaixo do logo. O Hugo
+// apontou isso ao ver a previa de Story pela primeira vez, em 19/08/2026. A contagem "2/5"
+// fica: o app mostra segmentos, nao numeros, entao ela nao repete nada — e mora dentro do
+// .top, ao lado do logo, sem ocupar altura propria.
 function storyTop(ctx) {
   const logo = logoSrc(ctx.logo, (ctx.theme && ctx.theme.logo) || LOGO_LIGHT);
   const total = Number(ctx.total) || 1;
   return `<div class="top"><img class="logo" src="${logo}" alt="4Selet"/>`
     + (total > 1 ? `<div class="conta">${ctx.n}/${total}</div>` : "")
-    + "</div>"
-    + (total > 1 ? `<div class="barra">${Array.from({ length: total }, (_, k) => `<i class="${k < (ctx.n || 1) ? "on" : ""}"></i>`).join("")}</div>` : "");
+    + "</div>";
 }
 
 function storyCover(card, ctx) {

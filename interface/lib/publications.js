@@ -45,4 +45,20 @@ function add(rec) {
 // Mais recentes primeiro.
 function list() { return load().slice().sort((a, b) => String(b.published_at).localeCompare(String(a.published_at))); }
 
-module.exports = { add, list };
+// Um registro pelo id. Devolve null se não existir.
+function get(id) { return load().find((x) => x.id === String(id || "")) || null; }
+
+// Tira a linha do histórico. Usado nos DOIS caminhos: depois de apagar de verdade no Instagram,
+// e quando a pessoa já apagou pelo celular e o painel ficou anunciando um post que não existe
+// mais (foi o caso do Story cortado de 19/08 — apagado à mão, e a lista continuava mostrando).
+// `motivo` fica gravado no registro de saída para o histórico não perder a razão.
+function remove(id, motivo, quem) {
+  const list = load();
+  const i = list.findIndex((x) => x.id === String(id || ""));
+  if (i < 0) return null;
+  const [fora] = list.splice(i, 1);
+  save(list);
+  return Object.assign({}, fora, { removido_em: new Date().toISOString(), removido_motivo: motivo || null, removido_por: quem || null });
+}
+
+module.exports = { add, list, get, remove };

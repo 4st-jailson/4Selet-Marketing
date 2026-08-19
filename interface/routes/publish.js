@@ -54,6 +54,37 @@ router.post("/test", adminOnly, async (req, res) => {
 // histórico de publicações que foram ao ar (agendadas OU diretas) — aba "Publicados"
 router.get("/publications", (req, res) => res.json({ items: publications.list() }));
 
+// TIRA uma publicação do ar. DOIS caminhos, e a diferença importa:
+//   ?no_instagram=1  → apaga DE VERDADE no Instagram (DELETE na Graph API) e depois some da lista.
+//   sem isso         → só some da lista do painel; o post no Instagram fica onde está. É o caso de
+//                      quem já apagou pelo celular e ficou com o painel anunciando um post morto.
+// A peça em si NÃO é apagada: ela volta a poder ser publicada, e é isso que se quer depois de
+// tirar do ar um post que saiu errado.
+router.delete("/publications/:id", adminOnly, async (req, res) => {
+  const item = publications.get(req.params.id);
+  if (!item) return res.status(404).json({ error: "este registro de publicação não existe mais." });
+  const noInstagram = String(req.query.no_instagram || "") === "1";
+  const who = req.user && (req.user.name || req.user.username);
+  let apagadoLa = false, aviso = null;
+  if (noInstagram) {
+    try {
+      const r = await publish.deleteMedia(item.post_id);
+      apagadoLa = true;
+      if (r && r.ja_nao_existia) aviso = "Este post já não existia no Instagram — provavelmente foi apagado pelo aplicativo. Tirei da lista do painel.";
+    } catch (e) {
+      // Não some da lista se o post continua no ar: sumir aqui daria a impressão de que foi
+      // apagado lá, e o post seguiria publicado sem ninguém sabendo.
+      return res.status(e.code === "E_SEM_PERMISSAO_APAGAR" ? 403 : 502).json({ error: e.message, code: e.code || "E_APAGAR" });
+    }
+  }
+  const fora = publications.remove(req.params.id, noInstagram ? "apagado no Instagram pelo painel" : "removido do histórico (apagado por fora)", who);
+  // A peça volta a ficar publicável: sem isso o botão de publicar continuaria apagado, dizendo
+  // "já publicado", para uma publicação que não existe mais.
+  let task = null;
+  try { content.clearPublished(item.folder, noInstagram ? "apagada no Instagram pelo painel" : "apagada por fora e tirada do histórico"); task = content.getTask(item.folder); } catch (e) { /* peça pode ter sido descartada; a lista já foi limpa */ }
+  res.json({ ok: true, removido: fora, apagado_no_instagram: apagadoLa, task: task, aviso: aviso });
+});
+
 // marca uma peça APROVADA como JÁ PUBLICADA manualmente — para publicações feitas por fora
 // do painel (ou antes do rastreamento existir). Registra no histórico p/ aparecer em "Publicados",
 // SEM postar de novo no Instagram (evita duplicar o post). Body: { published_at?, post_id?, permalink? }.
