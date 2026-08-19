@@ -1,6 +1,6 @@
 # **4Selet — Brand Identity Guide**
 
-*Versão 1.3 · Agosto/2026 · Knowledge file consumido pelo **painel web** (`interface/lib/knowledge.js` → `interface/lib/prompts.js`, injetado no system prompt de TODOS os 7 tipos de conteúdo) e pelas **skills dos 5 agentes** (Research, Ad Creative, Video Ad, Copywriter, Distribution)*
+*Versão 1.3 · Agosto/2026 · Knowledge file consumido pelo **painel web** (`interface/lib/knowledge.js` → `interface/lib/prompts.js`, injetado no system prompt de TODOS os 8 tipos de conteúdo) e pelas **skills dos 5 agentes** (Research, Ad Creative, Video Ad, Copywriter, Distribution)*
 
 > **Propósito:** Este documento define a identidade da marca 4Selet para ser usada em **toda peça gerada pelos agentes** — texto, imagem, vídeo, e-mail e metadata de publicação. Sempre referenciar antes de qualquer geração.
 

@@ -445,6 +445,17 @@ function setRenderPref(folder, patch) {
   else if (typeof patch.image === "string" && /^\/(uploads|assets)\/[\w./-]+$/.test(patch.image) && patch.image.indexOf("..") < 0) {
     cur.image = patch.image;
   }
+  // Manchete e apoio ESCRITOS PARA A ARTE do feed. Mesmo motivo do `fundo` acima: o arquivo do
+  // feed é um .txt e não guarda campo nenhum, então sem isto os dois campos que a IA escreve
+  // pensando na imagem morrem no caminho e o desenho volta a recortar a legenda no caractere 60 —
+  // que era o defeito da frase inacabada na peça publicável. Tetos iguais aos do render.
+  if (patch.dados === "auto" || patch.dados === "") delete cur.dados;
+  else if (patch.dados && typeof patch.dados === "object") {
+    const d = {};
+    if (typeof patch.dados.headline === "string" && patch.dados.headline.trim()) d.headline = patch.dados.headline.trim().slice(0, 60);
+    if (typeof patch.dados.subtext === "string" && patch.dados.subtext.trim()) d.subtext = patch.dados.subtext.trim().slice(0, 150);
+    if (Object.keys(d).length) cur.dados = Object.assign({}, cur.dados, d);
+  }
   writeJsonAtomic(p, cur);
   invalidateTasksCache();
   return true;

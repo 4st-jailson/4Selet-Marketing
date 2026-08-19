@@ -17,13 +17,22 @@ const ai = require("../interface/lib/anthropic");
 const prompts = require("../interface/lib/prompts");
 const content = require("../interface/lib/content");
 const render = require("../interface/lib/render");
-const { contentTypeById } = require("../interface/lib/config");
+const { contentTypeById, CONTENT_TYPES } = require("../interface/lib/config");
 const { runBrandGovernance } = require("../interface/lib/validation");
 
-const ALL_CONTENT_TYPES = [
-  "instagram_caption", "instagram_carousel", "ad_creative",
-  "video_idea", "linkedin_post", "threads_post",
-];
+// Tipos que dependem de um INSUMO que o pipeline nao tem como produzir sozinho. "4Selet na Midia"
+// e o print da materia publicada: sem alguem enviar essa captura (status.media) a peca sairia
+// vazia, entao ela fica fora do pacote padrao — para gerar uma, passe o id explicitamente em
+// `content_types`.
+const DEPENDEM_DE_INSUMO_ENVIADO = ["media_mention"];
+
+// O pacote que uma run SEM escolha de tipos gera. Sai de CONTENT_TYPES (a fonte unica do painel)
+// justamente para nao envelhecer: aqui havia uma copia manual de 6 ids que ja tinha perdido dois
+// tipos — "4Selet na Midia" e "Story Instagram" —, e quem rodava o pipeline sem escolher nada
+// achava que tinha recebido o pacote completo.
+const ALL_CONTENT_TYPES = CONTENT_TYPES
+  .map((c) => c.id)
+  .filter((id) => DEPENDEM_DE_INSUMO_ENVIADO.indexOf(id) < 0);
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function nop() {}
@@ -111,7 +120,10 @@ function researchAgent(ctx) {
     "- R$ 1,99 fixo por transação.",
     "- Recebimento: PIX em D+10, cartão em D+30.",
     "- 95%+ de aprovação no cartão.",
-    "- Acesso por convite — \"Para quem sabe que é Selet.\"",
+    // A frase-tag NAO entra aqui de proposito: este arquivo e lido pelos agentes como fonte de
+    // ancoragem, e frase escrita neste briefing reaparece copiada dentro das pecas — que e
+    // exatamente o que a regra dura proibe (ela nao assina peca).
+    "- Acesso por convite: exclusividade convidativa, nao escassez artificial.",
     "",
     "## Direcionais de tom",
     "- Sócio experiente e sobrio; factual, com números/prazos concretos.",
@@ -150,7 +162,10 @@ async function creativeAgent(ctx) {
   }, contentTypeId, log);
 
   const parsed = extractJson(result.text);
-  const gov = runBrandGovernance(textForGovernance(contentTypeId, parsed) || result.text, { type: contentTypeId });
+  // O brief vai junto porque a frase-tag da marca so e permitida quando o PEDIDO a pede
+  // (lib/validation.js). Sem ele, um brief que pedisse a frase de propria letra seria bloqueado.
+  const gov = runBrandGovernance(textForGovernance(contentTypeId, parsed) || result.text,
+    { type: contentTypeId, brief });
   log(`  gerado | simulated: ${result.simulated} | gov errors: ${gov.errors.length} | warnings: ${gov.warnings.length}`);
 
   // Gate de governanca: não grava peças que violam regras duras de marca.
@@ -219,7 +234,7 @@ function distributionAgent(ctx) {
 //
 // payload: {
 //   task_name, task_date, brief, angle?, platforms?, campaign_id?,
-//   content_types?: string[],            // default: todos os 6
+//   content_types?: string[],            // default: ALL_CONTENT_TYPES (todos, menos media_mention)
 //   user_flags?: { skip_research, skip_distribution, skip_render, skip_video }
 // }
 // Retorna um resumo (pipeline_run.json) e o grava na pasta da task.

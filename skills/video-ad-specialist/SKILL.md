@@ -200,37 +200,39 @@ Este é o arquivo canônico do tipo `video_idea` (`interface/lib/config.js`). O 
 
 ### O que realmente vai para a tela
 
-Apenas três coisas: **`scenes[].type`** (vira o eyebrow), **`scenes[].text`** (a headline) e **o subtexto** (que o adaptador do painel entrega ao componente como `visual`).
+Quatro coisas: **`scenes[].type`** (vira o eyebrow), **`scenes[].text`** (a headline), **o subtexto** (que o adaptador do painel entrega ao componente como `visual`) e o **`cta`**, que vira a pílula azul do card final.
 
-`concept`, `cta`, `hook`, `emotional_arc`, `visual_style` e `notes` são **metadados** — servem à peça, à legenda e ao racional, **não são desenhados**. Em particular:
+`concept`, `hook`, `emotional_arc`, `visual_style` e `notes` são **metadados** — servem à peça, à legenda e ao racional, **não são desenhados**.
 
-> **Bug aberto no renderer:** o card final do `BrandStory` estampa a string fixa *"Para quem sabe que é Selet."* (`src/BrandStory.tsx`, e também `src/Root.tsx`) em vez de usar `props.cta`. Ou seja, **mesmo um JSON limpo sai com a frase-tag no vídeo** — o que contraria a regra dura vigente. Enquanto isso não for corrigido no componente (trocar o texto fixo por `props.cta`), registre a limitação ao entregar o vídeo. Não é algo que o JSON resolva.
+> **Corrigido (agosto/2026) — o `cta` vai para a tela e a frase-tag saiu.** O card final do `BrandStory` desenha **`props.cta`**; com `cta` vazio, **nenhuma pílula é desenhada** (`src/BrandStory.tsx`). A frase-tag fixa que o componente carimbava saiu, e as cenas de exemplo do `src/Root.tsx` (as que o Remotion Studio abre e o CLI usa sem `--props`) fecham com *"Acesso por convite."*.
+>
+> **Pendente, e não é no componente:** pelo **painel**, o adaptador de props ainda troca um `cta` vazio pelo texto `"Conhecer a plataforma"` (`interface/lib/render.js`, `renderVideo`). Ou seja, quando a IA decide que a peça não leva chamada, o vídeo sai com uma chamada mesmo assim. Enquanto isso não for corrigido lá, **escreva o `cta` que você quer ver** — deixar vazio não some com a pílula pelo caminho do painel.
 
 ### Duração real
 
-A matemática do renderer não é "3s por cena". Cada cena avança **78 frames** (as cenas se sobrepõem num crossfade de 12 frames): `duração = n_cenas × 2,6s + 0,4s`.
+O ritmo é de **90 frames por cena (3,0s @ 30fps)**, sem sobreposição — uma cena sai e a outra entra: `duração = n_cenas × 3,0s`.
 
 | Cenas | Duração |
 |---|---|
-| 4 | ~10,8s |
-| 6 | ~16,0s |
-| 7 | ~18,6s |
-| 8 | ~21,2s |
+| 4 | 12,0s |
+| 5 | 15,0s |
+| 6 | 18,0s |
+| 7 | 21,0s |
 
-Para 15–20s, use **6 a 8 cenas**. Um roteiro de 4 cenas planejado para 18s sai com 10,8s. Não existe campo `duration` no contrato — se escrever, ninguém lê.
+Para 15–20s, use **5 a 6 cenas** (7 já passa de 20s). Não existe campo `duration` no contrato — se escrever, ninguém lê. *(Conferido em 2026-08-19 com `remotion compositions src/index.ts`: BrandStory, 4 cenas de exemplo = 360 frames = 12,00s.)*
 
 ---
 
 ## Brand Guardrails (4Selet) — checar antes de finalizar
 
-- **Frase-tag:** **nunca** use *"Para quem sabe que é Selet."* como fecho, assinatura, headline, subtexto ou cena de CTA — regra dura (GOVERNANCE em `interface/lib/prompts.js`), aplicada como gate no pipeline. Só se o brief pedir explicitamente. (Lembre do bug do renderer descrito no Step 4: o card final ainda carimba a frase sozinho — reporte, não reproduza no JSON.)
+- **Frase-tag:** **nunca** use *"Para quem sabe que é Selet."* como fecho, assinatura, headline, subtexto ou cena de CTA — regra dura (GOVERNANCE em `interface/lib/prompts.js`), aplicada como gate no pipeline **e agora também em código**: `runBrandGovernance` (`interface/lib/validation.js`) devolve **erro** quando a peça traz a frase, com e sem acento. Só passa se o brief pedir a frase explicitamente. O renderer não a carimba mais sozinho.
 - **Pilar:** o tema segue o pilar escolhido; Taxa Zero é um pilar entre seis.
-- **Cores:** apenas a paleta oficial — `Selet Darker #07212B`, `Navy #003554`, `Blue #006494`, `Sky #5499B5`, `Mist #AFBCC9`, `Cloud #D9DCD6`. Sem preto puro, sem neon, sem gradiente quente. `Selet Blue` aparece em toda peça. *(Limitação conhecida: o `BrandStory` usa `#FFFFFF` na tipografia principal — isso vem do componente, não do JSON, e não é verificável pelo roteiro.)*
+- **Cores:** apenas a paleta oficial — `Selet Darker #07212B`, `Navy #003554`, `Blue #006494`, `Sky #5499B5`, `Mist #AFBCC9`, `Cloud #D9DCD6`. Sem preto puro, sem neon, sem gradiente quente. *(O `BrandStory` escreve a headline em `#FFFFFF` sobre fundo Navy/Darker — isso **está dentro da regra**: a v1.3 de `brand_identity.md` permite branco puro como TEXTO sobre fundo escuro e proíbe só como fundo, card ou área chapada.)*
 - **Tipografia:** Inter (display/body/UI); JetBrains Mono **apenas** em snippets técnicos (códigos, prazos como label). Nunca Arial/Roboto/system fonts.
 - **CTAs aprovados (9):** "Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Migrar minha operação", "Calcular minha economia", "Falar com o time", "Acessar o material", "Ler o playbook", "Ver como funciona". **Proibidos:** "Compre já!", "Última chance!", "Garanta sua vaga gratuita", urgência fake.
 - **Números da Taxa Zero (precisão obrigatória):** 0% por **3 meses OU até R$ 300 mil** (o que vier primeiro); R$ 1,99/transação; PIX D+10; cartão D+30; prova-âncora 95% de aprovação. Nunca "0% pra sempre" nem "100% grátis".
 - **Concorrentes:** **nunca** citar Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay — nem por nome, sigla, descrição ou logo. Mercado só em abstrato ("taxas de mercado em torno de 7,9%").
-- **Motion:** transições fade/slide/wipe, texto animado word-by-word, `easeOut`. Sem footage/live-action, sem personagens fictícios, sem trending audio cliché. *(O ritmo efetivo é de 2,6s por cena — ver Step 4.)*
+- **Motion:** transições fade/slide/wipe, texto animado word-by-word, `easeOut`. Sem footage/live-action, sem personagens fictícios, sem trending audio cliché. *(O ritmo efetivo é de 3,0s por cena — ver Step 4.)*
 - **Tom:** sócio experiente, sóbrio. Cada claim com número/prazo/processo. Sem motivacional vazio, sem promessa mágica.
 
 ## Examples
@@ -244,7 +246,7 @@ Para 15–20s, use **6 a 8 cenas**. Um roteiro de 4 cenas planejado para 18s sai
 ### Example 2: Short da mecânica (limited_offer)
 
 **Usuário diz:** "Quero um Short explicando a Taxa Zero."
-**Actions:** Pilar `taxa_zero`, estratégia `limited_offer`, platform `youtube_shorts` (metadado — sai 9:16), estrutura Hook → Problem → Solution → CTA em 7 cenas (~18,6s), números completos da campanha, CTA "Ver as condições".
+**Actions:** Pilar `taxa_zero`, estratégia `limited_offer`, platform `youtube_shorts` (metadado — sai 9:16), estrutura Hook → Problem → Solution → CTA em 6 cenas (18,0s), números completos da campanha, CTA "Ver as condições".
 **Result:** `video/concept.json` com a regra completa (3 meses OU R$ 300 mil) presente e sem frase-tag.
 
 ### Example 3: Inputs faltando
@@ -281,7 +283,7 @@ Para 15–20s, use **6 a 8 cenas**. Um roteiro de 4 cenas planejado para 18s sai
 - [ ] Estratégia escolhida tem fit 4Selet (não `meme_style`/`lifestyle`)
 - [ ] Schema **plano** (sem `composition`/`props`); `concept`, `cta` e `scenes[]` preenchidos
 - [ ] Tipos de cena restritos a `hook`/`problem`/`product`/`benefit`/`cta`
-- [ ] Nº de cenas calibrado pela conta real (n × 2,6s + 0,4s) para a faixa da plataforma
+- [ ] Nº de cenas calibrado pela conta real (n × 3,0s) para a faixa da plataforma
 - [ ] **Nenhuma cena assina com a frase-tag**
 - [ ] Paleta, fontes, CTA aprovado (grafia canônica) e números da Taxa Zero corretos
 - [ ] Nenhum concorrente citado; sem urgência fake

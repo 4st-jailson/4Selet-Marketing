@@ -11,7 +11,8 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { PATHS } = require("./config");
+const config = require("./config");
+const { PATHS } = config;
 const media = require("./media_tokens");
 const { hashDirectory, diffHashes } = require(path.join(PATHS.SCRIPTS_DIR, "lib", "content_hash"));
 
@@ -255,16 +256,45 @@ function umaPorSlide(nomes) {
   }
   return Array.from(porNumero.entries()).sort((a, b) => a[0] - b[0]).map((e) => e[1]);
 }
-function pickImages(dir, kind) {
+// A arte que vai ao ar depende do DESTINO, não só do que existe na pasta. Antes esta função
+// recebia o tipo da peça e o descartava: olhava slides/ e ads/feed.png e mais nada. Duas
+// consequências medidas — a peça de Story morria com "não achei imagem publicável" (a pasta
+// story/ nunca era consultada), e a peça de Mídia gerada em 4:5 + 9:16 publicava só o feed e
+// descartava o vertical em silêncio, dizendo "Publicado!".
+function pickImages(dir, kind, destino) {
+  const dest = String(destino || "feed");
+  const nomes = (sub, re) => {
+    const d = path.join(dir, sub);
+    if (!fs.existsSync(d)) return [];
+    return fs.readdirSync(d).filter((f) => re.test(f)).map((f) => path.join(d, f));
+  };
+  if (dest === "story") {
+    // Os cartões do Story, em ordem. Cada um vira uma postagem própria.
+    const cartoes = nomes("story", /^story_0*\d+\.(png|jpe?g|webp)$/i)
+      .sort((a, b) => (parseInt((a.match(/story_0*(\d+)\./i) || [])[1] || "0", 10))
+        - (parseInt((b.match(/story_0*(\d+)\./i) || [])[1] || "0", 10)));
+    if (cartoes.length) return cartoes;
+    // A peça de Mídia gera o 9:16 como ads/story.png — é o vertical dela.
+    for (const n of ["story.png", "story.jpg", "story.jpeg"]) {
+      const p = path.join(dir, "ads", n);
+      if (fs.existsSync(p)) return [p];
+    }
+    // Sem vertical próprio, vale a arte da peça: o Instagram encaixa a 4:5 no Story.
+    // É uma escolha da pessoa (ela pediu Story), não um palpite do painel.
+  }
   const slidesDir = path.join(dir, "slides");
   if (fs.existsSync(slidesDir)) {
     const slides = umaPorSlide(fs.readdirSync(slidesDir)
       .filter((f) => /^slide_0*\d+\.(png|jpe?g|webp)$/i.test(f)))
       .map((f) => path.join(slidesDir, f));
+    // No Story não existe carrossel: cada cartão é uma postagem. Mandar os 5 slides como
+    // 5 stories seguidos é o que a pessoa espera de "postar este carrossel no story".
     if (slides.length) return slides;
   }
   const ads = path.join(dir, "ads");
-  for (const name of ["feed.png", "feed.jpg", "feed.jpeg", "ad.png", "ad.jpg", "ad.jpeg"]) {
+  // square.png (1:1) entrou na lista: é formato de feed válido, e a peça de Mídia gerada só em
+  // 1:1 morria com "não achei imagem publicável" por não estar aqui.
+  for (const name of ["feed.png", "feed.jpg", "feed.jpeg", "ad.png", "ad.jpg", "ad.jpeg", "square.png", "square.jpg"]) {
     const p = path.join(ads, name);
     if (fs.existsSync(p)) return [p];
   }
@@ -281,6 +311,31 @@ async function publishImage(igUserId, token, imageUrl, caption) {
   const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: c.body.id }, token, "publicar a imagem");
   if (!p.ok || !p.body.id) throw gerr("publicar a imagem", p);
   return { post_id: p.body.id, creation_id: c.body.id };
+}
+// STORY. Não existe carrossel de story: cada cartão é uma postagem própria, e é assim que o
+// aplicativo funciona também. Publica em ordem e devolve todos os ids — se o terceiro falhar,
+// os dois primeiros JÁ ESTÃO no ar, e quem chamou precisa saber disso para não mandar de novo.
+async function publishStories(igUserId, token, imageUrls) {
+  const feitos = [];
+  for (let i = 0; i < imageUrls.length; i++) {
+    try {
+      const c = await graphPost("/" + igUserId + "/media",
+        { image_url: imageUrls[i], media_type: "STORIES" }, token, "preparar o cartão " + (i + 1) + " do story");
+      if (!c.ok || !c.body.id) throw gerr("criar o cartão " + (i + 1) + " do story", c);
+      const p = await graphPost("/" + igUserId + "/media_publish",
+        { creation_id: c.body.id }, token, "publicar o cartão " + (i + 1) + " do story");
+      if (!p.ok || !p.body.id) throw gerr("publicar o cartão " + (i + 1) + " do story", p);
+      feitos.push(p.body.id);
+    } catch (e) {
+      if (!feitos.length) throw e;   // nada saiu: o erro sobe limpo
+      // Parcial: dizer QUANTOS foram é o que evita a pessoa republicar tudo e duplicar o story.
+      const err = new Error("Publiquei " + feitos.length + " de " + imageUrls.length
+        + " cartões do story e o seguinte falhou: " + e.message
+        + " Os que já saíram estão no ar — poste só os que faltam, pelo celular.");
+      err.code = "E_STORY_PARCIAL"; err.publicados = feitos; throw err;
+    }
+  }
+  return { post_id: feitos[0], cartoes: feitos };
 }
 async function publishCarousel(igUserId, token, imageUrls, caption) {
   const children = [];
@@ -345,32 +400,66 @@ function connectionState() {
 async function publishTask(folder, opts) {
   opts = opts || {};
   const gate = assertApproved(folder); // lança se não estiver aprovada/íntegra
-  const images = pickImages(gate.dir, opts.kind);
-  if (!images.length) { const e = new Error("Não achei imagem publicável nesta peça."); e.code = "E_NO_IMAGE"; throw e; }
-  const caption = (opts.caption != null ? String(opts.caption) : readCaption(gate.dir));
+  // O DESTINO é quem manda: ele decide a arte que vai ao ar e como a Meta é chamada. Sem ele,
+  // o painel decidia por "quantos arquivos achei", e todo post saía no feed.
+  const destino = config.DESTINO_IDS.indexOf(String(opts.destino || "")) >= 0
+    ? String(opts.destino) : config.destinoPadrao(opts.kind);
+  if (!config.publicaSozinho(destino, opts.kind)) {
+    const d = config.destinoById(destino);
+    const nome = (d && d.label) || destino;
+    // DOIS motivos diferentes para a mesma recusa, e culpar o errado confunde:
+    //   (a) o destino existe mas é manual (Reels): o painel não sabe publicar ali;
+    //   (b) o destino é automático, mas não aceita ESTE tipo de peça (um Story 9:16 não é
+    //       post de feed). Aqui o problema é a combinação, não o painel.
+    const manual = !d || d.modo !== "auto";
+    const e = manual
+      ? new Error("O painel não publica " + nome + " sozinho — poste pelo celular e use “Já publiquei esta peça por fora — só registrar”.")
+      : new Error("Uma peça de " + (config.KIND_LABELS[String(opts.kind || "")] || opts.kind || "conteúdo")
+        + " não vai para o " + nome + ". Escolha outro destino nesta janela.");
+    e.code = manual ? "E_DESTINO_MANUAL" : "E_DESTINO_INCOMPATIVEL"; throw e;
+  }
+  const images = pickImages(gate.dir, opts.kind, destino);
+  if (!images.length) {
+    const e = new Error(destino === "story"
+      ? "Esta peça não tem arte vertical para o Story. Gere a arte da peça (ou, na peça de Mídia, marque o formato 9:16)."
+      : "Não achei imagem publicável nesta peça.");
+    e.code = "E_NO_IMAGE"; throw e;
+  }
+  // Story não leva legenda: o texto mora na arte. Mandar legenda ali é campo que não vai a lugar
+  // nenhum — e a tela deixou de pedir.
+  const caption = destino === "story" ? ""
+    : (opts.caption != null ? String(opts.caption) : readCaption(gate.dir));
+  const tipo = destino === "story"
+    ? (images.length > 1 ? images.length + " cartões de story" : "story")
+    : (images.length > 1 ? "carrossel" : "imagem");
   const dryRun = !!opts.dryRun || !isConfigured();
   if (dryRun) {
     return {
-      ok: true, dry_run: true,
+      ok: true, dry_run: true, destino,
       reason: isConfigured() ? "Publicação simulada (dry-run)." : "Instagram ainda não conectado — simulado.",
-      images: images.length, type: images.length > 1 ? "carrossel" : "imagem",
+      images: images.length, type: tipo,
       caption_preview: caption.slice(0, 120),
     };
   }
   const c = ig();
   const base = publicBase();
   const urls = images.map((abs) => base + "/m/" + media.mint(abs));
-  const res = images.length > 1
-    ? await publishCarousel(c.ig_user_id, c.access_token, urls, caption)
-    : await publishImage(c.ig_user_id, c.access_token, urls[0], caption);
+  const res = destino === "story"
+    ? await publishStories(c.ig_user_id, c.access_token, urls)
+    : (images.length > 1
+      ? await publishCarousel(c.ig_user_id, c.access_token, urls, caption)
+      : await publishImage(c.ig_user_id, c.access_token, urls[0], caption));
   // Busca o link público do post (pra "ver no Instagram" no histórico). Best-effort.
   let permalink = "";
   try { const pl = await graphGet("/" + res.post_id, { fields: "permalink", access_token: c.access_token }, "buscar o link do post"); if (pl.ok && pl.body && pl.body.permalink) permalink = pl.body.permalink; } catch (e) { /* segue sem link: o post ja saiu */ }
-  return { ok: true, dry_run: false, type: images.length > 1 ? "carrossel" : "imagem", post_id: res.post_id, permalink };
+  return { ok: true, dry_run: false, destino, type: tipo, post_id: res.post_id, cartoes: res.cartoes || null, permalink };
 }
 
 module.exports = {
   connectionState,
   isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved,
+  // Exportado para a bateria: é ele que decide QUAL arte vai ao ar por destino, e essa
+  // decisão precisa ser verificável sem chamar a Meta.
+  pickImages,
   inspecionaToken, tornarPermanente,   // diz o QUE o token e e ate quando vale; e deriva o da Pagina
 };

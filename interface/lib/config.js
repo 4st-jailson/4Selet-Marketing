@@ -419,9 +419,16 @@ const STORY_SAFE = {
 // Para ONDE uma publicação vai. É campo da PUBLICAÇÃO, não da peça: a mesma arte de feed pode
 // virar story, e um carrossel pode ir ao feed hoje e ter um slide reaproveitado como story amanhã.
 // `auto` = o painel publica pela Graph API; `manual` = a arte sai pronta e a pessoa posta no app.
+// `modo: "auto"` = o painel publica sozinho pela Graph API. `manual` = a pessoa posta pelo
+// celular e depois registra aqui.
+// O Story saiu de manual para AUTO: a Content Publishing API aceita `media_type=STORIES` em
+// conta Instagram Business, um cartão por vez (Story não tem carrossel — cada cartão é uma
+// postagem própria, e é assim que o aplicativo funciona também).
+// Reels continua manual: publicar vídeo exige subir o arquivo e esperar o processamento da
+// Meta, que é outro fluxo — prometer aqui seria a escolha morta de sempre.
 const DESTINOS = [
   { id: "feed", label: "Feed", modo: "auto", kinds: ["feed", "image", "carousel", "media"] },
-  { id: "story", label: "Story", modo: "manual", kinds: ["story", "feed", "image", "carousel", "media"] },
+  { id: "story", label: "Story", modo: "auto", kinds: ["story", "feed", "image", "carousel", "media"] },
   { id: "reels", label: "Reels", modo: "manual", kinds: ["video"] },
   { id: "outro", label: "Outro", modo: "manual", kinds: [] },
 ];

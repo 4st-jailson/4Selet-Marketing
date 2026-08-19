@@ -110,6 +110,18 @@ const NUMEROS_OFICIAIS = [
     re: /\bcart[ãa]o\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
 ];
 
+// Tira acento e caixa para comparar texto. O modelo escreve a frase-tag das duas formas ("e
+// Selet" e "é Selet"), e no caminho do render ela ja chegou sem acento nenhum — comparar cru
+// deixava passar metade das grafias.
+function semAcento(s) {
+  return String(s == null ? "" : s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+// A frase-tag da marca NAO assina peca (knowledge/brand_identity.md, regra dura de jul/2026, e o
+// bloco GOVERNANCE de lib/prompts.js). A regra estava escrita em tres documentos e em NENHUM
+// lugar do codigo: peca assinada com ela salvava sem erro e sem aviso — tem uma aprovada no
+// acervo com a frase, saida da propria geracao.
+const FRASE_TAG_RE = /para\s+quem\s+sabe\s+que\s+e\s+selet/;
+
 function runBrandGovernance(text, opts) {
   opts = opts || {};
   const type = opts.type || "";
@@ -162,7 +174,27 @@ function runBrandGovernance(text, opts) {
     }
   }
 
+  // 2.7) Frase-tag assinando a peca (ERRO)
+  //
+  // A excecao da regra e o BRIEF: "so entra se o brief pedir explicitamente". Quem chama passa o
+  // pedido em `opts.brief` — se a frase esta la, ela e permitida na peca. Sem brief em maos, a
+  // regra vale cheia. Hoje quem passa o brief e o pipeline (pipeline/agents.js); a rota /save do
+  // painel ainda nao passa, entao la a excecao so vale pela API (`force: true`) — falta uma linha
+  // em interface/routes/generate.js, que e de outro dono.
+  const briefPediu = FRASE_TAG_RE.test(semAcento(opts.brief));
+  if (!briefPediu && FRASE_TAG_RE.test(semAcento(text))) {
+    errors.push('assina a peca com a frase-tag "Para quem sabe que e Selet." — ela nao assina peca ' +
+      "(nao e rodape, fecho, headline nem legenda). So entra se o pedido pedir a frase.");
+  }
+
   // 3) CTAs de urgencia fake / proibidos (AVISO)
+  //
+  // Fica em AVISO DE PROPOSITO — o CLAUDE.md e que prometia bloqueio, e foi ele que se corrigiu.
+  // Motivo: estes padroes sao PEDACOS de frase, nao CTAs inteiros ("nao perca" tambem casa com
+  // "nao perca margem para a taxa"), e a tela nao oferece "salvar assim mesmo" (o `force` do
+  // /save so existe pela API). Erro duro aqui deixaria a pessoa presa reescrevendo ate o regex
+  // parar de bater, sem saida. O gate duro fica com o que e sempre errado e nao tem leitura
+  // ambigua: concorrente, emoji de hype, numero oficial contraditorio e frase-tag.
   for (const re of BANNED_CTA_PATTERNS) {
     if (re.test(String(text))) {
       warnings.push("possivel CTA proibido / urgencia fake detectado: " + re.source);

@@ -130,7 +130,9 @@ router.post("/:folder", async (req, res) => {
     publishingNow.add(folder);
   }
   try {
-    const r = await publish.publishTask(folder, { kind: b.kind, caption: b.caption, dryRun: b.dryRun });
+    // O DESTINO vem da tela. Sem ele, o painel usava o padrão do tipo — e registrava "feed"
+    // fixo no histórico, qualquer que fosse a peça.
+    const r = await publish.publishTask(folder, { kind: b.kind, destino: b.destino, caption: b.caption, dryRun: b.dryRun });
     // Só quando saiu DE VERDADE (não dry-run): marca a peça como publicada + registra no histórico.
     const warnings = [];
     if (r && r.ok && !r.dry_run) {
@@ -140,12 +142,13 @@ router.post("/:folder", async (req, res) => {
       // PRECISA saber, senão a peça continua parecendo não-publicada e alguém posta de novo.
       try { content.setPublished(folder, { by: who, post_id: r.post_id }); }
       catch (e) { console.error("[publish] post publicado mas falhou ao marcar a peça:", folder, e && e.message); warnings.push("O post foi publicado, mas não consegui marcar a peça como publicada. Marque manualmente para não publicar de novo."); }
-      try { publications.add({ folder: folder, label: (t && t.status && t.status.title) || folder, kind: r.type, destino: "feed", caption: b.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: null, by: who }); }
+      try { publications.add({ folder: folder, label: (t && t.status && t.status.title) || folder, kind: r.type, destino: r.destino || "feed", caption: b.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: null, by: who }); }
       catch (e) { console.error("[publish] post publicado mas falhou ao registrar no histórico:", folder, e && e.message); warnings.push("O post foi publicado, mas não entrou no histórico de Publicados."); }
       // Publicou agora: qualquer agendamento pendente desta peça viraria um post duplicado.
       try {
-        // A publicação pela API é sempre no feed — é o único destino que a Graph API aceita hoje.
-        const cancelled = schedule.cancelPendingFor(folder, undefined, "feed");
+        // Só os agendamentos DO MESMO destino viram duplicata: publicar no story agora não
+        // invalida um feed marcado para amanhã.
+        const cancelled = schedule.cancelPendingFor(folder, undefined, r.destino || "feed");
         if (cancelled.length) warnings.push("Cancelei " + cancelled.length + (cancelled.length === 1 ? " agendamento pendente" : " agendamentos pendentes") + " desta peça para não publicar duas vezes.");
       } catch (e) { console.error("[publish] falha ao cancelar agendamentos da peça:", folder, e && e.message); }
     }

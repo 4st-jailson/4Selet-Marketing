@@ -317,7 +317,10 @@ router.post("/", async (req, res, next) => {
       parsed.fundo = String(body.fundo);
     }
     const fotosInventadas = limpaFotosInventadas(parsed);
-    const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
+    // O brief vai junto porque uma das regras duras depende dele: a frase-tag da marca não pode
+    // assinar peça, MAS é permitida quando quem pediu a peça pediu a frase. Sem passar o brief, o
+    // gate reprovaria exatamente o caso legítimo.
+    const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type, brief: body.brief });
     const limitacoes = avisaLimitacoes(gov, parsed);
     // Ordem importa: a lista de pendências é montada ANTES do aviso de foto inventada, porque o
     // aviso agora aponta para a janela ("resolva na janela que abriu") — e só faz sentido dizer isso
@@ -418,7 +421,7 @@ router.post("/refine", async (req, res, next) => {
     });
 
     const parsed = extractJson(result.text);
-    const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type });
+    const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type, brief: body.brief });
 
     res.json({
       simulated: result.simulated,
@@ -598,7 +601,7 @@ router.post("/save", async (req, res, next) => {
     const fotosInventadasSave = limpaFotosInventadas(parsed);
 
     // Gate de governanca: bloqueia erros duros antes de gravar
-    const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || body.raw, { type: body.content_type });
+    const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || body.raw, { type: body.content_type, brief: body.brief });
     avisaFotosInventadas(gov, fotosInventadasSave);
     if (gov.errors.length && !body.force) {
       return res.status(422).json({ error: "conteudo viola regras de marca", governance: gov });
@@ -645,6 +648,13 @@ router.post("/save", async (req, res, next) => {
     // A foto entra aqui junto: no FEED ela não cabe no arquivo de conteúdo (é .txt), então o
     // render.json é o único lugar onde ela sobrevive ao salvamento.
     if (body.logo || body.watermark || body.image || body.font || body.fundo) content.setRenderPref(folder, { logo: body.logo, watermark: body.watermark, image: body.image, font: body.font, fundo: body.fundo });
+    // A manchete e o apoio que a IA escreveu PARA A ARTE do feed seguem o mesmo caminho da foto,
+    // e pelo mesmo motivo: o arquivo do feed é um .txt e não tem onde guardá-los. Sem isto o
+    // render volta a recortar a legenda no caractere 60 e a peça publicável sai com frase pela
+    // metade — que é justamente o defeito que os campos novos vieram resolver.
+    if (parsed && (parsed.headline || parsed.subtext)) {
+      content.setRenderPref(folder, { dados: { headline: parsed.headline, subtext: parsed.subtext } });
+    }
 
     // 2d) grava o pilar de conteudo (eixo tematico) escolhido no brief.
     // Validado na taxonomia fechada; pilar invalido/ausente e ignorado.

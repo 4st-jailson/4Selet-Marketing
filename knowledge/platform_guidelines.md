@@ -1,11 +1,13 @@
 # **Platform Guidelines: 4Selet**
 
-*Versão 1.2 · Julho/2026*
+*Versão 1.3 · Agosto/2026*
 
 > **Propósito:** Garantir que todo conteúdo seja **corretamente formatado e estilizado por plataforma** antes de publicar. Referenciar **antes de finalizar** qualquer post, vídeo ou caption. Cobre specs, ajustes de tom e regras de formatação para cada plataforma ativa. Sempre usar **junto** ao `brand_identity.md` e `product_campaign.md`.
 
 > **Atenção — este arquivo entra literalmente no prompt de produção.** O painel injeta este documento no system prompt de cada geração (`interface/lib/knowledge.js` → `interface/lib/prompts.js`). Spec errada aqui vira instrução errada para a IA.
 
+> **O que mudou na v1.3 (Agosto/2026):** o tipo **Story Instagram** (`instagram_story`) passou a existir neste documento — ele já era gerado e renderizado pelo painel, mas nenhum knowledge file o descrevia, então um agente que lesse só estes documentos nunca proporia o formato. Entram: a linha do Story na tabela de specs, a **seção 2.7** com a zona segura real (250 px em cima, 250 px embaixo, 96 px nas laterais, faixa do sticker) e a matriz de formatos separando Story de Reel.
+>
 > **O que mudou na v1.2 (Julho/2026):** specs do Instagram corrigidas (feed é **4:5**, o quadrado 1:1 é a peça de anúncio); nova seção **2.6 — 4Selet na Mídia**; matriz de formatos completa (4:5 · 1:1 · 9:16 · 16:9) substituindo "feed/vertical dimensions"; margem segura corrigida para a faixa real dos templates (88–104px); CTA passou a ser **condicional** (padrão: sem CTA); mix de hashtags agora acompanha o **pilar de conteúdo**; coluna "onde se produz" na visão geral.
 
 > **O que veio da v1.1:** ajuste editorial na regra de tom do Threads/X (auto-depreciação explicitamente vetada).
@@ -16,14 +18,14 @@
 
 | Plataforma | Tipo de Conteúdo | Tom Primário | Hashtags | Onde se produz hoje |
 | ----- | ----- | ----- | ----- | ----- |
-| **Instagram** | Feed 4:5, Carrossel, Imagem/Anúncio 1:1, **4Selet na Mídia**, Stories, Reels | Editorial, sóbrio, premium | Obrigatórias (3–5) | **Painel** (5 tipos) · publicação real de feed e carrossel |
+| **Instagram** | Feed 4:5, Carrossel, **Story**, Imagem/Anúncio 1:1, **4Selet na Mídia**, Reels | Editorial, sóbrio, premium | Obrigatórias (3–5) · Story não tem legenda | **Painel** (6 tipos) · publicação real de feed, carrossel **e Story**; Reel sai pronto para postar no aplicativo |
 | **Threads / X** | Short text posts | Provocativo controlado, com dado | Opcional (0–1) | **Painel** (`threads_post`) · publicação manual |
 | **LinkedIn** | Posts editoriais, vídeos | Editorial premium, autoridade | Opcional (3–5) | **Painel** (`linkedin_post`) · publicação manual |
 | **YouTube** | Long & short-form video | Didático, técnico-acessível | Via tags/description | **Fora do painel** — só pela skill `copywriter-agent` (`youtube_metadata.json`); sem geração de arte e **sem publicação** |
 
 > **Pensar B2B:** o público da 4Selet é **decisor estabelecido**. LinkedIn é especialmente relevante e deve aparecer no mix de distribuição. Instagram é volumoso mas tem espaço para conteúdo sério se feito com cuidado editorial.
 
-> **Onde cada coisa é operável:** o painel (`https://mkt.4st.co`) gera 7 tipos de conteúdo e publica de verdade **apenas no feed do Instagram** (imagem única e carrossel, via Graph API). LinkedIn e Threads/X saem como texto para publicação manual. YouTube permanece como referência editorial — a Seção 4 continua válida como guia de redação, mas nada do YouTube é gerado ou publicado pelo sistema.
+> **Onde cada coisa é operável:** o painel (`https://mkt.4st.co`) gera 8 tipos de conteúdo e publica de verdade no Instagram, via Graph API, em **dois destinos**: o **feed** (imagem única e carrossel) e o **Story** (cada arte da sequência vira um Story, na ordem). Quem escolhe o destino é a janela de publicar — a peça de Story já nasce apontando para o Story, e o carrossel para o feed. **Reels o painel não publica sozinho**: a arte sai pronta, você posta pelo aplicativo e depois marca a peça como publicada. LinkedIn e Threads/X saem como texto para publicação manual. YouTube permanece como referência editorial — a Seção 4 continua válida como guia de redação, mas nada do YouTube é gerado ou publicado pelo sistema.
 
 ---
 
@@ -37,7 +39,8 @@
 | **Carrossel** — `instagram_carousel` | 1080 × 1350 px | 4:5 | `slides/slide_N.png` |
 | **Imagem / Anúncio (quadrado)** — `ad_creative` | 1080 × 1080 px | 1:1 | `ads/ad.png` |
 | **4Selet na Mídia** — `media_mention` | 4 formatos (ver 2.6) | 4:5 · 1:1 · 9:16 · 16:9 | `ads/feed.png`, `square.png`, `story.png`, `media_16x9.png` |
-| **Story / Reel** | 1080 × 1920 px | 9:16 | vídeo: `video/video.mp4` |
+| **Story Instagram** — `instagram_story` | 1080 × 1920 px | 9:16 | `story/story_N.png` (ver 2.7) |
+| **Reel / vídeo** — `video_idea` | 1080 × 1920 px | 9:16 | `video/video.mp4` |
 
 > **4:5 é o formato-padrão publicável no feed.** O quadrado 1:1 é o criativo estático de anúncio (tipo "Imagem / Anúncio"), não o post de feed. Essa distinção vale para toda a composição: headline, hierarquia e quebra de linha são pensadas para retrato, não para quadrado.
 
@@ -96,7 +99,7 @@ Solicitar convite no link da bio. →
 ### **Content Notes**
 
 * Screenshots da plataforma sempre com **dados mascarados** (e-mail `c••••@email.com`, código `pur_XXX•••••XXX`)
-* Para Stories: manter texto na **zona segura central** (evitar top/bottom 250px)
+* Para Stories: manter texto na **zona segura central** — as medidas exatas estão em 2.7
 * O **símbolo "4"** (do logo) pode ser usado como elemento decorativo sutil em opacidade reduzida (10–15%)
 * Mockups de laptop mostrando a plataforma em uso real são bem-vindos — sempre com UI atualizada e dados fictícios
 
@@ -125,6 +128,33 @@ Padrão marcado no painel: **4:5 + 16:9**.
 **Composição em paisagem (16:9):** o layout muda de empilhado para lado a lado — dispositivo de um lado, texto e marca do outro. Mantenha a mesma margem segura (88–104px), a hierarquia (veículo → título → marca) e o logo no canto oposto ao dispositivo. Não é o mesmo layout do 4:5 esticado.
 
 **Regras de conteúdo:** tom sóbrio de reconhecimento externo, **proibido inventar trecho, citação ou número da matéria**, veículo nomeado com exatidão, CTA suave ou nenhum. Hashtags: `#4Selet` + `#NaMidia` + 1 a 3 complementares, sem `#TaxaZero`. Detalhe completo em `brand_identity.md` → "4Selet na Mídia".
+
+### **2.7 — Story Instagram (`instagram_story`)**
+
+Tipo de peça nativo do painel: uma **sequência de 3 a 7 cartões verticais 1080 × 1920**, gerados em `story/story_N.png`. **Story não é feed encolhido nem carrossel na vertical** — cada cartão é visto por cerca de 5 segundos.
+
+**Story não tem legenda.** Todo o texto mora na arte; não existe arquivo de caption para esse tipo.
+
+**Zona segura (o aplicativo cobre parte da arte):**
+
+| Faixa | Medida | O que o app coloca ali |
+| ----- | ----- | ----- |
+| Topo | 250 px | foto e nome do perfil, horário, o "x" |
+| Rodapé | 250 px | caixa "Enviar mensagem" e ícones |
+| Laterais | 96 px | margem de leitura |
+| Faixa do sticker | 888 × 320 px, a 1580 px do topo | espaço reservado para a enquete/pergunta que a pessoa cola no app |
+
+Uma pílula de chamada só continua clicável até cerca de **340 px** acima da base. Essas medidas são as mesmas que o renderizador aplica (`STORY_SAFE` em `interface/lib/config.js`) — o desenho já reserva as faixas, mas **não escreva texto pensando em ocupar a tela toda**.
+
+**Regras de composição:**
+
+* **Uma ideia por cartão.** Frase curta e forte; nada de parágrafo.
+* Intercale **1 cartão claro** (`theme: "light"`) no meio dos escuros — é o recurso de respiro da marca.
+* Layouts disponíveis: `cover`, `text`, `number`, `quote`, `poll`, `photo`, `link`. O layout nasce do dado: um número vira `number`; frase de terceiro vira `quote`; pergunta ao público vira `poll` (a arte **reserva** o espaço e a enquete é colada no app).
+* O **último cartão chama a ação** (`link`), com um CTA aprovado.
+* Sequência pode ser marcada com um **destaque fixo do perfil**: `quem_somos`, `nosso_dna`, `diferenciais` ou nenhum. Isso é rótulo operacional para quem publica — **não existe endpoint de Destaques na Graph API**.
+
+**Publicação:** manual. A Graph API não publica Stories; a arte sai pronta e a pessoa posta pelo aplicativo.
 
 ---
 
@@ -293,7 +323,7 @@ Por isso a Taxa Zero da 4Selet não é só sobre 0%. É sobre dar ao produtor 3 
 | ----- | ----- | ----- | ----- | ----- |
 | **4:5 — 1080×1350** | **Publicável no feed** (post principal, carrossel, 4Selet na Mídia) | Anexo opcional | N/A | Aceito no post |
 | **1:1 — 1080×1080** | Imagem/Anúncio; grade | Anexo opcional | N/A | 1200×1200 no post |
-| **9:16 — 1080×1920** | Story / Reel | N/A | Shorts | N/A |
+| **9:16 — 1080×1920** | Story (`instagram_story`, publicação manual) · Reel/vídeo | N/A | Shorts | N/A |
 | **16:9 — 1920×1080** | **Não publicável no feed** — ativo de site/apresentação (4Selet na Mídia) | N/A | Vídeo e thumbnail (1280×720) | Vídeo |
 
 ### Redação e formatação
@@ -345,10 +375,10 @@ Quando uma campanha tem múltiplos formatos prontos, **ordem sugerida de publica
 
 | Agent | Seções-chave a referenciar |
 | ----- | ----- |
-| **Ad Creative Designer** | Specs por plataforma · Design Rules · Carrossel rules · **2.6 4Selet na Mídia** · Matriz de formatos |
+| **Ad Creative Designer** | Specs por plataforma · Design Rules · Carrossel rules · **2.6 4Selet na Mídia** · **2.7 Story Instagram** · Matriz de formatos |
 | **Copywriter Agent** | Caption Guidelines (todas) · Hashtags · Tom por plataforma · Estrutura de post LinkedIn · **2.6 4Selet na Mídia** |
 | **Distribution Agent** | Matriz de formatos (o que é publicável) · Sequenciamento de Distribuição · CTAs por plataforma |
 
 ---
 
-*Última atualização: Julho 2026 (v1.2 — auditoria dos agentes) · Mantido por: Marketing 4Selet · Knowledge file consumido pelo painel web (injetado no prompt de geração) e pelos agentes Ad Creative, Copywriter e Distribution*
+*Última atualização: Agosto 2026 (v1.3 — Story Instagram) · Mantido por: Marketing 4Selet · Knowledge file consumido pelo painel web (injetado no prompt de geração) e pelos agentes Ad Creative, Copywriter e Distribution*

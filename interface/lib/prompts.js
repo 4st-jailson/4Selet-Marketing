@@ -24,6 +24,14 @@ const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 const SCHEMAS = {
   instagram_caption: `{
   "body": "texto da caption (hook factual com numero -> beneficio -> CTA)",
+  "headline": "a frase que vai ESCRITA NA ARTE, ate 60 caracteres — frase COMPLETA, com comeco e fim",
+  "subtext": "apoio da ARTE, ate 150 caracteres — tambem frase COMPLETA",
+  // A ARTE nao e a legenda. Ate hoje a peca de feed nao tinha campo proprio e o desenho recortava a
+  // primeira linha da legenda em 60 caracteres: saiu publicado "Cada ponto percentual de aprovacao
+  // no cartao que voce perde..." — uma frase pela metade, com reticencias, na imagem do Instagram.
+  // Escreva "headline" e "subtext" pensando em quem so VE a arte enquanto rola o feed: curto,
+  // fechado, sem depender do que vem depois. Nada de cortar no meio nem terminar em reticencias.
+  // Se nao couber no limite, reescreva mais curto — nunca deixe a frase pela metade.
   "hashtags": ["#4Selet", "#TaxaZero", "..."],  // ${HASHTAG_RULES.min}-${HASHTAG_RULES.max} hashtags, incluir #4Selet
   "cta": "CTA aprovado",
   "notes": "1-2 frases: quais regras de marca/numeros voce ancorou"
@@ -33,7 +41,7 @@ const SCHEMAS = {
   "slides": [
     { "title": "titulo curto (use ==palavra== p/ realce azul sublinhado e ::palavra:: p/ marca-texto de fundo azul; os dois valem tambem no body)", "body": "texto de apoio (opcional)", "layout": "cover|stat_grid|list|text|flow|cta|device|numero|palavra|serie|citacao|comparacao|medidor|mapa|dialogo (opcional — inferido pela posicao/conteudo se ausente; a lista e sugestao, nao cerca)", "image": "/uploads/... — foto do acervo. Vale na capa E em qualquer slide de conteudo. ATENCAO: em layout que NAO seja 'device' ela entra como ATMOSFERA (fundo atras do texto, com veu de leitura por cima e recorte que corta as bordas); NAO serve para print/captura que precise ser lido. Print vai no layout 'device'.",
       "device": "notebook|janela|celular|tablet — SO no layout 'device': desenha a imagem DENTRO do aparelho, reta e legivel, sem veu por cima. Use quando o pedido falar em print, captura de tela, dashboard, ou 'dentro de um notebook/celular/janela'. Exige uma imagem REAL no campo image; sem ela o slide vira texto.",
-      "url": "endereco mostrado na barra do navegador — SO no layout 'device' com device 'janela'", "titleOffsetY": "numero, SO na capa: desloca o titulo N px na vertical (negativo sobe, ex.: -50)", "titleOffsetX": "numero, SO capa: desloca o titulo N px na horizontal", "titleScale": "numero, SO capa: escala do titulo (1 = normal, 1.3 = 30% maior)", "theme": "dark|light — vale em QUALQUER layout: light = editorial claro (fundo Cloud, texto escuro, marca d'agua) — use p/ intercalar 1-2 slides claros no meio dos escuros e dar variedade/respiro", "watermark": "marca d'agua do slide: string (palavra) OU objeto {text, style} — style: word|outline|symbol|none (padrao word 'SELET')", "items": ["item de lista"], "stats": [{ "value": "95%", "label": "rotulo" }], "orient": "row (SO no layout flow: icones em linha + setas)", "tone": "muted|accent (SO no flow: cinza+alerta x azul+escudo)", "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }], "note": "frase da caixa de callout ao pe do flow (opcional)",
+      "url": "endereco mostrado na barra do navegador — SO no layout 'device' com device 'janela'", "titleOffsetY": "numero, SO na capa: desloca o titulo N px na vertical (negativo sobe, ex.: -50)", "titleOffsetX": "numero, SO capa: desloca o titulo N px na horizontal", "titleScale": "numero, SO capa: escala do titulo (1 = normal, 1.3 = 30% maior)", "theme": "dark|light — vale em QUALQUER layout: light = editorial claro (fundo Cloud, texto escuro, marca d'agua) — use p/ intercalar 1-2 slides claros no meio dos escuros e dar variedade/respiro", "watermark": "marca d'agua do slide: string (palavra) OU objeto {text, style} — style: word|outline|symbol|none (padrao word 'SELET')", "items": ["item de lista"], "stats": [{ "value": "95%", "label": "rotulo" }], "orient": "row (SO no layout flow: icones em linha + setas)", "tone": "neutro|aviso|accent — SO no flow, e o TOM da caixa de nota: 'neutro' (padrao, so o texto, sem icone), 'aviso' desenha o TRIANGULO DE ALERTA (use so quando a frase for de fato uma advertencia — risco, perda, erro comum), 'accent' desenha o escudo azul de garantia. Convite, instrucao e observacao sao NEUTROS: triangulo de perigo num convite muda o sentido da peca.", "flow": [{ "label": "ROTULO CURTO", "sub": "detalhe opcional", "icon": "cart|bank|person|shield|alert|lock|wallet|check|money|clock", "mark": true }], "note": "frase da caixa de callout ao pe do flow (opcional). Sai NEUTRA, sem icone, a menos que voce declare o tone acima.",
       "stats com UM item so": "quando houver UM numero e ele for o assunto do slide, mande stats com UMA entrada: vira NUMERO GIGANTE. Dois a quatro viram grade.",
       "word": "UMA palavra (ate 16 caracteres) quando o slide inteiro e sobre um conceito: ela ocupa o slide atras do texto. Ex.: Simplificar, Confianca, Friccao.",
       "serie": { "n": 2, "total": 5, "rotulo": "PRINCIPIO" },
@@ -507,9 +515,14 @@ function simulate(req) {
   const p = (req.pillar && req.pillar !== "taxa_zero") ? PILLAR_SIM[req.pillar] : null;
   switch (req.content_type) {
     case "instagram_caption":
-      if (p) return JSON.stringify({ body: p.caption, hashtags: p.hashtags, cta: p.cta, notes: p.notes + tag }, null, 2);
+      // headline/subtext existem tambem aqui: sao o texto da ARTE, e sem eles o simulado voltaria a
+      // exercitar so o caminho antigo (recortar a legenda), que e justamente o que produzia frase
+      // pela metade na imagem publicada.
+      if (p) return JSON.stringify({ body: p.caption, headline: p.headline, subtext: p.subtext, hashtags: p.hashtags, cta: p.cta, notes: p.notes + tag }, null, 2);
       return JSON.stringify({
         body: offer + ". R$ 1,99 por transacao. PIX em D+10.\n\nA 4Selet abriu um corredor para produtores estabelecidos migrarem sem perder margem. Acesso por convite. →",
+        headline: "Zero taxa por tres meses",
+        subtext: "R$ 1,99 fixo por transacao e PIX em D+10, para quem ja opera com volume.",
         hashtags: ["#4Selet", "#TaxaZero", "#PlataformaDePagamentos", "#ProdutorDigital"],
         cta: "Solicitar convite",
         notes: "Ancorado em Taxa Zero + exclusividade por convite." + tag,

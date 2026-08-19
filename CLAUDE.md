@@ -38,6 +38,7 @@ Fonte de verdade: `interface/lib/config.js`. **É por aqui que a operação pens
 |---|---|---|---|
 | `instagram_caption` | Feed Instagram | `copy/instagram_caption.txt` | `ads/feed.png` (1080×1350) |
 | `instagram_carousel` | Carrossel | `copy/instagram_carousel.json` | `slides/slide_N.png` |
+| `instagram_story` | **Story Instagram** | `copy/instagram_story.json` | `story/story_N.png` (1080×1920) |
 | `ad_creative` | Imagem / Anúncio | `ads/concept.json` | `ads/ad.png` (1080×1080) |
 | `media_mention` | **4Selet na Mídia** | `copy/instagram_caption.txt` | `ads/{feed,square,story,media_16x9}.png` |
 | `video_idea` | Vídeo (short-form) | `video/concept.json` | `video/video.mp4` (9:16) |
@@ -45,6 +46,8 @@ Fonte de verdade: `interface/lib/config.js`. **É por aqui que a operação pens
 | `threads_post` | Threads/X | `copy/threads_post.txt` | — |
 
 **6 pilares de conteúdo** (eixo temático de toda peça, distinto das 5 colunas estratégicas da marca): `taxa_zero`, `educacional`, `curiosidade_mercado`, `prova_plataforma`, `novidade`, `motivacional`. Regra dura injetada no prompt: *"NEM toda peça é sobre Taxa Zero."*
+
+**"Story Instagram"** (`instagram_story`) é a sequência de **3 a 7 cartões verticais 1080×1920**, com as faixas que o aplicativo do Instagram cobre já reservadas (`STORY_SAFE` em `interface/lib/config.js`: 250px em cima, 250px embaixo, 96px nas laterais). **Story não tem legenda** — o texto mora na arte. Renderizado por `renderStory`; a publicação é **manual** (não há endpoint de Stories na Graph API).
 
 **"4Selet na Mídia"** é o tipo para aparição na imprensa: o print da matéria montado num de **10 modelos** de dispositivo/cena (`hand_tablet`, `foto_real`, `foto_mesa`, `foto_maos_mesa`, `celular`, `navegador`, `citacao`, `split`, `selo`, `camadas`), em até 4 formatos. Renderizado por `renderMedia`/`tplMedia` a partir de `status.media`.
 
@@ -76,7 +79,7 @@ Responsabilidades:
 - Rodar o job `preview_generator` ao fim (gera `preview.html` e promove `draft → in_review`)
 - Reportar a conclusão apontando `distribution/plan.md` e `pipeline_run.json`
 
-> ⚠️ **`media_mention` (4Selet na Mídia) NÃO está na lista default do pipeline** — para gerar peça de imprensa, passe o tipo explicitamente em `content_types`. E **`dry_run` não tem efeito** no executável: para não renderizar, use `--no-render`.
+> ⚠️ **`media_mention` (4Selet na Mídia) NÃO está na lista default do pipeline** — ele depende de um print da matéria que alguém precisa enviar, então sem esse insumo a peça sairia vazia; para gerar uma, passe o tipo explicitamente em `content_types`. Os demais **7 tipos** entram por padrão (a lista é derivada de `CONTENT_TYPES` em `pipeline/agents.js`, e não mais copiada à mão — era essa cópia que deixava Story e Mídia de fora sem avisar). E **`dry_run` não tem efeito** no executável: para não renderizar, use `--no-render`.
 
 ### Comandos do Pipeline
 
@@ -162,8 +165,9 @@ Output Típico (salvo em `outputs/<task_name>_<date>/video/`):
 - **`concept.json`** — o arquivo canônico, com schema **plano** (`concept`, `hook`, `emotional_arc`, `visual_style`, `scenes[]`, `cta`, `notes`). É o que o painel e o pipeline leem.
 - `scenes.json` — **arquivo de SAÍDA**, gerado pelo render como props do Remotion. Não escrever à mão.
 - `video.mp4` — render da composition **`BrandStory`** (`src/BrandStory.tsx`; `AdVideo` é estática de referência), sempre **1080×1920 (9:16)**.
-- Na tela aparecem só `scenes[].type` (eyebrow), `scenes[].text` (headline) e o subtexto. `concept`, `cta` e os demais campos são metadados. Duração real = nº de cenas × 2,6s + 0,4s.
-- ⚠️ Bug aberto: o card final do `BrandStory` estampa a frase-tag fixa em vez de usar `props.cta` — contraria a regra dura de marca.
+- Na tela aparecem `scenes[].type` (eyebrow), `scenes[].text` (headline), o subtexto e — no card final — o **`cta`**, que vira a pílula azul (com `cta` vazio, nenhuma pílula aparece). `concept`, `hook`, `emotional_arc` e `visual_style` são metadados. Duração real = **nº de cenas × 3,0s** (90 frames por cena, sem sobreposição).
+- ✅ Corrigido (ago/2026): o card final não carimba mais a frase-tag — usa `props.cta`. As cenas de exemplo do `src/Root.tsx` (o que o Remotion Studio abre e o CLI usa sem `--props`) fecham com *"Acesso por convite."*.
+- ⚠️ Aberto: pelo painel, o adaptador de props troca `cta` vazio por `"Conhecer a plataforma"` (`renderVideo` em `interface/lib/render.js`) — a peça sai com uma chamada que a IA não escreveu.
 - Schema detalhado e regras: `skills/video-ad-specialist/SKILL.md` (fonte de verdade).
 
 ---
@@ -187,7 +191,7 @@ Output Típico (salvo em `outputs/<task_name>_<date>/copy/`):
 - `linkedin_post.txt` — editorial premium (1.200–1.500 chars) com tese, dados e CTA suave
 - `youtube_metadata.json` — **legado**: nenhum tipo do painel ou do pipeline gera isso, e não há publicação no YouTube
 
-> No painel, **uma peça = um tipo = um arquivo** (não existe pacote `copy.json`). O texto passa por um gate de governança em runtime que **bloqueia a gravação com HTTP 422** se violar regra de marca (emoji banido, concorrente, CTA proibido).
+> No painel, **uma peça = um tipo = um arquivo** (não existe pacote `copy.json`). O texto passa por um gate de governança em runtime (`runBrandGovernance`, `interface/lib/validation.js`) que **bloqueia a gravação com HTTP 422** quando encontra: **concorrente citado**, **emoji banido**, **número oficial da campanha contraditório** ou a **frase-tag assinando a peça** (esta última só é liberada quando o próprio brief pede a frase). **CTA de urgência fake é AVISO, não bloqueio** — os padrões são pedaços de frase ("não perca" casa com "não perca margem") e a tela não oferece "salvar assim mesmo", então erro duro ali prenderia quem escreveu copy legítima.
 
 ---
 
@@ -336,7 +340,7 @@ Define:
 - regra de fotografia atualizada: **foto de banco (Pexels) é permitida** desde que tratada na marca e usada como fundo
 - o **brand governance checklist** (7 perguntas + a 8ª sobre a frase-tag) e a seção *What 4Selet Is Not* (lista fechada de concorrentes proibidos em criativos abertos)
 
-Usado por: **o painel (injetado no prompt de todos os 7 tipos)** e pelas skills dos cinco agentes
+Usado por: **o painel (injetado no prompt de todos os 8 tipos)** e pelas skills dos cinco agentes
 
 ---
 
@@ -436,6 +440,7 @@ outputs/<task_name>_<date>/
 │   ├── feed.png                  ← 1080×1350 (peça de feed · o publicável no Instagram)
 │   └── square.png · story.png · media_16x9.png   ← formatos da peça "4Selet na Mídia"
 ├── slides/slide_N.png            ← carrossel (1080×1350 por slide)
+├── story/story_N.png             ← Story Instagram (1080×1920 por cartão)
 ├── video/
 │   ├── concept.json              ← Video Ad Specialist (schema PLANO — o arquivo canônico)
 │   ├── scenes.json               ← derivado (props do Remotion, escrito pelo render)
@@ -443,6 +448,7 @@ outputs/<task_name>_<date>/
 ├── copy/
 │   ├── instagram_caption.txt     ← feed OU "4Selet na Mídia"
 │   ├── instagram_carousel.json   ← roteiro do carrossel
+│   ├── instagram_story.json      ← roteiro dos cartões do Story
 │   ├── threads_post.txt
 │   └── linkedin_post.txt
 ├── distribution/plan.md          ← Distribution (advisory; nunca publica)

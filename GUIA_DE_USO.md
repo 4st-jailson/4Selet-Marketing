@@ -332,12 +332,13 @@ A tela de Configurações reúne, em cartões, tudo que liga o painel ao mundo e
 
 ## 7. Tipos de conteúdo
 
-O painel gera sete tipos, cada um com formato e mídia final próprios:
+O painel gera oito tipos, cada um com formato e mídia final próprios:
 
 | Tipo | Plataforma | Saída | Mídia final |
 | --- | --- | --- | --- |
 | Feed Instagram | Instagram | Imagem + legenda (hashtags) | PNG 1080×1350 + texto |
 | Carrossel Instagram | Instagram | Estruturado (slides) | PNG por slide |
+| **Story Instagram** | Instagram | Estruturado (cartões verticais) | PNG 1080×1920 por cartão — **sem legenda**, o texto mora na arte |
 | Imagem / Anúncio | Instagram | Estruturado (layout) | PNG 2160×2160 (alta resolução) |
 | **4Selet na Mídia** | Instagram | Print da matéria + legenda de prova social | PNG em até 4 formatos (4:5, 1:1, 9:16, 16:9) |
 | Vídeo (short-form) | Instagram | Estruturado (cenas) | MP4 vertical 9:16 |

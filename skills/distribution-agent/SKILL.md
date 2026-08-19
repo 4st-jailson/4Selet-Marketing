@@ -40,7 +40,7 @@ Postar e uma acao **publica e dificil de reverter**. O caminho real de publicaca
 ## CRITICAL: reconciliacoes com o contrato real do projeto
 
 - **Pasta canonica:** `outputs/<task_name>_<date>/` (underscore, dir unico).
-- **Arquivos reais da peca** (o que o publisher procura): `slides/slide_N.png` (carrossel), `ads/feed.png` (4:5) e `ads/ad.png` (1:1). Tambem existem `ads/square.png`, `ads/story.png` e `ads/media_16x9.png` (peca "4Selet na Midia") e `video/video.mp4`.
+- **Arquivos reais da peca** (o que o publisher procura): `slides/slide_N.png` (carrossel), `ads/feed.png` (4:5) e `ads/ad.png` (1:1). Tambem existem `ads/square.png`, `ads/story.png` e `ads/media_16x9.png` (peca "4Selet na Midia"), `story/story_N.png` (tipo Story, publicacao manual) e `video/video.mp4`.
 - **Legenda:** `copy/instagram_caption.txt` — e o que o publisher le.
 - **Nao existem mais:** `ads/instagram_ad.png`, `video/ad.mp4`, `copy/copy.json`, `research_results.json` e `media_urls.json` no fluxo atual. Uma peca montada com esses nomes **nao e publicavel** (o `pickImages` nao acha a imagem e a chamada morre em `E_NO_IMAGE`).
 - **Formatos publicaveis no feed:** so o **4:5** (`ads/feed.png`) e os **slides** do carrossel. O 1:1 e ativo de anuncio; o 16:9 e ativo de site/apresentacao; 9:16 (story) e video **nao sao publicaveis** hoje.
@@ -84,6 +84,7 @@ Organize por tipo de peca e plataforma:
 - **Instagram — imagem unica:** legenda (`copy/instagram_caption.txt`) + a arte 4:5 (`ads/feed.png`) ou 1:1 (`ads/ad.png`).
 - **Instagram — carrossel:** legenda + `slides/slide_N.png` na ordem (o publisher monta os `is_carousel_item` e o container `CAROUSEL`).
 - **Instagram — 4Selet na Midia:** legenda de prova social + `ads/feed.png` (o 4:5 e o publicavel; os outros formatos servem a story/site).
+- **Instagram — Story (`instagram_story`):** `story/story_N.png` na ordem, **sem legenda** (o texto esta na arte) — **manual**: a Graph API nao publica Stories, entao a arte sai pronta e a pessoa posta pelo aplicativo.
 - **Threads/X:** post curto — **manual** (sem API).
 - **LinkedIn:** post editorial — **manual** (sem API).
 - **YouTube:** **nao ha publisher.** Nao existe nenhum modulo equivalente ao `lib/publish.js` para YouTube; o item permanece em modo manual/mock de forma permanente.

@@ -77,6 +77,7 @@ function salvarToken(token, quem, comoVeio) {
   // houve como reconstituir o que aconteceu: o painel guardava o token, mas não guardava a
   // história dele. Agora guarda — e a linha aparece na mesma tela de Requisições.
   registrar({
+    tipo: "conexao",
     resultado: "conexao",
     erro: null,
     titulo: cfg.token
@@ -92,6 +93,7 @@ function removerToken(quem) {
   try { fs.unlinkSync(ARQ_TOKEN); } catch (e) {}
   if (tinha) {
     registrar({
+      tipo: "conexao",
       resultado: "conexao",
       titulo: "Conexão desligada — o token foi removido",
       erro: "A partir daqui as entregas do squad são recusadas até um token novo ser cadastrado.",
@@ -104,8 +106,8 @@ function removerToken(quem) {
 // O valor NUNCA volta inteiro para o navegador — mesma regra do resto do painel.
 function estado() {
   const cfg = lerConfig();
-  const reqs = listar(1);
   const ent = contadoresDeEntrega();   // uma vez só: ele pode gravar a config na primeira leitura
+  const linhas = contarRequisicoes();
   return {
     conectado: !!cfg.token,
     token_dica: cfg.token ? ("…" + String(cfg.token).slice(-4)) : null,
@@ -113,30 +115,77 @@ function estado() {
     criado_por: cfg.criado_por || null,
     como_veio: cfg.como_veio || null,
     ultima_requisicao: cfg.ultima_requisicao || null,
-    ultimo_resultado: reqs.length ? reqs[0].resultado : null,
-    total_requisicoes: contarRequisicoes(),   // TODAS as batidas na porta, inclusive as recusadas
+    // O SELO da conexão sai daqui. Antes vinha da última linha do registro, qualquer que fosse
+    // ela: bastava uma varredura automática bater na porta depois de uma entrega perdida para o
+    // painel voltar a anunciar "recebendo artes" com 11 erros no registro. Agora o selo olha o
+    // desfecho da última ENTREGA — que é o que ele diz estar contando.
+    ultimo_resultado: ent.ultimo_resultado,
+    // "Outras batidas na porta", no cartão de Configurações, é este número menos `entregas` —
+    // e vinha acompanhado da frase "é varredura automática da internet, não exige nada de você".
+    // Enquanto as entregas PERDIDAS entravam nessa conta, cada peça que o squad achou que
+    // entregou e que nunca existiu aqui era classificada como ruído e sumia da vista. Elas agora
+    // têm número próprio (entregas_falhas) e ficam FORA daqui; o total cru continua em
+    // `total_linhas`, para quem precisar auditar a pasta.
+    total_requisicoes: Math.max(0, linhas - ent.falhas),
+    total_linhas: linhas,
     // O que interessa na tela: quantas artes chegaram de verdade, e quando foi a última.
     entregas: ent.entregas,
     ultima_entrega: ent.ultima_entrega,
+    // E quantas o squad mandou sem que virasse peça: cada uma é uma arte que existe lá e não
+    // existe aqui. Merece linha própria, não um rodapé tranquilizador.
+    entregas_falhas: ent.falhas,
+    ultima_falha_entrega: ent.ultima_falha,
   };
 }
-// Instalação que já rodava antes deste contador não tem o número na config. Nesse caso ele é
-// deduzido do registro UMA vez (com teto, para não repetir o congelamento de 10 mil linhas) e
-// guardado — das próximas vezes é só leitura.
+// Instalação que já rodava antes destes contadores não tem os números na config. Nesse caso
+// eles são deduzidos do registro UMA vez (com teto, para não repetir o congelamento de 10 mil
+// linhas) e guardados — das próximas vezes é só leitura.
 function contadoresDeEntrega() {
   const cfg = lerConfig();
-  if (cfg.entregas != null) return { entregas: Number(cfg.entregas) || 0, ultima_entrega: cfg.ultima_entrega || null };
-  let entregas = 0, ultima = null;
+  const temEntregas = cfg.entregas != null;
+  const temFalhas = cfg.entregas_falhas != null;
+  if (temEntregas && temFalhas) {
+    return {
+      entregas: Number(cfg.entregas) || 0,
+      ultima_entrega: cfg.ultima_entrega || null,
+      falhas: Number(cfg.entregas_falhas) || 0,
+      ultima_falha: cfg.ultima_falha_entrega || null,
+      ultimo_resultado: cfg.ultimo_resultado_entrega || null,
+    };
+  }
+  let entregas = 0, ultima = null, falhas = 0, ultimaFalha = null, ultimoResultado = null;
   try {
-    for (const r of listar(500)) {
-      if (r && r.peca && RESULTADO_ENTREGA.indexOf(r.resultado) >= 0) {
+    for (const r of listar(500)) {   // vem do mais novo para o mais antigo
+      if (!r || !ehLinhaDeEntrega(r)) continue;
+      if (!ultimoResultado) ultimoResultado = r.resultado || null;
+      if (r.peca && RESULTADO_ENTREGA.indexOf(r.resultado) >= 0) {
         entregas++;
         if (!ultima || String(r.recebido_em) > String(ultima)) ultima = r.recebido_em;
+      } else if (r.resultado === "erro") {
+        falhas++;
+        if (!ultimaFalha || String(r.recebido_em) > String(ultimaFalha)) ultimaFalha = r.recebido_em;
       }
     }
   } catch (e) { /* sem registro legível: começa do zero */ }
-  try { if (cfg.token) { cfg.entregas = entregas; cfg.ultima_entrega = ultima; gravarJson(ARQ_TOKEN, cfg, 0o600); } } catch (e) {}
-  return { entregas, ultima_entrega: ultima };
+  if (temEntregas) { entregas = Number(cfg.entregas) || 0; ultima = cfg.ultima_entrega || null; }
+  try {
+    if (cfg.token) {
+      cfg.entregas = entregas; cfg.ultima_entrega = ultima;
+      cfg.entregas_falhas = falhas; cfg.ultima_falha_entrega = ultimaFalha;
+      cfg.ultimo_resultado_entrega = ultimoResultado;
+      gravarJson(ARQ_TOKEN, cfg, 0o600);
+    }
+  } catch (e) {}
+  return { entregas, ultima_entrega: ultima, falhas, ultima_falha: ultimaFalha, ultimo_resultado: ultimoResultado };
+}
+// Linha de ENTREGA é a que passou pelo token e trazia (ou dizia trazer) uma peça. Fica de fora
+// a batida recusada na porta, a mudança de token e o teste de conexão — nenhum deles é arte que
+// deveria ter chegado. Linha antiga não tem o campo `tipo`; para ela vale o desfecho, que já
+// separava os dois mundos (`recusada`/`conexao`/`teste` de um lado, o resto do outro).
+const RESULTADO_NAO_ENTREGA = ["recusada", "conexao", "teste", "cancelado"];
+function ehLinhaDeEntrega(r) {
+  if (r.tipo) return r.tipo === "entrega";
+  return RESULTADO_NAO_ENTREGA.indexOf(r.resultado) === -1;
 }
 // Comparação em tempo constante. timingSafeEqual EXPLODE se os buffers tiverem tamanhos
 // diferentes — por isso comparamos o sha256 dos dois lados, que tem tamanho fixo.
@@ -152,7 +201,16 @@ function confere(recebido) {
 // De onde tirar o token da chamada. Ficam aqui (e não na rota) porque o server.js precisa
 // conferir o token ANTES de ler o corpo — um post de 40 MB não pode ser lido antes de
 // sabermos quem está batendo na porta.
+//
+// É TAMBÉM aqui que a linha da entrega nasce (ver abrirEntrega). Este é o único ponto do painel
+// que roda com a requisição inteira na mão, depois do token e antes da leitura do corpo — e
+// era justamente esse vão que engolia entrega grande demais ou cortada no meio.
 function tokenDaRequisicao(req) {
+  const t = tokenApresentado(req);
+  try { abrirEntrega(req, t); } catch (e) { /* registrar nunca pode derrubar a entrega */ }
+  return t;
+}
+function tokenApresentado(req) {
   const h = req.headers["x-painel-token"];
   if (h) return String(h).trim();
   const auth = req.headers.authorization;
@@ -201,10 +259,130 @@ function registrar(dados) {
 // depende de quanto tempo o servidor está de pé.
 const RECUSA_INTERVALO_MS = 5 * 60 * 1000;
 function registrarRecusa(ip, motivo) {
-  const ultima = listar(12).find((r) => r.resultado === "recusada");
+  const texto = String(motivo || "");
+  // O freio é por MOTIVO, e não um só para tudo. Bater sem token nenhum é varredura automática
+  // da internet (ruído); bater COM um token que não confere é a integração cadastrada errado —
+  // coisa de verdade, e o tropeço mais provável no dia de ligar a conexão. Com um freio único,
+  // uma enxurrada de varredura engolia justamente a linha que o Hugo precisava ver.
+  const ultima = listar(24).find((r) => r.resultado === "recusada" && String(r.erro || "") === texto);
   if (ultima && Date.now() - new Date(ultima.recebido_em).getTime() < RECUSA_INTERVALO_MS) return null;
-  return registrar({ origem_ip: ip, resultado: "recusada", erro: motivo, logs: [] });
+  return registrar({ origem_ip: ip, tipo: "porta", resultado: "recusada", erro: texto, logs: [] });
 }
+
+// ------------------------------- a linha nasce ANTES de o corpo ser lido
+
+// O corpo da entrega só passa a ser lido DEPOIS daqui (o parser de 80 MB do server.js é o
+// próximo da fila). Enquanto a linha só nascia lá na frente, dentro da rota, tudo que morresse
+// no parser sumia sem deixar rastro: corpo acima do teto e corpo cortado no meio devolviam erro,
+// o contador não mexia e a tela de Requisições continuava dizendo que nada tinha chegado — o
+// time do squad reenviava achando que já tinha entregado.
+//
+// Então a linha é ABERTA assim que o token confere e é FECHADA com o desfecho, inclusive quando
+// o desfecho é "não consegui nem ler". Quem fecha, no caso da leitura falhar, é o próprio fim da
+// resposta (ver vigiarDesfecho) — não há mais nenhum código nosso rodando nessa hora.
+//
+// Só abre para quem apresentou o token CERTO: varredura automática da internet continua no
+// caminho do freio (registrarRecusa), senão a tela viraria ruído.
+const CAMINHO_WEBHOOK = /^\/api\/squad\/webhook\/?$/i;
+// Enquanto o corpo não foi lido não há título nenhum para mostrar (o título vem de dentro do
+// que o squad mandou). Este provisório existe só para a linha não aparecer anônima na tela — e
+// é trocado no desfecho, senão sobra uma linha que já falhou anunciando que está "chegando".
+const TITULO_CHEGANDO = "Entrega do squad chegando";
+function abrirEntrega(req, token) {
+  if (!req || req.method !== "POST") return null;          // o GET é só sinal de vida
+  if (req.__squadLinha) return req.__squadLinha;           // a rota confere o token de novo
+  const caminho = String(req.originalUrl || req.url || "").split("?")[0];
+  if (!CAMINHO_WEBHOOK.test(caminho)) return null;
+  if (!confere(token)) return null;
+  const reg = registrar({
+    origem_ip: clientIp(req),
+    bytes: Number(req.headers["content-length"]) || 0,
+    tipo: "entrega",
+    // Nasce como "montando" de propósito: é o estado que a tela já sabe desenhar (com o
+    // recarregamento automático e o "Interrompida no meio" depois de meia hora). O campo
+    // `corpo_lido` é o que distingue "ainda estou lendo o que chegou" de "já li e estou
+    // montando a peça" — sem ele, o fim da resposta atropelaria a montagem em andamento.
+    resultado: "montando",
+    corpo_lido: false,
+    titulo: TITULO_CHEGANDO,
+    logs: [],
+  });
+  req.__squadLinha = reg;
+  vigiarDesfecho(req, reg.id);
+  return reg;
+}
+// Quem já abriu, reaproveita: a rota completa a MESMA linha em vez de criar uma segunda.
+function linhaDaRequisicao(req) { return (req && req.__squadLinha) || null; }
+
+// A resposta terminou. Se a linha continua sem o corpo lido, ninguém do nosso lado chegou a
+// tocar nela — quem respondeu foi o tratador de erro do servidor, e o motivo está no código
+// de status.
+function vigiarDesfecho(req, id) {
+  const res = req.res;   // o express põe req.res antes de qualquer rota nossa rodar
+  if (!res || typeof res.on !== "function") return;
+  let feito = false;
+  const fecha = () => {
+    if (feito) return;
+    feito = true;
+    try { encerrarSeNaoLida(id, res.statusCode, !!res.writableEnded); } catch (e) {}
+  };
+  res.on("finish", fecha);
+  res.on("close", fecha);   // conexão cortada no meio do envio não dispara "finish"
+}
+function encerrarSeNaoLida(id, status, respondeuInteiro) {
+  const reg = lerJson(caminhoReq(id), null);
+  if (!reg || reg.corpo_lido || reg.encerrada_em) return;   // a rota assumiu: não é comigo
+  const m = motivoDeLeitura(status, reg.bytes, respondeuInteiro);
+  encerrarEntrega(reg, "erro", {
+    erro: m.erro,
+    erro_code: m.code,
+    titulo: "Entrega que o painel não conseguiu ler",
+    // Sem corpo guardado não há o que reprocessar — e a tela precisa dizer ISSO, e não a
+    // desculpa genérica de "conteúdo antigo apagado para não encher o disco".
+    sem_payload_motivo: "nao_chegou_inteiro",
+  });
+  podar();   // linha aberta não passa pelo guardarPayload, que é quem costuma podar
+}
+// O motivo em português de por que a entrega não pôde nem ser lida. Os limites citados são os
+// do parser montado no server.js para esta porta.
+function motivoDeLeitura(status, bytes, respondeuInteiro) {
+  const tamanho = bytes ? " (vieram " + (bytes / 1048576).toFixed(1).replace(".", ",") + " MB)" : "";
+  if (status === 413) {
+    return {
+      code: "E_CORPO_GRANDE",
+      erro: "A entrega não coube: o corpo passou de 80 MB" + tamanho + ", que é o máximo que esta porta"
+        + " lê de uma vez. Nada foi criado. Peça ao time do squad para mandar as artes em tamanho menor"
+        + " ou dividir o post em entregas separadas.",
+    };
+  }
+  if (status === 415) {
+    return {
+      code: "E_CORPO_FORMATO",
+      erro: "A entrega veio num formato que esta porta não lê. O sistema do squad precisa enviar os dados"
+        + " como JSON. Nada foi criado.",
+    };
+  }
+  if (!respondeuInteiro) {
+    return {
+      code: "E_CORPO_INTERROMPIDO",
+      erro: "A entrega foi interrompida antes de chegar inteira — a conexão caiu no meio do envio."
+        + " Nada foi criado; peça ao time do squad para enviar de novo.",
+    };
+  }
+  if (status === 400) {
+    return {
+      code: "E_CORPO_CORTADO",
+      erro: "Os dados chegaram cortados no meio e o painel não conseguiu ler a entrega. Costuma acontecer"
+        + " quando o envio é interrompido. Nada foi criado; peça ao time do squad para enviar de novo.",
+    };
+  }
+  return {
+    code: "E_CORPO",
+    erro: "Não consegui ler o que o sistema do squad enviou (a porta respondeu " + status + "). Nada foi"
+      + " criado; peça ao time do squad para enviar de novo.",
+  };
+}
+
 // Uma ENTREGA é uma requisição que virou PEÇA. O cartão de Configurações contava todo arquivo
 // do registro — inclusive as varreduras automáticas da internet que a porta recusou. Medido em
 // produção: dizia "9 entregas recebidas" quando eram 1 entrega, 7 varreduras e 1 teste.
@@ -216,15 +394,39 @@ function atualizar(reg) {
   gravarJson(caminhoReq(reg.id), reg);
   return reg;
 }
-// A contagem vive AQUI, e não em quem grava o registro: quem sabe que uma arte chegou é o
-// caminho que cria a peça. Colocada no atualizar(), ela ficava em zero sempre que a entrega não
-// passasse pela rota HTTP — inclusive no reprocessamento pela tela de Requisições.
-function contabilizarEntrega(quando) {
+// PONTO ÚNICO de desfecho. Todo caminho que termina uma entrega (leitura impossível, pedido
+// malformado, montagem que falhou, peça criada, reprocessamento) passa por aqui — é o que
+// impede os contadores de voltarem a divergir do que a tela mostra, que foi como 10 peças
+// perdidas acabaram somadas às "batidas na porta" e chamadas de varredura automática.
+function encerrarEntrega(reg, resultado, extra) {
+  if (!reg) return null;
+  if (reg.encerrada_em) return reg;   // desfecho é um só: não conta duas vezes
+  Object.assign(reg, extra || {});
+  reg.resultado = resultado;
+  // Ninguém trocou o título provisório: a entrega morreu antes de o painel saber o que ela era.
+  if (reg.titulo === TITULO_CHEGANDO) {
+    reg.titulo = resultado === "erro" ? "Entrega que o painel não entendeu" : null;
+  }
+  reg.encerrada_em = new Date().toISOString();
+  atualizar(reg);
+  contabilizarDesfecho(reg);
+  return reg;
+}
+// Os números do cartão de Configurações. Só valem para linha de ENTREGA: teste de conexão,
+// aviso de cancelamento e batida recusada não são arte que deveria ter chegado.
+function contabilizarDesfecho(reg) {
   try {
+    if (!reg || reg.tipo !== "entrega") return;
     const cfg = lerConfig();
     if (!cfg.token) return;
-    cfg.entregas = (Number(cfg.entregas) || 0) + 1;
-    cfg.ultima_entrega = quando || new Date().toISOString();
+    cfg.ultimo_resultado_entrega = reg.resultado;
+    if (RESULTADO_ENTREGA.indexOf(reg.resultado) >= 0) {
+      cfg.entregas = (Number(cfg.entregas) || 0) + 1;
+      cfg.ultima_entrega = reg.encerrada_em;
+    } else if (reg.resultado === "erro") {
+      cfg.entregas_falhas = (Number(cfg.entregas_falhas) || 0) + 1;
+      cfg.ultima_falha_entrega = reg.encerrada_em;
+    }
     gravarJson(ARQ_TOKEN, cfg, 0o600);
   } catch (e) { /* contagem é informativa: nunca derruba a entrega */ }
 }
@@ -309,6 +511,25 @@ function podar() {
 // Por isso o recebimento é em duas etapas: a entrega é aceita e RESERVADA na hora (resposta
 // rápida), e a peça é montada em seguida. A reserva é o que faz o reenvio ser inofensivo.
 function indice() { return lerJson(ARQ_INDICE, {}) || {}; }
+// A chave da reserva. Normalmente é o post_id que o squad manda; quando ele não vem, a reserva
+// ficava sem chave nenhuma e a proteção contra reenvio simplesmente não existia — cada tentativa
+// virava mais uma peça aprovada igual à anterior. A impressão digital do conteúdo faz o papel do
+// identificador que faltou: reenvio idêntico bate na mesma chave e é reconhecido como repetido.
+function chaveDeOrigem(p) {
+  if (p && p.origem_id != null && p.origem_id !== "") return String(p.origem_id);
+  return impressaoDigital(p);
+}
+function impressaoDigital(p) {
+  const h = crypto.createHash("sha256");
+  h.update(String((p && p.evento) || "") + "\n" + String((p && p.titulo) || "") + "\n"
+    + String((p && p.legenda) || "") + "\n" + (((p && p.hashtags) || []).join(" ")) + "\n");
+  for (const c of (p && p.cards) || []) {
+    h.update("#" + c.n + "|" + (c.tipo || "") + "|");
+    if (c.buf) h.update(c.buf);
+    if (c.html) h.update(String(c.html));
+  }
+  return "sem_id:" + h.digest("hex").slice(0, 32);
+}
 function entradaDeOrigem(origemId) {
   if (origemId == null || origemId === "") return null;
   const e = indice()[String(origemId)];
@@ -605,6 +826,18 @@ async function receberAgora(payload, opcoes) {
     const carrossel = p.cards.length > 1;
     const avisos = [];
 
+    // Entrega sem `post_id` não tem como ser reconhecida num reenvio: o painel só sabe que dois
+    // envios são o mesmo post porque o identificador bate. Enquanto isso passava calado, cada
+    // reenvio criava mais uma peça idêntica em Aprovados e ninguém entendia de onde vinham as
+    // cópias. Agora o painel usa a impressão digital do conteúdo como rede de segurança E avisa,
+    // porque a rede só pega o reenvio IDÊNTICO — qualquer diferença faz nascer outra peça.
+    if (!p.origem_id) {
+      avisos.push("Esta entrega chegou sem o identificador do post (campo post_id). Para não duplicar, o painel"
+        + " guardou uma impressão digital do conteúdo — mas se o time do squad reenviar com qualquer diferença,"
+        + " nasce outra peça igual em Aprovados. Vale pedir a eles para mandar o post_id junto.");
+      log("Entrega sem post_id: a proteção contra duplicata vale só para reenvio idêntico.");
+    }
+
     for (let i = 0; i < p.cards.length; i++) {
       const c = p.cards[i];
       const n = i + 1;
@@ -709,8 +942,9 @@ async function receberAgora(payload, opcoes) {
     // cálculo das assinaturas — qualquer outro arquivo aqui derrubaria a publicação.
     if (avisos.length) { try { content.setOrigem(folder, Object.assign(content.getOrigem(folder) || {}, { avisos })); } catch (e) {} }
 
-    concluirReserva(p.origem_id, folder);
-    contabilizarEntrega();
+    // A contagem NÃO acontece mais aqui: quem fecha a linha é quem conta (encerrarEntrega).
+    // Com a contagem espalhada, o número da tela e o registro divergiam.
+    concluirReserva(op.chave || p.origem_id, folder);
     return { ok: true, peca: folder, formato: p.formato, cards: p.cards.length, avisos, resumo: p };
   } catch (e) {
     // Peça pela metade é pior que peça nenhuma: some da frente e libera o identificador.
@@ -728,13 +962,30 @@ function cancelar(origemId, motivo) {
   const entrada = entradaDeOrigem(origemId);
   const folder = entrada && entrada.folder;
   if (!folder || !content.findTask(folder)) {
-    return { ok: false, motivo: "não encontrei nenhuma peça vinda deste post por aqui", peca: null };
+    return { ok: false, motivo: "não encontrei nenhuma peça vinda deste post por aqui", peca: null, pecas: [] };
   }
-  const origem = content.getOrigem(folder) || {};
-  origem.cancelado_em = new Date().toISOString();
-  origem.cancelado_motivo = motivo || null;
-  content.setOrigem(folder, origem);
-  return { ok: true, peca: folder };
+  // Quando o squad REFAZ um post, a arte nova nasce como peça nova e guarda o endereço da
+  // anterior em `substitui`. O cancelamento marcava só a ponta da corrente: a versão antiga
+  // continuava em Aprovados, sem tarja nenhuma, e dava para publicá-la achando que estava tudo
+  // certo. Agora a marca desce a corrente inteira — todas as peças que nasceram deste post.
+  const quando = new Date().toISOString();
+  const marcadas = [];
+  const vistos = {};
+  let atual = folder;
+  while (atual && !vistos[atual]) {
+    vistos[atual] = true;
+    if (!content.findTask(atual)) break;   // peça descartada: a corrente termina aqui
+    const origem = content.getOrigem(atual) || {};
+    const anterior = origem.substitui || null;
+    origem.cancelado_em = quando;
+    origem.cancelado_motivo = motivo || null;
+    if (content.setOrigem(atual, origem)) marcadas.push(atual);
+    atual = anterior;
+  }
+  if (!marcadas.length) {
+    return { ok: false, motivo: "não consegui marcar a peça vinda deste post", peca: null, pecas: [] };
+  }
+  return { ok: true, peca: marcadas[0], pecas: marcadas };
 }
 
 // Grava a arte a partir do HTML: escreve a receita e desenha o PNG a partir DELA (não da
@@ -769,5 +1020,6 @@ module.exports = {
   registrar, registrarRecusa, atualizar, guardarPayload, lerPayload, listar, obter, podar,
   normalizar, receber, cancelar, refsExternas, dimensoesDoHtml,
   entradaDeOrigem, reservar, concluirReserva, liberarReserva,
+  linhaDaRequisicao, encerrarEntrega, chaveDeOrigem, impressaoDigital,
   EVENTOS, MAX_CARDS,
 };

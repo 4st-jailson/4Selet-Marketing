@@ -6,6 +6,13 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
+// CTAs, emojis banidos, hashtag obrigatoria e paleta saem do MESMO lugar que o painel usa.
+// Estavam copiados aqui a mao e a copia envelheceu: o checklist so conhecia 6 dos 9 CTAs
+// aprovados e ainda escrevia "Ver condicoes" (o oficial e "Ver as condicoes"), entao peca certa
+// aparecia com o aviso amarelo "Nenhum CTA aprovado detectado".
+const {
+  APPROVED_CTAS, BANNED_EMOJIS, HASHTAG_RULES, PALETTE, PALETAS_CAMPANHA, pillarById,
+} = require("../interface/lib/config");
 
 // ---- helpers inline ------------------------------------------------------
 function parseArgs(argv) {
@@ -186,9 +193,22 @@ function listFiles(dir, exts) {
   return out;
 }
 
-const adImages = listFiles(path.join(taskDir, "ads"), [".png", ".jpg", ".jpeg", ".webp"]);
+// `.bg.png` e camada de fundo que o editor guarda ao lado da arte, nao entregavel: aparecia na
+// grade duplicando cada peca (um carrossel de 7 slides virava 14 cartoes).
+const ehEntregavel = (p) => !/\.bg\.(png|jpg|jpeg|webp)$/i.test(p);
+const IMG_EXT = [".png", ".jpg", ".jpeg", ".webp"];
+const adImages = listFiles(path.join(taskDir, "ads"), IMG_EXT).filter(ehEntregavel);
+// Carrossel e o formato MAIS usado e story e o mais novo — os dois ficavam de fora da secao de
+// arte, que dizia "Sem entregaveis nesta secao" com sete slides prontos na pasta ao lado.
+const slideImages = listFiles(path.join(taskDir, "slides"), IMG_EXT).filter(ehEntregavel);
+const storyImages = listFiles(path.join(taskDir, "story"), IMG_EXT).filter(ehEntregavel);
 const adLayouts = listFiles(path.join(taskDir, "ads"), [".json"]);
 const adStyles = listFiles(path.join(taskDir, "ads"), [".css"]);
+// A ARTE de verdade mora nos .html (o PNG e so a foto dela). Sem ler estes arquivos o selo
+// "Paleta oficial + tipografia" saia verde mesmo com a peca pintada de magenta em fonte
+// proibida — ele varria concept.json e um styles.css que o fluxo atual nem gera mais.
+const artHtml = ["ads", "slides", "story"]
+  .reduce((acc, d) => acc.concat(listFiles(path.join(taskDir, d), [".html"])), []);
 const videoFiles = listFiles(path.join(taskDir, "video"), [".mp4", ".mov", ".webm"]);
 const videoStills = listFiles(path.join(taskDir, "video"), [".png", ".jpg"]);
 const copyTexts = listFiles(path.join(taskDir, "copy"), [".txt", ".md", ".json"]);
@@ -236,56 +256,149 @@ const allPublish = publishMd ? (readTextSafe(publishMd) || "") : "";
 const allText = allCopy + "\n\n" + allPublish;
 const allLayouts = adLayouts.map((p) => readTextSafe(p) || "").join("\n");
 const allStyles = adStyles.map((p) => readTextSafe(p) || "").join("\n");
-const designSurface = allLayouts + "\n" + allStyles;
+const allArtHtml = artHtml.map((p) => readTextSafe(p) || "").join("\n");
+const designSurface = allLayouts + "\n" + allStyles + "\n" + allArtHtml;
 
+// Numeros da campanha. A cobranca completa so faz sentido quando a peca E da oferta: cobrada em
+// TODA peca, ela acendia amarelo em 74 das 83 pecas com texto do acervo (89%) — e aviso que
+// acende sempre ninguem le mais. Com a regra amarrada ao pilar/assunto, cai para 12 (14%).
+// Peca de outro pilar (educacional, curiosidade de mercado, motivacional) nao tem por que citar a
+// mecanica da oferta; o que importa nela e que o numero CITADO esteja certo, e disso ja cuida o
+// gate de governanca (lib/validation.js, NUMEROS_OFICIAIS).
+const OFICIAIS_TAXA_ZERO = ["0%", "3 meses", "R$ 300 mil", "R$ 1,99", "D+10", "D+30", "95%"];
+// A peça está DECLARANDO a oferta? (peça sem pilar gravado — as do pipeline, por exemplo — ainda
+// deve ter a mecânica completa se o texto fala da campanha; o gatilho é o dado, não o rótulo.)
+const FALA_DA_CAMPANHA = /taxa zero|\b0\s*%/i;
 function ruleNumbers() {
-  const targets = ["0%", "3 meses", "R$ 300 mil", "R$ 1,99", "D+10", "D+30", "95%"];
   const lower = allText.toLowerCase();
-  const missing = [];
-  for (const t of targets) {
-    if (lower.indexOf(t.toLowerCase()) === -1) missing.push(t);
+  const pilar = status.pillar || "";
+  const presentes = OFICIAIS_TAXA_ZERO.filter((t) => lower.indexOf(t.toLowerCase()) !== -1);
+  const cobra = pilar === "taxa_zero" || (!pilar && FALA_DA_CAMPANHA.test(allText));
+  if (!cobra) {
+    const p = pillarById(pilar);
+    const nome = p ? "do pilar " + p.label : "fora do pilar Taxa Zero";
+    if (presentes.length === 0) {
+      return { status: "ok", evidence: "Peça " + nome + " — não precisa citar a mecânica da Taxa Zero." };
+    }
+    return { status: "ok", evidence: "Peça " + nome + " · números citados conferem: " + presentes.join(" · ") };
   }
+  const missing = OFICIAIS_TAXA_ZERO.filter((t) => lower.indexOf(t.toLowerCase()) === -1);
   if (missing.length === 0) {
-    return { status: "ok", evidence: "Todos presentes: " + targets.join(" · ") };
+    return { status: "ok", evidence: "Todos presentes: " + OFICIAIS_TAXA_ZERO.join(" · ") };
   }
-  return { status: "warn", evidence: "Ausentes: " + missing.join(", ") };
+  const onde = pilar === "taxa_zero" ? "Peça do pilar Campanha Taxa Zero · ausentes: " : "A peça fala da campanha · ausentes: ";
+  return { status: "warn", evidence: onde + missing.join(", ") };
 }
 function ruleCtas() {
-  const ctas = ["Solicitar convite", "Ver condições", "Falar com o time", "Conhecer a plataforma", "Migrar minha operação", "Calcular minha economia"];
-  const lower = allText.toLowerCase();
-  const found = ctas.filter((c) => lower.indexOf(c.toLowerCase()) !== -1);
-  if (found.length > 0) return { status: "ok", evidence: "Encontrados: " + found.join(", ") };
-  return { status: "warn", evidence: "Nenhum CTA aprovado detectado" };
+  // Procura tambem na ARTE: em peca de imagem e de carrossel a chamada nao esta na legenda, esta
+  // no blueprint (`ads/concept.json`) e desenhada no HTML. Olhando so a copy, peca com CTA certo
+  // na arte caia no aviso "Nenhum CTA aprovado detectado".
+  const superficie = allText + "\n" + designSurface;
+  const lower = superficie.toLowerCase();
+  const found = APPROVED_CTAS.filter((c) => lower.indexOf(c.toLowerCase()) !== -1);
+  if (found.length > 0) return { status: "ok", evidence: "Encontrados: " + [...new Set(found)].join(", ") };
+  // Sem CTA aprovado no texto: a peca DECLAROU alguma chamada? O campo `cta` do JSON e a resposta
+  // exata. Peca sem chamada nenhuma NAO e defeito — a regra vigente diz que o CTA e condicional e
+  // que o padrao e nao ter (brand_identity.md). Acender amarelo nela era o mesmo vicio do aviso
+  // dos numeros: acende quase sempre, ninguem le mais.
+  const declarados = [...superficie.matchAll(/"cta"\s*:\s*"([^"]+)"/g)]
+    .map((m) => m[1].trim()).filter(Boolean);
+  if (!declarados.length) {
+    return { status: "ok", evidence: "Peça sem chamada — o padrão da marca é CTA condicional." };
+  }
+  return { status: "warn", evidence: "Chamada fora da lista aprovada: " + [...new Set(declarados)].slice(0, 4).join(" · ") };
 }
+// Cor escrita em CSS/HTML, so nos tamanhos que existem (8, 6, 4 ou 3 digitos). O `(?<![&\w])`
+// esta ai porque `&#8595;` — a seta para baixo dos slides de fluxo — era lido como a cor "#8595"
+// e aparecia no relatorio como um roxo que ninguem tinha usado.
+const COR_RE = /(?<![&\w])#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{3})\b/g;
+// #abc -> #AABBCC · #abcd (com alfa curto) -> #AABBCC · #RRGGBBAA -> #RRGGBB. A transparencia
+// nao muda a cor da marca, e os templates escrevem muito #AFBCC94d / #07212Bf2.
+function corNormal(h) {
+  let s = h.slice(1).toUpperCase();
+  s = (s.length === 3 || s.length === 4)
+    ? s.slice(0, 3).split("").map((c) => c + c).join("")
+    : s.slice(0, 6);
+  return "#" + s;
+}
+function canais(h) {
+  return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+}
+const CORES_DA_MARCA = (() => {
+  const l = ["darker", "navy", "blue", "sky", "mist", "cloud"].map((k) => PALETTE[k].toUpperCase());
+  // As paletas de campanha sao escolha legitima na tela (o painel avisa na hora de escolher que
+  // aquilo nao e a identidade oficial) — nao podem virar apontamento aqui depois.
+  for (const p of Object.values(PALETAS_CAMPANHA)) {
+    if (p.cores) for (const c of Object.values(p.cores)) l.push(c.toUpperCase());
+  }
+  return l;
+})();
+// Tolerancia por canal. O renderizador monta as superficies CLARAS como tons de Selet Cloud
+// (#E9ECE6, #F5F4EF, #DDE1DB, #CBD2CC) — sao a mesma cor com mais luz, e sem folga cada slide
+// claro correto viraria "hex off-brand". Medido no acervo: 32 acomoda os tons de Cloud e ainda
+// separa com sobra o que e mesmo de fora (#FFD400, #885599, #996655).
+const TOLERANCIA_COR = 32;
+function ehDaMarca(hex) {
+  const a = canais(hex);
+  return CORES_DA_MARCA.some((o) => {
+    const b = canais(o);
+    return Math.abs(a[0] - b[0]) <= TOLERANCIA_COR && Math.abs(a[1] - b[1]) <= TOLERANCIA_COR &&
+      Math.abs(a[2] - b[2]) <= TOLERANCIA_COR;
+  });
+}
+// Familias permitidas (brand_identity.md): Inter no texto, JetBrains Mono nos rotulos. O resto da
+// lista sao fallbacks genericos do proprio CSS, que nao desenham nada por conta propria.
+const FONTES_DA_MARCA = [
+  "inter", "jetbrains mono", "sans-serif", "serif", "monospace", "system-ui", "ui-sans-serif", "ui-monospace",
+];
 function rulePalette() {
-  const allowed = ["#07212B", "#003554", "#006494", "#5499B5", "#AFBCC9", "#D9DCD6"];
-  const blacklist = [
-    { pat: /#fff(?![0-9a-f])/i, label: "#fff (branco puro)" },
-    { pat: /#ffffff/i, label: "#ffffff (branco puro)" },
-    { pat: /#000(?![0-9a-f])/i, label: "#000 (preto puro)" },
-    { pat: /#000000/i, label: "#000000 (preto puro)" },
-    { pat: /playfair/i, label: "Playfair (fonte off-brand)" },
-    { pat: /\bArial\b/i, label: "Arial (fonte off-brand)" },
-  ];
   const issues = [];
-  for (const b of blacklist) {
-    if (b.pat.test(designSurface)) issues.push(b.label);
+  // Branco/preto puro so contam como defeito quando pintam a SUPERFICIE da peca. A regra vigente
+  // (brand_identity.md v1.3) permite branco como TEXTO sobre Navy/Darker — e todo template de
+  // producao escreve `color:#FFFFFF` na headline. Proibir o branco em qualquer lugar tiraria o
+  // selo de "sempre verde" para "sempre vermelho", que e pior. Tambem por isso a busca olha so
+  // as regras de html/body/.card: o branco dentro do mockup (a tela do aparelho, o card do
+  // veiculo na peca de Midia) e citacao literal de um site e continua permitido.
+  for (const bloco of designSurface.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const seletor = bloco[1].trim().toLowerCase();
+    if (!/(^|,|\s)(html|body|\.card)\s*(,|$)/.test(seletor)) continue;
+    for (const d of bloco[2].matchAll(/background(?:-color|-image)?\s*:\s*([^;}]+)/gi)) {
+      for (const h of (d[1].match(COR_RE) || [])) {
+        const c = corNormal(h);
+        if (c === "#FFFFFF") issues.push("branco puro como fundo da peça (use Selet Cloud #D9DCD6)");
+        if (c === "#000000") issues.push("preto puro como fundo da peça (use Selet Darker #07212B)");
+      }
+    }
   }
-  // Hex colors fora do allowed
-  const hexes = designSurface.match(/#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b/g) || [];
-  const offBrand = [];
-  for (const h of hexes) {
-    const norm = h.toUpperCase();
-    const found = allowed.some((a) => a.toUpperCase() === norm);
-    if (!found && !["#FFF", "#FFFFFF", "#000", "#000000"].includes(norm)) offBrand.push(h);
+  const foraDaPaleta = new Set();
+  for (const h of (designSurface.match(COR_RE) || [])) {
+    const c = corNormal(h);
+    if (c === "#FFFFFF" || c === "#000000") continue; // tratados acima, por escopo
+    if (!ehDaMarca(c)) foraDaPaleta.add(c);
   }
-  const uniqueOff = [...new Set(offBrand)];
-  if (issues.length === 0 && uniqueOff.length === 0) {
-    return { status: "ok", evidence: "Paleta dentro de " + allowed.join(", ") };
+  const foraDaTipografia = new Set();
+  for (const m of designSurface.matchAll(/font-family\s*:\s*([^;}"]+)/gi)) {
+    for (const f of m[1].split(",")) {
+      const nome = f.trim().replace(/^['"]|['"]$/g, "").toLowerCase();
+      if (nome && FONTES_DA_MARCA.indexOf(nome) < 0) foraDaTipografia.add(nome);
+    }
+  }
+  if (!designSurface.trim()) {
+    return { status: "warn", evidence: "Sem arte para conferir (nenhum HTML/JSON de peça nesta task)." };
+  }
+  const achados = [...new Set(issues)];
+  if (!achados.length && !foraDaPaleta.size && !foraDaTipografia.size) {
+    // Diz QUANTAS artes foram lidas: sem isso o selo verde não distingue "arte conferida" de
+    // "não havia o que conferir" — que era exatamente o defeito antigo.
+    const onde = artHtml.length
+      ? artHtml.length + " arte(s) conferidas"
+      : "conferido só o blueprint (esta peça não tem HTML de arte)";
+    return { status: "ok", evidence: "Paleta e tipografia da marca — " + onde + "." };
   }
   const msg = [];
-  if (issues.length) msg.push("blacklist: " + issues.join(", "));
-  if (uniqueOff.length) msg.push("hexes off-brand: " + uniqueOff.slice(0, 8).join(", "));
+  if (achados.length) msg.push(achados.join(", "));
+  if (foraDaPaleta.size) msg.push("cores fora da paleta: " + [...foraDaPaleta].slice(0, 8).join(", "));
+  if (foraDaTipografia.size) msg.push("fontes fora da marca: " + [...foraDaTipografia].slice(0, 6).join(", "));
   return { status: "warn", evidence: msg.join(" | ") };
 }
 function ruleCompetitors() {
@@ -296,9 +409,8 @@ function ruleCompetitors() {
   return { status: "warn", evidence: "Citados: " + [...new Set(matches)].join(", ") };
 }
 function ruleEmoji() {
-  // Banidos sempre warn:
-  const banned = ["🔥", "⚡", "🚀", "💸", "💰", "😱"];
-  const bannedFound = banned.filter((e) => allText.indexOf(e) !== -1);
+  // Banidos sempre warn — a lista tambem vem do config (a copia local tinha 6 dos 8).
+  const bannedFound = BANNED_EMOJIS.filter((e) => allText.indexOf(e) !== -1);
   // Conta por caption (texto de cada copyTexts)
   let warnCount = 0;
   let evidence = [];
@@ -320,14 +432,22 @@ function ruleEmoji() {
 }
 function ruleHashtags() {
   const allTags = (allText.match(/#\w+/g) || []);
-  const required = "#4Selet";
+  const required = HASHTAG_RULES.mandatory;
   const banned = ["#Sucesso", "#DinheiroFacil", "#MentorDoSucesso"];
   const hasRequired = allTags.some((t) => t.toLowerCase() === required.toLowerCase());
   const bannedFound = allTags.filter((t) => banned.map((b) => b.toLowerCase()).includes(t.toLowerCase()));
   const issues = [];
   if (!hasRequired && allTags.length > 0) issues.push("falta " + required);
   if (bannedFound.length) issues.push("banidas: " + [...new Set(bannedFound)].join(", "));
-  if (allTags.length === 0) return { status: "warn", evidence: "Nenhuma hashtag detectada" };
+  if (allTags.length === 0) {
+    // Story nao tem legenda — o texto mora na arte —, entao cobrar hashtag dele e acender um
+    // amarelo que nao tem conserto. Peca de outros tipos sem hashtag continua sendo apontada.
+    const soStory = copyTexts.length > 0 && copyTexts.every((p) => /instagram_story\.json$/i.test(p));
+    if (soStory || (copyTexts.length === 0 && storyImages.length > 0)) {
+      return { status: "ok", evidence: "Story não tem legenda — não há hashtags a conferir." };
+    }
+    return { status: "warn", evidence: "Nenhuma hashtag detectada" };
+  }
   if (issues.length === 0) return { status: "ok", evidence: "Hashtags OK (" + [...new Set(allTags)].join(" ") + ")" };
   return { status: "warn", evidence: issues.join(" | ") };
 }
@@ -353,18 +473,28 @@ const STATUS_LABEL = {
 const statusBadgeMod = "status-badge--" + (status.status || "draft");
 const platforms = Array.isArray(status.platforms) ? status.platforms.join(" · ") : "—";
 
-// Section 1: Ads grid
-let adsSection = "";
-if (adImages.length === 0) {
-  adsSection = '<p class="empty">Sem entregáveis nesta seção.</p>';
-} else {
-  const cards = adImages.map((p) => {
+// Section 1: artes (imagem/feed, carrossel e story)
+// Antes so lia ads/. Carrossel e story ficavam de fora e a secao dizia "Sem entregáveis nesta
+// seção" com os slides prontos na pasta ao lado — no formato mais usado da operacao.
+function grupoDeArte(titulo, arquivos) {
+  if (!arquivos.length) return "";
+  // Ordem natural: sem isso slide_10 vem antes de slide_2 na listagem do sistema de arquivos.
+  const ordenados = arquivos.slice().sort((a, b) =>
+    path.basename(a).localeCompare(path.basename(b), "pt-BR", { numeric: true }));
+  const cards = ordenados.map((p) => {
     const rel = relAsset(p);
     const name = path.basename(p);
     return '<div class="card card--ad"><div class="thumb"><img src="' + rel + '" alt="' + escapeHtml(name) + '"/></div><div class="filename">' + escapeHtml(name) + "</div></div>";
   }).join("");
-  adsSection = '<div class="grid">' + cards + "</div>";
+  return '<h3 class="sub">' + escapeHtml(titulo) + " <span class=\"conta\">" + arquivos.length + "</span></h3>" +
+    '<div class="grid">' + cards + "</div>";
 }
+const grupos = [
+  grupoDeArte("Imagem e feed", adImages),
+  grupoDeArte("Carrossel", slideImages),
+  grupoDeArte("Story", storyImages),
+].filter(Boolean).join("");
+const adsSection = grupos || '<p class="empty">Sem entregáveis nesta seção.</p>';
 
 // Section 2: Video
 let videoSection = "";
@@ -477,8 +607,11 @@ section h2{font-weight:700;font-size:24px;color:var(--darker);margin:0 0 18px;le
 .grid--2{grid-template-columns:repeat(auto-fill,minmax(420px,1fr));}
 @media (max-width:1023px){.grid--2{grid-template-columns:1fr;}}
 .card{background:var(--bg);border-radius:12px;padding:18px;box-shadow:0 2px 12px rgba(7,33,43,.07),0 1px 3px rgba(7,33,43,.04);border:1px solid rgba(175,188,201,.4);}
-.card--ad .thumb{aspect-ratio:1/1;overflow:hidden;border-radius:8px;background:var(--navy);display:flex;align-items:center;justify-content:center;}
-.card--ad .thumb img{max-width:100%;max-height:100%;display:block;}
+.card--ad .thumb{overflow:hidden;border-radius:8px;background:var(--navy);display:flex;align-items:center;justify-content:center;min-height:200px;max-height:460px;}
+.card--ad .thumb img{max-width:100%;max-height:460px;display:block;}
+section h3.sub{font-size:14px;font-weight:600;color:var(--navy);letter-spacing:.4px;text-transform:uppercase;margin:22px 0 10px;display:flex;align-items:center;gap:8px;}
+section h3.sub:first-child{margin-top:0;}
+h3.sub .conta{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;background:var(--mist);color:var(--darker);border-radius:999px;padding:2px 8px;}
 .card .filename{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--navy);margin-top:10px;word-break:break-all;}
 .video-wrap{max-width:360px;margin:0 auto;}
 .video-wrap video{width:100%;border-radius:12px;background:#000;}
@@ -539,7 +672,7 @@ footer code{font-family:'JetBrains Mono',monospace;color:var(--sky);}
   </div>
 </header>
 <nav class="anchors">
-  <a href="#ads">Ads</a>
+  <a href="#ads">Artes</a>
   <a href="#video">Vídeo</a>
   <a href="#captions">Captions</a>
   <a href="#research">Research</a>
@@ -547,7 +680,7 @@ footer code{font-family:'JetBrains Mono',monospace;color:var(--sky);}
   <a href="#checklist">Checklist</a>
 </nav>
 <main>
-  <section id="ads"><h2>1. Ads</h2>${adsSection}</section>
+  <section id="ads"><h2>1. Artes</h2>${adsSection}</section>
   <section id="video"><h2>2. Vídeo</h2>${videoSection}</section>
   <section id="captions"><h2>3. Captions</h2>${captionsSection}</section>
   <section id="research"><h2>4. Research</h2>${researchSection}</section>

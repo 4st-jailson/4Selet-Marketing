@@ -116,7 +116,7 @@ Sao **4 templates reais** (`interface/lib/render.js`, `TEMPLATES`; validados em 
 - **CTA (opcional — padrao e sem CTA):** so quando a peca tem intencao de conversao ou o brief pede. Lista canonica de 9: *Solicitar convite · Ver as condicoes · Conhecer a plataforma · Migrar minha operacao · Calcular minha economia · Falar com o time · Acessar o material · Ler o playbook · Ver como funciona*.
 - **Badge (opcional):** pilula curta no canto superior (ex.: "TAXA ZERO", "NOVO").
 
-> **REGRA DURA — nao assine a peca com a frase-tag.** *"Para quem sabe que e Selet."* nao entra como rodape, fecho, assinatura, headline ou subtext. So se o brief pedir explicitamente. Nao existe mais rodape automatico nas artes (`DEFAULT_FOOTER = ""` em `interface/lib/render.js`).
+> **REGRA DURA — nao assine a peca com a frase-tag.** *"Para quem sabe que e Selet."* nao entra como rodape, fecho, assinatura, headline ou subtext. So se o brief pedir explicitamente. Nao existe mais rodape automatico nas artes (`DEFAULT_FOOTER = ""` em `interface/lib/render.js`), e desde agosto/2026 a regra **e verificada em codigo**: `runBrandGovernance` (`interface/lib/validation.js`) devolve erro e a gravacao volta 422.
 
 ## Step 3: Gerar o concept JSON (o blueprint)
 
@@ -237,9 +237,12 @@ Nenhum arquivo gerado fora de `outputs/`.
 | Imagem / Anuncio (`ad_creative`) | 1080×1080 | `ads/ad.png` |
 | Feed 4:5 (`instagram_caption`) | 1080×1350 | `ads/feed.png` |
 | Carrossel (`instagram_carousel`) | 1080×1350 por slide | `slides/slide_N.png` |
+| Story (`instagram_story`) | 1080×1920 por cartao | `story/story_N.png` |
 | 4Selet na Midia (`media_mention`) | 4:5 · 1:1 · 9:16 · 16:9 | `ads/{feed,square,story,media_16x9}.png` |
 
-Story 9:16 e thumbnail de YouTube **nao fazem parte do fluxo de producao** da peca estatica: nao existe tipo de conteudo de YouTube na taxonomia atual e nao ha publicacao no YouTube. Se alguem pedir, trate como peca avulsa fora do painel e diga isso.
+**Story (`instagram_story`) tem tipo proprio no painel** e nao sai daqui: a sequencia de 3 a 7 cartoes 1080×1920 e montada pelo `renderStory`, com a zona que o aplicativo cobre ja reservada (250px em cima, 250px embaixo, 96px nas laterais — `STORY_SAFE` em `interface/lib/config.js`). Regras em `platform_guidelines.md` secao 2.7. Nao entregue "um ad esticado para 9:16" no lugar dele.
+
+Thumbnail de YouTube **nao faz parte do fluxo de producao**: nao existe tipo de conteudo de YouTube na taxonomia atual e nao ha publicacao no YouTube. Se alguem pedir, trate como peca avulsa fora do painel e diga isso.
 
 ## Brand Guardrails (4Selet) — checar antes de finalizar
 

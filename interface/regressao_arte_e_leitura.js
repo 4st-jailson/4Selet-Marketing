@@ -1212,6 +1212,76 @@ function briefingLongo() {
     checa(/strictNet: true/.test(sq), "desenhando com a rede bloqueada (html de fora nao busca nada)");
   }
 
+  // ============================================================================
+  // 26. FEED OU STORY: o painel pergunta para onde a peça vai
+  // ----------------------------------------------------------------------------
+  // Antes o painel mandava TUDO para o feed e nem perguntava. A peça de Story batia em
+  // "não achei imagem publicável" DEPOIS de a pessoa confirmar a publicação de verdade.
+  // ============================================================================
+  {
+    secao("26. Feed ou Story: para onde a peça vai");
+    const cfg = require("./lib/config");
+    const pub = require("./lib/publish");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
+
+    // -- 26a. O vocabulário existe e as duas pontas leem o MESMO ---------
+    checa(Array.isArray(cfg.DESTINOS) && cfg.DESTINOS.length >= 2, "existe uma lista de destinos, uma só");
+    const story = cfg.destinoById("story"), feed = cfg.destinoById("feed"), reels = cfg.destinoById("reels");
+    checa(story && story.modo === "auto", "o painel publica no Story sozinho");
+    checa(reels && reels.modo !== "auto", "e NAO promete publicar Reels sozinho (o painel nao faz isso)");
+    checa(cfg.destinoPadrao("story") === "story", "peca de Story ja nasce apontando para o Story");
+    checa(cfg.destinoPadrao("carousel") === "feed", "e carrossel para o feed");
+    // A tela tem um espelho desta conta. Se as duas divergirem, a peça vai para
+    // um lugar que ninguem escolheu — por isso o espelho é conferido aqui.
+    const esp = app.match(/function destinoPadraoDaPeca\(kind\)\{?[\s\S]{0,300}?\n\}/);
+    checa(!!esp && /"story"/.test(esp[0]) && /"reels"/.test(esp[0]),
+      "a tela repete a mesma conta do servidor (senao a peca vai parar noutro lugar)");
+
+    // -- 26b. Cada destino pega as artes CERTAS --------------------------
+    const dTmp = path.join(require("os").tmpdir(), "reg_dest_" + Date.now());
+    fs.mkdirSync(path.join(dTmp, "story"), { recursive: true });
+    fs.mkdirSync(path.join(dTmp, "slides"), { recursive: true });
+    fs.mkdirSync(path.join(dTmp, "ads"), { recursive: true });
+    criadas.push(dTmp);
+    [["story/story_1.png"], ["story/story_2.png"], ["story/story_3.png"],
+      ["slides/slide_01.png"], ["slides/slide_02.png"], ["ads/feed.png"]].forEach(([r]) =>
+      fs.writeFileSync(path.join(dTmp, r), "x"));
+    const pStory = pub.pickImages(dTmp, "story", "story").map((f) => path.basename(f));
+    const pFeed = pub.pickImages(dTmp, "carousel", "feed").map((f) => path.basename(f));
+    checa(pStory.length === 3 && pStory[0] === "story_1.png" && pStory[2] === "story_3.png",
+      "Story leva as artes de story, NA ORDEM", pStory.join(","));
+    checa(pFeed.length === 2 && pFeed[0] === "slide_01.png",
+      "e o feed leva os slides do carrossel", pFeed.join(","));
+
+    // -- 26c. Recusa que explica o motivo certo --------------------------
+    // Sao DOIS motivos diferentes e a frase tem que separar: "o painel nao faz"
+    // e' diferente de "essa peca nao vai nesse lugar".
+    checa(cfg.publicaSozinho("story", "story") === true, "Story de peca de Story: pode");
+    checa(cfg.publicaSozinho("feed", "story") === false, "Story no feed: nao (e o painel barra antes)");
+    checa(cfg.publicaSozinho("reels", "video") === false, "Reels: o painel nao publica sozinho");
+    const pubSrc = fs.readFileSync(path.join(__dirname, "lib/publish.js"), "utf8");
+    checa(/E_DESTINO_MANUAL/.test(pubSrc) && /E_DESTINO_INCOMPATIVEL/.test(pubSrc),
+      "os dois motivos tem codigos diferentes");
+    checa(/poste pelo celular/.test(pubSrc), "o manual diz o que fazer no lugar");
+    checa(/Escolha outro destino nesta janela/.test(pubSrc), "e o incompativel manda escolher outro");
+    checa(/media_type: "STORIES"/.test(pubSrc), "o Story usa o tipo STORIES do Instagram");
+    checa(/E_STORY_PARCIAL/.test(pubSrc), "e se cair no meio, diz QUANTAS ja foram (nao repostar as mesmas)");
+
+    // -- 26d. A tela mostra o Story como Story, nao como post de feed ----
+    checa(/function instagramStoryPreview\(/.test(app), "existe a previa propria de Story");
+    checa(/ig-st-bars/.test(app) && /ig-st-bar/.test(css), "com as barrinhas de progresso no topo");
+    checa(!/ig-story[\s\S]{0,900}ig-post-likes/.test(app),
+      "e SEM curtidas/legenda falsa — Story nao tem isso");
+    checa(/aspect-ratio: 9 \/ 16/.test(css), "em tela cheia 9:16");
+    checa(/pv\.dataset\.modo !== destino/.test(app), "trocar o destino troca a previa na hora");
+    checa(/cx\.hidden = noStory/.test(app), "e a caixa de legenda some no Story (o texto mora na arte)");
+    checa(/sem-legenda/.test(app) && /\.pub-form\.sem-legenda \.pub-foot/.test(css),
+      "sem a legenda o rodape sobe (senao fica meia tela de vazio)");
+    checa(/bn\.disabled = soManual/.test(app),
+      "e destino que o painel nao publica nem deixa clicar em publicar");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

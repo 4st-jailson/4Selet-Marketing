@@ -62,7 +62,7 @@ Inegociavel. Sem excecao para "edicao minima" ou "fix rapido".
 
 ## CRITICAL: reconciliacoes com o contrato real do projeto
 
-- **Tipos de copy que o painel produz** (`interface/lib/config.js`): `instagram_caption` (feed), `instagram_carousel` (roteiro de slides), `media_mention` ("4Selet na Midia"), `linkedin_post`, `threads_post` — alem da copy embutida em `ad_creative` e `video_idea`. **Nao existe tipo de YouTube.**
+- **Tipos de copy que o painel produz** (`interface/lib/config.js`): `instagram_caption` (feed), `instagram_carousel` (roteiro de slides), `instagram_story` (roteiro de cartoes, sem legenda), `media_mention` ("4Selet na Midia"), `linkedin_post`, `threads_post` — alem da copy embutida em `ad_creative` e `video_idea`. **Nao existe tipo de YouTube.**
 - **Pilar de conteudo:** toda peca tem um dos 6 pilares como eixo tematico. Ver Step 1.5.
 - **Campos do research** (contrato do `marketing-research-agent`): `selected_campaign_angle`, `ad_hooks`, `marketing_angles`, `keywords`, `video_concepts`, `campaign_facts`. (Mapeie: "content_angles" -> `marketing_angles`; "video_ideas" -> `video_concepts`.)
 - **Path do research:** `outputs/<task_name>_<date>/research_results.json` — **legado do caminho CLI**; no painel a pesquisa ao vivo entra pelo prompt e as fontes ficam em `status.json.research_sources`.
@@ -119,6 +119,7 @@ Cada plataforma no seu estilo nativo. **Nunca** copie texto identico entre plata
 |------------|---------|----------|-------|-----|-----|
 | **Feed Instagram** (`instagram_caption`) | 1–3 frases antes das hashtags | 3–5, `#4Selet` obrigatoria | máx 1 funcional (`→`) | **condicional** (ver abaixo) | Editorial, sobrio, com numero |
 | **Carrossel** (`instagram_carousel`) | roteiro de 4–7 slides + caption | 3–5, `#4Selet` obrigatoria | máx 1 na caption | condicional (slide de CTA no fim) | Editorial; capa-gancho → desenvolvimento → fecho |
+| **Story Instagram** (`instagram_story`) | 3–7 cartoes; UMA ideia por cartao, frase curta | **nenhuma** — Story nao tem legenda | nenhum | ultimo cartao chama a acao (`link`) | Direto e curto: cada cartao e visto por ~5 segundos |
 | **4Selet na Midia** (`media_mention`) | 1–3 frases de prova social | 3–5 com `#4Selet` + `#NaMidia`, **sem `#TaxaZero`** | máx 1 | suave ou **vazio** | Sobrio, de quem foi reconhecido. **Nao inventar trechos da materia** |
 | **Threads/X** (`threads_post`) | 1–3 frases curtas (≤500 chars) | 0–1 (nunca comecar com #) | máx 1 | opcional (pode fechar com observacao seca) | Provocacao controlada COM dado |
 | **LinkedIn** (`linkedin_post`) | 1.200–1.500 chars, hook nas 2 primeiras linhas | 3–5 | 0–1 funcional | suave | Editorial premium, autoridade tecnica |
@@ -176,6 +177,7 @@ Para os agentes downstream consumirem:
 |---|---|
 | Feed Instagram (`instagram_caption`) | `copy/instagram_caption.txt` |
 | Carrossel (`instagram_carousel`) | `copy/instagram_carousel.json` |
+| Story Instagram (`instagram_story`) | `copy/instagram_story.json` (roteiro dos cartoes; **sem legenda**) |
 | 4Selet na Midia (`media_mention`) | `copy/instagram_caption.txt` (mesmo caminho do feed) |
 | LinkedIn (`linkedin_post`) | `copy/linkedin_post.txt` |
 | Threads/X (`threads_post`) | `copy/threads_post.txt` |

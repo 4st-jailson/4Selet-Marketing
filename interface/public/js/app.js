@@ -156,6 +156,32 @@ function setView(html) {
   // dropdown de qualificadores da biblioteca), evitando nó órfão preso ao document.
   document.querySelectorAll(".qual-menu").forEach((n) => n.remove());
   $("#view").innerHTML = html;
+  preparaTabelas($("#view"));
+}
+// Tabela larga em tela estreita: no celular, Publicações/Agendados/Usuários eram mais largas do
+// que a tela e NÃO tinham rolagem própria — arrastar para o lado levava a PÁGINA inteira junto
+// (cabeçalho fixo e menu iam embora) e os botões "Ver peça" apareciam soltos fora do cartão.
+// Aqui toda tabela ganha (1) uma faixa com rolagem lateral só dela e (2) o rótulo da coluna
+// carimbado em cada célula, que é o que o CSS usa abaixo de 560px para virar lista de cartões
+// empilhados — o mesmo padrão do resto do painel. Fica no setView, por onde TODA tela passa:
+// tabela nova nasce com o tratamento, sem ninguém precisar lembrar.
+function preparaTabelas(root) {
+  $$("table.utable", root || document).forEach((tab) => {
+    if (!tab.parentElement || !tab.parentElement.classList.contains("tbl-rolagem")) {
+      const faixa = document.createElement("div");
+      faixa.className = "tbl-rolagem";
+      tab.parentNode.insertBefore(faixa, tab);
+      faixa.appendChild(tab);
+    }
+    const titulos = $$("thead th", tab).map((th) => th.textContent.trim());
+    $$("tbody tr", tab).forEach((tr) => {
+      // Linha de recado ("Nada publicado ainda") ocupa a largura toda: não tem coluna a nomear.
+      if (tr.children.length !== titulos.length) return;
+      Array.from(tr.children).forEach((td, i) => {
+        if (titulos[i]) td.setAttribute("data-rotulo", titulos[i]);
+      });
+    });
+  });
 }
 function setTitle(t) { $("#page-title").textContent = t; document.title = t + " · Painel 4Selet"; }
 function metaType(id) { return (State.meta.content_types || []).find((c) => c.id === id); }
@@ -471,7 +497,7 @@ function pexelsSearchModal(opts) {
     const ov = document.createElement("div"); ov.className = "modal-ov";
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="max-width:780px;width:94vw">
       <h3>Buscar imagem (Pexels)</h3>
-      <p class="muted mt">Fotos de banco gratuitas. Só a que você escolher é baixada pra peça.</p>
+      <p class="muted mt">Fotos de banco gratuitas. Só a que você escolher é baixada pra peça. O acervo é em inglês — pode escrever em português, mas termos em inglês acham mais fotos.</p>
       <div class="flex mt" style="gap:8px"><input id="px-q" placeholder="ex.: produtor digital, escritório, dinheiro…" style="flex:1" value="${esc(opts.query || "")}" /><button class="btn btn-primary" id="px-go">Buscar</button></div>
       <div id="px-grid" class="px-grid mt"><p class="muted">Digite um tema e clique em Buscar.</p></div>
       <div class="modal-actions"><button class="btn btn-ghost" id="px-more" title="Abrir a busca completa, com filtros de orientação, cor e tamanho">Ver mais opções &#8599;</button><button class="btn btn-ghost" id="px-cancel">Fechar</button></div>
@@ -1209,6 +1235,43 @@ document.addEventListener("click", (e) => {
   document.querySelectorAll("details.dl-res[open], details.ed-menu[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
 });
 
+// O CARTÃO recebe do servidor UM arquivo já escolhido: o primeiro que casa na varredura da pasta
+// — e a pasta vem em ordem alfabética, então "slide_1.jpg" (a arte que a pessoa importou) vem
+// antes de "slide_1.png" (a que a prancheta redesenhou ao salvar a edição). Resultado medido:
+// depois de editar e salvar, o cartão da biblioteca seguia mostrando a arte ANTIGA para sempre,
+// enquanto a peça aberta mostrava a nova — quem olhava a biblioteca concluía que tinha perdido o
+// trabalho. Aqui o cartão passa a aplicar a MESMA preferência da galeria da peça e da publicação
+// (ORDEM_ARTE): existindo a versão em PNG da mesma arte, é ela que aparece. A pergunta "essa
+// versão existe?" é um HEAD (resposta sem corpo) e só sai para o cartão que está numa versão
+// fraca — hoje 9 dos 104 da biblioteca; o resto não faz requisição nenhuma a mais.
+function promoveMiniatura(img) {
+  if (!img || img.dataset.miniConferida) return;
+  // A galeria da peça já resolve o arquivo certo por umaPorArte: perguntar de novo ali seria
+  // refazer uma pergunta que já tem resposta.
+  if (img.closest(".media-item")) return;
+  let u;
+  try { u = new URL(img.src, location.href); } catch (e) { return; }
+  if (!u.searchParams.get("thumb")) return;               // só as miniaturas de cartão
+  const rel = u.searchParams.get("rel") || "";
+  const ext = (rel.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
+  const melhores = Object.keys(ORDEM_ARTE)
+    .filter((e) => ORDEM_ARTE[e] > (ORDEM_ARTE[ext] || 0))
+    .sort((a, b) => ORDEM_ARTE[b] - ORDEM_ARTE[a]);
+  if (!melhores.length) return;                            // já está na melhor versão
+  img.dataset.miniConferida = "1";                         // a troca do src recarrega: não repetir
+  const folder = decodeURIComponent((u.pathname.split("/")[3] || ""));
+  if (!folder) return;
+  (async () => {
+    for (const alvo of melhores) {
+      const relAlvo = rel.replace(/\.[^.]+$/, "." + alvo);
+      const url = API.thumbUrl(folder, relAlvo);
+      try {
+        const r = await fetch(url, { method: "HEAD" });
+        if (r.ok) { img.src = url; return; }
+      } catch (e) { return; }                              // sem rede: o cartão fica como está
+    }
+  })();
+}
 function thumbHtml(t) {
   if (t.thumb && t.thumb.rel) {
     if (t.thumb.type === "video") return `<video class="thumb" src="${API.rawUrl(t.folder, t.thumb.rel)}" muted preload="metadata"></video>`;
@@ -1790,8 +1853,11 @@ function fileRow(folder, f) {
 // contava cada uma como uma peça diferente, e o carrossel aparecia duplicado (5 slides
 // viravam 10) inclusive na hora de publicar. Aqui a arte volta a ser uma só por nome,
 // preferindo o PNG: é ele que o editor edita e que vai para o Instagram.
+// A ordem de preferência entre as versões da MESMA arte, num lugar só: é ela que a galeria da
+// peça, a publicação (lib/publish.js) e a miniatura do cartão precisam responder igual.
+const ORDEM_ARTE = { png: 3, jpg: 2, jpeg: 2, webp: 1 };
 function umaPorArte(files) {
-  const ordem = { png: 3, jpg: 2, jpeg: 2, webp: 1 };
+  const ordem = ORDEM_ARTE;
   const porNome = new Map();
   for (const f of files || []) {
     if (/\.orig\.[^.]+$/i.test(f.rel) || /\.bg\.png$/i.test(f.rel)) continue;
@@ -1820,9 +1886,13 @@ function mediaGallery(folder, task) {
   const zonaOk = task.zone === "active" && (task.kind === "image" || task.kind === "feed" || task.kind === "media");
   const podeEditar = (f) => zonaOk && temReceitaDeEdicao(f.rel, task.files);
   const editable = imgs.some(podeEditar);
+  // A grade desenha a arte em ~200px, mas pedia o arquivo INTEIRO (2160×2700, megabytes cada):
+  // abrir uma peça de carrossel baixava quase 10 MB para montar cinco selos. Aqui ela pede a
+  // miniatura (?thumb=1, a mesma da biblioteca) e guarda a arte cheia em data-cheia — é de lá
+  // que o "Ampliar" e o editor tiram a imagem, então o lightbox continua nítido.
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${podeEditar(f) ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.thumbUrl(folder, f.rel)}&v=${f.mtime || 0}" data-cheia="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${podeEditar(f) ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
   // Arte que chegou de FORA vem como imagem chapada: o texto dela está dentro dos pixels. Dá
   // para escrever por cima, mas não para reescrever o que já está lá — e isso precisa estar dito
   // ANTES do clique, senão a pessoa abre o editor, procura o texto e conclui que está quebrado.
@@ -1846,10 +1916,11 @@ function carouselStrip(folder, task) {
   // Regerar com a IA é outra coisa: precisa do CONCEITO que a IA escreveu. Arte que chegou
   // pronta de fora não tem conceito — dá para editar, não para regerar.
   const podeRegerar = task.zone === "active" && !(task.status && task.status.imported);
+  // Miniatura na grade e arte cheia em data-cheia — mesma divisão da galeria (ver mediaGallery).
   const items = slides.map((s) =>
     `<div class="media-item"><div class="media-frame">
       <span class="slide-num">${s.n}</span>
-      <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${podeEditar(s.f.rel) ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
+      <img src="${API.thumbUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" data-cheia="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${podeEditar(s.f.rel) ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
     </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}${podeRegerar ? '<button class="slide-regen" data-n="' + s.n + '" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ' + s.n + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span>Regerar</span></button>' : ""}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
@@ -4103,7 +4174,26 @@ function bindWorkflow(task) {
 }
 
 // Prévia REALISTA de como a peça fica no Instagram (mockup do feed).
-function instagramPreview(imgUrls, caption, username) {
+// Prévia do Story. O Story NÃO é um post de feed: é tela cheia, tem as barrinhas de progresso
+// no topo (uma por arte), o nome sobreposto — e não tem curtidas, comentários nem legenda.
+// A prévia mostrava o mock do feed em cima da arte 9:16, prometendo uma coisa que não acontece.
+function instagramStoryPreview(imgUrls, username) {
+  username = username || "4selet";
+  const chev = (d) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="' + (d < 0 ? "15 18 9 12 15 6" : "9 18 15 12 9 6") + '"/></svg>';
+  const multi = imgUrls.length > 1;
+  return `<div class="ig-post ig-story">
+    <div class="ig-st-media">
+      <img class="ig-post-img" src="${esc(imgUrls[0] || "")}" alt="">
+      <div class="ig-st-bars">${imgUrls.map((_, i) => '<span class="ig-st-bar' + (i === 0 ? " on" : "") + '"></span>').join("")}</div>
+      <div class="ig-st-head"><span class="ig-post-av">4</span><span class="ig-st-name">${esc(username)}</span><span class="ig-st-ago">agora</span></div>
+      ${multi ? '<button class="ig-nav ig-prev" data-d="-1" aria-label="Arte anterior">' + chev(-1) + '</button><button class="ig-nav ig-next" data-d="1" aria-label="Próxima arte">' + chev(1) + '</button>' : ""}
+      <div class="ig-st-foot">Enviar mensagem</div>
+    </div>
+    <p class="hint ig-st-leg">${multi ? "Arte <strong class=\"igp-idx\">1</strong> de " + imgUrls.length + " — cada uma vira um Story separado." : "Uma arte, um Story."}</p>
+  </div>`;
+}
+function instagramPreview(imgUrls, caption, username, modo) {
+  if (modo === "story") return instagramStoryPreview(imgUrls, username);
   username = username || "4selet";
   const multi = imgUrls.length > 1;
   const cap = esc(caption || "").replace(/\n/g, "<br>");
@@ -4131,8 +4221,9 @@ function wireIgPreview(root, imgUrls) {
   if (imgUrls.length < 2) return;
   let i = 0;
   const img = root.querySelector(".ig-post-img"), idx = root.querySelector(".igp-idx");
-  const dots = root.querySelectorAll(".ig-dot");
-  const show = () => { img.classList.add("swapping"); img.src = imgUrls[i]; if (idx) idx.textContent = i + 1; dots.forEach((d, k) => d.classList.toggle("on", k === i)); requestAnimationFrame(() => img.classList.remove("swapping")); };
+  // Bolinhas no feed, barrinhas no Story — a mesma navegação serve as duas prévias.
+  const marcas = root.querySelectorAll(".ig-dot, .ig-st-bar");
+  const show = () => { img.classList.add("swapping"); img.src = imgUrls[i]; if (idx) idx.textContent = i + 1; marcas.forEach((d, k) => d.classList.toggle("on", k === i)); requestAnimationFrame(() => img.classList.remove("swapping")); };
   root.querySelectorAll(".ig-nav").forEach((b) => { b.onclick = () => { i = (i + parseInt(b.dataset.d, 10) + imgUrls.length) % imgUrls.length; show(); }; });
 }
 
@@ -4158,6 +4249,15 @@ function igConnLabel(ig) {
   return { badge: "paused", texto: "Não conectado", detalhe: "A publicação roda em modo simulado — não posta nada.", pode: false };
 }
 
+// Espelho de config.destinoPadrao (servidor). As duas contas TÊM que bater: se a tela sugerir
+// um destino e o servidor usar outro, a peça vai para o lugar que ninguém escolheu.
+function destinoPadraoDaPeca(kind) {
+  const k = String(kind || "");
+  if (k === "story") return "story";
+  if (k === "video") return "reels";
+  return "feed";
+}
+
 // Modal de publicar/agendar com a PRÉVIA do Instagram. Conectado = publica de verdade
 // (confirma explícito); não conectado = simulado. Também dá pra AGENDAR (data/hora).
 async function openPublishModal(task) {
@@ -4169,21 +4269,36 @@ async function openPublishModal(task) {
   const uname = st.username || "4selet";
   const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
   if (!imgs.length) { toast("Esta peça não tem imagem publicável.", "error"); return; }
-  const caption = await loadCaption(task.folder);
+  const caption = await loadCaption(task);
+  // ONDE a peça vai. Antes o painel mandava tudo para o feed e nem perguntava: a peça de Story
+  // batia em "não achei imagem publicável" DEPOIS de a pessoa confirmar a publicação real.
+  // Só entram aqui os destinos que o painel publica sozinho E que aceitam este tipo de peça.
+  const destinos = (State.meta.destinos || []).filter((d) => d.modo === "auto" && (d.kinds || []).indexOf(task.kind) >= 0);
+  let destino = (destinos.find((d) => d.id === destinoPadraoDaPeca(task.kind)) || destinos[0] || { id: "feed" }).id;
+  // Nenhum destino automático (Reels, hoje): o painel NÃO publica sozinho. Dizer isso aqui,
+  // e não depois que a pessoa confirmou — era o modal prometendo "vai para o Feed" e falhando.
+  const soManual = destinos.length === 0;
 
   const ov = document.createElement("div"); ov.className = "modal-ov pub-ov";
   ov.innerHTML = `<div class="modal pub-modal" role="dialog" aria-modal="true">
     <div class="pub-head"><h3>Publicar ou agendar</h3><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>
     <div class="pub-body">
-      <div class="pub-preview">${instagramPreview(imgs, caption, uname)}</div>
+      <div class="pub-preview" id="pub-preview" data-modo="${esc(destino)}">${instagramPreview(imgs, caption, uname, destino)}</div>
       <div class="pub-form">
         <div class="pub-status">${connected
           ? '<span class="badge ok">Conectado</span> @' + esc(uname) + ' — <span class="hint">publica de verdade</span>'
           : '<span class="badge ' + esc(conn.badge) + '">' + esc(conn.texto) + '</span> <span class="hint">— ' + esc(conn.detalhe) + '</span>'}</div>
         <p class="hint">Esta peça já está <strong>aprovada</strong>. Aqui você só decide <strong>quando</strong> ela vai ao ar — publicar agora ou agendar.</p>
-        <label class="layer-lab">Legenda</label>
-        <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
-        <p class="hint">Edite a legenda e veja a prévia atualizar ao lado.</p>
+        ${destinos.length > 1 ? `<label class="layer-lab">Onde publicar</label>
+        <div class="pub-dest" id="pub-dest">${destinos.map((d) => `
+          <button type="button" class="pub-dest-op${d.id === destino ? " on" : ""}" data-dest="${esc(d.id)}">${esc(d.label)}</button>`).join("")}</div>`
+        : ""}
+        <p class="hint" id="pub-dest-hint"></p>
+        <div id="pub-cap-box">
+          <label class="layer-lab">Legenda</label>
+          <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
+          <p class="hint">Edite a legenda e veja a prévia atualizar ao lado.</p>
+        </div>
         <div class="pub-foot">
           <div class="pub-sched">
             <label class="layer-lab">Agendar para depois</label>
@@ -4207,13 +4322,59 @@ async function openPublishModal(task) {
   // Trava enquanto a publicação está em voo: fechar no meio faz o usuário perder a confirmação
   // (e achar que não publicou — o caminho mais comum para alguém publicar duas vezes).
   let inFlight = false;
-  const close = () => { if (inFlight) return; ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  // Esc fecha, como em toda janela do painel — menos com a publicação em voo, e aí o close()
+  // ignora sozinho (fechar no meio faz a pessoa perder a confirmação e publicar duas vezes).
+  const aoTeclar = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  const close = () => { if (inFlight) return; document.removeEventListener("keydown", aoTeclar); ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  document.addEventListener("keydown", aoTeclar);
   ov.querySelector("[data-x='close']").onclick = close;
   ov.addEventListener("click", (e) => { if (e.target === ov) close(); }); // close() ignora o clique durante a publicação
   wireIgPreview(ov, imgs);
   const capEl = ov.querySelector("#pub-caption");
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
   const publishing = ov.querySelector(".pub-publishing");
+  // Trocar o destino muda o que a peça leva: Story não tem legenda — o texto mora na arte.
+  const aplicaDestino = () => {
+    ov.querySelectorAll("#pub-dest .pub-dest-op").forEach((b) => b.classList.toggle("on", b.dataset.dest === destino));
+    const noStory = destino === "story";
+    const cx = ov.querySelector("#pub-cap-box");
+    if (cx) cx.hidden = noStory; // Story não tem legenda: o texto mora dentro da arte
+    // Sem a legenda a coluna ficava com um vazio de meia tela até o rodapé ancorado embaixo.
+    ov.querySelector(".pub-form").classList.toggle("sem-legenda", noStory);
+    // A prévia acompanha a escolha: post de feed ou tela cheia de Story.
+    const pv = ov.querySelector("#pub-preview");
+    if (pv && pv.dataset.modo !== destino) {
+      pv.dataset.modo = destino;
+      pv.innerHTML = instagramPreview(imgs, capEl.value, uname, destino);
+      wireIgPreview(ov, imgs);
+    }
+    const dh = ov.querySelector("#pub-dest-hint");
+    // A explicação aparece SEMPRE — inclusive quando o destino é único e não há o que escolher.
+    if (dh) dh.textContent = soManual
+      ? "O painel não publica " + (((State.meta.destinos || []).find((d) => (d.kinds || []).indexOf(task.kind) >= 0) || {}).label || "este tipo de peça")
+        + " sozinho. Baixe a arte, poste pelo celular e depois use “Já publiquei esta peça por fora — só registrar”."
+      : noStory
+        ? (imgs.length > 1
+          ? "Vão para o Story " + imgs.length + " artes, uma por vez, na ordem — cada arte vira uma postagem e some em 24 horas."
+          : "Vai para o Story uma arte — cada arte vira uma postagem e some em 24 horas.")
+          + " Story não tem legenda: o texto já está na arte."
+        : imgs.length > 1
+          ? "Um carrossel de " + imgs.length + " artes no feed, permanente, com a legenda abaixo."
+          : "Um post no feed, permanente, com a legenda abaixo.";
+    const bn = ov.querySelector("#pub-now");
+    const onde = noStory ? "no Story" : "no feed";
+    if (bn && !bn.classList.contains("is-published")) {
+      bn.textContent = connected ? "Publicar " + onde + " agora" : "Simular " + onde;
+      bn.disabled = soManual;
+    }
+    const sc = ov.querySelector("#pub-schedule");
+    if (sc) sc.disabled = soManual;
+  };
+  ov.querySelectorAll("#pub-dest .pub-dest-op").forEach((b) => {
+    b.onclick = () => { destino = b.dataset.dest; aplicaDestino(); };
+  });
+  aplicaDestino();
+
   const pubBtn = ov.querySelector("#pub-now");
   const alreadyPub = task.status && task.status.published_at;
   if (alreadyPub) {
@@ -4224,7 +4385,10 @@ async function openPublishModal(task) {
     pubBtn.onclick = () => toast("Esta peça já foi publicada em @" + esc(uname) + " em " + fmtDateTime(alreadyPub) + ". Publicar de novo criaria um post duplicado.", "info");
   } else pubBtn.onclick = async () => {
     const cap = capEl.value.trim();
-    if (connected && !(await uiConfirm("Isto PUBLICA de verdade em @" + esc(uname) + " agora. Confirmar?", { confirmText: "Publicar agora" }))) return;
+    const ondeVai = (destinos.find((d) => d.id === destino) || {}).label || "Feed";
+    if (connected && !(await uiConfirm("Isto PUBLICA de verdade no " + ondeVai + " de @" + esc(uname) + " agora"
+      + (destino === "story" && imgs.length > 1 ? " — " + imgs.length + " cartões, um atrás do outro" : "") + ". Confirmar?",
+      { confirmText: "Publicar no " + ondeVai }))) return;
     const btn = ov.querySelector("#pub-now"), sBtn = ov.querySelector("#pub-schedule"), xBtn = ov.querySelector("[data-x='close']");
     if (inFlight) return; // segundo clique enquanto o primeiro ainda está indo
     inFlight = true;
@@ -4232,7 +4396,7 @@ async function openPublishModal(task) {
     const tt = publishing.querySelector(".pub-prog-t"); if (tt) tt.textContent = connected ? "Publicando no Instagram…" : "Simulando publicação…";
     publishing.hidden = false; // overlay com spinner grande + mensagem (mais intuitivo que só o texto do botão)
     try {
-      const r = await API.publishPiece(task.folder, { caption: cap || undefined, dryRun: !connected });
+      const r = await API.publishPiece(task.folder, { destino: destino, caption: cap || undefined, dryRun: !connected });
       // Estado de SUCESSO: troca pra confirmação visível antes de fechar (some o spinner).
       const sp = publishing.querySelector(".spinner"); if (sp) sp.remove();
       if (tt) tt.textContent = r.dry_run ? "Simulação concluída" : "Publicado no Instagram!";
@@ -4267,7 +4431,7 @@ async function openPublishModal(task) {
     if (inFlight) return;
     inFlight = true; sBtn.disabled = true;
     try {
-      await API.schedulePost(task.folder, { caption: capEl.value.trim() || undefined, scheduled_at: iso, label: displayName(task) });
+      await API.schedulePost(task.folder, { destino: destino, caption: destino === "story" ? undefined : (capEl.value.trim() || undefined), scheduled_at: iso, label: displayName(task) });
       toast("Agendado. Veja em Agendados.", "ok");
       inFlight = false; close();
     } catch (e) {
@@ -4278,12 +4442,24 @@ async function openPublishModal(task) {
 }
 
 // Carrega a legenda do Instagram da peça. instagram_caption.txt (feed/imagem) OU, se não
-// existir (carrossel), tenta o JSON. Blinda contra o corpo de erro 404 (que vinha vazando
+// existir (carrossel), o JSON do carrossel. Blinda contra o corpo de erro 404 (que vinha vazando
 // como se fosse a legenda: {"error":"arquivo nao encontrado"}).
-async function loadCaption(folder) {
+//
+// A peça JÁ diz quais arquivos tem — e a lista chega junto com ela. Pedir o .txt "para ver se
+// existe" fazia TODO carrossel disparar um 404 no console ao abrir "Publicar ou agendar" e o
+// "Ver no celular": erro vermelho, em toda abertura, para uma pergunta que a própria tela já
+// tinha respondido. Agora só pedimos o que está na lista de arquivos da peça.
+async function loadCaption(task) {
+  const folder = (task && task.folder) || task;               // aceita a peça inteira ou só a pasta
+  const arquivos = (task && task.files) || null;
+  const existe = (rel) => !arquivos || arquivos.some((f) => f.rel === rel);
   const bad = (s) => !s || /^\s*\{\s*"error"/.test(s);
-  try { const c = await API.taskFile(folder, "copy/instagram_caption.txt"); if (!bad(c)) return c; } catch (e) { /* segue */ }
-  try { const j = await API.taskFile(folder, "copy/instagram_carousel.json"); if (!bad(j)) { const o = JSON.parse(j); return o.caption || o.instagram_caption || o.legenda || (Array.isArray(o.hashtags) ? o.hashtags.join(" ") : "") || ""; } } catch (e) { /* segue */ }
+  if (existe("copy/instagram_caption.txt")) {
+    try { const c = await API.taskFile(folder, "copy/instagram_caption.txt"); if (!bad(c)) return c; } catch (e) { /* segue */ }
+  }
+  if (existe("copy/instagram_carousel.json")) {
+    try { const j = await API.taskFile(folder, "copy/instagram_carousel.json"); if (!bad(j)) { const o = JSON.parse(j); return o.caption || o.instagram_caption || o.legenda || (Array.isArray(o.hashtags) ? o.hashtags.join(" ") : "") || ""; } } catch (e) { /* segue */ }
+  }
   return "";
 }
 
@@ -4295,7 +4471,7 @@ async function openPhonePreview(task) {
   const vidFile = (task.files || []).find((f) => f.isVideo);
   const videoUrl = vidFile ? API.rawUrl(task.folder, vidFile.rel) : "";
   if (!imgs.length && !videoUrl) { toast("Esta peça não tem mídia para prever no celular.", "error"); return; }
-  const caption = await loadCaption(task.folder);
+  const caption = await loadCaption(task);
   const uname = "4selet";
   const fs = imgs.length ? imgs : [];
   const cover = imgs[0] || "";
@@ -4350,7 +4526,10 @@ async function openPhonePreview(task) {
     + "</div></div>";
   document.body.appendChild(ov); document.body.classList.add("no-scroll");
   requestAnimationFrame(() => ov.classList.add("open"));
-  const close = () => { ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  // Esc fecha, como em toda janela do painel (a prévia é só visualização: nada a perder ao sair).
+  const aoTeclar = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  const close = () => { document.removeEventListener("keydown", aoTeclar); ov.classList.remove("open"); document.body.classList.remove("no-scroll"); setTimeout(() => ov.remove(), 160); };
+  document.addEventListener("keydown", aoTeclar);
   ov.querySelector("[data-x='close']").onclick = close;
   ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
   const host = ov.querySelector("#phone-view"), screen = ov.querySelector(".phone-screen");
@@ -4458,7 +4637,11 @@ let _lbItems = [];
 let _lbIdx = 0;
 function lbItemFromMedia(m) {
   const isVid = m.tagName === "VIDEO";
-  const src = m.getAttribute("src") || "";
+  // A grade da peça mostra MINIATURA (data-cheia guarda a arte inteira). Ampliar é justamente o
+  // gesto de ver a arte de verdade: se o lightbox pegasse o `src` da grade, a peça de 2160px
+  // abriria borrada em tela cheia. O `src` continua valendo para quem não tem a versão cheia
+  // (prévia da criação, cartão da biblioteca).
+  const src = m.dataset.cheia || m.getAttribute("src") || "";
   return { url: src, type: isVid ? "video" : "image", dlUrl: src.replace("/raw?", "/download?"), folder: m.dataset.folder || "", rel: m.dataset.rel || "", editable: m.dataset.edit === "1" };
 }
 // Esconde a navegação (preview de texto/HTML e ao fechar) e zera o grupo.
@@ -5710,6 +5893,9 @@ function renderGenResult(r, opts) {
   if (structHtml) {
     bindStructuredEditor();
     if ($("#g-json-apply")) $("#g-json-apply").onclick = () => applyJsonToStructured(r.content_type);
+    // O editor acabou de ser montado — e montá-lo já pode ter mudado o texto (o <input> não
+    // guarda quebra de linha). Confere ANTES de a pessoa acreditar no "passou".
+    confereTextoDaTela();
   }
   // #R4 — feed com editor de campos (corpo + hashtags) mantendo o #g-edit sincronizado.
   if (feedHtml) bindFeedEditor();
@@ -5770,7 +5956,17 @@ async function renderArtPreview(contentType, kind) {
   const ed = $("#g-edit");
   if (ed) {
     if (ct && ct.format === "json") { try { parsed = JSON.parse(ed.value); } catch (e) { /* mantém o último parsed válido */ } }
-    else parsed = { body: ed.value };
+    else {
+      // A manchete e o apoio escritos para a ARTE viajam junto com o texto editado. Sem isto a
+      // prévia caía na legenda recortada enquanto a peça salva usava a frase inteira — a prévia e
+      // o arquivo mostrariam manchetes DIFERENTES, que é a armadilha que este par de campos veio
+      // resolver. Só o feed tem esses campos; nos outros tipos de texto eles não existem e o
+      // objeto sai igual ao de antes.
+      const ant = parsed && typeof parsed === "object" ? parsed : null;
+      parsed = { body: ed.value };
+      if (ant && ant.headline) parsed.headline = ant.headline;
+      if (ant && ant.subtext) parsed.subtext = ant.subtext;
+    }
   }
   // Foto do acervo/Pexels (estilo "Foto"): garante a foto na PRÉVIA (o structToParsed pode não preservá-la).
   if (parsed && typeof parsed === "object" && ($("#g-style") && $("#g-style").value) === "photo" && $("#g-image") && $("#g-image").value) parsed.image = $("#g-image").value;
@@ -6638,6 +6834,10 @@ function syncJsonMirror() {
   // syncJsonMirror roda tanto na digitação quanto nos cliques de add/remover/reordenar cena, e é
   // re-ligado por bindStructuredEditor após "Aplicar JSON" (o listener avulso morria nesses casos).
   const g = $("#g-story"); if (g && parsed) g.innerHTML = videoStoryboard(parsed);
+  // A caixa de conferência tem de falar do texto que está na tela AGORA — é ele que vai ser
+  // enviado. Aqui (e não num listener à parte) porque syncJsonMirror roda na digitação, nos
+  // botões de slide/cena e depois do "Aplicar JSON".
+  confereTextoDaTela();
 }
 function seRenumber(ed) {
   const scene = ed.dataset.type === "video_idea";
@@ -6823,6 +7023,105 @@ function govHtml(gov) {
     gov.warnings.map((w) => '<div class="gov-item warn">⚠ ' + esc(w) + "</div>").join("");
 }
 
+/* ===================================================================================
+   Conferência da marca sobre o texto JÁ NORMALIZADO (o que vai ser enviado)
+
+   A caixa "Conferência da marca" mostra o veredito que o SERVIDOR deu sobre o texto que a IA
+   acabou de escrever. Só que, entre a geração e o salvamento, o painel MEXE nesse texto: um
+   <input> não guarda quebra de linha, então o editor troca a quebra por espaço (ver esc1). E o
+   conferidor de marca não atravessa quebra de linha de propósito — "Taxa Zero por\n6 meses"
+   passa; "Taxa Zero por 6 meses", a mesma frase depois que o painel a juntou, reprova.
+   O resultado medido: a tela dizia "Passou na checagem da marca (sem problemas)", a pessoa
+   clicava em Salvar e levava "Bloqueado por regra de marca" — em vermelho, sobre um texto que
+   ela não tinha editado.
+
+   As regras abaixo são um ESPELHO das regras de número de lib/validation.js: a fonte da verdade
+   continua sendo o servidor, que é quem barra de fato. Este espelho só entra em cena quando o
+   texto da tela ficou DIFERENTE do que a IA entregou, e só relata o que apareceu DEPOIS dessa
+   diferença. Assim, se um dia ele ficar para trás da regra do servidor, o pior que acontece é
+   deixar de avisar (que é o comportamento de hoje) — nunca barrar à toa algo que o servidor
+   aceitaria.
+   =================================================================================== */
+const NUMEROS_DA_CAMPANHA = [
+  { oq: "a duração da Taxa Zero", oficial: 3, escrito: "3 meses",
+    re: /(?:0\s*%|taxa zero)[^.!?\n]{0,70}?\b(\d{1,2})\s*(?:meses|mes|mês)\b/i },
+  { oq: "o teto de vendas da Taxa Zero", oficial: 300, escrito: "R$ 300 mil",
+    re: /(?:0\s*%|taxa zero)[^.!?\n]{0,70}?\bR\$\s*(\d{2,4})\s*mil\b/i },
+  { oq: "o custo fixo por transação", oficial: 1.99, escrito: "R$ 1,99",
+    re: /R\$\s*(\d{1,2}[,.]\d{2})\s*(?:fixos?\s*)?(?:por|\/)\s*transa/i },
+  { oq: "o prazo do PIX", oficial: 10, escrito: "D+10", naoNoMeio: /cart[ãa]o/i,
+    re: /\bPIX\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
+  { oq: "o prazo do cartão", oficial: 30, escrito: "D+30", naoNoMeio: /\bPIX\b/i,
+    re: /\bcart[ãa]o\b[^.!?\n]{0,25}?\bD\s*\+\s*(\d{1,2})\b/i },
+];
+const COMPARA_MERCADO = /m[ée]dia do mercado|no mercado|do mercado|outras plataformas|a maioria das plataformas|por a[ií]|concorr[êe]nc/i;
+function numerosContraditorios(texto) {
+  const achados = [];
+  const t = String(texto || "");
+  for (const regra of NUMEROS_DA_CAMPANHA) {
+    const rex = new RegExp(regra.re.source, regra.re.flags.includes("g") ? regra.re.flags : regra.re.flags + "g");
+    let m;
+    while ((m = rex.exec(t)) !== null) {
+      const achado = String(m[m.length - 1]).replace(",", ".");
+      if (parseFloat(achado) === regra.oficial) continue;
+      if (regra.naoNoMeio && regra.naoNoMeio.test(m[0])) continue;   // o outro meio de pagamento entrou no meio
+      // Enumerar os dois números na mesma frase não é contradizer nenhum deles.
+      const inicio = t.lastIndexOf("\n", m.index) + 1;
+      let fim = t.slice(m.index).search(/[.!?\n]/);
+      fim = fim < 0 ? t.length : m.index + fim + 1;
+      const frase = t.slice(inicio, fim);
+      if (new RegExp("(?:^|[^\\d.,])" + String(regra.oficial).replace(".", "[.,]") + "(?![\\d])").test(frase)) continue;
+      if (COMPARA_MERCADO.test(frase)) continue;                     // falar do mercado é argumento legítimo
+      achados.push({ chave: regra.oq + "|" + m[0].trim(), trecho: m[0].trim(), oq: regra.oq, escrito: regra.escrito });
+    }
+  }
+  return achados;
+}
+// Junta o texto de um conteúdo estruturado do mesmo jeito que o servidor junta antes de conferir
+// (lib/validation via textForGovernance): tudo que é texto para o leitor entra; caminho de
+// arquivo, id de layout e nome de ícone ficam de fora.
+const CHAVES_SEM_TEXTO = ["image", "url", "icon", "device", "layout", "type", "theme", "tone", "estilo", "orient", "side"];
+function textoParaConferencia(parsed) {
+  const partes = [];
+  const vistos = new Set();
+  const anda = (v) => {
+    if (v == null) return;
+    if (typeof v === "string" || typeof v === "number") { const s = String(v).trim(); if (s) partes.push(s); return; }
+    if (typeof v !== "object" || vistos.has(v)) return;
+    vistos.add(v);
+    if (Array.isArray(v)) { v.forEach(anda); return; }
+    Object.keys(v).forEach((k) => { if (CHAVES_SEM_TEXTO.indexOf(k) < 0) anda(v[k]); });
+  };
+  anda(parsed);
+  return partes.join("\n");
+}
+// Roda a conferência sobre o texto do jeito que ele vai ser enviado e, se ela achar algo que o
+// texto original não tinha, tira o "passou" da tela e explica o que vai acontecer no Salvar.
+function confereTextoDaTela() {
+  const box = $("#g-gov");
+  if (!box) return;
+  const anterior = box.querySelector(".gov-junta"); if (anterior) anterior.remove();
+  const okItem = box.querySelector(".gov-item.ok");
+  // .gov-item declara display:flex, e classe vence [hidden] — por isso escondemos pelo style.
+  if (okItem) okItem.style.display = "";
+  if (!document.querySelector(".struct-ed")) return;          // só os tipos com editor de campos
+  if (!LAST_GEN || !LAST_GEN.res || !LAST_GEN.res.parsed) return;
+  const daTela = structToParsed();
+  if (!daTela) return;
+  const textoIA = textoParaConferencia(LAST_GEN.res.parsed);
+  const textoTela = textoParaConferencia(daTela);
+  if (textoTela === textoIA) return;                          // nada mudou: vale o veredito do servidor
+  const antes = numerosContraditorios(textoIA).map((a) => a.chave);
+  const novos = numerosContraditorios(textoTela).filter((a) => antes.indexOf(a.chave) < 0);
+  if (!novos.length) return;
+  if (okItem) okItem.style.display = "none";
+  const a = novos[0];
+  box.insertAdjacentHTML("afterbegin",
+    '<div class="gov-item err gov-junta">✕ <span>Conferindo o texto do jeito que ele vai ser salvo: “' + esc(a.trecho)
+    + '” contradiz ' + esc(a.oq) + ', que é ' + esc(a.escrito) + '. Ajuste antes de salvar — assim o salvamento recusa a peça.'
+    + '<span class="hint"> A frase pode ter ficado assim quando o painel juntou uma quebra de linha que a IA deixou no meio dela.</span></span></div>');
+}
+
 // #1 — Banner de sucesso destacado com CTA principal e auto-redirecionamento.
 function showSaveBanner(folder) {
   const host = $("#g-result");
@@ -6886,7 +7185,10 @@ function capaHtml(capa) {
              derrama o texto alternativo para fora da moldura — foi o que apareceu ao olhar. */ ""}
       ${capa.url ? `<img class="capa-thumb" src="${esc(capa.url)}" alt="" onerror="this.remove()" />` : ""}
       <div class="capa-txt">
-        <strong>A capa ganhou uma foto.</strong>${termo ? ` Procurei <span class="capa-termo">${esc(termo)}</span> no banco de imagens.` : ""}
+        ${/* O termo sai em INGLÊS porque é assim que o banco de imagens acha foto — e chegava na
+             tela sem uma palavra de explicação, no meio de uma frase em português. Quem lia não
+             tinha como saber que aquilo era a busca, nem por que estava em outra língua. */ ""}
+        <strong>A capa ganhou uma foto.</strong>${termo ? ` Procurei por <span class="capa-termo">${esc(termo)}</span> — a busca vai em inglês, que é a língua do banco de imagens.` : ""}
         ${motivo ? `<span class="capa-motivo">${esc(motivo)}.</span>` : ""}
         <span class="capa-rodape">
           ${capa.autor ? `<span class="capa-credito">Foto: ${esc(capa.autor)}</span>` : ""}
@@ -6926,6 +7228,22 @@ async function saveGenerated() {
   const editVal = $("#g-edit").value;
   let parsed = null, raw = editVal;
   if (ct.format === "json") { try { parsed = JSON.parse(editVal); } catch (e) { toast("JSON inválido no editor: " + e.message, "error"); return; } }
+  // FEED: a MANCHETE e o APOIO que a IA escreveu pensando na ARTE não têm campo na tela (o editor
+  // do feed só mostra corpo e hashtags) e o tipo é format:text — então `parsed` saía NULO daqui e
+  // os dois campos morriam no navegador, antes de qualquer rota. O servidor já sabe guardá-los
+  // (render.json.dados), mas nunca os recebia: a arte publicável voltava a recortar a legenda no
+  // caractere 60 e ia para o Instagram com a frase pela metade. Medido numa peça real.
+  // O arquivo salvo NÃO muda: formatContentFile monta corpo + hashtags, que é o mesmo texto que o
+  // #g-edit já carrega.
+  if (parsed === null && ct.id === "instagram_caption" && LAST_GEN.res && LAST_GEN.res.parsed) {
+    const g = LAST_GEN.res.parsed;
+    if (g.headline || g.subtext) {
+      const fed = document.querySelector(".feed-ed");
+      const corpo = fed ? ((fed.querySelector(".fe-body") || {}).value || "") : editVal;
+      const tags = fed ? splitTags((fed.querySelector(".fe-tags") || {}).value) : [];
+      parsed = { body: corpo, hashtags: tags, headline: g.headline, subtext: g.subtext };
+    }
+  }
   const payload = Object.assign({}, LAST_GEN.req, { task_name: task, title, task_date: date, parsed, raw });
   // No estilo "Foto", a imagem pode ter sido escolhida DEPOIS de gerar (acervo/Pexels):
   // LAST_GEN.req foi montado na hora da geração e não a tem, mas a prévia já mostra a foto ao vivo.
@@ -7109,8 +7427,15 @@ async function viewRequisicoes() {
       + esc((e && e.data && e.data.error) || e.message || "erro") + "</p></div>");
     return;
   }
-  const reqs = (dados && dados.requisicoes) || [];
+  const todas = (dados && dados.requisicoes) || [];
   const st = (dados && dados.estado) || {};
+  // "Entrega que falhou" é a única linha daqui que cobra alguma coisa de você — o resto é
+  // varredura da internet e teste de conexão. Quando o cartão de Configurações manda para cá,
+  // ele manda já filtrado: chegar numa lista de 40 linhas para achar as 3 que importam é o
+  // mesmo que não ter o atalho. Só ENTREGA conta (tipo), e só a que morreu (resultado).
+  const soFalhas = /[?&]filtro=falhas/.test(location.hash);
+  const falhas = todas.filter((r) => r.tipo === "entrega" && r.resultado === "erro");
+  const reqs = soFalhas ? falhas : todas;
 
   const linhas = reqs.map((r) => {
     const res = sqSituacao(r);
@@ -7153,13 +7478,23 @@ async function viewRequisicoes() {
         <h3>Requisições do sistema squad</h3>
         <a class="btn btn-sm btn-ghost" href="#/settings">Configurar a conexão</a>
       </div>
-      <p class="muted mt">Tudo que o sistema squad entregou aqui, na ordem de chegada. ${st.conectado
-        ? "A conexão está ligada e pronta para receber."
-        : "<strong>A conexão ainda não foi ligada</strong> — cadastre o token em Configurações para começar a receber."}</p>
+      <p class="muted mt">${soFalhas
+        ? "Mostrando só as <strong>entregas que falharam</strong> — artes que o time do squad achou que entregou e que não existem no painel. As outras linhas do registro estão escondidas."
+        : "Tudo que o sistema squad entregou aqui, na ordem de chegada. " + (st.conectado
+          ? "A conexão está ligada e pronta para receber."
+          : "<strong>A conexão ainda não foi ligada</strong> — cadastre o token em Configurações para começar a receber.")}</p>
+      ${soFalhas ? '<div class="flex mt"><button type="button" class="btn btn-sm btn-ghost" id="sq-ver-tudo">Ver o registro inteiro</button></div>'
+        : (falhas.length ? '<div class="flex mt"><button type="button" class="btn btn-sm" id="sq-so-falhas">Ver só as ' + falhas.length + ' que falharam</button></div>' : "")}
       ${reqs.length ? '<div class="list mt">' + linhas + "</div>"
-        : '<div class="empty mt">Nenhuma entrega ainda. Assim que o sistema squad enviar a primeira arte, ela aparece aqui.</div>'}
+        : (soFalhas
+          ? '<div class="empty mt">Nenhuma entrega falhou. Tudo que o squad enviou virou peça.</div>'
+          : '<div class="empty mt">Nenhuma entrega ainda. Assim que o sistema squad enviar a primeira arte, ela aparece aqui.</div>')}
     </div>`);
 
+  // Só troca o endereço: quem redesenha é o roteador. Chamar a view aqui também desenharia a
+  // tela duas vezes.
+  if ($("#sq-so-falhas")) $("#sq-so-falhas").onclick = () => { location.hash = "#/requisicoes?filtro=falhas"; };
+  if ($("#sq-ver-tudo")) $("#sq-ver-tudo").onclick = () => { location.hash = "#/requisicoes"; };
   $$("[data-sqver]").forEach((b) => { b.onclick = () => abrirRequisicao(b.dataset.sqver); });
   $$("[data-sqrep]").forEach((b) => {
     b.onclick = async () => {
@@ -7423,8 +7758,10 @@ async function viewSettings() {
       <ul class="sq-facts mt">
         <li><span>Artes recebidas</span><strong>${sq.entregas || 0}</strong></li>
         <li><span>Última arte</span><strong>${sq.ultima_entrega ? esc(fmtDateTime(sq.ultima_entrega)) : "nenhuma ainda"}</strong></li>
+        ${(sq.entregas_falhas || 0) > 0 ? '<li class="sq-falhas"><span>Entregas que falharam</span><strong>' + sq.entregas_falhas + '</strong></li>' : ""}
         ${(sq.total_requisicoes || 0) > (sq.entregas || 0) ? '<li><span>Outras batidas na porta</span><strong>' + ((sq.total_requisicoes || 0) - (sq.entregas || 0)) + '</strong></li>' : ""}
       </ul>
+      ${(sq.entregas_falhas || 0) > 0 ? '<p class="hint sq-falhas-aviso">Cada uma dessas é uma arte que o time do squad achou que entregou e que <strong>não existe no painel</strong>' + (sq.ultima_falha_entrega ? ' (a última em ' + esc(fmtDateTime(sq.ultima_falha_entrega)) + ')' : "") + '. Abra as requisições para ver o motivo e reprocessar.</p><div class="flex"><button type="button" class="btn btn-ghost" id="sq-falhas-ver">Ver as que falharam</button></div>' : ""}
       ${(sq.total_requisicoes || 0) > (sq.entregas || 0) ? '<p class="hint">As outras batidas são testes de conexão e tentativas sem token — varredura automática da internet, que a porta recusou. Não exigem nada de você; estão no registro para você poder conferir.</p>' : ""}
       <div class="flex mt"><button class="btn btn-primary" id="sq-req">Ver requisições</button><button class="btn" id="sq-trocar">Definir outro token</button><button class="btn btn-danger" id="sq-off">Desconectar</button></div>
       <div id="sq-edit" class="sq-caminhos mt" style="display:none">
@@ -7623,6 +7960,9 @@ async function viewSettings() {
     Promise.resolve(copiou).then((ok) => toast(ok ? "Endereço copiado." : "Selecione e copie o endereço.", ok ? "success" : "warn"));
   };
   if ($("#sq-req")) $("#sq-req").onclick = () => { location.hash = "#/requisicoes"; };
+  // Entrega que falhou é a única batida na porta que exige alguma coisa de você — por isso ela
+  // ganha um caminho direto, já filtrado, em vez de cair na lista inteira junto das varreduras.
+  if ($("#sq-falhas-ver")) $("#sq-falhas-ver").onclick = () => { location.hash = "#/requisicoes?filtro=falhas"; };
   if ($("#sq-trocar")) $("#sq-trocar").onclick = () => { $("#sq-edit").style.display = ""; $("#sq-token").focus(); };
   if ($("#sq-cancel")) $("#sq-cancel").onclick = () => { $("#sq-edit").style.display = "none"; };
   if ($("#sq-save")) $("#sq-save").onclick = async () => {
@@ -7814,6 +8154,41 @@ function mdToHtml(src) {
   return out.join("\n");
 }
 
+// O Assistente recebia como contexto só "rota: task" — e, sem saber como o painel é por dentro,
+// descrevia o painel de memória: mandava a pessoa procurar um botão "Agendar publicação" que não
+// existe (o de verdade é "Publicar ou agendar", na página da peça). Ele não estava mentindo, ele
+// estava adivinhando. A tela sabe exatamente o que está nela — o menu de verdade, o nome da página
+// aberta e os botões visíveis — então basta mandar junto: a resposta passa a citar o que a pessoa
+// consegue ver e clicar.
+// Mapa curto do painel, escrito a partir das rotas e telas que existem NESTE arquivo. Sem ele o
+// modelo preenche a lacuna com o que costuma existir num painel qualquer — foi assim que ele
+// passou a mandar agendar pelo menu Publicações, que só mostra o que já está agendado.
+const MAPA_DO_PAINEL = [
+  "Conteúdo: a biblioteca com todas as peças. Clicar numa peça abre a página dela.",
+  "Página da peça: onde se revisa, edita a arte, aprova ou reprova. Depois de aprovada, é aqui que aparece o botão “Publicar ou agendar” — publicar agora ou marcar data e hora.",
+  "Publicações: só MOSTRA o que já foi publicado e o que está agendado (abas Publicados e Agendados). Não se agenda por aqui.",
+  "Aprovados: a lista das peças já aprovadas.",
+  "Criar Conteúdo: descrever o tema e gerar com a IA. Importar Conteúdo: subir arte pronta, feita fora do painel.",
+  "Configurações: chaves de IA, banco de imagens e conexão com o Instagram.",
+];
+function contextoDaTela() {
+  const menu = $$("#nav a").map((a) => a.textContent.trim().replace(/\s+/g, " ")).filter(Boolean);
+  const titulo = ($("#page-title") && $("#page-title").textContent.trim()) || "";
+  const botoes = $$("#view .btn, #view button")
+    .filter((b) => b.offsetParent !== null)
+    .map((b) => b.textContent.trim().replace(/\s+/g, " "))
+    .filter((t) => t && t.length <= 40)
+    .filter((t, i, todos) => todos.indexOf(t) === i)
+    .slice(0, 20);
+  return [
+    "Menu do painel, exatamente como a pessoa vê: " + (menu.length ? menu.join(" · ") : "(não carregado)"),
+    "O que cada lugar faz de verdade:",
+    MAPA_DO_PAINEL.map((l) => "- " + l).join("\n"),
+    "Tela aberta agora: " + (titulo || "—") + " (rota " + parseHash().route + ")",
+    botoes.length ? "Botões visíveis nesta tela: " + botoes.join(" · ") : "",
+    "Ao explicar um caminho, use SÓ nomes de menu e de botão desta lista. Se o que a pessoa quer não estiver aqui, diga em qual item do menu ela chega — sem inventar tela, aba ou botão.",
+  ].filter(Boolean).join("\n");
+}
 function setupAssistant() {
   const panel = $("#assistant");
   const btn = $("#btn-assistant");
@@ -7821,12 +8196,16 @@ function setupAssistant() {
   const openAsst = () => {
     asstOpener = document.activeElement;
     panel.classList.add("open");
+    // A marca no <body> é o que faz o conteúdo encolher em vez de ficar escondido atrás do
+    // Assistente (ver .assistente-aberto no CSS) — sem ela, ele cobre os botões da peça.
+    document.body.classList.add("assistente-aberto");
     panel.setAttribute("aria-hidden", "false");
     if (btn) btn.setAttribute("aria-expanded", "true");
     const inp = $("#assistant-input"); if (inp) inp.focus();
   };
   const closeAsst = () => {
     panel.classList.remove("open");
+    document.body.classList.remove("assistente-aberto");
     panel.setAttribute("aria-hidden", "true");
     if (btn) btn.setAttribute("aria-expanded", "false");
     restoreFocus(asstOpener); asstOpener = null;
@@ -7843,7 +8222,7 @@ function setupAssistant() {
     const loading = document.createElement("div"); loading.className = "msg msg-bot"; loading.innerHTML = '<span class="spinner"></span>';
     log.appendChild(loading); log.scrollTop = log.scrollHeight;
     try {
-      const r = await API.assistant(q, "rota: " + parseHash().route);
+      const r = await API.assistant(q, contextoDaTela());
       loading.innerHTML = mdToHtml(r.answer) + (r.simulated ? ' <span class="sim-flag">SIMULADO</span>' : "");
     } catch (err) {
       const m = (err && err.status === 429)
@@ -8390,6 +8769,11 @@ async function boot() {
   if (metaFail) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   window.addEventListener("hashchange", router);
   window.addEventListener("auth:expired", onAuthExpired);
+  // Toda miniatura de cartão passa por aqui ao carregar (ver promoveMiniatura). A escuta é no
+  // documento e em fase de CAPTURA porque o evento de carga de imagem não borbulha — assim vale
+  // para qualquer lista de cartões, inclusive as que são redesenhadas depois (o filtro da
+  // biblioteca, as coleções), sem cada uma delas precisar lembrar de chamar nada.
+  document.addEventListener("load", (e) => { if (e.target && e.target.tagName === "IMG") promoveMiniatura(e.target); }, true);
   router();
 }
 boot();

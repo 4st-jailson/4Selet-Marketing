@@ -51,7 +51,10 @@
   --text:    #eaf2f5;
   --text-2:  #b9ccd5;
   --text-dim:#85a2af;
-  --text-mut:#5f8092;
+  /* Era #5f8092: 3,0:1 contra as superfícies escuras — abaixo do mínimo legível (4,5:1) e usado
+     justamente nos rótulos e dicas (.hint), que já são o texto menor da tela. Medido em tela, nos
+     dois esquemas que o painel entrega. O tom continua o mesmo azul-acinzentado, só mais claro. */
+  --text-mut:#819ead;
 
   --accent:        #5499B5;
   --accent-strong: #6fb4cf;
@@ -81,17 +84,25 @@
 
   --text:    #0c2530;
   --text-2:  #355163;
-  --text-dim:#5d7686;
-  --text-mut:#8499a6;
+  /* Mesma medição do tema escuro, ao contrário: no claro estes dois tons ficavam em 4,0:1
+     (--text-dim) e 2,5:1 (--text-mut) sobre o branco e os cinzas das superfícies. Escurecidos
+     dentro da mesma família azul-acinzentada até passar de 4,5:1. */
+  --text-dim:#4f6674;
+  --text-mut:#556e7d;
 
   --accent:        #006494;
   --accent-strong: #00547f;
   --accent-ink:    #ffffff;
   --accent-soft:   rgba(0, 100, 148, .09);
 
-  --ok:    #16a34a;  --ok-soft:   rgba(22, 163, 74, .10);
-  --warn:  #c2750a;  --warn-soft: rgba(217, 119, 6, .12);
-  --err:   #dc2626;  --err-soft:  rgba(220, 38, 38, .10);
+  /* Cores dos SELOS de estado. Elas são texto sobre o próprio tom claro ("Aprovado" verde sobre
+     verde-claro): medido, ficavam em 2,9:1 (verde), 3,1:1 (âmbar) e 3,5:1 (vermelho) — o selo de
+     status era, na prática, o texto menos legível da tela. Escurecidos até passar de 4,5:1, com a
+     mesma matiz; o fundo suave acompanha a cor nova. Não são cores da identidade (a paleta oficial
+     é azul), então nada de marca muda aqui. */
+  --ok:    #0f7133;  --ok-soft:   rgba(15, 113, 51, .10);
+  --warn:  #8a5307;  --warn-soft: rgba(138, 83, 7, .12);
+  --err:   #bc1e1e;  --err-soft:  rgba(188, 30, 30, .10);
 
   --shadow: 0 1px 2px rgba(16,40,55,.06), 0 18px 40px -24px rgba(16,40,55,.28);
   --shadow-sm: 0 1px 2px rgba(16,40,55,.06);
@@ -398,7 +409,9 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .lr-main { flex: 1; min-width: 0; }
 .lr-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lr-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 1px; }
-.lr-pillar { color: var(--brand-sky); }
+/* O Sky puro (#5499B5) sobre o branco do tema claro dá 2,7:1 — ilegível para um rótulo de 12px.
+   O --accent é o mesmo azul da marca ajustado a cada tema (Sky no escuro, Blue no claro). */
+.lr-pillar { color: var(--accent); }
 .lr-go { color: var(--text-mut); flex: none; display: inline-flex; align-items: center; transition: transform var(--tr), color var(--tr); }
 .lr-go svg { width: 19px; height: 19px; display: block; }
 .list-row:hover .lr-go { transform: translateX(4px); color: var(--accent-strong); }
@@ -427,7 +440,9 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
    MODO (quem posta) em âmbar SÓ quando depende da pessoa — a cor de atenção fica reservada para o
    que precisa de atenção. Se tudo colorir, nada avisa. */
 .badge.dest-feed, .badge.dest-story, .badge.dest-reels, .badge.dest-outro {
-  color: var(--accent); background: var(--accent-soft); border-color: var(--accent);
+  /* O texto usa o azul FORTE da marca: o --accent puro sobre o próprio fundo suave media 4,3:1,
+     abaixo do mínimo. Continua o mesmo azul, um passo mais firme — a moldura segue no --accent. */
+  color: var(--accent-strong); background: var(--accent-soft); border-color: var(--accent);
 }
 /* Aviso do que o token colado É. Três estados, e a cor carrega o recado: verde = permanente,
    âmbar = tem data para vencer (a pessoa precisa fazer algo), vermelho = não serve. */
@@ -461,10 +476,47 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .pub-preview { flex: 0 0 auto; }
 .pub-preview .ig-post { width: 340px; max-width: 100%; } /* largura alinhada com "Ver no celular"; encolhe em telas pequenas */
 .pub-form { flex: 1 1 300px; min-width: 240px; display: flex; flex-direction: column; }
+/* Escolha de destino. Segmentado, e não um select: são dois ou três caminhos e a diferença
+   entre eles muda o que a peça leva — vale ver os dois de uma vez, não abrir uma lista. */
+.pub-dest { display: flex; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+.pub-dest-op {
+  flex: 1 1 auto; min-width: 96px; padding: 9px 14px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2);
+  color: var(--text-2); font: inherit; font-size: 13px; font-weight: 600; line-height: normal;
+  transition: border-color var(--tr), background var(--tr), color var(--tr);
+}
+.pub-dest-op:hover { border-color: var(--brand-sky); }
+.pub-dest-op.on { border-color: var(--accent); background: var(--surface-3); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
+.pub-dest-op:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pub-form textarea { width: 100%; resize: vertical; min-height: 200px; max-height: 46vh; } /* altura moderada; NÃO estica pra não quebrar o modal */
 .pub-status { margin-bottom: 10px; }
 /* Rodapé no FINAL da coluna (margin-top:auto empurra pro fundo, alinhado com a prévia): agendamento em cima, botões embaixo */
 .pub-foot { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+/* Story não tem legenda: sem a caixa de texto, o "margin-top:auto" abria meia tela de vazio
+   entre a explicação e o rodapé. Sem legenda o rodapé sobe e encosta no conteúdo. */
+.pub-form.sem-legenda .pub-foot { margin-top: 22px; }
+
+/* ---- Prévia de Story: tela cheia 9:16, barrinhas no topo, sem curtidas nem legenda ---- */
+.ig-post.ig-story { border: none; background: none; box-shadow: none; }
+.ig-st-media {
+  position: relative; aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden;
+  background: #000; box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+}
+.ig-st-media .ig-post-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ig-st-bars { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 2; }
+.ig-st-bar { flex: 1 1 0; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, .38); }
+.ig-st-bar.on { background: #fff; }
+.ig-st-head { position: absolute; top: 24px; left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; z-index: 2; }
+.ig-st-head .ig-post-av { width: 26px; height: 26px; font-size: 12px; }
+.ig-st-name { color: #fff; font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.ig-st-ago { color: rgba(255, 255, 255, .72); font-size: 12px; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.ig-st-foot {
+  position: absolute; bottom: 12px; left: 12px; right: 12px; z-index: 2;
+  border: 1px solid rgba(255, 255, 255, .55); border-radius: 999px; padding: 9px 16px;
+  color: rgba(255, 255, 255, .82); font-size: 13px;
+}
+.ig-story .ig-nav { z-index: 3; }
+.ig-st-leg { margin: 8px 0 0; text-align: center; }
 .pub-sched { display: flex; flex-direction: column; gap: 6px; }
 .pub-sched input[type="datetime-local"] { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 10px; max-width: 300px; }
 .pub-btns { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -1654,6 +1706,15 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* ---- assistant ---- */
 .assistant { position: fixed; top: 0; right: 0; bottom: 0; z-index: 1000; width: 400px; max-width: 92vw; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform var(--tr-slow); box-shadow: -20px 0 50px -30px rgba(0,0,0,.6); }
 .assistant.open { transform: none; }
+/* O Assistente é uma faixa fixa de 400px na direita — e ficava POR CIMA da página: na peça, ele
+   cobria justamente os botões do canto superior direito ("Ver no celular", ações da revisão), que
+   é onde a pessoa está trabalhando quando pede ajuda. Com ele aberto, o conteúdo encolhe a mesma
+   largura e continua todo alcançável. Só em tela larga: abaixo de 1080px ele ocupa a tela quase
+   inteira e empurrar não faria sentido — ali ele é uma janela, e fecha-se para voltar ao trabalho. */
+.main { transition: padding-right var(--tr-slow); }
+@media (min-width: 1081px) {
+  body.assistente-aberto .main { padding-right: 400px; }
+}
 .assistant-head { display: flex; align-items: center; justify-content: space-between; padding: var(--s5) var(--s5) var(--s4); border-bottom: 1px solid var(--border-soft); }
 .assistant-body { flex: 1; overflow-y: auto; padding: var(--s5); display: flex; flex-direction: column; gap: var(--s3); }
 .msg { padding: 10px 14px; border-radius: var(--r); font-size: 13.5px; line-height: 1.5; max-width: 88%; white-space: pre-wrap; }
@@ -2046,7 +2107,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .sq-selo { margin-bottom: 4px; }
 .sq-facts span { color: var(--text-dim); }
 /* Etiqueta e cartão da arte que veio de fora (sistema squad). */
-.tag-origem { border-color: var(--accent); color: var(--accent); }
+/* Mesma correção dos selos de destino: o azul forte no texto, o azul normal na moldura. */
+.tag-origem { border-color: var(--accent); color: var(--accent-strong); }
 .sq-origem-card { border-left: 3px solid var(--accent); }
 /* FITA de origem. Era um cartão inteiro, do tamanho dos outros, empurrando a arte para baixo
    para dizer uma coisa que cabe numa linha — e repetindo a etiqueta da faixa de cima. Agora é

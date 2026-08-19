@@ -32,9 +32,9 @@ Existem **dois caminhos** de operacao, e eles compartilham os mesmos scripts de 
 | **Painel web** (`interface/`, producao em `https://mkt.4st.co`) | **Caminho principal.** O usuario cria uma peca por vez pela interface; o painel garante a task chamando o mesmo `scripts/orchestrator.js`, e faz preview/promote pelos mesmos `generate_preview.js` e `promote_task.js` | Operacao do dia a dia |
 | **Pipeline** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`) | Via **em lote/CLI**: gera varias pecas de uma vez a partir de um brief | Campanha inteira de uma vez, automacao |
 
-**Os 7 tipos de conteudo atuais** (`interface/lib/config.js`): `instagram_caption`, `instagram_carousel`, `ad_creative`, `media_mention` ("4Selet na Midia"), `video_idea`, `linkedin_post`, `threads_post`.
+**Os 8 tipos de conteudo atuais** (`interface/lib/config.js`): `instagram_caption`, `instagram_carousel`, `instagram_story` ("Story Instagram"), `ad_creative`, `media_mention` ("4Selet na Midia"), `video_idea`, `linkedin_post`, `threads_post`.
 
-> **Atencao:** o default do pipeline (`ALL_CONTENT_TYPES`, em `pipeline/agents.js`) tem **6 tipos e nao inclui `media_mention`**. Uma run default **nunca** gera peca "4Selet na Midia" — para incluir, passe o tipo explicitamente em `content_types`. (Alternativa: corrigir a lista no codigo.)
+> **Atencao:** o default do pipeline (`ALL_CONTENT_TYPES`, em `pipeline/agents.js`) e **derivado de `CONTENT_TYPES`** — sao os **7 tipos**, com `media_mention` de fora. "4Selet na Midia" fica fora de proposito: a peca depende de um print da materia que alguem precisa enviar, e sem esse insumo sairia vazia. Para gerar uma, passe o tipo explicitamente em `content_types`. (Ate agosto/2026 a lista era copiada a mao e tinha perdido tambem o `instagram_story`; agora, tipo novo no painel entra sozinho no pipeline.)
 
 ## When to Use This Skill
 
@@ -74,7 +74,7 @@ Existem **dois caminhos** de operacao, e eles compartilham os mesmos scripts de 
 
 **Obrigatorios no pipeline executavel:** `task_name`, `task_date` **e `brief`** (min. 8 caracteres) — sem `brief`, sai com exit 2.
 
-`content_types` escolhe quais pecas gerar; ausente, usa a lista default de 6 (sem `media_mention`).
+`content_types` escolhe quais pecas gerar; ausente, usa a lista default de 7 (todos, menos `media_mention`).
 
 ## Step 1: Intake + validacao
 
@@ -182,7 +182,7 @@ Se um job falha: ele vira `error` no resumo, o pipeline **segue** com os demais 
 ## Examples
 
 ### Example 1: Campanha completa
-**Payload:** task `taxa_zero_maio`, brief da campanha, `platforms: ["instagram","linkedin"]`, sem `content_types`. -> research -> 6 jobs criativos (um por tipo default) -> distribution -> preview. Report aponta `pipeline_run.json`; pecas em `in_review`. Nada publicado.
+**Payload:** task `taxa_zero_maio`, brief da campanha, `platforms: ["instagram","linkedin"]`, sem `content_types`. -> research -> 7 jobs criativos (um por tipo default) -> distribution -> preview. Report aponta `pipeline_run.json`; pecas em `in_review`. Nada publicado.
 
 ### Example 2: So as pecas de imagem
 **Payload:** `content_types: ["ad_creative","instagram_caption"]`. -> 2 jobs criativos; os outros tipos nem sao tentados.
@@ -205,7 +205,7 @@ Se um job falha: ele vira `error` no resumo, o pipeline **segue** com os demais 
 **Cause:** `dry_run` nao existe no executavel. **Solution:** para nao gerar arte, use `--no-render`; para nao consumir IA, rode sem chave configurada (as pecas voltam com `simulated: true`).
 
 ### A run nao gerou peca de "4Selet na Midia"
-**Cause:** `media_mention` nao esta no default. **Solution:** passar em `content_types`.
+**Cause:** `media_mention` nao esta no default (depende do print da materia). **Solution:** passar em `content_types`.
 
 ### Procurei `logs/<job>.log` e nao existe
 **Cause:** o executavel nao escreve log em disco. **Solution:** ler `pipeline_run.json` (e o console da run).
@@ -231,7 +231,8 @@ Job Payload → orchestrator (esta skill)
   research_agent → research/insights.md            (advisory; sem Tavily)
      └─► N jobs criativos, um por content_type → o arquivo do tipo:
              instagram_caption / media_mention → copy/instagram_caption.txt
-             instagram_carousel                → copy/instagram_carousel.json
+             instagram_carousel                → copy/instagram_carousel.json (+ slides/slide_N.png)
+             instagram_story                   → copy/instagram_story.json    (+ story/story_N.png)
              ad_creative                       → ads/concept.json      (+ ads/ad.png)
              video_idea                        → video/concept.json    (+ video/video.mp4)
              linkedin_post                     → copy/linkedin_post.txt

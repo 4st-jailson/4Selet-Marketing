@@ -1935,6 +1935,16 @@ function watermark(spec, theme) {
 // design system real do feed @4selet (ver Referencia-Instagram), em vez de
 // repetir um unico template. A CAPA usa o template de arte escolhido
 // (editorial|bold|split); os demais slides usam estes arquetipos navy.
+
+// A pílula de chamada. Ela mora AQUI, no CSS que todo arranjo herda, e não colada no CSS de cada
+// arquétipo. Enquanto a regra era copiada função a função, os cinco arranjos antigos a tinham e os
+// oito acrescentados depois copiaram só a chamada `pilulaCta(ctx)`: o elemento saía com a classe
+// .ac-cta e NENHUMA declaração — texto de 16px, peso 400, sem fundo, em 7 dos 10 arranjos. Medido
+// numa peça de cada arranjo. Na base, o próximo arranjo que alguém criar já nasce certo.
+// `cssExtrasApertados` continua entrando depois, no CSS do arquétipo, e por isso continua
+// conseguindo encolher a pílula quando o slide fica cheio.
+const CSS_PILULA_CTA = ".ac-cta { align-self:flex-start; margin-top:44px; font-weight:800; font-size:36px;"
+  + " background:" + PALETTE.blue + "; color:#FFFFFF; padding:26px 48px; border-radius:999px; }";
 function carBase(width, height, theme) {
   const t = theme || THEME_DARK;
   return `* { margin:0; padding:0; box-sizing:border-box; }
@@ -1960,7 +1970,8 @@ function carBase(width, height, theme) {
   .mid { position:relative; z-index:2; flex:1; display:flex; flex-direction:column; justify-content:center; }
   .s-title { font-weight:700; font-size:84px; line-height:1.02; color:${t.text}; letter-spacing:-1.5px; }
   .s-title .accent { color:${t.eyebrow}; font-weight:900; }
-  .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }`;
+  .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
+  ${CSS_PILULA_CTA}`;
 }
 function carDoc(ctx, extraCss, bodyInner) {
   // Continuidade visual entre slides: desloca os Selet Dots como se os slides
@@ -2027,8 +2038,6 @@ function pilulaCta(ctx) {
   const t = String((ctx && ctx.cta) || "").trim();
   return t ? '<div class="ac-cta">' + esc(t) + " &#8594;</div>" : "";
 }
-const CSS_PILULA_CTA = ".ac-cta { align-self:flex-start; margin-top:44px; font-weight:800; font-size:36px;"
-  + " background:" + PALETTE.blue + "; color:#FFFFFF; padding:26px 48px; border-radius:999px; }";
 // Quanto o conteúdo pesa no cartão, e quanto o desenho tem que ceder. Estes arquétipos nasceram para
 // o slide de carrossel (1080x1350, sem rótulo e sem chamada). Como PEÇA ÚNICA eles perdem 270px de
 // altura E ganham dois blocos — por isso o formato quadrado e cada extra entram na conta. Em vez de
@@ -2095,7 +2104,7 @@ function slideStatGrid(slide, ctx) {
     .stat-v { font-weight:900; font-size:${v(94, 80, 68)}px; line-height:1; color:${c.valor}; letter-spacing:-2px; }
     .stat-v .accent { color:${c.acento}; }
     .stat-l { margin-top:${v(16, 12, 9)}px; font-size:${v(33, 30, 27)}px; line-height:1.24; color:${c.rotulo}; }
-    ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}` + CSS_PILULA_CTA + cssExtrasApertados(v);
+    ${light ? `.s-title span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}` + cssExtrasApertados(v);
   const inner = `${carTop(ctx)}
   <div class="mid">
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
@@ -2128,7 +2137,7 @@ function slideList(slide, ctx) {
     .mk { color:${c.marcador}; font-size:${v(44, 35, 32)}px; line-height:1.1; font-weight:900; flex:0 0 auto; }
     .lt { font-size:${v(44, 34, 30)}px; line-height:1.28; color:${c.item}; font-weight:600; }
     .s-body { margin-top:${v(40, 22, 16)}px; font-size:${v(36, 29, 27)}px; line-height:1.3; color:${c.apoio}; }
-    ${light ? `.s-title span, .s-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}` + CSS_PILULA_CTA + cssExtrasApertados(v);
+    ${light ? `.s-title span, .s-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}` + cssExtrasApertados(v);
   const inner = `${carTop(ctx)}
   <div class="mid">
     ${slide.eyebrow ? `<div class="eyebrow">${esc(slide.eyebrow)}</div>` : ""}
@@ -2182,7 +2191,7 @@ function slideDevice(slide, ctx) {
     + ".dev .scr img { width:100%; height:100%; object-fit:cover; object-position:top center; display:block; }"
     + ".dev .scr-empty { display:flex; align-items:center; justify-content:center; height:100%; color:" + PALETTE.mist + "; font-size:26px; }"
     + ".dev-nota { margin-top:" + v(26, 18, 12) + "px; font-size:" + v(32, 29, 26) + "px; line-height:1.3; color:" + PALETTE.mist + "; }"
-    + CSS_PILULA_CTA + cssExtrasApertados(v) + cssAparelhoClaro(claro);
+    + cssExtrasApertados(v) + cssAparelhoClaro(claro);
   const inner = carTop(ctx) + '<div class="mid">'
     + (slide.eyebrow ? '<div class="eyebrow">' + esc(slide.eyebrow) + "</div>" : "")
     + (slide.title ? '<div class="s-title sm">' + highlightHeadline(slide.title) + "</div>" : "")
@@ -2299,14 +2308,22 @@ function slideFlow(slide, ctx) {
   // cima e nada embaixo. Cai no texto, igual ao que stat_grid e list já faziam; o fluxo era o único
   // arquétipo sem essa rede, e é justamente o que a pessoa pode escolher no seletor sem ter os dados.
   if (!nodes.length) return slideText(slide, ctx);
-  const accent = String(slide.tone || "").toLowerCase() === "accent";
+  const tom = String(slide.tone || "").toLowerCase().trim();
+  const accent = tom === "accent";
   const line = accent ? PALETTE.blue : (claro ? PALETTE.navy : PALETTE.mist);
   const emph = accent ? PALETTE.sky : PALETTE.mist;
-  const toneIcon = accent ? ICON_SHIELD : ICON_ALERT;
+  // O TOM da caixa de nota. O PADRÃO era o triângulo de ALERTA, e o schema nem contava que existia
+  // tom — resultado: "Solicitar convite: link na bio." saía com sinal de perigo ao pé do passo a
+  // passo, num convite. Agora a nota nasce NEUTRA (sem ícone), que é o que ela quase sempre é; o
+  // triângulo só entra quando o tom diz, com todas as letras, que aquilo é uma advertência.
+  const ehAviso = /^(aviso|alerta|alert|warning|aten[cç][aã]o|cuidado|risco)$/.test(tom);
+  const toneIcon = accent ? ICON_SHIELD : (ehAviso ? ICON_ALERT : "");
   const head = (slide.eyebrow ? '<div class="eyebrow">' + esc(slide.eyebrow) + "</div>" : "")
     + (slide.title ? '<div class="s-title sm">' + highlightHeadline(slide.title) + "</div>" : "");
+  // Sem ícone, o <span> vazio ainda ocuparia 50px + o espaçamento do flex: some junto.
   const note = slide.note
-    ? '<div class="fnote"><span class="fnote-ic">' + toneIcon + "</span><span>" + esc(slide.note) + "</span></div>"
+    ? '<div class="fnote">' + (toneIcon ? '<span class="fnote-ic">' + toneIcon + "</span>" : "")
+      + "<span>" + esc(slide.note) + "</span></div>"
     : "";
   // A nota é emitida nos DOIS layouts (vertical e horizontal), mas o CSS dela só existia no
   // horizontal. No vertical o ícone é um SVG sem width/height, então sem regra ele esticava para a
@@ -2338,7 +2355,7 @@ function slideFlow(slide, ctx) {
       + ".fr-l { font-size:28px; font-weight:800; color:#FFFFFF; line-height:1.15; text-transform:uppercase; letter-spacing:0.4px; }"
       + ".fr-s { font-size:25px; color:" + PALETTE.mist + "; line-height:1.22; }"
       + ".fr-arrow { align-self:flex-start; margin-top:44px; font-size:54px; line-height:1; color:" + line + "; font-weight:700; flex:0 0 auto; }"
-      + cssNota + CSS_PILULA_CTA + cssFluxoClaro(claro);
+      + cssNota + cssFluxoClaro(claro);
     const inner = carTop(ctx) + '<div class="mid">' + head
         + '<div class="frow">' + cells + "</div>" + note + pilulaCta(ctx) + "</div>" + carFooter(ctx);
     return carDoc(ctx, css, inner);
@@ -2380,8 +2397,7 @@ function slideFlow(slide, ctx) {
     + ".flow-note { margin-top:" + v(38, 22) + "px; font-size:" + v(34, 30) + "px; line-height:1.32; color:" + PALETTE.mist + "; }"
     + cssNota
     + (apertado ? ".fnote { margin-top:30px; padding:24px 30px; } .fnote span:last-child { font-size:29px; }" : "")
-    + CSS_PILULA_CTA
-    + cssExtrasApertados(v);   // depois da pílula de propósito: sobrescreve
+    + cssExtrasApertados(v);   // a pílula vem do CSS base; isto entra depois e a aperta quando precisa
   const inner = carTop(ctx) + '<div class="mid">' + head
     + '<div class="flow">' + nodeHtml + "</div>"
     + (slide.body ? '<div class="flow-note">' + highlightHeadline(slide.body) + "</div>" : "")
@@ -3000,6 +3016,41 @@ async function renderImage(folder, opts) {
   return Object.assign(r, { rel: "ads/ad.png", template: tpl.id });
 }
 
+// Corte de última instância: quando nem o campo escrito para a arte nem a legenda cabem, o texto é
+// cortado no último espaço antes do limite (nunca no meio da palavra) e ganha reticências.
+function cortaEmPalavra(s, max) {
+  s = String(s == null ? "" : s).trim();
+  if (s.length <= max) return s;
+  const pedaco = s.slice(0, max);
+  const esp = pedaco.lastIndexOf(" ");
+  return (esp > max * 0.6 ? pedaco.slice(0, esp) : pedaco).replace(/[\s,;:.\-–—]+$/, "") + "…";
+}
+// A MANCHETE e o APOIO da arte de feed, num lugar só. Eram dois: a prévia cortava a legenda em 60
+// quebrando palavra e não mostrava apoio nenhum; o arquivo salvo cortava respeitando a palavra e
+// ainda trazia um parágrafo. Quem aprovava olhando a prévia aprovava outra arte.
+//
+// Precedência: o que foi ESCRITO PARA A ARTE vence. A peça de feed não tinha campo de manchete, e
+// por isso a arte publicava a legenda picotada — "Cada ponto percentual de aprovação no cartão que
+// você perde…" — frase inacabada indo ao Instagram. Com `headline`/`subtext` no schema, a frase sai
+// inteira; sem eles (peça antiga, ou importada), a legenda continua sendo a fonte, como sempre foi.
+const FEED_MAX_MANCHETE = 60;
+const FEED_MAX_APOIO = 150;
+function textoDaArteDoFeed(fonte) {
+  fonte = fonte || {};
+  // A legenda tem estrutura: 1a linha = gancho, parágrafos de desenvolvimento, hashtags no fim.
+  const linhas = String(fonte.caption || "").split("\n").map((s) => s.trim()).filter(Boolean)
+    .filter((s) => !/^#/.test(s));
+  const gancho = linhas[0] || "";
+  const escrita = String(fonte.headline == null ? "" : fonte.headline).trim();
+  const apoioEscrito = String(fonte.subtext == null ? "" : fonte.subtext).trim();
+  // Apoio da legenda: o próximo parágrafo depois do gancho, sem repetir o gancho.
+  const apoioDaLegenda = linhas.slice(1).find((s) => s.length > 24 && s !== gancho) || "";
+  return {
+    headline: cortaEmPalavra(escrita || gancho || "4Selet.", FEED_MAX_MANCHETE),
+    subtext: cortaEmPalavra(apoioEscrito || apoioDaLegenda, FEED_MAX_APOIO),
+  };
+}
+
 async function renderFeed(folder, opts) {
   const loc = requireActive(folder);
   // A foto do feed vive no render.json (o arquivo da peça é .txt e não guarda campo). Sem isto,
@@ -3012,28 +3063,17 @@ async function renderFeed(folder, opts) {
   // render.json, junto do logo e da marca d'água — senão a escolha da criação sumia ao salvar.
   const fundoV = fundoDaPeca(loc, opts);
   const tpl = pickTemplate(loc, opts && opts.template, { temFoto: !!foto });
-  // Le a caption salva (txt) e usa a 1a linha forte como headline.
+  // Le a legenda salva (txt). O que a arte mostra sai do MESMO helper que a prévia usa.
   let caption = "";
   try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
-  // A caption tem estrutura: 1a linha = gancho, paragrafos de desenvolvimento, hashtags no fim.
-  // A arte usava SO a primeira linha e mandava eyebrow/subtexto/CTA vazios — por isso a peca de
-  // feed saia como fundo + uma frase + logo. O texto de apoio ja estava no arquivo o tempo todo.
-  const linhas = caption.split("\n").map((s) => s.trim()).filter(Boolean);
-  const semHashtag = (s) => !/^#/.test(s);
-  const firstLine = linhas.filter(semHashtag)[0] || "4Selet.";
-  // Cortar em 57 caracteres cortava no meio da palavra ("...está olhando par…"). Agora o corte
-  // acontece no ultimo espaco antes do limite, e so quando a frase realmente nao cabe.
-  const cortaEmPalavra = (s, max) => {
-    s = String(s || "").trim();
-    if (s.length <= max) return s;
-    const pedaco = s.slice(0, max);
-    const esp = pedaco.lastIndexOf(" ");
-    return (esp > max * 0.6 ? pedaco.slice(0, esp) : pedaco).replace(/[\s,;:.\-–—]+$/, "") + "…";
-  };
-  const headline = cortaEmPalavra(firstLine, 60);
-  // Texto de apoio: o proximo paragrafo depois do gancho, sem hashtag e sem repetir o gancho.
-  const apoio = linhas.filter(semHashtag).slice(1).find((s) => s.length > 24 && s !== firstLine) || "";
-  const subtexto = cortaEmPalavra(apoio, 150);
+  // O feed é um .txt: manchete e apoio escritos para a ARTE, quando existem, moram no render.json
+  // junto da foto e da superfície — é o único lugar da peça de feed que sobrevive ao salvamento.
+  const dadosSalvos = readRenderJson(loc).dados || {};
+  const arte = textoDaArteDoFeed({
+    headline: dadosSalvos.headline, subtext: dadosSalvos.subtext, caption: caption,
+  });
+  const headline = arte.headline;
+  const subtexto = arte.subtext;
   const logoV = pickLogo(loc, opts && opts.logo);
   const wmV = pickWatermark(loc, opts && opts.watermark);
   const htmlPath = path.join(loc.path, "ads", "feed.html");
@@ -3042,7 +3082,7 @@ async function renderFeed(folder, opts) {
   // O feed lê a legenda (.txt), então o dado dos arquétipos vem do render.json — a peça de feed
   // não tem JSON de conceito. Sem dado, o próprio arquétipo cai no desenho de texto: é o mesmo
   // comportamento que a peça de Imagem já tem quando alguém força um arranjo sem o dado.
-  const conceitoFeed = Object.assign({}, readRenderJson(loc).dados || {}, {
+  const conceitoFeed = Object.assign({}, dadosSalvos, {
     headline: headline, subtext: subtexto, eyebrow: "",
   });
   const html = tpl.arquetipo
@@ -3264,21 +3304,31 @@ function storyNumber(card, ctx) {
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
   const um = stats.length === 1;
-  const tam = um ? 300 : stats.length === 2 ? 172 : 132;
+  // O texto de apoio existe no schema para QUALQUER cartão, e todos os irmãos (capa, texto, foto,
+  // link) o desenham — só este descartava. A IA escrevia o apoio, o desenho jogava fora, e ninguém
+  // via o que sumiu. Aqui ele volta, com o mesmo tratamento de realce dos outros.
+  const apoio = String(card.body == null ? "" : card.body).trim();
+  // Com apoio na tela o número cede um pouco antes: 3 cartões em corpo 132 mais um parágrafo
+  // encostavam na faixa que o aplicativo cobre embaixo. É o número que encolhe, não o texto — e
+  // nenhum dos dois é cortado em silêncio.
+  const tam = um ? (apoio ? 264 : 300) : stats.length === 2 ? (apoio ? 156 : 172) : (apoio ? 116 : 132);
   const c = light
     ? { val: PALETTE.darker, lab: PALETTE.navy, cartao: PALETTE.cloud, borda: PALETTE.blue + "33" }
     : { val: "#FFFFFF", lab: PALETTE.mist, cartao: PALETTE.navy, borda: PALETTE.blue + "55" };
-  const css = `.s-title { font-size:64px; margin-bottom:40px; }
-    .nums { display:flex; flex-direction:column; gap:${um ? 0 : 26}px; }
-    .num { ${um ? "" : `background:${c.cartao}; border:2px solid ${c.borda}; border-radius:30px; padding:36px 40px;`} }
+  const css = `.s-title { font-size:${apoio && !um ? 56 : 64}px; margin-bottom:${apoio ? 30 : 40}px; }
+    .nums { display:flex; flex-direction:column; gap:${um ? 0 : apoio ? 20 : 26}px; }
+    .num { ${um ? "" : `background:${c.cartao}; border:2px solid ${c.borda}; border-radius:30px; padding:${apoio ? 28 : 36}px 40px;`} }
     .num-v { font-weight:900; font-size:${tam}px; line-height:.9; letter-spacing:-.05em; color:${c.val}; }
-    .num-l { margin-top:${um ? 24 : 12}px; font-size:${um ? 46 : 34}px; line-height:1.24; color:${c.lab}; }`;
+    .num-l { margin-top:${um ? 24 : 12}px; font-size:${um ? 46 : 34}px; line-height:1.24; color:${c.lab}; }
+    .s-body { margin-top:${um ? 34 : 28}px; font-size:${um ? 42 : 36}px; line-height:1.36; color:${c.lab}; }
+    ${light ? `.s-title span, .s-body span { color:${PALETTE.blue} !important; text-decoration-color:${PALETTE.blue} !important; }` : ""}`;
   const blocos = stats.map((s) => `<div class="num"><div class="num-v">${esc(String(s.value))}</div>${s.label ? `<div class="num-l">${esc(s.label)}</div>` : ""}</div>`).join("");
   return storyDoc(ctx, css, `${storyTop(ctx)}
   <div class="mid">
     ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
     ${card.title ? `<div class="s-title">${highlightHeadline(card.title)}</div>` : ""}
     <div class="nums">${blocos}</div>
+    ${apoio ? `<div class="s-body">${highlightHeadline(apoio)}</div>` : ""}
   </div>`);
 }
 
@@ -3577,9 +3627,14 @@ async function renderVideo(folder) {
   // cena e: headline = `text`; segunda linha (subtexto) = `subtitle` (voltada ao
   // espectador). A composition exibe o prop `visual` como subtexto, entao passamos
   // o `subtitle` ali — nunca a direcao de arte.
+  // A chamada e a que a IA escreveu — nao uma inventada aqui. Quando o roteiro e institucional,
+  // ela deixa `cta` vazio de proposito (e chega a anotar o porque no conceito); o padrao antigo
+  // carimbava "Conhecer a plataforma" por cima disso, e nao havia como tirar pela tela, porque o
+  // campo da peca estava vazio mesmo. O BrandStory ja trata o vazio: so desenha a pilula quando o
+  // texto nao e vazio.
   const props = {
     concept: concept.concept || "",
-    cta: concept.cta || "Conhecer a plataforma",
+    cta: typeof concept.cta === "string" ? concept.cta : "",
     scenes: scenes.map((s) => ({ type: s.type || "benefit", text: s.text || "", visual: s.subtitle || "" })),
   };
   const videoDir = path.join(loc.path, "video");
@@ -3631,14 +3686,18 @@ function previewFields(ct, parsed) {
     };
   }
   if (ct.kind === "feed") {
-    const caption = String(parsed.body || parsed.caption || "");
-    const firstLine = caption.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "4Selet.";
-    const headline = firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
+    // A MESMA conta do renderFeed, e de propósito: enquanto cada lado fazia a sua, a prévia cortava
+    // no meio da palavra e não trazia apoio, e o arquivo salvo cortava na palavra e trazia um
+    // parágrafo — quem aprovava a prévia aprovava uma arte que não era a que ia para o disco.
+    const arte = textoDaArteDoFeed({
+      headline: parsed.headline, subtext: parsed.subtext,
+      caption: String(parsed.body || parsed.caption || ""),
+    });
     return {
       width: 1080, height: 1350,
       eyebrow: "",
-      headline: highlightHeadline(headline),
-      subtext: "",
+      headline: highlightHeadline(arte.headline),
+      subtext: arte.subtext,
       cta: "",
       badge: "",
       image: parsed.image || "",
@@ -3693,6 +3752,15 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
   // salvava Grade de números no arquivo — medido: a pessoa aprovava uma arte e recebia outra.
   const semEscolha = !arranjoConhecido(template);
   let tplId = semEscolha ? "editorial" : template;
+  // O FEED no "Automático" seguia caindo no editorial fixo, enquanto o renderFeed (pickTemplate)
+  // decide por foto ou pela rotação por nome — a mesma armadilha que a peça de Imagem já teve, e
+  // metade do "a prévia mostra uma arte diferente da que vai para o disco".
+  if (semEscolha && ct.kind === "feed") {
+    const p = parsed || {};
+    tplId = (p.image && TEMPLATES.photo)
+      ? "photo"
+      : TEMPLATES_ROTACAO[hashDoNome(String(folder || "")) % TEMPLATES_ROTACAO.length];
+  }
   if (semEscolha && ct.kind === "image") {
     const p = parsed || {};
     const arqDoDado = arquetipoPorDado(p);

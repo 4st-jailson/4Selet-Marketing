@@ -68,7 +68,7 @@ Implementado em 2026-06-02. Máquina de estados explícita `draft → in_review 
 
 ### 2.3 Pipeline de vídeo (Remotion) — `src/`
 
-- Composition **`BrandStory`** — **composition de produção** parametrizada (consome `props.concept`/`cta`/`scenes[]`); é a que o **painel** renderiza ao gerar vídeo (`interface/lib/render.js`).
+- Composition **`BrandStory`** — **composition de produção** parametrizada; é a que o **painel** renderiza ao gerar vídeo (`interface/lib/render.js`). Vão para a tela `scenes[].type` (rótulo), `scenes[].text` (headline), o subtexto e o **`cta`** no card final (com `cta` vazio, nenhuma pílula é desenhada). **Duração = nº de cenas × 3,0s** (90 frames por cena, sem sobreposição). As cenas de exemplo do `src/Root.tsx` — o que o Remotion Studio abre e o CLI usa sem `--props` — deixaram de fechar com a frase-tag (agosto/2026).
 - Composition **`AdVideo`** (1080×1920, 15s) — estática de **referência**: 5 scenes, SVGs inline, Inter+JetBrains Mono, paleta oficial.
 - Composition **`CampanhaDemo`** — adaptação do AdVideo para o ângulo "Migração Sem Trauma" (campanha-demo).
 
@@ -126,9 +126,10 @@ Painel **em produção e ATIVO** em `https://mkt.4st.co` — **Docker Compose** 
 ### 2.14 Tipo nativo "4Selet na Mídia", pilares de conteúdo e busca de imagens (julho/2026)
 
 - **"4Selet na Mídia"** (`media_mention`, `interface/lib/config.js`) — tipo de peça para **aparição na imprensa**: o print da matéria montado num de **10 modelos** (`hand_tablet`, `foto_real`, `foto_mesa`, `foto_maos_mesa`, `celular`, `navegador`, `citacao`, `split`, `selo`, `camadas`), em até 4 formatos (4:5 → `feed.png` · 1:1 → `square.png` · 9:16 → `story.png` · 16:9 → `media_16x9.png`; padrão 4:5 + 16:9). Render por `renderMedia`/`tplMedia`, schema de legenda próprio no prompt. Só o 4:5 é publicável no feed.
+- **Story Instagram** (`instagram_story`) — sequência de **3 a 7 cartões 1080×1920** em `story/story_N.png`, com as faixas que o aplicativo cobre já reservadas (`STORY_SAFE`: 250px topo, 250px rodapé, 96px laterais). **Sem legenda** — o texto mora na arte. Render por `renderStory`; publicação **manual** (a Graph API não publica Stories). Desde agosto/2026 também entra no pacote padrão do pipeline.
 - **6 pilares de conteúdo** (`CONTENT_PILLARS`) — eixo temático de **toda** peça (`taxa_zero`, `educacional`, `curiosidade_mercado`, `prova_plataforma`, `novidade`, `motivacional`), com o ângulo injetado no prompt e a regra dura *"NEM toda peça é sobre Taxa Zero"*. Distinto das 5 colunas estratégicas da marca.
 - **Busca de imagens (Pexels)** — `interface/lib/pexels.js` + `interface/routes/pexels.js`: busca/aplica foto na arte (template `photo`) e como **fundo por slide** do carrossel, com página completa de resultados (filtros, paginação, crédito do autor). Chave em Configurações (`interface/data/pexels.json`).
-- **Regra dura de marca em vigor:** nenhuma peça nova é assinada com a frase-tag *"Para quem sabe que é Selet."* (bloco `GOVERNANCE` em `interface/lib/prompts.js`; `DEFAULT_FOOTER = ""` no render).
+- **Regra dura de marca em vigor:** nenhuma peça nova é assinada com a frase-tag *"Para quem sabe que é Selet."* (bloco `GOVERNANCE` em `interface/lib/prompts.js`; `DEFAULT_FOOTER = ""` no render). **Desde agosto/2026 a regra também existe em código:** `runBrandGovernance` (`interface/lib/validation.js`) devolve **erro** — o que bloqueia a gravação com HTTP 422 — quando a peça traz a frase, com ou sem acento; a única exceção é o brief pedir a frase explicitamente. Antes disso a regra vivia só no texto do prompt, e peça assinada salvava sem erro nem aviso (havia uma aprovada no acervo com a frase).
 
 ### 2.15 Auditoria dos agentes e da documentação (2026-07-30)
 

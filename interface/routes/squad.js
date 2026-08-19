@@ -52,7 +52,9 @@ router.delete("/token", adminOnly, (req, res) => {
 router.get("/requisicoes", (req, res) => {
   const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 60, 1), 300);
   const estado = squad.estado();
-  res.json({ requisicoes: squad.listar(limite), total: estado.total_requisicoes, estado });
+  // `total` aqui é a contagem crua da pasta: quem abre a tela quer saber quantas linhas existem
+  // no registro, não o recorte que o cartão de Configurações usa.
+  res.json({ requisicoes: squad.listar(limite), total: estado.total_linhas, estado });
 });
 
 router.get("/requisicoes/:id", (req, res) => {
@@ -94,8 +96,14 @@ router.post("/requisicoes/:id/reprocessar", adminOnly, async (req, res) => {
   if (!reg) return res.status(404).json({ error: "requisição não encontrada" });
   const payload = squad.lerPayload(req.params.id);
   if (!payload) {
+    // Duas razões MUITO diferentes para não haver o que reprocessar, e a mensagem única contava
+    // a errada: entrega que nunca chegou inteira (corpo acima do teto, dados cortados no meio)
+    // não tem conteúdo guardado desde o primeiro segundo — não foi o painel que apagou.
+    const naoChegou = reg.sem_payload_motivo === "nao_chegou_inteiro";
     return res.status(409).json({
-      error: "O conteúdo desta requisição não está mais guardado (os mais antigos são apagados para não encher o disco). Peça ao sistema do squad para enviar de novo.",
+      error: naoChegou
+        ? "Esta entrega não chegou inteira, então não há conteúdo guardado para montar de novo. Peça ao time do squad para enviar outra vez."
+        : "O conteúdo desta requisição não está mais guardado (os mais antigos são apagados para não encher o disco). Peça ao sistema do squad para enviar de novo.",
       code: "E_SEM_PAYLOAD",
     });
   }
@@ -112,17 +120,19 @@ router.post("/requisicoes/:id/reprocessar", adminOnly, async (req, res) => {
   const novo = squad.registrar({
     origem_ip: reg.origem_ip, origem_id: reg.origem_id, bytes: reg.bytes,
     titulo: lido.titulo, formato: lido.formato, cards: lido.cards.length,
+    // É entrega como qualquer outra: conta nos números do cartão e no selo da conexão.
+    tipo: "entrega", corpo_lido: true,
     resultado: "montando", reprocessamento_de: reg.id, logs,
   });
   res.json({ ok: true, requisicao: novo.id, montando: true });
 
   squad.receber(payload, { log, jaLido: lido }).then((r) => {
-    novo.resultado = "criada"; novo.peca = r.peca; novo.avisos = r.avisos || []; novo.logs = logs;
-    squad.atualizar(novo);
+    squad.encerrarEntrega(novo, "criada", {
+      peca: r.peca, formato: r.formato, cards: r.cards, avisos: r.avisos || [], logs,
+    });
     console.log("[squad] reprocessada " + reg.id + " -> " + r.peca);
   }).catch((e) => {
-    novo.resultado = "erro"; novo.erro = e.message; novo.erro_code = e.code || null; novo.logs = logs;
-    squad.atualizar(novo);
+    squad.encerrarEntrega(novo, "erro", { erro: e.message, erro_code: e.code || null, logs });
     console.error("[squad] reprocessar falhou: " + (e.code || "") + " " + e.message);
   });
 });
