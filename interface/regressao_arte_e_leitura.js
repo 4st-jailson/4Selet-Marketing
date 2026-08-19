@@ -115,7 +115,29 @@ function briefingLongo() {
   const nomes = ["regA_margem_" + un(), "regB_prazo_" + un(), "regC_convite_" + un()].map((n) => n + "_" + DATA);
   for (const n of nomes) { peca(n, { "ads/concept.json": { headline: "Margem real", subtext: "Quatro números.", cta: "Ver como funciona" } }); await render.render(n, "image", {}); }
   const tpls = nomes.map((n) => JSON.parse(fs.readFileSync(path.join(RAIZ, n, "render.json"), "utf8")).template);
-  checa(new Set(tpls).size >= 2, "peças diferentes recebem estilos diferentes", "(" + tpls.join(", ") + ")");
+  // Estas três provam a LIGAÇÃO (o sorteio chega no disco); a distribuição é medida logo abaixo.
+  checa(tpls.every((t) => render.TEMPLATE_IDS.indexOf(t) >= 0), "cada peça recebeu um estilo válido", "(" + tpls.join(", ") + ")");
+  // A DISTRIBUIÇÃO, num universo grande. Antes esta seção sorteava 3 nomes e exigia 3 estilos
+  // diferentes — com 3 estilos, dá tudo igual em 1 de 9 execuções, e a bateria acusava falha
+  // sem nada estar quebrado. O que importa medir é que nomes PARECIDOS se espalham: era esse o
+  // defeito real do hash antigo (h*31+c dava 5-1-2 em vez de perto de 3-3-2).
+  {
+    const ROT = render.TEMPLATES_ROTACAO;
+    const conta = {};
+    const amostra = [];
+    for (let i = 1; i <= 90; i++) amostra.push("campanha_taxa_zero_" + i + "_2026-08-18");
+    amostra.forEach((n) => {
+      const id = ROT[render.hashDoNome(n) % ROT.length];
+      conta[id] = (conta[id] || 0) + 1;
+    });
+    const usados = Object.keys(conta);
+    const minimo = Math.min.apply(null, ROT.map((r) => conta[r] || 0));
+    checa(usados.length === ROT.length, "em 90 nomes PARECIDOS, os três estilos aparecem",
+      ROT.map((r) => r + ":" + (conta[r] || 0)).join("  "));
+    // 90/3 = 30 por estilo no ideal. Piso em 15 (metade) pega o desequilíbrio grosseiro que o
+    // hash antigo tinha, sem quebrar por variação natural.
+    checa(minimo >= 15, "e nenhum fica de escanteio", "o menos sorteado ficou com " + minimo);
+  }
   await render.render(nomes[0], "image", {});
   checa(JSON.parse(fs.readFileSync(path.join(RAIZ, nomes[0], "render.json"), "utf8")).template === tpls[0], "re-renderizar não muda a cara");
 

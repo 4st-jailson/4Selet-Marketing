@@ -4092,6 +4092,10 @@ async function render(folder, kind, opts) {
 module.exports = {
   render, renderPreview, renderForDownload, renderEditedHtml, renderCarouselSlide,
   carouselSlidesHtml,
+  // A conta do sorteio do "Automático" e a lista que ele sorteia. Exportadas para a bateria
+  // medir a DISTRIBUIÇÃO num universo grande — antes ela sorteava 3 nomes e exigia 3 estilos
+  // diferentes, o que dá tudo igual em 1 de 9 execuções. Teste que grita à toa mina a confiança.
+  hashDoNome, TEMPLATES_ROTACAO,
   // Os 4 templates de arte e a tradução da superfície para eles: exportados para a bateria de
   // regressão conseguir montar UMA capa e olhar o HTML, sem escrever um carrossel inteiro em disco.
   TEMPLATES, fundoNoTemplate, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
