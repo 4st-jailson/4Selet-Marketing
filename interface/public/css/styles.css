@@ -502,7 +502,11 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
   position: relative; aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden;
   background: #000; box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
 }
-.ig-st-media .ig-post-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* CONTAIN, nunca cover. Uma arte 4:5 mandada ao Story aparecia com as laterais cortadas na
+   prévia — o texto sumia pela borda e a pessoa aprovava um enquadramento que não é o que sai.
+   Com contain, arte 9:16 preenche igual (contain e cover coincidem) e arte de outro formato
+   aparece inteira, com a sobra em volta, que é o que o Instagram faz. */
+.ig-st-media .ig-post-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ig-st-bars { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 2; }
 .ig-st-bar { flex: 1 1 0; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, .38); }
 .ig-st-bar.on { background: #fff; }
@@ -517,6 +521,12 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 }
 .ig-story .ig-nav { z-index: 3; }
 .ig-st-leg { margin: 8px 0 0; text-align: center; }
+/* Arte que não é 9:16 indo para o Story: aviso, não erro — o post sai, só não preenche a tela. */
+.aviso-formato {
+  margin: 8px 0 0; padding: 9px 12px; border-radius: var(--r-sm);
+  border: 1px solid var(--warn-border, var(--border)); background: var(--warn-bg, var(--surface-2));
+  color: var(--text-2); font-size: 12.5px; line-height: 1.45;
+}
 .pub-sched { display: flex; flex-direction: column; gap: 6px; }
 .pub-sched input[type="datetime-local"] { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 10px; max-width: 300px; }
 .pub-btns { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -742,6 +752,11 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 /* "Limpar filtros" agrupado à contagem (não isolado na ponta) */
 #lib-clear::before { content: "·"; margin-right: var(--s3); color: var(--text-mut); }
 .lib-quals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 2px var(--s4); }
+/* "Filtrar na busca:" mora sobre a barra de filtros, que é mais escura que as superfícies onde o
+   --text-mut foi calibrado: medido ali, ele dá 4,17:1 no tema claro — o único rótulo que continuou
+   abaixo de 4,5:1 depois do acerto de contraste. O --text-dim é o tom vizinho, já um passo mais
+   firme, e leva este rótulo a 4,7:1 sem mexer no token que o resto da tela usa. */
+.lib-quals > .hint { color: var(--text-dim); }
 .qual-chip { font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: var(--r-sm); border: 1px dashed var(--border); background: transparent; color: var(--text-dim); cursor: pointer; transition: color var(--tr), border-color var(--tr); }
 .qual-chip:hover { color: var(--accent-strong); border-color: var(--accent); }
 .qual-menu { position: fixed; z-index: 60; min-width: 180px; max-width: 280px; max-height: 320px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 4px; }

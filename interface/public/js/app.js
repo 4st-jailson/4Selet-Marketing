@@ -1235,43 +1235,12 @@ document.addEventListener("click", (e) => {
   document.querySelectorAll("details.dl-res[open], details.ed-menu[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
 });
 
-// O CARTÃO recebe do servidor UM arquivo já escolhido: o primeiro que casa na varredura da pasta
-// — e a pasta vem em ordem alfabética, então "slide_1.jpg" (a arte que a pessoa importou) vem
-// antes de "slide_1.png" (a que a prancheta redesenhou ao salvar a edição). Resultado medido:
-// depois de editar e salvar, o cartão da biblioteca seguia mostrando a arte ANTIGA para sempre,
-// enquanto a peça aberta mostrava a nova — quem olhava a biblioteca concluía que tinha perdido o
-// trabalho. Aqui o cartão passa a aplicar a MESMA preferência da galeria da peça e da publicação
-// (ORDEM_ARTE): existindo a versão em PNG da mesma arte, é ela que aparece. A pergunta "essa
-// versão existe?" é um HEAD (resposta sem corpo) e só sai para o cartão que está numa versão
-// fraca — hoje 9 dos 104 da biblioteca; o resto não faz requisição nenhuma a mais.
-function promoveMiniatura(img) {
-  if (!img || img.dataset.miniConferida) return;
-  // A galeria da peça já resolve o arquivo certo por umaPorArte: perguntar de novo ali seria
-  // refazer uma pergunta que já tem resposta.
-  if (img.closest(".media-item")) return;
-  let u;
-  try { u = new URL(img.src, location.href); } catch (e) { return; }
-  if (!u.searchParams.get("thumb")) return;               // só as miniaturas de cartão
-  const rel = u.searchParams.get("rel") || "";
-  const ext = (rel.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
-  const melhores = Object.keys(ORDEM_ARTE)
-    .filter((e) => ORDEM_ARTE[e] > (ORDEM_ARTE[ext] || 0))
-    .sort((a, b) => ORDEM_ARTE[b] - ORDEM_ARTE[a]);
-  if (!melhores.length) return;                            // já está na melhor versão
-  img.dataset.miniConferida = "1";                         // a troca do src recarrega: não repetir
-  const folder = decodeURIComponent((u.pathname.split("/")[3] || ""));
-  if (!folder) return;
-  (async () => {
-    for (const alvo of melhores) {
-      const relAlvo = rel.replace(/\.[^.]+$/, "." + alvo);
-      const url = API.thumbUrl(folder, relAlvo);
-      try {
-        const r = await fetch(url, { method: "HEAD" });
-        if (r.ok) { img.src = url; return; }
-      } catch (e) { return; }                              // sem rede: o cartão fica como está
-    }
-  })();
-}
+// Qual versão da arte o CARTÃO mostra (o .jpg importado ou o .png que a prancheta redesenhou ao
+// salvar a edição) é decidido no SERVIDOR, em lib/content.js › pickThumb/melhorVersao. Já foi
+// tentado resolver aqui, perguntando ao servidor "existe a versão em PNG?" com um HEAD por cartão:
+// funcionava, mas o cartão que legitimamente só tem .jpg respondia 404 — e 404 é erro vermelho no
+// console em toda abertura da biblioteca, para uma pergunta que a lista de arquivos da peça já
+// respondia. Medido: 8 sondagens por carga, 3 delas 404. Decidir no servidor custa zero requisição.
 function thumbHtml(t) {
   if (t.thumb && t.thumb.rel) {
     if (t.thumb.type === "video") return `<video class="thumb" src="${API.rawUrl(t.folder, t.thumb.rel)}" muted preload="metadata"></video>`;
@@ -3726,7 +3695,16 @@ async function refineTask(folder, task) {
     }
     router();
   } catch (e) {
-    if (e.status === 422 && e.data && e.data.governance) toast("Ajuste bloqueado por regra de marca — reescreva a orientação.", "error");
+    // QUAL regra, e não só "uma regra". A frase-tag da marca virou erro duro, e peça antiga já
+    // trazia a frase de antes: aí o ajuste é barrado por causa do texto que JÁ estava lá, não do
+    // que a pessoa pediu. Mandar "reescreva a orientação" sem dizer o motivo põe alguém a
+    // reescrever o pedido para sempre sem nunca descobrir que o problema é o fecho da peça.
+    if (e.status === 422 && e.data && e.data.governance) {
+      const errs = (e.data.governance.errors || []).filter(Boolean);
+      toast(errs.length
+        ? "Ajuste bloqueado por regra de marca. " + errs.join(" ") + " Peça o ajuste de novo dizendo para tirar isso do texto."
+        : "Ajuste bloqueado por regra de marca — reescreva a orientação.", "error");
+    }
     else toastAiError(e);
     btn.disabled = false; btn.textContent = orig;
   } finally { hideBusy(); }
@@ -4190,7 +4168,28 @@ function instagramStoryPreview(imgUrls, username) {
       <div class="ig-st-foot">Enviar mensagem</div>
     </div>
     <p class="hint ig-st-leg">${multi ? "Arte <strong class=\"igp-idx\">1</strong> de " + imgUrls.length + " — cada uma vira um Story separado." : "Uma arte, um Story."}</p>
+    <p class="aviso-formato" id="ig-st-formato" hidden></p>
   </div>`;
+}
+// A arte cabe no Story? Story é 9:16. Uma arte de feed (4:5) ou quadrada mandada pro Story
+// aparece com sobra em cima e embaixo — o Instagram não corta, mas também não preenche.
+// Isso se descobria DEPOIS de postar; agora a janela mede a arte de verdade (o próprio
+// arquivo, pelo naturalWidth) e diz antes.
+function avisaFormatoDoStory(root) {
+  const img = root.querySelector(".ig-st-media .ig-post-img");
+  const alvo = root.querySelector("#ig-st-formato");
+  if (!img || !alvo) return;
+  const medir = () => {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return;
+    const prop = w / h, story = 9 / 16;
+    if (Math.abs(prop - story) < 0.02) { alvo.hidden = true; return; }
+    alvo.textContent = prop > story
+      ? "Esta arte é mais larga que o Story (" + w + "×" + h + "). Ela vai aparecer inteira, com sobra em cima e embaixo — não cortada."
+      : "Esta arte é mais alta que o Story (" + w + "×" + h + "). Ela vai aparecer inteira, com sobra nas laterais.";
+    alvo.hidden = false;
+  };
+  if (img.complete) medir(); else img.addEventListener("load", medir, { once: true });
 }
 function instagramPreview(imgUrls, caption, username, modo) {
   if (modo === "story") return instagramStoryPreview(imgUrls, username);
@@ -4330,6 +4329,7 @@ async function openPublishModal(task) {
   ov.querySelector("[data-x='close']").onclick = close;
   ov.addEventListener("click", (e) => { if (e.target === ov) close(); }); // close() ignora o clique durante a publicação
   wireIgPreview(ov, imgs);
+  if (destino === "story") avisaFormatoDoStory(ov); // a peça já abriu no Story: mede na hora
   const capEl = ov.querySelector("#pub-caption");
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
   const publishing = ov.querySelector(".pub-publishing");
@@ -4347,6 +4347,7 @@ async function openPublishModal(task) {
       pv.dataset.modo = destino;
       pv.innerHTML = instagramPreview(imgs, capEl.value, uname, destino);
       wireIgPreview(ov, imgs);
+      if (noStory) avisaFormatoDoStory(ov);
     }
     const dh = ov.querySelector("#pub-dest-hint");
     // A explicação aparece SEMPRE — inclusive quando o destino é único e não há o que escolher.
@@ -4578,7 +4579,12 @@ async function viewPublications(arg, query) {
   const DEST = { feed: "Feed", story: "Story", reels: "Reels", outro: "Outro" };
   const selosDe = (x) => {
     const d = DEST[x && x.destino] ? x.destino : "feed";
-    const auto = d === "feed";
+    // O modo vem da MESMA lista que o servidor usa (config.DESTINOS, servida em /api/meta). Estava
+    // fixo em "só o feed é automático" — e no dia em que o Story passou a ser publicado pelo
+    // painel, o histórico começou a carimbar "Manual" numa publicação que o painel fez sozinho.
+    // Lendo a lista, o selo acompanha a mudança sem ninguém precisar lembrar deste ponto.
+    const def = (State.meta.destinos || []).find((z) => z.id === d);
+    const auto = def ? def.modo === "auto" : d === "feed";
     return '<span class="badge dest-' + d + '">' + esc(DEST[d]) + "</span>"
       + '<span class="badge ' + (auto ? "modo-auto" : "modo-manual") + '">' + (auto ? "Automático" : "Manual") + "</span>";
   };
@@ -8769,11 +8775,6 @@ async function boot() {
   if (metaFail) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   window.addEventListener("hashchange", router);
   window.addEventListener("auth:expired", onAuthExpired);
-  // Toda miniatura de cartão passa por aqui ao carregar (ver promoveMiniatura). A escuta é no
-  // documento e em fase de CAPTURA porque o evento de carga de imagem não borbulha — assim vale
-  // para qualquer lista de cartões, inclusive as que são redesenhadas depois (o filtro da
-  // biblioteca, as coleções), sem cada uma delas precisar lembrar de chamar nada.
-  document.addEventListener("load", (e) => { if (e.target && e.target.tagName === "IMG") promoveMiniatura(e.target); }, true);
   router();
 }
 boot();

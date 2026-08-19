@@ -397,14 +397,34 @@ function connectionState() {
 }
 
 // Orquestra a publicação de uma peça aprovada. dryRun (ou não-configurado) = simula.
+// O tipo da peça, lido da peça. `require` preguiçoso de propósito: content.js é o módulo grande
+// do painel e carregá-lo no topo daqui amarra os dois em ciclo na primeira vez que alguém fizer
+// content.js falar com a publicação. Se por qualquer motivo não der para classificar, devolve ""
+// — e "" só bate em destino nenhum, então a peça cai na recusa explicada em vez de ir para o
+// lugar errado calada.
+function kindDaPeca(folder) {
+  try {
+    const content = require("./content");
+    const t = content.getTask(folder);
+    return (t && t.kind) ? String(t.kind) : "";
+  } catch (e) { return ""; }
+}
+
 async function publishTask(folder, opts) {
   opts = opts || {};
   const gate = assertApproved(folder); // lança se não estiver aprovada/íntegra
+  // O TIPO da peça vem da PRÓPRIA PEÇA, não do que a tela mandou. A tela chama sem `kind`
+  // (sempre chamou), e enquanto a trava de destino lia `opts.kind` cru ela recebia vazio,
+  // não encontrava esse vazio na lista de tipos aceitos por nenhum destino e recusava TUDO
+  // com "Uma peça de conteúdo não vai para o Story" — inclusive a peça certa, no destino certo.
+  // classifyKind é a mesma conta que a tela usa para desenhar a peça, então as duas pontas
+  // enxergam o mesmo tipo. opts.kind, quando vem, ainda manda (é o caminho do agendamento).
+  const kind = String(opts.kind || "") || kindDaPeca(folder);
   // O DESTINO é quem manda: ele decide a arte que vai ao ar e como a Meta é chamada. Sem ele,
   // o painel decidia por "quantos arquivos achei", e todo post saía no feed.
   const destino = config.DESTINO_IDS.indexOf(String(opts.destino || "")) >= 0
-    ? String(opts.destino) : config.destinoPadrao(opts.kind);
-  if (!config.publicaSozinho(destino, opts.kind)) {
+    ? String(opts.destino) : config.destinoPadrao(kind);
+  if (!config.publicaSozinho(destino, kind)) {
     const d = config.destinoById(destino);
     const nome = (d && d.label) || destino;
     // DOIS motivos diferentes para a mesma recusa, e culpar o errado confunde:
@@ -414,11 +434,11 @@ async function publishTask(folder, opts) {
     const manual = !d || d.modo !== "auto";
     const e = manual
       ? new Error("O painel não publica " + nome + " sozinho — poste pelo celular e use “Já publiquei esta peça por fora — só registrar”.")
-      : new Error("Uma peça de " + (config.KIND_LABELS[String(opts.kind || "")] || opts.kind || "conteúdo")
+      : new Error("Uma peça de " + (config.KIND_LABELS[kind] || kind || "conteúdo")
         + " não vai para o " + nome + ". Escolha outro destino nesta janela.");
     e.code = manual ? "E_DESTINO_MANUAL" : "E_DESTINO_INCOMPATIVEL"; throw e;
   }
-  const images = pickImages(gate.dir, opts.kind, destino);
+  const images = pickImages(gate.dir, kind, destino);
   if (!images.length) {
     const e = new Error(destino === "story"
       ? "Esta peça não tem arte vertical para o Story. Gere a arte da peça (ou, na peça de Mídia, marque o formato 9:16)."
