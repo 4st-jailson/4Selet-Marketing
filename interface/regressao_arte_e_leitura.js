@@ -1162,6 +1162,51 @@ function briefingLongo() {
       "nada mais foca um campo invisivel (que era um nao-evento)");
   }
 
+
+  // ==========================================================================
+  // 25. ENTREGA DO SQUAD SEM O DESENHO EDITAVEL
+  // O contrato (PROMPT_SQUAD_WEBHOOK.md, secao 3.2) pede `cards[].html` junto do `png`, com
+  // aceite escrito: "a peca criada no painel permite editar o texto por dentro". O time deles
+  // esta mandando so o `png` — medido no payload do post 5. Isso passava CALADO: a peca nascia
+  // chapada, e quem abrisse o editor ia procurar o texto e nao achar.
+  // Detalhe que confunde: as DUAS entregas produzem um feed.html. O que muda e o que tem dentro
+  // — com html vem o desenho de verdade; sem ele, o painel monta a PRANCHETA (a imagem como
+  // camada de fundo). Foi por isso que a arte "parecia" ter chegado em HTML.
+  // ==========================================================================
+  {
+    secao("25. Entrega do squad sem o desenho editável");
+    const sq = fs.readFileSync(path.join(__dirname, "lib/squad.js"), "utf8");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const doc = fs.readFileSync(path.join(__dirname, "..", "PROMPT_SQUAD_WEBHOOK.md"), "utf8");
+
+    // -- 25a. O contrato pede, e com aceite --------------------------------
+    checa(doc.indexOf("cards[].html") >= 0, "o documento entregue ao squad pede o campo cards[].html");
+    checa(/Aceite:[^\n]*cards\[\]\.html/.test(doc), "com um aceite escrito, para nao virar 'opinioes'");
+    checa(doc.indexOf("3.2 Levar o HTML de cada card junto com a imagem") >= 0,
+      "e uma secao so sobre isso, apontando o codigo deles");
+
+    // -- 25b. Quando NAO vem, o painel diz -------------------------------
+    checa(sq.indexOf("chegou só como imagem, sem o desenho editável junto") >= 0,
+      "sem o html, a entrega gera um AVISO na peca (antes passava calado)");
+    checa(/avisos\.push\("A arte " \+ n \+ " chegou só como imagem[\s\S]{0,400}cards\[\]\.html/.test(sq),
+      "o aviso cita o campo exato que falta");
+    checa(/chegou só como imagem[\s\S]{0,500}seção 3\.2/.test(sq),
+      "e a secao do documento — da para cobrar do time deles sem procurar");
+    checa(/if \(!c\.html\) \{/.test(sq), "o aviso so aparece quando o html realmente nao veio");
+
+    // -- 25c. E a TELA diz antes do clique -------------------------------
+    checa(app.indexOf("A arte chegou como imagem") >= 0,
+      "a tela avisa o limite ANTES do clique, em vez de deixar procurar o texto");
+    checa(app.indexOf("não para reescrever o texto que já está lá") >= 0,
+      "dizendo o que da (escrever por cima) e o que nao da (reescrever)");
+
+    // -- 25d. A prova viva, nos dois sentidos ----------------------------
+    // Prancheta = imagem chapada como camada (class="base"). Desenho de verdade = tem o texto.
+    checa(sq.indexOf("gravarDeHtml") >= 0, "existe o caminho que transforma o html recebido na arte da peca");
+    checa(/sanitizeArtHtml/.test(sq), "e ele higieniza o html de fora antes de desenhar");
+    checa(/strictNet: true/.test(sq), "desenhando com a rede bloqueada (html de fora nao busca nada)");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

@@ -596,6 +596,17 @@ async function receberAgora(payload, opcoes) {
       if (!usouHtml) {
         if (!c.buf) { const e = new Error("a arte " + n + " não pôde ser gravada"); e.code = "E_SEM_ARTE"; throw e; }
         content.writeMediaFile(folder, base + "." + c.ext, c.buf);
+        // O desenho editável NÃO veio, e isso passava calado: a peça nascia chapada e quem
+        // abrisse o editor ia procurar o texto e não achar. O contrato pede o `html` junto do
+        // `png` (seção 3.2 do PROMPT_SQUAD_WEBHOOK.md, com o aceite escrito) — quando ele falta,
+        // o painel diz, em vez de deixar a pessoa descobrir clicando.
+        if (!c.html) {
+          avisos.push("A arte " + n + " chegou só como imagem, sem o desenho editável junto. Ela está correta e"
+            + " pode ser publicada — mas o texto dela faz parte da figura: dá para escrever por cima, e não para"
+            + " reescrever o que já está lá. Para destravar a edição do texto, o time do squad precisa mandar o"
+            + " campo cards[].html junto com o png (está na seção 3.2 do documento da integração).");
+          log("Arte " + n + ": veio sem cards[].html — a peça fica editável só por cima.");
+        }
       }
     }
     log("Artes gravadas.");
