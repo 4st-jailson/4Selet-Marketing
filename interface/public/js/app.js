@@ -7389,7 +7389,11 @@ async function viewSettings() {
         badge: sq.conectado
           ? (sq.ultimo_resultado === "erro"
             ? '<span class="badge warn">última entrega falhou</span>'
-            : '<span class="badge ok">pronto para receber</span>')
+            : (sq.entregas > 0
+              // Já chegou arte: a integração não está "pronta", está funcionando. Dizer que está
+              // à espera depois de nove entregas é o painel contando uma história velha.
+              ? '<span class="badge ok">recebendo artes</span>'
+              : '<span class="badge ok">pronto para receber</span>'))
           : '<span class="badge paused">não conectado</span>',
         body: `
       <p class="muted">O sistema do squad envia as artes prontas para cá. Elas chegam em <strong>Aprovados</strong>, com a marca de que vieram de lá, prontas para você revisar, editar ou publicar.</p>
@@ -7412,10 +7416,16 @@ async function viewSettings() {
         <div class="flex"><input id="sq-url" readonly value="${esc(enderecoSquad)}" /><button class="btn btn-sm" id="sq-copy" type="button">Copiar</button></div>
         <p class="hint">Eles cadastram este endereço na integração <span class="codeblock">webhook_post</span>, acrescentando <span class="codeblock">?token=</span> e o token que eles mesmos geraram.</p>
       </div>`}
+      ${/* "Entregas" contava TODA batida na porta — inclusive as varreduras automáticas da
+             internet que a porta recusou. Medido em produção: dizia 9 quando era 1 entrega,
+             7 varreduras e 1 teste. Agora entrega é o que virou peça; o resto vira uma linha
+             separada, que é informação de segurança e não de produção. */ ""}
       <ul class="sq-facts mt">
-        <li><span>Entregas recebidas</span><strong>${sq.total_requisicoes || 0}</strong></li>
-        <li><span>Última entrega</span><strong>${sq.ultima_requisicao ? esc(fmtDateTime(sq.ultima_requisicao)) : "nenhuma ainda"}</strong></li>
+        <li><span>Artes recebidas</span><strong>${sq.entregas || 0}</strong></li>
+        <li><span>Última arte</span><strong>${sq.ultima_entrega ? esc(fmtDateTime(sq.ultima_entrega)) : "nenhuma ainda"}</strong></li>
+        ${(sq.total_requisicoes || 0) > (sq.entregas || 0) ? '<li><span>Outras batidas na porta</span><strong>' + ((sq.total_requisicoes || 0) - (sq.entregas || 0)) + '</strong></li>' : ""}
       </ul>
+      ${(sq.total_requisicoes || 0) > (sq.entregas || 0) ? '<p class="hint">As outras batidas são testes de conexão e tentativas sem token — varredura automática da internet, que a porta recusou. Não exigem nada de você; estão no registro para você poder conferir.</p>' : ""}
       <div class="flex mt"><button class="btn btn-primary" id="sq-req">Ver requisições</button><button class="btn" id="sq-trocar">Definir outro token</button><button class="btn btn-danger" id="sq-off">Desconectar</button></div>
       <div id="sq-edit" class="sq-caminhos mt" style="display:none">
         <p class="muted">O token que vale é um só. Escolha de onde vem o novo:</p>

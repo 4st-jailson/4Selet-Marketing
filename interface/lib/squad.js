@@ -105,6 +105,7 @@ function removerToken(quem) {
 function estado() {
   const cfg = lerConfig();
   const reqs = listar(1);
+  const ent = contadoresDeEntrega();   // uma vez só: ele pode gravar a config na primeira leitura
   return {
     conectado: !!cfg.token,
     token_dica: cfg.token ? ("…" + String(cfg.token).slice(-4)) : null,
@@ -113,8 +114,29 @@ function estado() {
     como_veio: cfg.como_veio || null,
     ultima_requisicao: cfg.ultima_requisicao || null,
     ultimo_resultado: reqs.length ? reqs[0].resultado : null,
-    total_requisicoes: contarRequisicoes(),
+    total_requisicoes: contarRequisicoes(),   // TODAS as batidas na porta, inclusive as recusadas
+    // O que interessa na tela: quantas artes chegaram de verdade, e quando foi a última.
+    entregas: ent.entregas,
+    ultima_entrega: ent.ultima_entrega,
   };
+}
+// Instalação que já rodava antes deste contador não tem o número na config. Nesse caso ele é
+// deduzido do registro UMA vez (com teto, para não repetir o congelamento de 10 mil linhas) e
+// guardado — das próximas vezes é só leitura.
+function contadoresDeEntrega() {
+  const cfg = lerConfig();
+  if (cfg.entregas != null) return { entregas: Number(cfg.entregas) || 0, ultima_entrega: cfg.ultima_entrega || null };
+  let entregas = 0, ultima = null;
+  try {
+    for (const r of listar(500)) {
+      if (r && r.peca && RESULTADO_ENTREGA.indexOf(r.resultado) >= 0) {
+        entregas++;
+        if (!ultima || String(r.recebido_em) > String(ultima)) ultima = r.recebido_em;
+      }
+    }
+  } catch (e) { /* sem registro legível: começa do zero */ }
+  try { if (cfg.token) { cfg.entregas = entregas; cfg.ultima_entrega = ultima; gravarJson(ARQ_TOKEN, cfg, 0o600); } } catch (e) {}
+  return { entregas, ultima_entrega: ultima };
 }
 // Comparação em tempo constante. timingSafeEqual EXPLODE se os buffers tiverem tamanhos
 // diferentes — por isso comparamos o sha256 dos dois lados, que tem tamanho fixo.
@@ -183,9 +205,28 @@ function registrarRecusa(ip, motivo) {
   if (ultima && Date.now() - new Date(ultima.recebido_em).getTime() < RECUSA_INTERVALO_MS) return null;
   return registrar({ origem_ip: ip, resultado: "recusada", erro: motivo, logs: [] });
 }
+// Uma ENTREGA é uma requisição que virou PEÇA. O cartão de Configurações contava todo arquivo
+// do registro — inclusive as varreduras automáticas da internet que a porta recusou. Medido em
+// produção: dizia "9 entregas recebidas" quando eram 1 entrega, 7 varreduras e 1 teste.
+// O contador vive na config e sobe UMA vez por requisição (atualizar é chamada várias vezes
+// para o mesmo registro). Contar varrendo a pasta a cada abertura da tela era o caminho que já
+// congelou o painel uma vez — ver o comentário do "CORTA ANTES DE LER" mais acima.
+const RESULTADO_ENTREGA = ["criada", "atualizada"];
 function atualizar(reg) {
   gravarJson(caminhoReq(reg.id), reg);
   return reg;
+}
+// A contagem vive AQUI, e não em quem grava o registro: quem sabe que uma arte chegou é o
+// caminho que cria a peça. Colocada no atualizar(), ela ficava em zero sempre que a entrega não
+// passasse pela rota HTTP — inclusive no reprocessamento pela tela de Requisições.
+function contabilizarEntrega(quando) {
+  try {
+    const cfg = lerConfig();
+    if (!cfg.token) return;
+    cfg.entregas = (Number(cfg.entregas) || 0) + 1;
+    cfg.ultima_entrega = quando || new Date().toISOString();
+    gravarJson(ARQ_TOKEN, cfg, 0o600);
+  } catch (e) { /* contagem é informativa: nunca derruba a entrega */ }
 }
 function guardarPayload(id, payload) {
   garanteDirs();
@@ -669,6 +710,7 @@ async function receberAgora(payload, opcoes) {
     if (avisos.length) { try { content.setOrigem(folder, Object.assign(content.getOrigem(folder) || {}, { avisos })); } catch (e) {} }
 
     concluirReserva(p.origem_id, folder);
+    contabilizarEntrega();
     return { ok: true, peca: folder, formato: p.formato, cards: p.cards.length, avisos, resumo: p };
   } catch (e) {
     // Peça pela metade é pior que peça nenhuma: some da frente e libera o identificador.
