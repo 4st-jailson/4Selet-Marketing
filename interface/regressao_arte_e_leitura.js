@@ -516,9 +516,14 @@ function briefingLongo() {
     const pub = fs.readFileSync(path.join(__dirname, "lib/publish.js"), "utf8");
 
     // executa a função de verdade que a tela usa, extraída do arquivo
+    // A função depende da tabela de prioridade das extensões, que virou uma constante
+    // compartilhada da tela (ORDEM_ARTE). Extrair só a função deixava a bateria com um
+    // ReferenceError na cara — o teste tem que trazer o que a função precisa para viver.
+    const tabela = (app.match(/const ORDEM_ARTE = \{[^}]*\};/) || [""])[0];
     const corpo = (app.match(/function umaPorArte\(files\) \{[\s\S]*?\n\}/) || [""])[0];
+    checa(!!tabela, "a tela declara a ordem de preferência das versões da arte (ORDEM_ARTE)");
     checa(!!corpo, "a tela tem a regra de uma arte por nome (umaPorArte)");
-    const umaPorArte = new Function(corpo + "; return umaPorArte;")();
+    const umaPorArte = new Function(tabela + "\n" + corpo + "; return umaPorArte;")();
 
     // o estado real de um carrossel importado JÁ preparado para edição
     const arquivos = [];

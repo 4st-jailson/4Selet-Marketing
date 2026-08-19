@@ -301,6 +301,13 @@ hr.sep { border: none; border-top: 1px solid var(--border-soft); margin: var(--s
 /* ---- buttons ---- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  /* `normal`, e não um número. Um <button class="btn"> já recebia o `normal` do navegador; um
+     <a class="btn"> HERDAVA o 1.55 do corpo — dois botões vizinhos, "Ver no quadro" (button) e
+     "Baixar todos (ZIP)" (a), ficavam com caixas de texto de alturas diferentes dentro da mesma
+     pílula. A primeira tentativa foi fixar 1.3, e PIOROU: o "Gerar com IA" (14,5px) saiu de 0
+     para 1,8px fora do centro e cresceu 1,8px de altura. O `normal` usa as métricas da própria
+     fonte, que centram melhor que qualquer múltiplo escolhido a dedo — o anômalo era a herança. */
+  line-height: normal;
   font-family: inherit; font-size: 13.5px; font-weight: 600;
   padding: 9px 16px; border-radius: var(--r-sm);
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
@@ -1308,6 +1315,32 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .utable .u-role:hover { border-color: var(--accent); }
 .utable .u-actions { text-align: right; white-space: nowrap; }
 .utable .u-actions .btn { margin-left: 4px; }
+/* Faixa de rolagem da tabela (ver preparaTabelas no app.js). A tabela é mais larga que a tela do
+   celular; sem uma área de rolagem SÓ DELA, arrastar para o lado movia a página inteira e levava
+   junto o cabeçalho fixo e o menu. `overscroll-behavior-x: contain` impede que o gesto vaze para
+   a página quando a rolagem da tabela chega ao fim. */
+.tbl-rolagem { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+@media (max-width: 560px) {
+  /* Abaixo de 560px a tabela vira lista de cartões empilhados — o padrão do resto do painel.
+     Cada linha é um cartão, cada célula ganha o rótulo da coluna (data-rotulo, carimbado pelo
+     preparaTabelas). Assim nada precisa rolar de lado e os botões ficam DENTRO do cartão. */
+  .tbl-rolagem { overflow-x: visible; }
+  .utable, .utable tbody, .utable tr, .utable td { display: block; width: 100%; }
+  .utable thead { display: none; }
+  .utable tr { border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: var(--surface-2); padding: var(--s3); margin-bottom: var(--s3); }
+  .utable tr:last-child { margin-bottom: 0; }
+  .utable td { border-bottom: none; padding: 4px 0; }
+  .utable tbody tr:hover td { background: transparent; }
+  .utable td[data-rotulo]::before {
+    content: attr(data-rotulo); display: block; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .06em; font-weight: 700; color: var(--text-dim); margin-bottom: 2px;
+  }
+  /* Coluna sem título (a das ações) não tem rótulo a mostrar: fica só o espaço antes dos botões. */
+  .utable td:not([data-rotulo]) { margin-top: 2px; }
+  .utable .u-actions { text-align: left; white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; }
+  .utable .u-actions .btn { margin-left: 0; }
+  .utable .u-role { width: 100%; }
+}
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
 /* Aviso de painel desatualizado. Fica embaixo, discreto, e não cobre nada: é informação, não
    interrupção — quem está no meio de uma peça termina antes de recarregar. z-index abaixo dos
@@ -1599,7 +1632,11 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 
 /* ---- #5 tags ---- */
 .cc-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 1px; }
-.cc-tag { font-size: 11px; line-height: 1; padding: 4px 8px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-strong); border: 1px solid var(--border-soft); font-weight: 600; white-space: nowrap; }
+/* inline-flex + align-items: center, e não o `inline` de antes. A etiqueta convive numa faixa
+   flex com o selo de estado, que é mais alto; sem `align-items` no contêiner, o padrão é
+   ESTICAR — a pílula crescia até a altura do selo e o texto ficava colado no topo dela, com o
+   dobro de espaço embaixo. Centrar aqui resolve em qualquer contêiner, esticado ou não. */
+.cc-tag { display: inline-flex; align-items: center; font-size: 11px; line-height: 1; padding: 4px 8px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-strong); border: 1px solid var(--border-soft); font-weight: 600; white-space: nowrap; }
 .cc-tag.more { background: var(--surface-3); color: var(--text-mut); }
 #task-tags .cc-tag { font-size: 12px; }
 
