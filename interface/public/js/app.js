@@ -1288,21 +1288,31 @@ function avisoDeOrigem(origem) {
   // Cancelado LÁ não apaga nada AQUI: a peça pode já ter sido editada, agendada ou publicada.
   // O painel avisa e deixa a decisão com quem opera — inclusive a de não fazer nada.
   const cancelado = origem.cancelado_em ? `
-    <div class="sq-cancelado mt">
-      <strong>O time do squad cancelou este post</strong> em ${esc(fmtDateTime(origem.cancelado_em))}${origem.cancelado_motivo ? " — " + esc(origem.cancelado_motivo) : "."}
-      <br />Nada foi apagado por aqui. Se você concorda, descarte a peça; se ela já foi publicada, o cancelamento não desfaz a publicação.
+    <div class="sq-cancelado">
+      <strong>O time do squad cancelou este post</strong> em ${esc(fmtDateTime(origem.cancelado_em))}${origem.cancelado_motivo ? " — " + esc(String(origem.cancelado_motivo).trim().replace(/\.+$/, "")) + "." : "."}
+      Nada foi apagado por aqui. Se você concorda, descarte a peça; se ela já foi publicada, o cancelamento não desfaz a publicação.
     </div>` : "";
   const substitui = origem.substitui ? `
-    <p class="muted mt">Esta é uma <strong>versão refeita</strong>. A anterior continua no painel:
-    <a href="#/task/${encodeURIComponent(origem.substitui)}">abrir a versão anterior</a>.</p>` : "";
-  return `<div class="card mt sq-origem-card">
-    <h3>Esta arte veio do sistema squad</h3>
-    ${cancelado}
-    <p class="muted mt">Ela foi gerada fora do painel${origem.id ? " (post " + esc(String(origem.id)) + ")" : ""}${quando ? " e chegou aqui em " + esc(quando) : ""}.
-    Você pode revisar, editar e publicar normalmente${origem.pauta ? " — a pauta era: " + esc(origem.pauta) : ""}.</p>
-    ${substitui}
-    ${avisos.length ? '<ul class="sq-avisos mt">' + avisos.map((a) => "<li>" + esc(a) + "</li>").join("") + "</ul>" : ""}
-    <p class="hint mt"><a href="#/requisicoes">Ver a entrega no registro de requisições</a></p>
+    <div class="sq-nota">Esta é uma <strong>versão refeita</strong>. A anterior continua no painel:
+    <a href="#/task/${encodeURIComponent(origem.substitui)}">abrir a versão anterior</a>.</div>` : "";
+  // Era um CARTÃO inteiro, do tamanho dos outros, empurrando a arte para baixo — para dizer uma
+  // coisa que se lê numa linha. E repetia a etiqueta "Veio do squad" da faixa de cima: o mesmo
+  // fato anunciado duas vezes. Agora é uma fita fina, e ela só cresce quando há o que decidir
+  // (post cancelado, versão refeita, ou algo que o painel percebeu ao receber).
+  const temAlerta = !!(cancelado || substitui || avisos.length);
+  return `<div class="sq-fita${temAlerta ? " sq-fita-alerta" : ""} mt">
+    <span class="sq-fita-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7"/><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/>
+      </svg>
+    </span>
+    <div class="sq-fita-txt">
+      <span class="sq-fita-linha"><strong>Recebida do squad</strong>${quando ? " · chegou em " + esc(quando) : ""}${origem.pauta ? " · pauta: “" + esc(origem.pauta) + "”" : ""}</span>
+      <span class="hint">Foi gerada fora do painel. Aqui você revisa, edita e publica como em qualquer outra peça.</span>
+      ${cancelado}${substitui}
+      ${avisos.length ? '<ul class="sq-avisos">' + avisos.map((a) => "<li>" + esc(a) + "</li>").join("") + "</ul>" : ""}
+    </div>
+    <a class="sq-fita-link" href="#/requisicoes">ver a entrega</a>
   </div>`;
 }
 
@@ -1795,15 +1805,33 @@ function umaPorArte(files) {
   return Array.from(porNome.values());
 }
 
+// O editor abre a RECEITA da arte — o .html ao lado do .png. Então a pergunta é "existe a
+// receita?", não "de onde a peça veio". Era `!status.imported`, e isso deixava a arte do squad
+// sem edição MESMO com o feed.html na pasta: o cartão de preparar dizia "já dá para editar, use
+// o painel de arte normal" e o painel de arte respondia que não dava. A peça caía no vão.
+function temReceitaDeEdicao(rel, files) {
+  const alvo = String(rel).replace(/\.[^./]+$/, ".html").toLowerCase();
+  return (files || []).some((f) => String(f.rel).toLowerCase() === alvo);
+}
 function mediaGallery(folder, task) {
   const imgs = umaPorArte(task.files.filter((f) => f.isImage));
   const vids = task.files.filter((f) => f.isVideo);
   if (!imgs.length && !vids.length) return "";
-  const editable = task.zone === "active" && (task.kind === "image" || task.kind === "feed" || task.kind === "media") && !(task.status && task.status.imported);
+  const zonaOk = task.zone === "active" && (task.kind === "image" || task.kind === "feed" || task.kind === "media");
+  const podeEditar = (f) => zonaOk && temReceitaDeEdicao(f.rel, task.files);
+  const editable = imgs.some(podeEditar);
   const items = []
     .concat(vids.map((f) => `<div class="media-item"><div class="media-frame"><video src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" controls preload="metadata"></video><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div><a class="btn btn-sm btn-ghost" href="${API.downloadUrl(folder, f.rel)}" download>baixar ${esc(f.rel.split("/").pop())}</a></div>`))
-    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
-  return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">${editable ? "Clique para ampliar e editar — adicionar textos, formas, logo e ajustar." : "Clique na imagem para ampliar dentro do site."}</p><div class="media-gallery mt">${items.join("")}</div></div>`;
+    .concat(imgs.map((f) => `<div class="media-item"><div class="media-frame"><img src="${API.rawUrl(folder, f.rel)}&v=${f.mtime || 0}" alt="${esc(f.rel)}" data-folder="${esc(folder)}" data-rel="${esc(f.rel)}" data-edit="${podeEditar(f) ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" /><button class="media-zoom" title="Ampliar" aria-label="Ampliar" onclick="openLightboxFromEl(this)">⤢</button></div>${dlMenu(API.downloadUrl(folder, f.rel), "baixar")}</div>`));
+  // Arte que chegou de FORA vem como imagem chapada: o texto dela está dentro dos pixels. Dá
+  // para escrever por cima, mas não para reescrever o que já está lá — e isso precisa estar dito
+  // ANTES do clique, senão a pessoa abre o editor, procura o texto e conclui que está quebrado.
+  const veioDeFora = !!(task.status && task.status.imported);
+  const dica = !editable ? "Clique na imagem para ampliar dentro do site."
+    : veioDeFora
+      ? "Clique para ampliar e editar. <strong>A arte chegou como imagem</strong>, então o texto dela faz parte da figura: dá para escrever por cima, acrescentar logo e formas e reenquadrar — mas não para reescrever o texto que já está lá."
+      : "Clique para ampliar e editar — adicionar textos, formas, logo e ajustar.";
+  return `<div class="card"><h3>Arte gerada</h3><p class="muted mt">${dica}</p><div class="media-gallery mt">${items.join("")}</div></div>`;
 }
 
 // #2 — Galeria única e ordenada dos slides de um carrossel (slide_1..n): cada slide
@@ -1813,13 +1841,17 @@ function carouselStrip(folder, task) {
     .map((f) => ({ f, n: parseInt((f.rel.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
     .sort((a, b) => a.n - b.n);
   if (slides.length < 2) return "";
-  const editable = task.zone === "active" && !(task.status && task.status.imported);
+  // Mesma regra da galeria: o que decide é existir a receita (.html) ao lado do slide.
+  const podeEditar = (rel) => task.zone === "active" && temReceitaDeEdicao(rel, task.files);
+  // Regerar com a IA é outra coisa: precisa do CONCEITO que a IA escreveu. Arte que chegou
+  // pronta de fora não tem conceito — dá para editar, não para regerar.
+  const podeRegerar = task.zone === "active" && !(task.status && task.status.imported);
   const items = slides.map((s) =>
     `<div class="media-item"><div class="media-frame">
       <span class="slide-num">${s.n}</span>
-      <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${editable ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
+      <img src="${API.rawUrl(folder, s.f.rel)}&v=${s.f.mtime || 0}" alt="Slide ${s.n}" data-folder="${esc(folder)}" data-rel="${esc(s.f.rel)}" data-edit="${podeEditar(s.f.rel) ? 1 : 0}" loading="lazy" onclick="openLightboxFromEl(this)" />
       <button class="media-zoom" title="Ampliar slide ${s.n}" aria-label="Ampliar slide ${s.n}" onclick="openLightboxFromEl(this)">⤢</button>
-    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}${editable ? '<button class="slide-regen" data-n="' + s.n + '" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ' + s.n + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span>Regerar</span></button>' : ""}</div>`).join("");
+    </div>${dlMenu(API.downloadUrl(folder, s.f.rel), "baixar slide " + s.n)}${podeRegerar ? '<button class="slide-regen" data-n="' + s.n + '" title="Regerar só este slide com a IA (mantém os outros)" aria-label="Regerar slide ' + s.n + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg><span>Regerar</span></button>' : ""}</div>`).join("");
   return `<div class="card"><h3>Slides do carrossel <span class="dim">(${slides.length})</span></h3>
     <p class="muted mt">Na ordem de publicação — clique para ampliar ou baixe cada slide.</p>
     <div class="media-gallery mt">${items}</div>
@@ -1884,7 +1916,9 @@ function openCarouselBoard(folder, task) {
   const stage = $("#bd-stage"), canvas = $("#bd-canvas"), marquee = $("#bd-marquee");
   let zoom = 1, panX = 0, panY = 0, zc = 1, space = false;
   const items = [], sel = new Set();
-  const editable = task.zone === "active" && !(task.status && task.status.imported); // duplo-clique edita
+  // Mesma correção da galeria: o duplo-clique abre o EDITOR, e o editor precisa da receita —
+  // não de saber se a peça veio de fora.
+  const editable = task.zone === "active" && (task.files || []).some((f) => f.isImage && temReceitaDeEdicao(f.rel, task.files));
   const snapOn = () => $("#bd-snap") && $("#bd-snap").checked;
   const applyView = () => { canvas.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + zoom + ")"; };
   const place = (it) => { it.el.style.left = it.x + "px"; it.el.style.top = it.y + "px"; };
@@ -1903,7 +1937,7 @@ function openCarouselBoard(folder, task) {
     // arrastar/selecionar). Só p/ peça editável (ativa e não importada); senão, avisa.
     wrap.addEventListener("dblclick", (e) => {
       e.preventDefault(); e.stopPropagation();
-      if (!editable) { toast((task.status && task.status.imported) ? "Peça importada — os slides não são editáveis aqui." : "Só dá para editar peças em rascunho ou em revisão.", "info"); return; }
+      if (!editable) { toast(task.zone !== "active" ? "Só dá para editar peças em rascunho ou em revisão." : "Esta arte não tem o desenho editável — abra a peça e use “Preparar para editar”.", "info"); return; }
       close(); openHtmlEditor(folder, task, it.rel, { backToBoard: true }); // close() salva a montagem
     });
     canvas.appendChild(wrap); items.push(it); dragItem(it);
@@ -3823,7 +3857,11 @@ async function viewTaskDetail(folder) {
   const pillarTag = (task.pillar && pillarLabel(task.pillar)) ? tag("Pilar: " + pillarLabel(task.pillar)) : "";
   State.task = task; // o "Editar" do lightbox usa a peça atual
   setView(`
-    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(effStatus(s.status, s.published_at))}${tag(kindLabel(task.kind))}${(s.origem && s.origem.sistema === "squad") ? tag("Veio do squad") : (isImported ? tag("Importada") : "")}${pillarTag}${tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
+    ${/* A zona e o estado tinham o MESMO nome: "Aprovado" saía duas vezes na mesma faixa, uma do
+          selo de estado e outra da etiqueta de zona. E a etiqueta "Veio do squad" repetia o que a
+          fita logo abaixo já diz por extenso. Cada fato aparece UMA vez: o estado no selo, a
+          origem na fita, e a zona só quando ela acrescenta algo (arquivada). */ ""}
+    <div class="flex flex-wrap mb" style="align-items:center">${statusBadge(effStatus(s.status, s.published_at))}${tag(kindLabel(task.kind))}${(!(s.origem && s.origem.sistema === "squad") && isImported) ? tag("Importada") : ""}${pillarTag}${zonaRedundante(task.zone, s.status) ? "" : tag(zoneLabel(task.zone))}${(s.platforms || []).map((p) => tag(platformLabel(p))).join("")}${techSlug}<button class="btn btn-sm btn-ghost" id="btn-phone" title="Ver como fica no celular" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>Ver no celular</button></div>
     ${avisoDeOrigem(s.origem)}
     ${task.kind === "carousel" ? (carouselStrip(folder, task) || mediaGallery(folder, task)) : mediaGallery(folder, task)}
     <div class="grid grid-2 mt">
@@ -3962,22 +4000,40 @@ async function deleteTagGlobally(tag) {
   if (location.hash.indexOf("/settings") !== -1) viewSettings();
 }
 
+// A zona repete o estado? "Aprovado" e "Aprovado" na mesma faixa não informam duas coisas.
+function zonaRedundante(zona, estado) {
+  return (zona === "approved" && estado === "approved");
+}
+
+// As ações do fluxo. O selo de ESTADO e os BOTÕES de ação estavam na mesma fileira, e o selo
+// verde "aprovada e salva" parecia um botão desligado — estado com cara de ação. Agora o estado
+// tem a própria linha, as ações principais vêm juntas, e o registro manual (que quase ninguém
+// usa, e que confunde com publicar) fica à parte, discreto.
 function workflowActions(task) {
   const s = task.status.status;
-  if (s === "draft") return `<button class="btn btn-primary" data-wf="preview">Enviar para revisão</button>`;
-  if (s === "in_review") return `<button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Gerar prévia de novo</button>`;
-  if (s === "approved") {
-    // Já publicada: não oferece "Publicar" de novo (evita duplicar), só o selo + reabrir.
-    if (task.status.published_at) return `${statusBadge("published")}<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
-    return `<span class="badge approved">aprovada e salva</span><button class="btn btn-primary" data-wf="publish">Publicar ou agendar</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button><button class="btn btn-ghost btn-sm" data-wf="mark-published" title="Já publicou esta peça por fora do painel? Registre aqui para ela aparecer em Publicações — não posta de novo.">Marcar como já publicada</button>`;
+  if (s === "draft") return `<div class="wf-acoes"><button class="btn btn-primary" data-wf="preview">Enviar para revisão</button></div>`;
+  if (s === "in_review") {
+    return `<div class="wf-acoes"><button class="btn btn-primary" data-wf="approve">Aprovar</button><button class="btn btn-danger" data-wf="reject">Rejeitar</button><button class="btn btn-sm" data-wf="preview">Gerar prévia de novo</button></div>`;
   }
-  if (s === "rejected") return `<button class="btn btn-sm" data-wf="rework">Reabrir para edição</button>`;
+  if (s === "approved") {
+    // Já publicada: não oferece "Publicar" de novo (evita duplicar), só o estado + reabrir.
+    if (task.status.published_at) {
+      return `<div class="wf-estado">${statusBadge("published")}<span class="hint">Já está no ar. Reabrir cria uma nova versão para editar.</span></div>
+        <div class="wf-acoes"><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button></div>`;
+    }
+    return `<div class="wf-estado"><span class="badge approved">Aprovada e travada</span><span class="hint">A arte não muda mais até você reabrir.</span></div>
+      <div class="wf-acoes"><button class="btn btn-primary" data-wf="publish">Publicar ou agendar</button><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button></div>
+      <button class="wf-secundaria" data-wf="mark-published" title="Já publicou esta peça por fora do painel? Registre aqui para ela aparecer em Publicações — não posta de novo.">Já publiquei esta peça por fora — só registrar</button>`;
+  }
+  if (s === "rejected") return `<div class="wf-acoes"><button class="btn btn-sm" data-wf="rework">Reabrir para edição</button></div>`;
   return "";
 }
+// A dica embaixo repetia o que os botões já dizem, em três linhas. Ela existe para o que NÃO
+// está escrito no botão — o que acontece depois de clicar.
 function workflowHint(s) {
   if (s === "draft") return "Envia a peça para revisão antes da aprovação.";
-  if (s === "in_review") return "Aprovar salva uma versão final protegida da peça. Rejeitar arquiva a peça.";
-  if (s === "approved") return "Aprovada e travada. Para colocar no ar, use “Publicar ou agendar” — a peça já está aprovada, aqui você só escolhe QUANDO (não é uma nova aprovação). Para mudar a arte, use “Reabrir para edição”.";
+  if (s === "in_review") return "Aprovar guarda uma versão final protegida. Rejeitar arquiva a peça.";
+  if (s === "approved") return "Publicar não aprova de novo — aqui você só escolhe quando a peça vai ao ar.";
   if (s === "rejected") return "Rejeitada e arquivada. Reabra para editar de novo.";
   return "";
 }

@@ -2011,8 +2011,50 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 /* Etiqueta e cartão da arte que veio de fora (sistema squad). */
 .tag-origem { border-color: var(--accent); color: var(--accent); }
 .sq-origem-card { border-left: 3px solid var(--accent); }
-.sq-avisos { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--text-2); }
+/* FITA de origem. Era um cartão inteiro, do tamanho dos outros, empurrando a arte para baixo
+   para dizer uma coisa que cabe numa linha — e repetindo a etiqueta da faixa de cima. Agora é
+   uma faixa fina que só cresce quando há algo a decidir (cancelado, versão refeita, avisos). */
+.sq-fita {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 16px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+}
+.sq-fita-ico { flex: none; display: flex; margin-top: 1px; color: var(--accent); }
+.sq-fita-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sq-fita-linha { font-size: 13.5px; color: var(--text-2); }
+.sq-fita-linha strong { color: var(--text); }
+.sq-fita .hint { margin: 0; }
+/* Alinhado com a PRIMEIRA linha, não centrado: quando a fita cresce por causa de um aviso, o
+   link centralizado ficava boiando no meio do bloco, longe do que ele complementa. */
+.sq-fita-link { flex: none; align-self: flex-start; margin-top: 1px; font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.sq-fita-link:hover { color: var(--brand-sky); }
+/* Com alerta ela ganha o tom de atenção — e aí o espaço extra se justifica. */
+.sq-fita-alerta { border-color: var(--warn); border-left-color: var(--warn); background: var(--warn-soft); }
+.sq-fita-alerta .sq-fita-ico { color: var(--warn); }
+.sq-nota { font-size: 13px; line-height: 1.6; color: var(--text-2); margin-top: 6px; }
+.sq-avisos { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--text-2); }
 .sq-avisos li { margin-bottom: 4px; }
+@media (max-width: 560px) {
+  .sq-fita { flex-wrap: wrap; }
+  .sq-fita-link { align-self: flex-start; margin-left: 29px; }
+}
+
+/* ---- Estado x ações do fluxo de aprovação ----
+   O selo verde de ESTADO ficava na mesma fileira dos BOTÕES, e parecia um botão desligado.
+   Estado é o que a peça É; ação é o que você pode fazer. Linhas separadas. */
+.wf-estado { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.wf-estado .hint { margin: 0; }
+.wf-acoes { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+/* O registro manual não é irmão de "Publicar": é raro, e confundi-lo com publicar posta duas
+   vezes. Fica como texto de ação, fora da fileira dos botões. */
+.wf-secundaria {
+  display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none;
+  font: inherit; font-size: 12.5px; color: var(--text-mut); text-decoration: underline;
+  text-underline-offset: 3px; cursor: pointer;
+}
+.wf-secundaria:hover { color: var(--text-2); }
+.wf-secundaria:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 /* Aviso de cancelamento vindo do outro sistema: chama atenção sem gritar, e sem parecer erro
    do painel (não é — é uma informação de fora que a pessoa precisa considerar). */
 .sq-cancelado { font-size: 13px; line-height: 1.7; padding: 10px 12px; border-radius: 8px;
