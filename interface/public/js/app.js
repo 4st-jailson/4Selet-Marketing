@@ -4273,7 +4273,22 @@ function ajustaAlturaDaPrevia(ov) {
     // Quando o piso vence, a folga que sobra na coluna da direita é DISTRIBUÍDA entre as seções
     // (`.espalhado`) em vez de se juntar num buraco só antes do rodapé.
     const PISO = 620;
-    const alvo = Math.max(PISO, Math.min(760, casaComOForm));
+    // ...mas o piso não pode empurrar a janela para além da TELA. O modal já rola quando precisa
+    // (max-height: 92vh), e uma barra de rolagem aqui é pior que uma prévia um pouco menor: ela
+    // esconde os botões de publicar abaixo da dobra. Então o teto é o espaço que sobra de verdade
+    // — a altura do modal menos o cabeçalho, os recuos e a legenda sob a prévia — e ele vence.
+    const modal = ov.querySelector(".pub-modal");
+    const cabeca = ov.querySelector(".pub-head");
+    let teto = 760;
+    if (modal) {
+      const cs = getComputedStyle(modal);
+      const recuos = parseFloat(cs.paddingTop || 0) + parseFloat(cs.paddingBottom || 0);
+      const corpoTopo = parseFloat(getComputedStyle(ov.querySelector(".pub-body")).marginTop || 0);
+      const disponivel = window.innerHeight * 0.92 - (cabeca ? cabeca.getBoundingClientRect().height : 0)
+        - recuos - corpoTopo - extra - 8; // 8px de respiro: arredondamento não pode gerar a barra
+      if (isFinite(disponivel) && disponivel > 240) teto = Math.min(760, Math.floor(disponivel));
+    }
+    const alvo = Math.max(Math.min(PISO, teto), Math.min(teto, casaComOForm));
     pv.style.setProperty("--alt-previa", alvo + "px");
     form.classList.toggle("espalhado", alvo > casaComOForm + 24);
   };

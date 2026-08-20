@@ -1289,6 +1289,12 @@ function briefingLongo() {
     checa(/aspect-ratio: 9 \/ 16/.test(css), "e a proporcao 9:16 deriva a largura");
     checa(/classList\.contains\("pub-foot"\)\) return;/.test(app),
       "a margem automatica do rodape fica FORA da conta (era ela o buraco)");
+    // E o piso da previa nao pode empurrar a janela para alem da TELA: barra de rolagem aqui
+    // esconde os botoes de publicar abaixo da dobra, que e pior que uma previa menor.
+    checa(app.indexOf("window.innerHeight * 0.92") >= 0, "o teto da previa sai da altura da TELA");
+    checa(app.indexOf("const PISO = 620") >= 0, "com piso generoso quando cabe");
+    checa(app.indexOf("Math.max(Math.min(PISO, teto), Math.min(teto, casaComOForm))") >= 0,
+      "e o teto vence o piso (senao nasce a barra de rolagem)");
     checa(!/\.pub-form\.sem-legenda/.test(css), "e a regra antiga que empurrava o rodape saiu");
     checa(/bn\.disabled = soManual/.test(app),
       "e destino que o painel nao publica nem deixa clicar em publicar");
