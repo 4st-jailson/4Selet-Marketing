@@ -1021,233 +1021,99 @@ async function refreshKeyStatus() {
 // Ícone de "campanha" — o MESMO megafone do menu lateral "Campanhas", para o
 // dashboard não ter três ícones diferentes para a mesma ideia.
 const CAMP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>';
-/* =====================================================================
-   DASHBOARD — lista de PENDÊNCIAS, não inventário do acervo.
-   ---------------------------------------------------------------------
-   A tela antiga contava o que existe desde sempre: "Campanhas 1", "Peças 20",
-   "Aprovadas 4". Nada disso muda uma decisão. Pior: o cartão verde "Aprovadas"
-   comemorava um número que, medido em produção, era fila parada — as 4 estavam
-   prontas e NENHUMA tinha ido ao ar, uma delas desde 8 de julho.
-   E a tela não sabia que o painel publica: nada de Instagram, agendamento,
-   histórico ou squad. Se a conexão com a Meta caísse, ela seguia mostrando
-   contador de peça como se estivesse tudo bem.
-   Agora ela responde, de cima para baixo: o que quebrou, o que espera decisão,
-   o que está pronto e parado, o que sai hoje sozinho, há quantos dias a conta
-   não posta, e o que chegou sem ninguém abrir.
-   ===================================================================== */
-
-// Distância no tempo, em palavra. Contador sem idade não cobra ninguém: "4 aprovadas" é
-// neutro; "4 aprovadas, a mais antiga há 43 dias" é uma cobrança.
-function haQuantoTempo(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
-  if (dias <= 0) return "hoje";
-  if (dias === 1) return "ontem";
-  if (dias < 7) return "há " + dias + " dias";
-  if (dias < 60) { const s = Math.round(dias / 7); return "há " + s + (s === 1 ? " semana" : " semanas"); }
-  return "há " + Math.round(dias / 30) + " meses";
-}
-function diasDesde(iso) {
-  if (!iso) return -1;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? -1 : Math.floor((Date.now() - d.getTime()) / 86400000);
-}
-// A data que responde "parada desde quando": para quem espera OK, a última mexida; para quem
-// já está aprovada, a aprovação.
-function paradaDesde(t) {
-  const s = (t && t.status_obj) || {};
-  return (t.zone === "approved" && s.approved_at) || t.last_updated_at || t.created_at || null;
-}
-
-// As PEÇAS DE TESTE criadas durante o desenvolvimento (amostra_*, zz_*, reg*_mt0k*, pastas que
-// começam com um número) competem com peça real nesta tela. São reconhecíveis pelo nome e o
-// dashboard as ignora — a biblioteca continua mostrando todas, que é onde elas devem aparecer.
-const RE_PECA_DE_TESTE = /^(zz|amostra|teste_|reg[A-Za-z]*_?mt0k|\d)/i;
-function ehPecaDeTeste(t) { return RE_PECA_DE_TESTE.test(String((t && t.folder) || "")); }
-
 async function viewDashboard() {
   setTitle("Dashboard");
-  // Cinco chamadas em paralelo, TODAS já existentes e locais — nenhuma bate na Meta ao abrir a
-  // tela. Cada uma degrada sozinha: um serviço fora tira o bloco dele, não a tela inteira.
-  const [{ tasks }, st, sc, pb, sq] = await Promise.all([
-    API.content(),
-    API.publishStatus().catch(() => ({ instagram: {} })),
-    API.listSchedule().catch(() => ({ items: [] })),
-    API.publications().catch(() => ({ items: [] })),
-    API.squadStatus().catch(() => ({})),
+  // O estado da publicação entra aqui só para o AVISO: se a conexão com o Instagram cair, a tela
+  // dizia "tudo certo" com contadores de peça enquanto publicar não publicava nada. Degrada
+  // sozinha — sem essa resposta, o dashboard segue inteiro, só sem o aviso.
+  const [{ campaigns }, { tasks }, pubSt] = await Promise.all([
+    API.campaigns(), API.content(), API.publishStatus().catch(() => null),
   ]);
-  const pecas = (tasks || []).filter((t) => !ehPecaDeTeste(t));
-  const ig = (st && st.instagram) || {};
-  const conexao = ig.connection || {};
-  const agendas = (sc && sc.items) || [];
-  const publicados = (pb && pb.items) || [];
-  const squad = sq || {};
-
-  /* ---- FAIXA 1: o que precisa de você -------------------------------- */
-  // Fita, não cartões. Cada linha é um problema com o caminho de resolver ao lado. Sem nenhum,
-  // ela colapsa numa linha verde — a resposta de um segundo a "está tudo bem?".
-  const alertas = [];
-  const conn = igConnLabel(ig);
-  if (!ig.configured) {
-    alertas.push({ grau: "aviso", texto: "O Instagram não está conectado — publicar aqui <strong>roda simulado e não posta nada</strong>.", acao: "Conectar", href: "#/settings" });
-  } else if (!conn.pode) {
-    alertas.push({ grau: "erro", texto: "<strong>" + esc(conn.texto) + "</strong> — " + esc(conn.detalhe), acao: "Resolver", href: "#/settings" });
+  setCampMap(campaigns);
+  const active = campaigns.filter((c) => c.status === "active").length;
+  const inReview = tasks.filter((t) => t.status === "in_review").length;
+  // Aprovada que JÁ FOI AO AR não é peça esperando publicação. O cartão somava as duas coisas e
+  // a ação rápida prometia "prontas para publicar" — medido em produção, ele exibia 4 quando
+  // nenhuma delas estava esperando por nada. `published_at` já vinha no payload.
+  const aprovadas = tasks.filter((t) => t.status === "approved" || t.zone === "approved");
+  const publicadas = aprovadas.filter((t) => t.published_at).length;
+  const approved = aprovadas.length - publicadas;
+  const draft = tasks.filter((t) => t.status === "draft").length;
+  // Mix por tipo (formato) — visão do que está sendo produzido.
+  const byKind = {};
+  tasks.forEach((t) => { byKind[t.kind] = (byKind[t.kind] || 0) + 1; });
+  // Story e "4Selet na Mídia" faltavam nesta ordem e caíam no rabo da lista, depois de LinkedIn e
+  // Threads — sendo que Mídia é hoje quase metade do acervo e Story é destino de publicação de
+  // primeira classe. A lista oficial dos tipos está em interface/lib/config.js.
+  const kindOrder = ["feed", "carousel", "story", "image", "media", "video", "linkedin", "threads"];
+  const mixKinds = kindOrder.filter((k) => byKind[k]).concat(Object.keys(byKind).filter((k) => !kindOrder.includes(k)));
+  const maxKind = Math.max(1, ...mixKinds.map((k) => byKind[k]));
+  const activeCamps = campaigns.filter((c) => c.status === "active");
+  const mixHtml = mixKinds.length
+    ? '<div class="mix">' + mixKinds.map((k) => {
+        const n = byKind[k], pct = Math.round((n / maxKind) * 100);
+        return `<div class="mix-row"><span class="mix-lbl">${esc(kindLabel(k))}</span><span class="mix-bar"><span class="mix-fill" style="width:${pct}%"></span></span><span class="mix-n">${n}</span></div>`;
+      }).join("") + "</div>"
+    : '<div class="empty">Sem peças ainda.</div>';
+  const campsHtml = activeCamps.length
+    ? '<div class="list">' + activeCamps.slice(0, 5).map((c) =>
+        `<a class="list-row" href="#/campaign/${encodeURIComponent(c.id)}"><span class="lr-ico" aria-hidden="true">${CAMP_SVG}</span><div class="lr-main"><div class="lr-title">${esc(c.name)}</div><div class="lr-meta">${c.angle ? esc(c.angle) + " · " : ""}${plural((c.content_ids || []).length, "peça vinculada", "peças vinculadas")}</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>`
+      ).join("") + "</div>"
+    : '<div class="empty">Nenhuma campanha ativa. <a href="#/campaigns">Criar campanha</a></div>';
+  const keyWarn = State.settings && !State.settings.has_key
+    ? `<div class="card callout mb"><div class="flex-between"><div><h3>Configure a Inteligência Artificial</h3><p class="muted mt">Cole sua chave Anthropic para geração real. Sem chave, o painel funciona em modo simulado.</p></div><a class="btn btn-primary" href="#/settings">Configurar</a></div></div>` : "";
+  // O MESMO aviso, para o Instagram. Era o buraco da tela: o único alerta que ela dava era sobre
+  // a chave de IA, e uma conexão expirada com a Meta passava calada — publicar rodava simulado,
+  // ou falhava, e o dashboard seguia mostrando contador de peça como se estivesse tudo bem.
+  const ig = (pubSt && pubSt.instagram) || null;
+  let igWarn = "";
+  if (ig) {
+    const conn = igConnLabel(ig);
+    if (!ig.configured) {
+      igWarn = '<div class="card callout mb"><div class="flex-between"><div><h3>Instagram não conectado</h3>'
+        + '<p class="muted mt">Publicar pelo painel <strong>roda em modo simulado</strong> — não posta nada na conta.</p></div>'
+        + '<a class="btn btn-primary" href="#/settings">Conectar</a></div></div>';
+    } else if (!conn.pode) {
+      igWarn = '<div class="card callout mb"><div class="flex-between"><div><h3>' + esc(conn.texto) + " no Instagram</h3>"
+        + '<p class="muted mt">' + esc(conn.detalhe) + "</p></div>"
+        + '<a class="btn btn-primary" href="#/settings">Resolver</a></div></div>';
+    }
   }
-  const falhou = agendas.filter((a) => a.status === "failed");
-  if (falhou.length) {
-    alertas.push({ grau: "erro",
-      texto: plural(falhou.length, "agendamento falhou", "agendamentos falharam") + " — algo que você achou que tinha saído <strong>não saiu</strong>.",
-      acao: "Ver", href: "#/publicacoes?tab=agendados" });
-  }
-  // O contador de falhas do squad é CUMULATIVO e nunca baixa. Alerta vermelho permanente vira
-  // papel de parede em três dias — por isso só entra se for coisa desta semana.
-  const diasFalhaSquad = diasDesde(squad.ultima_falha_entrega);
-  if (squad.entregas_falhas > 0 && diasFalhaSquad >= 0 && diasFalhaSquad <= 7) {
-    alertas.push({ grau: "aviso",
-      texto: "O squad mandou arte que <strong>não virou peça</strong> aqui (a última " + esc(haQuantoTempo(squad.ultima_falha_entrega)) + ").",
-      acao: "Ver requisições", href: "#/requisicoes" });
-  }
-  if (State.settings && !State.settings.has_key) {
-    alertas.push({ grau: "aviso", texto: "Sem chave de IA: a geração de conteúdo <strong>roda simulada</strong>.", acao: "Configurar", href: "#/settings" });
-  }
-  const faixaAlertas = alertas.length
-    ? '<div class="dash-alertas">' + alertas.map((a) =>
-      '<div class="dash-al dash-al-' + a.grau + '"><span class="dash-al-txt">' + a.texto
-      + '</span><a class="btn btn-sm" href="' + a.href + '">' + esc(a.acao) + "</a></div>").join("") + "</div>"
-    : '<div class="dash-ok">Nada travado. Instagram conectado'
-      + (conexao.checked_at ? " — verificado " + esc(haQuantoTempo(conexao.checked_at)) : "") + ".</div>";
-
-  /* ---- FAIXA 2: as três filas, com idade ----------------------------- */
-  const emRevisao = pecas.filter((t) => t.status === "in_review");
-  const prontas = pecas.filter((t) => t.zone === "approved" && !t.published_at);
-  const rascunhos = pecas.filter((t) => t.status === "draft");
-  const maisVelha = (lista) => lista.map(paradaDesde).filter(Boolean).sort()[0] || null;
-  const fimDoDia = new Date(); fimDoDia.setHours(23, 59, 59, 999);
-  // `pending`, e não "não cancelado": agendamento que já saiu ou que falhou não "sai hoje".
-  const pendentes = agendas.filter((a) => a.status === "pending");
-  const saiHoje = pendentes.filter((a) => a.scheduled_at && new Date(a.scheduled_at) <= fimDoDia);
-  const proximo = pendentes.slice().sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)))[0];
-
-  const fila = (n, rot, sub, href, acento) =>
-    '<a class="card dash-fila" data-accent="' + acento + '" href="' + href + '">'
-    + '<span class="dash-fila-n">' + n + "</span>"
-    + '<span class="dash-fila-rot">' + rot + "</span>"
-    + '<span class="dash-fila-sub">' + sub + "</span></a>";
-  const faixaFilas = '<div class="dash-filas">'
-    + fila(emRevisao.length, "Esperando seu OK",
-      emRevisao.length
-        ? "a mais antiga " + esc(haQuantoTempo(maisVelha(emRevisao)) || "há pouco")
-          + (rascunhos.length ? " · +" + rascunhos.length + " em rascunho" : "")
-        : (rascunhos.length ? rascunhos.length + " em rascunho, nenhuma enviada" : "nada esperando"),
-      "#/content?status=in_review", "warn")
-    + fila(prontas.length, "Prontas, não foram ao ar",
-      prontas.length ? "a mais antiga " + esc(haQuantoTempo(maisVelha(prontas)) || "há pouco") : "nenhuma parada",
-      "#/approved", prontas.length ? "sky" : "ok")
-    + fila(saiHoje.length, "Sai sozinho hoje",
-      proximo ? "próximo " + esc(fmtDateTime(proximo.scheduled_at)) : "nada agendado",
-      "#/publicacoes?tab=agendados", "blue")
-    + "</div>";
-
-  /* ---- FAIXA 3: o que está parado, e o ritmo ------------------------- */
-  // Um ranking só, por IDADE: se sobrar dez minutos, é por aqui que se começa.
-  const parado = emRevisao.concat(prontas)
-    .map((t) => ({ t: t, quando: paradaDesde(t) }))
-    .filter((x) => x.quando)
-    .sort((a, b) => String(a.quando).localeCompare(String(b.quando)))
-    .slice(0, 5);
-  const paradoHtml = parado.length
-    ? '<div class="list">' + parado.map((x) =>
-      '<a class="list-row" href="#/task/' + encodeURIComponent(x.t.folder) + '">'
-      + '<span class="lr-ico" aria-hidden="true">' + kindIcon(x.t.kind) + "</span>"
-      + '<div class="lr-main"><div class="lr-title">' + esc(displayName(x.t)) + "</div>"
-      + '<div class="lr-meta">' + esc(kindLabel(x.t.kind)) + " · "
-      + (x.t.zone === "approved" ? "pronta para publicar" : "esperando seu OK") + "</div></div>"
-      + '<span class="dash-idade">' + esc(haQuantoTempo(x.quando)) + "</span></a>").join("") + "</div>"
-    : '<div class="empty">Nada parado. Fila limpa.</div>';
-
-  // "Última publicação" é o MÁXIMO entre o histórico e o carimbo das peças. O histórico começou
-  // depois de algumas publicações já existirem — olhar só para ele faz a tela dizer "nenhuma
-  // ainda" logo depois de alguém publicar.
-  const ultimoHist = publicados[0] && publicados[0].published_at;
-  const ultimoPeca = pecas.map((t) => t.published_at).filter(Boolean).sort().reverse()[0];
-  const ultima = [ultimoHist, ultimoPeca].filter(Boolean).sort().reverse()[0] || null;
-  const linhaDaUltima = publicados.find((p) => p.published_at === ultima);
-  const trintaDias = Date.now() - 30 * 86400000;
-  const noMes = publicados.filter((p) => new Date(p.published_at).getTime() >= trintaDias).length;
-  const DEST_ROT = { feed: "no feed", story: "no Story", reels: "no Reels" };
-  const semPostHa = ultima ? diasDesde(ultima) : -1;
-  const ritmoHtml = '<div class="dash-ritmo">'
-    + '<div class="dash-r-linha"><span class="dash-r-rot">Última publicação</span><span class="dash-r-val">'
-    + (ultima ? esc(haQuantoTempo(ultima)) + (linhaDaUltima && DEST_ROT[linhaDaUltima.destino] ? " " + DEST_ROT[linhaDaUltima.destino] : "") : "<em>nenhuma ainda</em>")
-    + "</span></div>"
-    + '<div class="dash-r-linha"><span class="dash-r-rot">Nos últimos 30 dias</span><span class="dash-r-val">'
-    + plural(noMes, "publicação", "publicações") + "</span></div>"
-    + '<div class="dash-r-linha"><span class="dash-r-rot">Próxima agendada</span><span class="dash-r-val">'
-    + (proximo ? esc(fmtDateTime(proximo.scheduled_at)) : "<em>nenhuma</em>") + "</span></div>"
-    + (semPostHa >= 7
-      ? '<p class="hint dash-r-nota">A conta está ' + esc(haQuantoTempo(ultima)) + " sem post"
-        + (prontas.length ? " — e há " + plural(prontas.length, "peça pronta", "peças prontas") + " esperando." : ".") + "</p>"
-      : "")
-    + "</div>";
-
-  /* ---- FAIXA 4: o que chegou, e sobre o que estamos falando ---------- */
-  // `first_viewed_at` é GLOBAL, não por pessoa: o rótulo diz "ninguém abriu", nunca "novo para
-  // você" — senão a tela promete um controle por usuário que não existe.
-  const naoAbertas = pecas.filter((t) => !t.first_viewed_at)
-    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))).slice(0, 5);
-  const naoAbertasHtml = naoAbertas.length
-    ? '<div class="list">' + naoAbertas.map((t) =>
-      '<a class="list-row" href="#/task/' + encodeURIComponent(t.folder) + '">'
-      + '<span class="lr-ico" aria-hidden="true">' + kindIcon(t.kind) + "</span>"
-      + '<div class="lr-main"><div class="lr-title">' + esc(displayName(t)) + "</div>"
-      + '<div class="lr-meta">' + esc(kindLabel(t.kind)) + " · " + esc(haQuantoTempo(t.created_at) || "")
-      + ((t.origem && t.origem.sistema === "squad") ? ' · <span class="lr-pillar">veio do squad</span>' : "")
-      + "</div></div>" + statusBadge(effStatus(t.status, t.published_at)) + "</a>").join("") + "</div>"
-    : '<div class="empty">Tudo que chegou já foi aberto.</div>';
-
-  // Barras por PILAR, normalizadas pelo TOTAL. A tela antiga normalizava pelo MAIOR, então a
-  // barra de cima era sempre 100% e as porcentagens não somavam nada interpretável.
-  const recentes = pecas.filter((t) => new Date(t.created_at || 0).getTime() >= trintaDias);
-  const porPilar = {};
-  recentes.forEach((t) => { const p = t.pillar || "__sem"; porPilar[p] = (porPilar[p] || 0) + 1; });
-  const totPilar = recentes.length || 1;
-  const pilares = Object.keys(porPilar).sort((a, b) => porPilar[b] - porPilar[a]);
-  const pilaresHtml = recentes.length
-    ? '<div class="mix">' + pilares.map((p) => {
-      const n = porPilar[p], pct = Math.round((n / totPilar) * 100);
-      const rot = p === "__sem" ? "sem pilar definido" : (pillarLabel(p) || p);
-      return '<div class="mix-row"><span class="mix-lbl">' + esc(rot) + '</span><span class="mix-bar"><span class="mix-fill'
-        + (p === "__sem" ? " mix-fill-vago" : "") + '" style="width:' + pct + '%"></span></span><span class="mix-n">' + pct + "%</span></div>";
-    }).join("") + "</div>"
-    : '<div class="empty">Nenhuma peça criada nos últimos 30 dias.</div>';
-
-  /* ---- FAIXA 5: rodapé fino ------------------------------------------ */
-  const rodape = [
-    "IA: " + (State.settings && State.settings.has_key ? esc(modelLabel((State.settings || {}).model) || "conectada") : "sem chave"),
-    "Instagram: " + (ig.username ? "@" + esc(ig.username) : "não conectado"),
-    "Squad: " + (squad.conectado ? plural(squad.entregas || 0, "entrega recebida", "entregas recebidas") : "desligado"),
-  ].join(" · ");
-
-  setView('<div class="dash-stack">'
-    + '<div class="section-head dash-topo"><p class="muted">O que precisa de você agora.</p>'
-    + '<a class="btn btn-primary" href="#/create">＋ Criar conteúdo</a></div>'
-    + faixaAlertas
-    + faixaFilas
-    + '<div class="dash-2col">'
-    + '<div class="dash-col">'
-    + '<div class="card"><div class="section-head"><h2>Parado há mais tempo</h2><a class="muted-link" href="#/content">ver tudo →</a></div>'
-    + paradoHtml + "</div>"
-    + '<div class="card"><div class="section-head"><h2>Chegou e ninguém abriu</h2><a class="muted-link" href="#/content">ver tudo →</a></div>'
-    + naoAbertasHtml + "</div></div>"
-    + '<div class="dash-col">'
-    + '<div class="card"><div class="section-head"><h2>Ritmo de publicação</h2><a class="muted-link" href="#/publicacoes">histórico →</a></div>'
-    + ritmoHtml + "</div>"
-    + '<div class="card"><div class="section-head"><h2>Sobre o que estamos falando</h2><span class="muted">últimos 30 dias</span></div>'
-    + pilaresHtml + "</div></div></div>"
-    + '<p class="dash-rodape"><a href="#/settings">' + rodape + "</a></p>"
-    + "</div>");
+  setView(`
+    <div class="dash-stack">
+    ${keyWarn}${igWarn}
+    <div class="stat-grid">
+      <a class="card stat" data-accent="sky" href="#/campaigns" title="Ver campanhas"><span class="stat-ico">${CAMP_SVG}</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></a>
+      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></a>
+      <a class="card stat" data-accent="warn" href="#/content?status=in_review" title="Ver peças em revisão"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg></span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></a>
+      <a class="card stat" data-accent="ok" href="#/approved" title="Ver peças aprovadas"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg></span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Prontas para publicar${publicadas ? " <em>"+plural(publicadas, "já publicada", "já publicadas")+"</em>" : ""}</span></div></a>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="section-head"><h2>Conteúdo recente</h2><a class="muted-link" href="#/content">ver tudo →</a></div>
+        ${tasks.length ? '<div class="list">' + tasks.slice(0, 6).map(taskRow).join("") + "</div>" : '<div class="empty">Nenhuma peça ainda. <a href="#/create">Criar conteúdo</a></div>'}
+      </div>
+      <div class="card">
+        <div class="section-head"><h2>Ações rápidas</h2></div>
+        <div class="list">
+          <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
+          <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">${CAMP_SVG}</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
+          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças aprovadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="section-head"><h2>Mix de conteúdo</h2></div>
+        ${mixHtml}
+        <div class="mix-pipe muted">Pipeline: <strong>${draft}</strong> rascunho · <strong>${inReview}</strong> em revisão · <strong>${approved}</strong> aprovadas</div>
+      </div>
+      <div class="card">
+        <div class="section-head"><h2>Campanhas ativas</h2><a class="muted-link" href="#/campaigns">ver todas →</a></div>
+        ${campsHtml}
+      </div>
+    </div>
+    </div>`);
 }
 
 function taskRow(t) {
@@ -1261,7 +1127,7 @@ function taskRow(t) {
     ${ico}
     <div class="lr-main"><div class="lr-title">${esc(displayName(t))}${isNewPiece(t) ? ' <span class="lr-new">Novo</span>' : ""}</div>
     <div class="lr-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}${(t.platforms || []).length ? " · " + esc(t.platforms.map(platformLabel).join(", ")) : ""}</div></div>
-    ${statusBadge(t.status)}</a>`;
+    ${statusBadge(effStatus(t.status, t.published_at))}</a>`;
 }
 
 /* =====================================================================

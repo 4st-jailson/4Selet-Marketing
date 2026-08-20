@@ -1539,69 +1539,55 @@ function briefingLongo() {
   }
 
   // ============================================================================
-  // 30. Dashboard: pendências com idade, não inventário do acervo
+  // 30. Dashboard: as correções pontuais, sem redesenhar
   // ----------------------------------------------------------------------------
-  // A tela contava o que existe desde sempre ("Campanhas 1", "Peças 20") e exibia
-  // "4 Aprovadas" com selo verde — medido em produção, as 4 estavam prontas e NENHUMA
-  // tinha ido ao ar. Era fila, não conquista. E não mencionava publicação nenhuma.
+  // Cheguei a redesenhar esta tela inteira e o Hugo não gostou: perdeu as miniaturas da arte,
+  // os ícones dos contadores e os atalhos que ele usava — ficou parecendo painel de sistema.
+  // A tela ANTERIOR voltou, e o que entrou foram só as correções que ele aprovou, uma a uma.
   // ============================================================================
   {
-    secao("30. Dashboard: pendências com idade");
+    secao("30. Dashboard: correções pontuais, sem redesenhar");
     const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
     const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
-    const api = fs.readFileSync(path.join(__dirname, "public/js/api.js"), "utf8");
-
-    // -- 30a. O que SAIU da tela ------------------------------------------
     const dash = (app.match(/async function viewDashboard\(\)[\s\S]*?\n\}/) || [""])[0];
-    checa(dash.length > 500, "a funcao do dashboard foi reescrita", dash.length + " chars");
-    checa(dash.indexOf("Ações rápidas") < 0, "a caixa 'Acoes rapidas' saiu (duplicava o menu lateral)");
-    checa(dash.indexOf("Pipeline:") < 0, "o rodape 'Pipeline: ...' saiu (repetia dois cartoes acima)");
-    checa(dash.indexOf("Mix de conteúdo") < 0, "o mix por FORMATO saiu");
-    checa(dash.indexOf("Campanhas <em>") < 0, "e o cartao de campanhas tambem");
 
-    // -- 30b. As tres filas, com idade -------------------------------------
-    checa(dash.indexOf("Esperando seu OK") >= 0, "fila 'Esperando seu OK'");
-    checa(dash.indexOf("Prontas, não foram ao ar") >= 0,
-      "fila 'Prontas, nao foram ao ar' — aprovada JA publicada nao conta mais como fila");
-    checa(dash.indexOf("Sai sozinho hoje") >= 0, "fila 'Sai sozinho hoje'");
-    checa(/zone === "approved" && !t\.published_at/.test(dash),
-      "e a conta desconta o que ja foi ao ar");
-    checa(app.indexOf("function haQuantoTempo(") >= 0, "existe a conta de idade");
-    checa(dash.indexOf("a mais antiga ") >= 0, "e cada fila diz DESDE QUANDO (contador sem idade nao cobra ninguem)");
+    // -- 30a. A tela ANTERIOR está de volta, inteira -----------------------
+    checa(dash.indexOf("Conteúdo recente") >= 0, "a lista 'Conteudo recente' voltou");
+    checa(dash.indexOf("taskRow") >= 0, "com a MINIATURA da arte (era o que ele mais sentiu falta)");
+    checa(dash.indexOf("Ações rápidas") >= 0, "os atalhos rapidos voltaram");
+    checa(dash.indexOf("Mix de conteúdo") >= 0, "e o mix de conteudo tambem");
+    checa(dash.indexOf("stat-ico") >= 0, "os contadores voltaram a ter icone");
+    checa(dash.indexOf("dash-fila") < 0 && dash.indexOf("dash-alertas") < 0,
+      "e nada do redesenho sobrou no JS");
+    checa(css.indexOf(".dash-fila") < 0 && css.indexOf(".dash-2col") < 0,
+      "nem no CSS (regra morta e a que ninguem apaga)");
 
-    // -- 30c. O que a tela nao sabia: publicacao ---------------------------
-    checa(/API\.publishStatus\(\)/.test(dash) && /API\.listSchedule\(\)/.test(dash)
-      && /API\.publications\(\)/.test(dash) && /API\.squadStatus\(\)/.test(dash),
-      "a tela passa a olhar Instagram, agendamento, historico e squad");
-    checa(/publishStatus: \(\) =>/.test(api), "por rotas que ja existiam");
-    checa(/\.catch\(\(\) => \(\{ instagram: \{\} \}\)\)/.test(dash),
-      "e cada uma degrada sozinha — um servico fora tira o bloco dele, nao a tela");
-    checa(dash.indexOf("Última publicação") >= 0, "mostra ha quanto tempo a conta nao posta");
-    checa(/\[ultimoHist, ultimoPeca\]/.test(dash),
-      "somando historico E carimbo da peca (o historico comecou depois; so ele diria 'nenhuma ainda')");
+    // -- 30b. Aprovada que JÁ FOI AO AR não é fila --------------------------
+    // O cartão somava as duas coisas e a ação rápida prometia "prontas para publicar".
+    checa(/const publicadas = aprovadas\.filter\(\(t\) => t\.published_at\)\.length/.test(dash),
+      "o cartao desconta o que ja foi publicado");
+    checa(dash.indexOf("Prontas para publicar") >= 0, "e o rotulo diz o que o numero e");
+    checa(dash.indexOf("já publicadas</em>") >= 0, "sem esconder as que sairam — elas viram nota ao lado");
 
-    // -- 30d. A fita de alertas --------------------------------------------
-    checa(dash.indexOf("dash-alertas") >= 0 && dash.indexOf("dash-ok") >= 0,
-      "ou lista problemas, ou diz que esta tudo bem — nunca fica muda");
-    checa(dash.indexOf("roda simulado e não posta nada") >= 0, "avisa quando publicar nao publica");
-    checa(/diasFalhaSquad >= 0 && diasFalhaSquad <= 7/.test(dash),
-      "e a falha do squad so alerta se for desta semana (o contador e cumulativo e nunca baixa)");
+    // -- 30c. O aviso que faltava: Instagram --------------------------------
+    // Era o buraco da tela: o único alerta era sobre a chave de IA, e uma conexão expirada com
+    // a Meta passava calada enquanto publicar rodava simulado.
+    checa(/API\.publishStatus\(\)\.catch\(\(\) => null\)/.test(dash),
+      "a tela pergunta o estado do Instagram");
+    checa(/\.catch\(\(\) => null\)/.test(dash),
+      "e degrada sozinha — sem resposta, o dashboard segue inteiro");
+    checa(dash.indexOf("Instagram não conectado") >= 0, "avisa quando nao esta conectado");
+    checa(dash.indexOf("roda em modo simulado") >= 0, "dizendo que publicar nao publica");
+    checa(/igConnLabel\(ig\)/.test(dash), "e usa o MESMO estado que a janela de publicar usa");
+    checa(/\$\{keyWarn\}\$\{igWarn\}/.test(dash), "os dois avisos ficam no mesmo lugar");
 
-    // -- 30e. Os erros de leitura que vinham junto -------------------------
-    checa(/statusBadge\(effStatus\(t\.status, t\.published_at\)\)/.test(dash),
-      "peca publicada mostra 'Publicado', nao 'Aprovado'");
-    checa(/a\.status === "pending"/.test(dash),
-      "'sai hoje' conta pendente, nao 'nao cancelado'");
-    checa(/n \/ totPilar/.test(dash),
-      "as barras somam 100% (a antiga normalizava pelo MAIOR e a de cima era sempre 100%)");
-    checa(dash.indexOf("ninguém abriu") >= 0 && dash.indexOf("novo para você") < 0,
-      "o rotulo e 'ninguem abriu' — first_viewed_at e global, nao por pessoa");
-    checa(app.indexOf("function ehPecaDeTeste(") >= 0, "peca de teste nao polui o painel de controle");
-
-    // -- 30f. O layout nao estica cartao ------------------------------------
-    checa(/\.dash-2col \{ display: grid; grid-template-columns: minmax\(0, 1\.55fr\)/.test(css),
-      "coluna principal + lateral (grade de colunas iguais deixava buraco ao lado do cartao curto)");
-    checa(/\.dash-2col[^}]*align-items: start/.test(css), "e os cartoes sobem ate o conteudo deles");
+    // -- 30d. Os dois erros de leitura que vinham junto ---------------------
+    const linhaDaPeca = (app.match(/function taskRow\(t\)[\s\S]*?\n\}/) || [""])[0];
+    checa(/statusBadge\(effStatus\(t\.status, t\.published_at\)\)/.test(linhaDaPeca),
+      "peca publicada mostra 'Publicado', nao 'Aprovado' (ja era assim nas outras duas telas)");
+    const ordem = (dash.match(/const kindOrder = \[[^\]]*\]/) || [""])[0];
+    checa(/"story"/.test(ordem) && /"media"/.test(ordem),
+      "Story e Midia entram na ordem do mix (caiam no rabo da lista, e Midia e quase metade do acervo)", ordem.slice(18, 90));
   }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
