@@ -2283,3 +2283,92 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .fundo-opt.on { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
 .fundo-opt .lt-svg { width: 34px; height: 42px; display: block; border-radius: 4px; }
 .fundo-nome { font-size: 11.5px; font-weight: 600; }
+
+/* =====================================================================
+   DASHBOARD — pendências com idade, não inventário
+   ---------------------------------------------------------------------
+   Ordem de leitura, de cima para baixo: o que quebrou (fita), as três filas
+   com idade, o que está parado + o ritmo, o que chegou + os pilares.
+   ===================================================================== */
+
+/* Fita de alertas. Cada linha é um problema com o caminho de resolver ao lado —
+   nunca um selo vermelho sem saída. Some inteira quando não há nada. */
+.dash-alertas { display: flex; flex-direction: column; gap: 8px; }
+.dash-al {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: var(--r-sm); border: 1px solid var(--border);
+  background: var(--surface-2); font-size: 13.5px; line-height: 1.5;
+}
+.dash-al-txt { flex: 1 1 340px; }
+.dash-al .btn { flex: 0 0 auto; }
+.dash-al-erro { border-color: var(--err); background: color-mix(in srgb, var(--err) 9%, transparent); }
+.dash-al-aviso { border-color: var(--warn); background: var(--warn-soft); }
+/* Tudo certo é UMA linha, não um cartão: ela responde "está tudo bem?" e sai da frente. */
+.dash-ok {
+  padding: 11px 16px; border-radius: var(--r-sm);
+  border: 1px solid var(--ok); background: var(--ok-soft);
+  color: var(--text-2); font-size: 13.5px;
+}
+
+/* As três filas. Número grande, rótulo, e a IDADE embaixo — contador sem idade
+   não cobra ninguém. */
+.dash-filas { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s6); }
+.dash-fila {
+  display: flex; flex-direction: column; gap: 2px; padding: 18px 20px;
+  text-decoration: none; color: inherit; position: relative; overflow: hidden;
+  transition: border-color var(--tr), transform var(--tr);
+}
+.dash-fila::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--brand-sky);
+}
+.dash-fila[data-accent="warn"]::before { background: var(--warn); }
+.dash-fila[data-accent="ok"]::before { background: var(--ok); }
+.dash-fila[data-accent="blue"]::before { background: var(--brand-blue); }
+.dash-fila:hover { border-color: var(--brand-sky); transform: translateY(-1px); }
+.dash-fila-n { font-size: 34px; font-weight: 750; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.dash-fila-rot { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.dash-fila-sub { font-size: 12px; color: var(--text-2); }
+
+/* A idade na linha do que está parado: alinhada à direita, tabular, sem gritar. */
+.dash-idade { flex: 0 0 auto; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+
+/* Ritmo de publicação: três linhas rótulo/valor. */
+.dash-ritmo { display: flex; flex-direction: column; gap: 2px; margin-top: var(--s3); }
+.dash-r-linha {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  padding: 10px 0; border-bottom: 1px solid var(--border-soft);
+}
+.dash-r-linha:last-of-type { border-bottom: none; }
+.dash-r-rot { font-size: 13px; color: var(--text-2); }
+.dash-r-val { font-size: 14px; font-weight: 600; text-align: right; }
+.dash-r-val em { font-weight: 400; color: var(--text-2); font-style: normal; }
+.dash-r-nota { margin: 10px 0 0; padding: 9px 12px; border-radius: var(--r-sm); background: var(--warn-soft); }
+
+/* A fatia "sem pilar" não usa a cor da marca: ela é ausência de escolha, não um pilar. */
+.mix-fill-vago { background: var(--border) !important; }
+
+.dash-rodape { margin: 0; text-align: center; font-size: 12px; }
+.dash-rodape a { color: var(--text-2); text-decoration: none; }
+.dash-rodape a:hover { color: var(--brand-sky); text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .dash-filas { grid-template-columns: 1fr; }
+}
+
+/* Os cartões do dashboard sobem até o conteúdo deles: sem isto, a grade de duas colunas estica
+   os dois lados até a altura do MAIOR, e "Ritmo de publicação" (3 linhas) ficava com meia tela
+   de vazio ao lado de "Parado há mais tempo" (5 linhas). É o mesmo vazio que a janela de
+   publicar tinha — aqui a cura é não esticar, porque cada cartão é independente. */
+.dash-stack .grid-2 { align-items: start; }
+/* O cabeçalho da página já diz "Dashboard": aqui fica só a frase e o botão. */
+.dash-topo { align-items: center; }
+.dash-topo .muted { margin: 0; }
+
+/* Coluna principal (as listas, que são longas) + lateral (os resumos, que são curtos).
+   Antes eram duas grades de 2 colunas iguais, e um cartão de 3 linhas ficava lado a lado com um
+   de 5 itens — o de baixo terminava e sobrava meia tela de nada. Aqui a lateral é mais estreita
+   de propósito: conteúdo curto em coluna estreita lê como painel de resumo, não como buraco. */
+.dash-2col { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: var(--s6); align-items: start; }
+.dash-col { display: flex; flex-direction: column; gap: var(--s6); min-width: 0; }
+@media (max-width: 1100px) { .dash-2col { grid-template-columns: 1fr; } }

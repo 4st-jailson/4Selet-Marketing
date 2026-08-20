@@ -1538,6 +1538,72 @@ function briefingLongo() {
       "e o historico sabe achar e tirar uma linha");
   }
 
+  // ============================================================================
+  // 30. Dashboard: pendências com idade, não inventário do acervo
+  // ----------------------------------------------------------------------------
+  // A tela contava o que existe desde sempre ("Campanhas 1", "Peças 20") e exibia
+  // "4 Aprovadas" com selo verde — medido em produção, as 4 estavam prontas e NENHUMA
+  // tinha ido ao ar. Era fila, não conquista. E não mencionava publicação nenhuma.
+  // ============================================================================
+  {
+    secao("30. Dashboard: pendências com idade");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+    const css = fs.readFileSync(path.join(__dirname, "public/css/styles.css"), "utf8");
+    const api = fs.readFileSync(path.join(__dirname, "public/js/api.js"), "utf8");
+
+    // -- 30a. O que SAIU da tela ------------------------------------------
+    const dash = (app.match(/async function viewDashboard\(\)[\s\S]*?\n\}/) || [""])[0];
+    checa(dash.length > 500, "a funcao do dashboard foi reescrita", dash.length + " chars");
+    checa(dash.indexOf("Ações rápidas") < 0, "a caixa 'Acoes rapidas' saiu (duplicava o menu lateral)");
+    checa(dash.indexOf("Pipeline:") < 0, "o rodape 'Pipeline: ...' saiu (repetia dois cartoes acima)");
+    checa(dash.indexOf("Mix de conteúdo") < 0, "o mix por FORMATO saiu");
+    checa(dash.indexOf("Campanhas <em>") < 0, "e o cartao de campanhas tambem");
+
+    // -- 30b. As tres filas, com idade -------------------------------------
+    checa(dash.indexOf("Esperando seu OK") >= 0, "fila 'Esperando seu OK'");
+    checa(dash.indexOf("Prontas, não foram ao ar") >= 0,
+      "fila 'Prontas, nao foram ao ar' — aprovada JA publicada nao conta mais como fila");
+    checa(dash.indexOf("Sai sozinho hoje") >= 0, "fila 'Sai sozinho hoje'");
+    checa(/zone === "approved" && !t\.published_at/.test(dash),
+      "e a conta desconta o que ja foi ao ar");
+    checa(app.indexOf("function haQuantoTempo(") >= 0, "existe a conta de idade");
+    checa(dash.indexOf("a mais antiga ") >= 0, "e cada fila diz DESDE QUANDO (contador sem idade nao cobra ninguem)");
+
+    // -- 30c. O que a tela nao sabia: publicacao ---------------------------
+    checa(/API\.publishStatus\(\)/.test(dash) && /API\.listSchedule\(\)/.test(dash)
+      && /API\.publications\(\)/.test(dash) && /API\.squadStatus\(\)/.test(dash),
+      "a tela passa a olhar Instagram, agendamento, historico e squad");
+    checa(/publishStatus: \(\) =>/.test(api), "por rotas que ja existiam");
+    checa(/\.catch\(\(\) => \(\{ instagram: \{\} \}\)\)/.test(dash),
+      "e cada uma degrada sozinha — um servico fora tira o bloco dele, nao a tela");
+    checa(dash.indexOf("Última publicação") >= 0, "mostra ha quanto tempo a conta nao posta");
+    checa(/\[ultimoHist, ultimoPeca\]/.test(dash),
+      "somando historico E carimbo da peca (o historico comecou depois; so ele diria 'nenhuma ainda')");
+
+    // -- 30d. A fita de alertas --------------------------------------------
+    checa(dash.indexOf("dash-alertas") >= 0 && dash.indexOf("dash-ok") >= 0,
+      "ou lista problemas, ou diz que esta tudo bem — nunca fica muda");
+    checa(dash.indexOf("roda simulado e não posta nada") >= 0, "avisa quando publicar nao publica");
+    checa(/diasFalhaSquad >= 0 && diasFalhaSquad <= 7/.test(dash),
+      "e a falha do squad so alerta se for desta semana (o contador e cumulativo e nunca baixa)");
+
+    // -- 30e. Os erros de leitura que vinham junto -------------------------
+    checa(/statusBadge\(effStatus\(t\.status, t\.published_at\)\)/.test(dash),
+      "peca publicada mostra 'Publicado', nao 'Aprovado'");
+    checa(/a\.status === "pending"/.test(dash),
+      "'sai hoje' conta pendente, nao 'nao cancelado'");
+    checa(/n \/ totPilar/.test(dash),
+      "as barras somam 100% (a antiga normalizava pelo MAIOR e a de cima era sempre 100%)");
+    checa(dash.indexOf("ninguém abriu") >= 0 && dash.indexOf("novo para você") < 0,
+      "o rotulo e 'ninguem abriu' — first_viewed_at e global, nao por pessoa");
+    checa(app.indexOf("function ehPecaDeTeste(") >= 0, "peca de teste nao polui o painel de controle");
+
+    // -- 30f. O layout nao estica cartao ------------------------------------
+    checa(/\.dash-2col \{ display: grid; grid-template-columns: minmax\(0, 1\.55fr\)/.test(css),
+      "coluna principal + lateral (grade de colunas iguais deixava buraco ao lado do cartao curto)");
+    checa(/\.dash-2col[^}]*align-items: start/.test(css), "e os cartoes sobem ate o conteudo deles");
+  }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));
