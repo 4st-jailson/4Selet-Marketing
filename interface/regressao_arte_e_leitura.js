@@ -1473,6 +1473,18 @@ function briefingLongo() {
     checa(/Tornar permanente/.test(sp.message), "com o passo do token ate o fim");
     const jaFoi = L(400, { error: { code: 100, message: "Object with ID '1' does not exist" } }, "1");
     checa(jaFoi.ok && jaFoi.ja_nao_existia, "post ja apagado pelo celular nao e erro, e o resultado");
+    // "Unsupported delete request" é o que a Meta responde quando RECUSA a operação. Aceitar isso
+    // como "já não existia" fazia o painel anunciar "apagado" com o post no ar — o pior desfecho:
+    // a linha some do histórico e ninguém mais olha para o post.
+    const recusa = L(400, { error: { code: 100, message: "(#100) Unsupported delete request" } }, "1");
+    checa(!recusa.ok, "mas recusa da Meta NAO passa por 'ja nao existia'", recusa.code || "passou como ok");
+    const srcP = fs.readFileSync(path.join(__dirname, "lib/publish.js"), "utf8");
+    checa(/async function mediaAindaExiste\(/.test(srcP),
+      "e depois de apagar o painel CONFERE se o post saiu mesmo");
+    checa(/E_APAGAR_NAO_PEGOU/.test(srcP), "com codigo proprio quando ele continua la");
+    checa(srcP.indexOf("Não tirei da lista") >= 0, "e sem tirar a linha da lista nesse caso");
+    checa(srcP.indexOf("null = não deu para saber") >= 0,
+      "consulta que falha nao vira 'o post sobreviveu' (seria travar a limpeza a toa)");
     checa(L(400, { error: { code: 190, message: "expired" } }, "1").code === "E_TOKEN", "token vencido tem saida propria");
 
     // -- 29b. Os dois caminhos existem, e sao diferentes -------------------

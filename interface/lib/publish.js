@@ -423,9 +423,37 @@ async function deleteMedia(postId) {
   }
   const body = await r.json().catch(() => ({}));
   const v = leituraDoApagar(r.status, body, id);
-  if (v.ok) { recordCheck(true); return v; }
-  if (v.code === "E_TOKEN") recordCheck(false, v.message);
-  const e = new Error(v.message); e.code = v.code; throw e;
+  if (!v.ok) {
+    if (v.code === "E_TOKEN") recordCheck(false, v.message);
+    const e = new Error(v.message); e.code = v.code; throw e;
+  }
+  // CONFERE em vez de confiar. Dizer "apagado" com o post no ar é o pior desfecho possível: a
+  // linha some do histórico, a peça volta a ficar publicável, e o post segue lá sem ninguém
+  // olhando. A leitura da resposta é boa mas não é prova — e um dos casos que ela aceita é
+  // justamente "esse objeto não existe", que também é o que a Meta responde quando ela recusou
+  // a operação por outro motivo. Uma consulta a mais resolve a dúvida de vez.
+  const aindaLa = await mediaAindaExiste(id, token);
+  if (aindaLa === true) {
+    const e = new Error("A Meta aceitou o pedido mas o post continua no ar. Não tirei da lista para "
+      + "você não perder o rastro dele. Tente de novo em instantes; se insistir, apague pelo aplicativo "
+      + "e use “Só tirar desta lista”.");
+    e.code = "E_APAGAR_NAO_PEGOU"; throw e;
+  }
+  recordCheck(true);
+  return v;
+}
+
+// O post ainda existe? true = existe, false = não existe, null = não deu para saber (rede, timeout).
+// O `null` é de propósito: na dúvida NÃO se afirma que o post sobreviveu — seria bloquear a
+// limpeza do histórico por causa de uma consulta que falhou.
+async function mediaAindaExiste(id, token) {
+  try {
+    const r = await graphGet("/" + encodeURIComponent(id), { fields: "id", access_token: token }, "conferir se o post saiu do ar");
+    if (r.ok && r.body && r.body.id) return true;
+    const err = (r.body && r.body.error) || {};
+    if (Number(err.code) === 100) return false;   // sumiu, que é o que se queria
+    return null;
+  } catch (e) { return null; }
 }
 
 // A LEITURA da resposta da Meta, separada da chamada de rede — assim dá para conferir cada
@@ -450,7 +478,11 @@ function leituraDoApagar(status, body, id) {
       + "em “Tornar permanente”. Enquanto isso, apague pelo aplicativo e use “Só tirar desta lista”." };
   }
   // O post já não existe (apagado pelo celular antes): não é erro, é o resultado que se queria.
-  if (cod === 100 && /does not exist|Unsupported|cannot be loaded|nonexisting/i.test(msg)) {
+  // A frase tem que dizer que o OBJETO sumiu. "Unsupported delete request" sozinho NÃO serve:
+  // é o que a Meta responde quando recusa a operação — e aceitá-lo aqui fazia o painel anunciar
+  // "apagado" com o post no ar. A confirmação final é a consulta em deleteMedia, mas esta porta
+  // também não pode ficar aberta: leituraDoApagar é chamada direto pela bateria.
+  if (cod === 100 && /does not exist|cannot be loaded|nonexisting/i.test(msg)) {
     return { ok: true, deleted_id: id, ja_nao_existia: true };
   }
   if (cod === 190) {
