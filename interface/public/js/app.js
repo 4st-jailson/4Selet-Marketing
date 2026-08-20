@@ -2191,6 +2191,33 @@ function renderPanel(folder, task) {
     <p class="muted mt">${note}</p>
     ${templatePicker(task)}
     <div class="flex mt"><button class="btn btn-primary" id="btn-render" data-kind="${esc(task.kind)}">${hasMedia ? reLabel : label}</button><span id="render-out" class="muted"></span></div>
+    ${versaoStoryHtml(task)}
+  </div>`;
+}
+// A VERSÃO 9:16 de uma peça que nasceu para o feed. O Instagram não completa com borda: amplia a
+// arte até preencher a tela do Story e CORTA o resto — um feed 1080×1350 postado ali perde 228px de
+// cada lado, e é onde o texto começa. Aqui a peça ganha uma arte vertical de verdade, com o mesmo
+// conteúdo. Aparece só onde faz sentido: peça estática, não importada, e que ainda não tem a arte.
+const KINDS_COM_VERSAO_STORY = ["feed", "image", "carousel", "media"];
+function temArteDeStory(task) {
+  return (task.files || []).some((f) => /^story\/story_\d+\.(png|jpe?g)$/i.test(f.rel));
+}
+function podeGerarVersaoStory(task) {
+  if (!task || task.kind === "story" || task.kind === "video") return false;
+  if (task.status && task.status.imported) return false;
+  return KINDS_COM_VERSAO_STORY.indexOf(task.kind) >= 0;
+}
+function versaoStoryHtml(task) {
+  if (!podeGerarVersaoStory(task)) return "";
+  const tem = temArteDeStory(task);
+  return `<div class="vs-box mt">
+    <div class="vs-txt">
+      <strong>${tem ? "Versão para o Story: pronta" : "Publicar isto no Story?"}</strong>
+      <p class="hint">${tem
+        ? "Esta peça já tem a arte vertical 1080×1920. Ao publicar no Story é ela que vai ao ar, inteira."
+        : "A arte desta peça é 1080×1350. O Instagram não completa com borda no Story: ele amplia até preencher a tela e corta as laterais — cerca de <strong>228 px de cada lado</strong>, que é onde o texto começa. Gerar a versão vertical desenha o mesmo conteúdo em 1080×1920, dentro da área que o aplicativo não cobre."}</p>
+    </div>
+    <button class="btn" id="btn-versao-story">${tem ? "Gerar de novo" : "Gerar versão 9:16"}</button>
   </div>`;
 }
 
@@ -4006,6 +4033,23 @@ async function viewTaskDetail(folder) {
     $$("#pick-fundo-box [data-fundo]").forEach((el) => { el.addEventListener("click", () => { const b = $("#btn-render"); if (b) b.classList.add("attn"); }); });
     // Sair da identidade da marca pergunta antes (modal centralizado, Sim/Não).
     ligaConfirmacaoDeFonte($("#pick-font"));
+  }
+  if ($("#btn-versao-story")) {
+    $("#btn-versao-story").onclick = async () => {
+      const btn = $("#btn-versao-story"), orig = btn.textContent;
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> desenhando…';
+      showBusy("Desenhando a versão 1080×1920…");
+      try {
+        const r = await API.versaoStory(folder);
+        if (!r.ok) throw new Error(r.error || "não consegui desenhar a versão 9:16");
+        hideBusy();
+        toast("Versão 9:16 pronta. Ao publicar no Story é ela que vai ao ar.", "success");
+        router();
+      } catch (e) {
+        hideBusy(); btn.disabled = false; btn.textContent = orig;
+        toast(e.message, "error");
+      }
+    };
   }
   if ($("#btn-discard")) {
     $("#btn-discard").onclick = async () => {

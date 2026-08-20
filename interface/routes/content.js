@@ -253,6 +253,41 @@ router.post("/:folder/render", async (req, res) => {
   }
 });
 
+// VERSÃO 9:16 para o Story de uma peça que nasceu para o feed.
+// O Instagram não completa com borda: amplia até preencher a tela do Story e CORTA o resto — um
+// feed 1080x1350 postado ali perde ~228px de cada lado, e é onde o texto começa. Aqui a peça ganha
+// uma arte 1080x1920 de verdade, com os MESMOS dados, desenhada dentro da zona segura.
+//
+// Peça APROVADA não é tocada por baixo do pano: qualquer arquivo novo dentro dela derruba a
+// conferência de integridade (E_HASH_MISMATCH) e a publicação para de funcionar em silêncio.
+// Então a rota RECUSA e diz o caminho — reabrir, gerar, aprovar de novo.
+router.post("/:folder/versao-story", async (req, res) => {
+  const t = content.getTask(req.params.folder);
+  if (!t) return res.status(404).json({ error: "task nao encontrada" });
+  if (t.status && t.status.imported) {
+    return res.status(409).json({ error: "Esta peça foi importada por você — o painel não tem os dados da arte para redesenhá-la em 9:16.", code: "E_PECA_IMPORTADA" });
+  }
+  if (t.kind === "story") {
+    return res.status(409).json({ error: "Esta peça já é um Story: a arte dela já nasce 1080×1920.", code: "E_JA_E_STORY" });
+  }
+  if (t.zone === "approved") {
+    return res.status(409).json({
+      error: "Esta peça está aprovada. Acrescentar a arte vertical agora quebraria a conferência de integridade e a publicação pararia de funcionar. "
+        + "Clique em “Reabrir para edição”, gere a versão 9:16 e aprove de novo.",
+      code: "E_PRECISA_REABRIR",
+    });
+  }
+  try {
+    const r = await render.renderStoryDeFeed(req.params.folder, {});
+    const task = content.getTask(req.params.folder);
+    if (!r.ok) return res.status(400).json({ error: (r.stderr && String(r.stderr).slice(0, 300)) || "Não consegui desenhar a versão 9:16.", task });
+    return res.json({ ok: true, rels: r.rels, task });
+  } catch (e) {
+    const code = e.code === "E_NOT_EDITABLE" ? 409 : 500;
+    return res.status(code).json({ error: e.message, code: e.code });
+  }
+});
+
 // Descarta (move para outputs/_archived/, reversivel).
 router.post("/:folder/discard", (req, res) => {
   try {

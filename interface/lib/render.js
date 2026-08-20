@@ -3065,8 +3065,15 @@ function cortaEmPalavra(s, max) {
 // inteira; sem eles (peça antiga, ou importada), a legenda continua sendo a fonte, como sempre foi.
 const FEED_MAX_MANCHETE = 60;
 const FEED_MAX_APOIO = 150;
-function textoDaArteDoFeed(fonte) {
+// O Story é MAIS ALTO que o feed (1920 contra 1350) e a faixa de texto tem 1420px de altura útil.
+// Reusar o limite do feed cortava a frase no meio com reticências — "Ela só acelera a…" — numa
+// arte onde sobravam mais de mil pixels. Os limites viram parâmetro para cada formato usar o seu.
+const STORY_MAX_MANCHETE = 110;
+const STORY_MAX_APOIO = 200;
+function textoDaArteDoFeed(fonte, limites) {
   fonte = fonte || {};
+  const maxManchete = (limites && limites.manchete) || FEED_MAX_MANCHETE;
+  const maxApoio = (limites && limites.apoio) || FEED_MAX_APOIO;
   // A legenda tem estrutura: 1a linha = gancho, parágrafos de desenvolvimento, hashtags no fim.
   const linhas = String(fonte.caption || "").split("\n").map((s) => s.trim()).filter(Boolean)
     .filter((s) => !/^#/.test(s));
@@ -3076,8 +3083,8 @@ function textoDaArteDoFeed(fonte) {
   // Apoio da legenda: o próximo parágrafo depois do gancho, sem repetir o gancho.
   const apoioDaLegenda = linhas.slice(1).find((s) => s.length > 24 && s !== gancho) || "";
   return {
-    headline: cortaEmPalavra(escrita || gancho || "4Selet.", FEED_MAX_MANCHETE),
-    subtext: cortaEmPalavra(apoioEscrito || apoioDaLegenda, FEED_MAX_APOIO),
+    headline: cortaEmPalavra(escrita || gancho || "4Selet.", maxManchete),
+    subtext: cortaEmPalavra(apoioEscrito || apoioDaLegenda, maxApoio),
   };
 }
 
@@ -3515,6 +3522,57 @@ function storyCardsHtml(concept, opts) {
     out.push({ n: i + 1, html: html, arquetipo: arq });
   }
   return out;
+}
+
+// VERSÃO 9:16 DE UMA PEÇA QUE NÃO É STORY.
+//
+// O Instagram não completa com borda: ele amplia a arte até preencher a tela do Story e corta o
+// resto. Um feed 1080x1350 postado no Story em 19/08/2026 perdeu ~228px de CADA lado — e o texto
+// começava justamente ali. Isso só se descobria no aparelho, depois de publicado.
+//
+// Aqui a peça ganha uma arte 1080x1920 DE VERDADE, desenhada com os MESMOS dados (manchete,
+// apoio, foto, superfície, logo, marca d'água) que a arte de feed usa. Não é a imagem de feed
+// esticada nem recortada: é o mesmo conteúdo redesenhado na proporção certa, com a zona segura
+// do aplicativo reservada — o texto nasce dentro dela e nada encosta na borda.
+async function renderStoryDeFeed(folder, opts) {
+  opts = opts || {};
+  const loc = requireActive(folder);
+  const rj = readRenderJson(loc);
+  const fotoSalva = rj.image;
+  const foto = opts.image || (imagemExiste(fotoSalva) ? fotoSalva : "");
+  const dadosSalvos = rj.dados || {};
+  // O feed guarda o texto da ARTE no render.json; sem ele, o helper deriva da legenda — a mesma
+  // conta que renderFeed faz, para as duas artes dizerem a mesma coisa.
+  let caption = "";
+  try { caption = fs.readFileSync(path.join(loc.path, "copy", "instagram_caption.txt"), "utf8"); } catch (e) {}
+  // Limites do STORY, não os do feed: aqui a faixa de texto tem 1420px de altura, e o corte de 60
+  // caracteres do feed picotava a frase no meio numa arte onde sobrava mais de mil pixels.
+  const arte = textoDaArteDoFeed(
+    { headline: dadosSalvos.headline, subtext: dadosSalvos.subtext, caption: caption },
+    { manchete: STORY_MAX_MANCHETE, apoio: STORY_MAX_APOIO }
+  );
+  const card = {
+    title: arte.headline,
+    body: arte.subtext || "",
+    eyebrow: dadosSalvos.eyebrow || "",
+    image: foto,
+    theme: dadosSalvos.theme || "",
+  };
+  const S = STORY_SAFE;
+  const ctx = {
+    width: S.w, height: S.h, n: 1, total: 1, cta: "",
+    logo: pickLogo(loc, opts.logo), wmStyle: pickWatermark(loc, opts.watermark),
+    image: foto, fundo: fundoDaPeca(loc, opts),
+  };
+  // Com foto, o desenho de foto; sem foto, o de texto — os dois já respeitam a zona segura.
+  const html = (foto && imagemExiste(foto)) ? storyPhoto(card, ctx) : storyText(card, ctx);
+  const dir = path.join(loc.path, "story");
+  fs.mkdirSync(dir, { recursive: true });
+  const htmlPath = path.join(dir, "story_1.html");
+  const outPng = path.join(dir, "story_1.png");
+  fs.writeFileSync(htmlPath, html, "utf8");
+  const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
+  return { ok: !!r.ok, rels: r.ok ? ["story/story_1.png"] : [], total: 1, stderr: r.ok ? null : (r.stderr || r.stdout) };
 }
 
 async function renderStory(folder, opts) {
@@ -4199,6 +4257,7 @@ module.exports = {
   // regressão conseguir montar UMA capa e olhar o HTML, sem escrever um carrossel inteiro em disco.
   TEMPLATES, fundoNoTemplate, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   storyCardsHtml, storyArchetype,   // idem, para o story
+  renderStoryDeFeed,  // peca de feed/imagem ganha a arte 9:16 (senao o Instagram corta as laterais)
   prepararImportada, dimensoesDeImagem,   // arte importada -> prancheta editavel
   htmlToPng, sanitizeArtHtml,   // usados pelo recebimento do squad: HTML de FORA vira PNG (limpo + sem rede)
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)

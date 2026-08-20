@@ -1330,6 +1330,44 @@ function briefingLongo() {
   }
 
   // ============================================================================
+  // 27b. Versão 9:16 de uma peça que nasceu para o feed
+  // ----------------------------------------------------------------------------
+  // O Instagram não completa com borda: amplia até preencher a tela do Story e corta o resto.
+  // Um feed 1080×1350 postado ali em 19/08/2026 perdeu ~228px de CADA lado.
+  // ============================================================================
+  {
+    secao("27b. Versão 9:16 de uma peça de feed");
+    const rr = require("./lib/render");
+    const rota = fs.readFileSync(path.join(__dirname, "routes/content.js"), "utf8");
+    const app = fs.readFileSync(path.join(__dirname, "public/js/app.js"), "utf8");
+
+    checa(typeof rr.renderStoryDeFeed === "function", "existe o caminho que desenha a arte vertical");
+    // A conta do corte, que é o motivo de tudo: 1080x1350 no 9:16.
+    const escala = Math.max(1080 / 1080, 1920 / 1350);
+    const corte = Math.round((1080 * escala - 1080) / 2);
+    checa(corte === 228, "e a conta do corte confere com o que saiu no aparelho", corte + "px de cada lado");
+
+    // Peça APROVADA não é tocada por baixo do pano: arquivo novo lá dentro derruba o gate.
+    checa(/E_PRECISA_REABRIR/.test(rota), "peca aprovada e RECUSADA, com o caminho de volta");
+    checa(/quebraria a conferência de integridade/.test(rota), "explicando por que (o gate, nao um capricho)");
+    checa(/E_JA_E_STORY/.test(rota), "e peca que ja e Story tambem recusa");
+    checa(/E_PECA_IMPORTADA/.test(rota), "arte importada tambem — o painel nao tem os dados dela");
+
+    // O texto do Story NÃO usa o limite do feed: lá cabe mais, e cortar em 60 picotava a frase.
+    const src = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
+    checa(/const STORY_MAX_MANCHETE = 110/.test(src), "o Story tem limite de texto proprio");
+    checa(/manchete: STORY_MAX_MANCHETE/.test(src), "e a versao 9:16 o usa (o do feed cortava com reticencias)");
+    checa(/function textoDaArteDoFeed\(fonte, limites\)/.test(src), "o limite virou parametro, um por formato");
+
+    // A tela só oferece onde faz sentido.
+    checa(/function podeGerarVersaoStory\(/.test(app), "a tela sabe quando oferecer");
+    checa(/task\.kind === "story" \|\| task\.kind === "video"/.test(app), "nao oferece para Story nem para video");
+    checa(/228 px de cada lado/.test(app), "e o aviso na tela diz o numero medido");
+    checa(/versaoStory: \(folder\)/.test(fs.readFileSync(path.join(__dirname, "public/js/api.js"), "utf8")),
+      "com a chamada ligada");
+  }
+
+  // ============================================================================
   // 28. Editor: o clique chega em quem dá para mover
   // ----------------------------------------------------------------------------
   // Medido na peça "infraestrutura_checkout": no meio da foto, a pilha sob o cursor era

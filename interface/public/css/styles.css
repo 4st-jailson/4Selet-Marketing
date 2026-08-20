@@ -523,6 +523,16 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .ig-story .ig-nav { z-index: 3; }
 .ig-st-leg { margin: 8px 0 0; text-align: center; }
 
+/* ---- Versão 9:16 para o Story numa peça que nasceu para o feed ---- */
+.vs-box {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.vs-txt { flex: 1 1 320px; min-width: 240px; }
+.vs-txt .hint { margin: 4px 0 0; }
+.vs-box .btn { flex: 0 0 auto; }
+
 /* ---- "Tirar do ar": escolher entre apagar no Instagram e só limpar a lista ---- */
 .tirar-op {
   display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
