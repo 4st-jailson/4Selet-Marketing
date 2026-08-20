@@ -1567,7 +1567,8 @@ function briefingLongo() {
     checa(/const publicadas = aprovadas\.filter\(\(t\) => t\.published_at\)\.length/.test(dash),
       "o cartao desconta o que ja foi publicado");
     checa(dash.indexOf("Prontas para publicar") >= 0, "e o rotulo diz o que o numero e");
-    checa(dash.indexOf("já publicadas</em>") >= 0, "sem esconder as que sairam — elas viram nota ao lado");
+    checa(/plural\(publicadas, "já publicada", "já publicadas"\)/.test(dash),
+      "sem esconder as que sairam — elas viram nota ao lado, no plural certo");
 
     // -- 30c. O aviso que faltava: Instagram --------------------------------
     // Era o buraco da tela: o único alerta era sobre a chave de IA, e uma conexão expirada com
@@ -1588,6 +1589,30 @@ function briefingLongo() {
     const ordem = (dash.match(/const kindOrder = \[[^\]]*\]/) || [""])[0];
     checa(/"story"/.test(ordem) && /"media"/.test(ordem),
       "Story e Midia entram na ordem do mix (caiam no rabo da lista, e Midia e quase metade do acervo)", ordem.slice(18, 90));
+
+    // -- 30e. O que as features NOVAS produziram, e a tela ignorava ---------
+    // Publicacao com destino, agendamento e as artes que o squad manda chegaram DEPOIS desta
+    // tela. Ela seguia contando peca como se nada disso existisse: dava para o Instagram ficar
+    // semanas sem post, ou o squad mandar arte, sem nenhum sinal no painel de controle.
+    checa(/API\.publications\(\)\.catch/.test(dash) && /API\.listSchedule\(\)\.catch/.test(dash)
+      && /API\.squadStatus\(\)\.catch/.test(dash),
+      "a tela passa a olhar historico, agendamento e squad");
+    checa(dash.indexOf("<h2>Publicações</h2>") >= 0, "bloco Publicacoes: ha quanto tempo a conta nao posta");
+    checa(dash.indexOf("nos últimos 30 dias") >= 0, "com o ritmo do mes");
+    checa(dash.indexOf("Nada agendado") >= 0, "e o proximo agendamento");
+    checa(/falhados\.length \? /.test(dash), "agendamento que FALHOU vira selo (senao some da vista)");
+    checa(dash.indexOf("<h2>Chegando de fora</h2>") >= 0, "bloco do squad: quantas artes chegaram");
+    checa(/sq\.entregas_falhas \? /.test(dash), "e quantas nao viraram peca");
+    checa(dash.indexOf("Publicar ou agendar") >= 0,
+      "o atalho de Publicacoes entrou nas acoes rapidas (era a unica tela do menu sem atalho)");
+    checa(/\[ultimaHist, ultimaPeca\]/.test(dash),
+      "a ultima publicacao soma historico E carimbo da peca (o historico comecou depois)");
+
+    // -- 30f. O numero que nao batia com o destino --------------------------
+    checa(/const noAcervo = tasks\.filter\(\(t\) => t\.zone !== "approved" && t\.status !== "rejected"\)/.test(dash),
+      "'Pecas de conteudo' conta o que a tela de destino MOSTRA (dizia 20 e a tela abria com 15)");
+    checa(dash.indexOf("${noAcervo}") >= 0, "e o cartao usa esse numero");
+    checa(app.indexOf("function haQuantoTempo(") >= 0, "existe a conta de distancia no tempo");
   }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });

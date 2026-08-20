@@ -1021,13 +1021,38 @@ async function refreshKeyStatus() {
 // Ícone de "campanha" — o MESMO megafone do menu lateral "Campanhas", para o
 // dashboard não ter três ícones diferentes para a mesma ideia.
 const CAMP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>';
+// Distância no tempo, em palavra. "Última publicação: 14/08/2026" obriga a fazer a conta de
+// cabeça; "há 6 dias" já é a resposta. A data exata continua no histórico, que é onde ela serve.
+function haQuantoTempo(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (dias <= 0) return "hoje";
+  if (dias === 1) return "ontem";
+  if (dias < 7) return "há " + dias + " dias";
+  if (dias < 60) { const s = Math.round(dias / 7); return "há " + s + (s === 1 ? " semana" : " semanas"); }
+  return "há " + Math.round(dias / 30) + " meses";
+}
+function diasDesde(iso) {
+  if (!iso) return -1;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? -1 : Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
 async function viewDashboard() {
   setTitle("Dashboard");
   // O estado da publicação entra aqui só para o AVISO: se a conexão com o Instagram cair, a tela
   // dizia "tudo certo" com contadores de peça enquanto publicar não publicava nada. Degrada
   // sozinha — sem essa resposta, o dashboard segue inteiro, só sem o aviso.
-  const [{ campaigns }, { tasks }, pubSt] = await Promise.all([
+  const [{ campaigns }, { tasks }, pubSt, pubHist, agenda, squadSt] = await Promise.all([
     API.campaigns(), API.content(), API.publishStatus().catch(() => null),
+    // As features que chegaram depois desta tela: publicação com destino, agendamento e as
+    // artes que o squad manda de fora. Todas produziam dado que o dashboard não olhava.
+    // Cada uma degrada sozinha — sem a resposta, some o bloco dela, não a tela.
+    API.publications().catch(() => ({ items: [] })),
+    API.listSchedule().catch(() => ({ items: [] })),
+    API.squadStatus().catch(() => null),
   ]);
   setCampMap(campaigns);
   const active = campaigns.filter((c) => c.status === "active").length;
@@ -1039,6 +1064,28 @@ async function viewDashboard() {
   const publicadas = aprovadas.filter((t) => t.published_at).length;
   const approved = aprovadas.length - publicadas;
   const draft = tasks.filter((t) => t.status === "draft").length;
+  // O cartão dizia 20 e a tela Conteúdo mostrava 15: ele somava as três zonas (inclusive
+  // aprovadas e arquivadas) e levava a uma tela que filtra as duas. Número que não bate com
+  // o destino é pior que número nenhum — quem clica acha que perdeu peça.
+  const noAcervo = tasks.filter((t) => t.zone !== "approved" && t.status !== "rejected").length;
+  // --- o que as features novas produziram ---
+  const publicacoes = (pubHist && pubHist.items) || [];
+  const agendamentos = (agenda && agenda.items) || [];
+  const pendentes = agendamentos.filter((x) => x.status === "pending")
+    .sort((x, y) => String(x.scheduled_at).localeCompare(String(y.scheduled_at)));
+  const falhados = agendamentos.filter((x) => x.status === "failed");
+  // A última publicação sai do MÁXIMO entre o histórico e o carimbo da peça: o histórico
+  // começou a ser guardado depois de algumas publicações já existirem, e olhar só para ele
+  // faria a tela dizer "nenhuma ainda" logo depois de alguém publicar.
+  const ultimaHist = publicacoes[0] && publicacoes[0].published_at;
+  const ultimaPeca = tasks.map((t) => t.published_at).filter(Boolean).sort().reverse()[0];
+  const ultimaPub = [ultimaHist, ultimaPeca].filter(Boolean).sort().reverse()[0] || null;
+  const linhaUltima = publicacoes.find((x) => x.published_at === ultimaPub) || null;
+  const trinta = Date.now() - 30 * 86400000;
+  const noMes = publicacoes.filter((x) => new Date(x.published_at).getTime() >= trinta).length;
+  const DEST_ROT = { feed: "no feed", story: "no Story", reels: "no Reels" };
+  const doSquad = tasks.filter((t) => t.origem && t.origem.sistema === "squad");
+  const sq = squadSt || {};
   // Mix por tipo (formato) — visão do que está sendo produzido.
   const byKind = {};
   tasks.forEach((t) => { byKind[t.kind] = (byKind[t.kind] || 0) + 1; });
@@ -1084,7 +1131,7 @@ async function viewDashboard() {
     ${keyWarn}${igWarn}
     <div class="stat-grid">
       <a class="card stat" data-accent="sky" href="#/campaigns" title="Ver campanhas"><span class="stat-ico">${CAMP_SVG}</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></a>
-      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><div class="stat-body"><span class="num">${tasks.length}</span><span class="lbl">Peças de conteúdo</span></div></a>
+      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><div class="stat-body"><span class="num">${noAcervo}</span><span class="lbl">Peças de conteúdo</span></div></a>
       <a class="card stat" data-accent="warn" href="#/content?status=in_review" title="Ver peças em revisão"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg></span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></a>
       <a class="card stat" data-accent="ok" href="#/approved" title="Ver peças aprovadas"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg></span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Prontas para publicar${publicadas ? " <em>"+plural(publicadas, "já publicada", "já publicadas")+"</em>" : ""}</span></div></a>
     </div>
@@ -1098,6 +1145,7 @@ async function viewDashboard() {
         <div class="list">
           <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
           <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">${CAMP_SVG}</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
+          <a class="list-row action-row" href="#/publicacoes"><span class="lr-ico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></span><div class="lr-main"><div class="lr-title">Publicar ou agendar</div><div class="lr-meta">Feed ou Story, agora ou na hora marcada · e o que já foi ao ar</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
           <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças aprovadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
         </div>
       </div>
@@ -1111,6 +1159,39 @@ async function viewDashboard() {
       <div class="card">
         <div class="section-head"><h2>Campanhas ativas</h2><a class="muted-link" href="#/campaigns">ver todas →</a></div>
         ${campsHtml}
+      </div>
+    </div>
+    ${/* O QUE FOI AO AR e O QUE CHEGOU DE FORA — os dois blocos que faltavam.
+         A publicação com destino (Feed/Story), o agendamento e a integração com o squad
+         chegaram depois desta tela, e nada disso aparecia aqui: dava para o Instagram ficar
+         semanas sem post, ou o squad mandar arte, sem nenhum sinal no painel de controle. */""}
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="section-head"><h2>Publicações</h2><a class="muted-link" href="#/publicacoes">histórico →</a></div>
+        <div class="list">
+          <a class="list-row" href="#/publicacoes"><span class="lr-ico" aria-hidden="true">↑</span>
+            <div class="lr-main"><div class="lr-title">${ultimaPub ? "Última publicação " + esc(haQuantoTempo(ultimaPub)) + (linhaUltima && DEST_ROT[linhaUltima.destino] ? " " + DEST_ROT[linhaUltima.destino] : "") : "Nenhuma publicação ainda"}</div>
+            <div class="lr-meta">${plural(noMes, "publicação", "publicações")} nos últimos 30 dias</div></div></a>
+          <a class="list-row" href="#/publicacoes?tab=agendados"><span class="lr-ico" aria-hidden="true">◷</span>
+            <div class="lr-main"><div class="lr-title">${pendentes.length ? plural(pendentes.length, "publicação agendada", "publicações agendadas") : "Nada agendado"}</div>
+            <div class="lr-meta">${pendentes.length ? "a próxima em " + esc(fmtDateTime(pendentes[0].scheduled_at)) : "agende uma peça aprovada em “Publicar ou agendar”"}</div></div>
+            ${falhados.length ? '<span class="badge rejected">' + plural(falhados.length, "falhou", "falharam") + "</span>" : ""}</a>
+        </div>
+        ${(ultimaPub && diasDesde(ultimaPub) >= 7) ? '<div class="mix-pipe muted">A conta está <strong>' + esc(haQuantoTempo(ultimaPub)) + "</strong> sem post" + (approved ? " — e há <strong>" + plural(approved, "peça pronta", "peças prontas") + "</strong> esperando." : ".") + "</div>" : ""}
+      </div>
+      <div class="card">
+        <div class="section-head"><h2>Chegando de fora</h2><a class="muted-link" href="#/requisicoes">requisições →</a></div>
+        ${sq.conectado
+          ? '<div class="list">'
+            + '<a class="list-row" href="#/requisicoes"><span class="lr-ico" aria-hidden="true">↓</span>'
+            + '<div class="lr-main"><div class="lr-title">' + plural(sq.entregas || 0, "arte recebida do squad", "artes recebidas do squad") + "</div>"
+            + '<div class="lr-meta">' + (sq.ultima_entrega ? "a última " + esc(haQuantoTempo(sq.ultima_entrega)) : "nenhuma ainda") + "</div></div>"
+            + (sq.entregas_falhas ? '<span class="badge rejected">' + sq.entregas_falhas + " não virou peça</span>" : "") + "</a>"
+            + (doSquad.length ? '<a class="list-row" href="#/content"><span class="lr-ico" aria-hidden="true">◫</span>'
+              + '<div class="lr-main"><div class="lr-title">' + plural(doSquad.length, "peça no painel veio de fora", "peças no painel vieram de fora") + "</div>"
+              + '<div class="lr-meta">a arte chega pronta e entra no mesmo fluxo de aprovação</div></div></a>' : "")
+            + "</div>"
+          : '<div class="empty">A integração com o squad está desligada. <a href="#/settings">Conectar</a></div>'}
       </div>
     </div>
     </div>`);
