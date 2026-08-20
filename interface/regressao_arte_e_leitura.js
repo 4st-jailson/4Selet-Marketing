@@ -1395,6 +1395,24 @@ function briefingLongo() {
       "e o .orig/.bg do editor NAO pode virar a origem (devolveria a versao pre-edicao)");
     checa(/E_SEM_ARTE/.test(src) && /E_SEM_ARTE/.test(rota), "peca sem arte recusa em vez de gerar vazio");
 
+    // -- O squad pode mandar a 9:16 junto, e o painel ja recebe -------------
+    const sq2 = fs.readFileSync(path.join(__dirname, "lib/squad.js"), "utf8");
+    const doc = fs.readFileSync(path.join(__dirname, "..", "SQUAD_FORMATO_STORY.md"), "utf8");
+    // indexOf, nao regex: estas frases tem barra, chave e barra-vertical — escapa-las num regex
+    // so cria oportunidade de errar o escape (ja aconteceu duas vezes nesta bateria).
+    checa(sq2.indexOf('obj.story && typeof obj.story === "object"') >= 0,
+      "o painel LE o campo cards[].story da entrega do squad");
+    checa(sq2.indexOf('const baseSt = "story/story_"') >= 0,
+      "e grava no lugar de onde a publicacao tira a arte do Story");
+    checa(sq2.indexOf('h.update("|story|")') >= 0,
+      "a versao vertical entra na impressao digital (senao o reenvio vira duplicata)");
+    checa(sq2.indexOf("} else if (!carrossel || n === 1) {") >= 0,
+      "e o aviso de que faltou sai UMA vez por entrega, nao por card");
+    checa(doc.indexOf("228 px de cada lado") >= 0, "o documento traz a conta do corte");
+    checa(doc.indexOf("cards[].story") >= 0 && doc.indexOf("1080 × 1920") >= 0, "o contrato e a medida");
+    checa(/## 6. Aceite/.test(doc), "com aceite escrito, para nao virar opiniao");
+    checa(doc.indexOf("888 × 1420") >= 0, "e a area util depois da zona segura");
+
     // -- A peca NAO troca de tipo por ganhar a arte vertical ---------------
     // Enquanto a pasta story/ classificava a peca, um feed que ganhava a versao 9:16 virava
     // "story" — e PERDIA o Feed da lista de destinos, porque feed.kinds nao aceita story.

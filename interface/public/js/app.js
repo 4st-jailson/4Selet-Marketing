@@ -4267,8 +4267,15 @@ function ajustaAlturaDaPrevia(ov) {
     // Desconta a legenda sob a prévia: quem precisa bater com o formulário é a coluna inteira.
     const legenda = pv.querySelector(".ig-st-leg");
     const extra = legenda ? legenda.getBoundingClientRect().height + 8 : 0;
-    const alvo = Math.max(380, Math.min(620, Math.round(alto - extra)));
+    const casaComOForm = Math.round(alto - extra);
+    // A prévia do Story tem um PISO generoso: ela é o que a pessoa olha para decidir, e a arte
+    // 9:16 espremida na altura do formulário fica pequena demais para julgar o enquadramento.
+    // Quando o piso vence, a folga que sobra na coluna da direita é DISTRIBUÍDA entre as seções
+    // (`.espalhado`) em vez de se juntar num buraco só antes do rodapé.
+    const PISO = 620;
+    const alvo = Math.max(PISO, Math.min(760, casaComOForm));
     pv.style.setProperty("--alt-previa", alvo + "px");
+    form.classList.toggle("espalhado", alvo > casaComOForm + 24);
   };
   requestAnimationFrame(medir); // depois do layout, senão as alturas vêm zeradas
 }

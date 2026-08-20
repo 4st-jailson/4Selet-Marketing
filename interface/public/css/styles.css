@@ -499,6 +499,11 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
    altura ter (--alt-previa, posta em aplicaDestino); a proporção 9:16 deriva a largura. Sem a
    variável — Story fora deste modal — vale a largura fixa de sempre. */
 .pub-preview .ig-story { width: auto; }
+/* Quando a prévia é maior que o formulário (o piso do Story vence), a folga vai para os ESPAÇOS
+   ENTRE as seções, não para um buraco só antes do rodapé. Espaçamento generoso lê como escolha;
+   um vão de 200px antes dos botões lê como defeito. */
+.pub-form.espalhado { justify-content: space-between; }
+.pub-form.espalhado .pub-foot { margin-top: 0; }
 .pub-preview .ig-story .ig-st-media {
   height: var(--alt-previa, 477px); width: auto; margin: 0 auto;
   aspect-ratio: 9 / 16;

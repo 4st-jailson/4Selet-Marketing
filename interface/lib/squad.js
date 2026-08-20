@@ -527,6 +527,14 @@ function impressaoDigital(p) {
     h.update("#" + c.n + "|" + (c.tipo || "") + "|");
     if (c.buf) h.update(c.buf);
     if (c.html) h.update(String(c.html));
+    // A versão vertical entra na conta: um reenvio que só ACRESCENTA o 9:16 é uma entrega
+    // diferente e precisa ser aceita. Fora daqui, ela seria descartada como duplicata — e o
+    // time do squad mandaria a correção achando que chegou.
+    if (c.story) {
+      h.update("|story|");
+      if (c.story.buf) h.update(c.story.buf);
+      if (c.story.html) h.update(String(c.story.html));
+    }
   }
   return "sem_id:" + h.digest("hex").slice(0, 32);
 }
@@ -728,10 +736,38 @@ function normalizar(payload) {
     const ext = buf ? sniffImagem(buf) : null;
     if (buf && !ext) erro("a arte " + n + " não é PNG nem JPEG");
     if (!buf && !html) erro("a arte " + n + " chegou sem imagem e sem HTML — não há o que gravar");
+    // A VERSÃO VERTICAL da mesma arte, quando o time do squad manda as duas.
+    // Existe porque o Instagram não completa com borda no Story: ele amplia a arte até preencher
+    // os 1080x1920 e CORTA o resto — uma arte de feed (1080x1350) perde ~228px de cada lado, que
+    // é justamente onde o texto começa. Medido num post real de 20/08/2026.
+    // Fica OPCIONAL e num campo irmão (`story`), sem mexer no `png`/`html` que já existem: entrega
+    // antiga continua chegando igual, e quem passar a mandar as duas ganha o Story inteiro.
+    const st = (obj.story && typeof obj.story === "object") ? obj.story : null;
+    let story = null;
+    if (st) {
+      const imgSt = st.png || st.imagem || st.image || null;
+      const brutoSt = typeof st.html === "string" ? st.html.trim() : "";
+      const htmlSt = brutoSt && /<[a-z!]/i.test(brutoSt)
+        ? (/<html[\s>]/i.test(brutoSt) ? brutoSt
+          : "<!doctype html><html><head><meta charset=\"utf-8\"></head><body>" + brutoSt + "</body></html>")
+        : null;
+      let bufSt = imgSt ? dataUriParaBuffer(imgSt) : null;
+      if (bufSt && bufSt.length > MAX_BYTES_IMAGEM) {
+        erro("a versão de Story da arte " + n + " tem " + (bufSt.length / 1048576).toFixed(1)
+          + " MB, acima do limite de " + (MAX_BYTES_IMAGEM / 1048576) + " MB por arte", "E_ARTE_GRANDE");
+      }
+      const extSt = bufSt ? sniffImagem(bufSt) : null;
+      if (bufSt && !extSt) erro("a versão de Story da arte " + n + " não é PNG nem JPEG");
+      if (bufSt || htmlSt) {
+        story = { buf: bufSt, ext: extSt, html: htmlSt,
+          largura: Number(st.largura || st.width) || null,
+          altura: Number(st.altura || st.height) || null };
+      }
+    }
     cards.push({
       n: Number(obj.n) > 0 ? Number(obj.n) : n,
       tipo: String(obj.tipo || obj.type || "").slice(0, 24) || null,
-      buf, ext, html,
+      buf, ext, html, story,
       largura: Number(obj.largura || obj.width) || null,
       altura: Number(obj.altura || obj.height) || null,
     });
@@ -882,6 +918,30 @@ async function receberAgora(payload, opcoes) {
           log("Arte " + n + ": veio sem cards[].html — a peça fica editável só por cima.");
         }
       }
+
+      // A VERSÃO VERTICAL, quando veio. Vai para story/story_N — que é exatamente de onde a
+      // publicação tira a arte quando o destino escolhido é o Story. Sem ela, o painel ainda
+      // publica: ele enquadra a de feed em 9:16 com a própria imagem desfocada nas faixas. Mas
+      // enquadrar é remendo; a arte desenhada para a proporção certa é sempre melhor.
+      if (c.story) {
+        const baseSt = "story/story_" + n;
+        let usouSt = false;
+        if (c.story.html && !refsExternas(c.story.html).length) {
+          usouSt = await gravarDeHtml(render, content, folder, baseSt, c.story, log, avisos, n, !c.story.buf);
+        }
+        if (!usouSt && c.story.buf) {
+          content.writeMediaFile(folder, baseSt + "." + c.story.ext, c.story.buf);
+          usouSt = true;
+        }
+        if (usouSt) log("Arte " + n + ": veio também na versão 9:16 — o Story sai inteiro, sem corte.");
+      } else if (!carrossel || n === 1) {
+        // Dito UMA vez por entrega, não uma vez por card: repetir dez vezes o mesmo recado
+        // transforma aviso em ruído e ninguém lê nenhum.
+        avisos.push("Esta entrega não trouxe a versão vertical das artes (campo cards[].story). Publicar no Story"
+          + " uma arte de feed faz o Instagram ampliar e cortar cerca de 228 px de cada lado — onde o texto"
+          + " costuma começar. O painel contorna encaixando a arte inteira em 1080×1920, mas o resultado ideal"
+          + " é o time do squad mandar a arte já desenhada em 9:16 (está na seção 4 do documento da integração).");
+      }
     }
     log("Artes gravadas.");
 
@@ -1021,5 +1081,5 @@ module.exports = {
   normalizar, receber, cancelar, refsExternas, dimensoesDoHtml,
   entradaDeOrigem, reservar, concluirReserva, liberarReserva,
   linhaDaRequisicao, encerrarEntrega, chaveDeOrigem, impressaoDigital,
-  EVENTOS, MAX_CARDS,
+  EVENTOS, MAX_CARDS, receberAgora, normalizar,
 };
