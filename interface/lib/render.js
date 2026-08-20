@@ -3575,6 +3575,82 @@ async function renderStoryDeFeed(folder, opts) {
   return { ok: !!r.ok, rels: r.ok ? ["story/story_1.png"] : [], total: 1, stderr: r.ok ? null : (r.stderr || r.stdout) };
 }
 
+// ENQUADRAR uma arte pronta em 9:16, sem cortar nada.
+//
+// Serve para a arte que o painel NÃO desenhou — a que veio do squad, ou a que a pessoa importou.
+// Nesses casos não existem manchete, foto e superfície separados para redesenhar: existe um PNG
+// chapado, com o design de quem fez. Redesenhar jogaria fora esse design; cortar (o que o
+// Instagram faz sozinho) come 228px de cada lado.
+//
+// Então a arte inteira é colocada na largura cheia, centrada, e as duas faixas que sobram em cima
+// e embaixo recebem a PRÓPRIA arte ampliada e desfocada. O resultado é uma moldura que continua a
+// imagem em vez de uma tarja preta, e nada do original se perde.
+//
+// A conta fecha com a zona segura: arte de 4:5 na largura cheia ocupa y=285..1635, e o aplicativo
+// cobre 0..250 e 1670..1920 — a arte inteira cai no meio, longe das duas faixas.
+async function enquadraStory(folder, opts) {
+  opts = opts || {};
+  const loc = requireActive(folder);
+  const S = STORY_SAFE;
+  // A arte de origem: a que a peça publica hoje. Preferimos a de MAIOR área — é a arte principal.
+  const origem = opts.arte ? path.join(loc.path, opts.arte) : arteParaEnquadrar(loc);
+  if (!origem || !fs.existsSync(origem)) {
+    const e = new Error("Não achei a arte desta peça para enquadrar."); e.code = "E_SEM_ARTE"; throw e;
+  }
+  const dim = dimensoesDeImagem(origem) || { w: 1080, h: 1350 };
+  // Largura cheia; se a arte for MAIS alta que o Story (raro), limita pela altura para não vazar.
+  const escala = Math.min(S.w / dim.w, S.h / dim.h);
+  const larg = Math.round(dim.w * escala), alt = Math.round(dim.h * escala);
+  const url = fileUrl(origem);
+  const html = `<!doctype html><html><head><meta charset="utf-8"/>${fontHead()}
+  <style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:${S.w}px; height:${S.h}px; background:${PALETTE.darker}; }
+  .card { position:relative; width:${S.w}px; height:${S.h}px; overflow:hidden; }
+  /* A moldura é a própria arte, ampliada e desfocada: continua a imagem em vez de virar tarja. */
+  .fundo { position:absolute; inset:-10%; background-image:url('${escAttr(url)}');
+    background-size:cover; background-position:center; filter:blur(64px) saturate(.85) brightness(.55); }
+  .veu { position:absolute; inset:0; background:${PALETTE.darker}55; }
+  .arte { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:${larg}px; height:${alt}px; display:block;
+    box-shadow:0 24px 80px -20px rgba(0,0,0,.55); }
+  </style></head>
+  <body><div class="card"><div class="fundo"></div><div class="veu"></div>
+  <img class="arte" src="${escAttr(url)}" alt=""/></div></body></html>`;
+  const dir = path.join(loc.path, "story");
+  fs.mkdirSync(dir, { recursive: true });
+  const htmlPath = path.join(dir, "story_1.html");
+  const outPng = path.join(dir, "story_1.png");
+  fs.writeFileSync(htmlPath, html, "utf8");
+  const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
+  return {
+    ok: !!r.ok, modo: "enquadrada", rels: r.ok ? ["story/story_1.png"] : [],
+    origem: path.relative(loc.path, origem).replace(/\\/g, "/"),
+    ocupa: { topo: Math.round((S.h - alt) / 2), base: Math.round((S.h + alt) / 2) },
+    stderr: r.ok ? null : (r.stderr || r.stdout),
+  };
+}
+// A arte principal da peça, para enquadrar: a de MAIOR área entre as publicáveis. Ignora os
+// sidecars do editor (.bg/.orig) — o .orig é a imagem ANTES da edição, e enquadrar ela devolveria
+// a versão que a pessoa já tinha corrigido.
+function arteParaEnquadrar(loc) {
+  const cands = [];
+  for (const sub of ["ads", "slides"]) {
+    const dir = path.join(loc.path, sub);
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir)) {
+      if (!/\.(png|jpe?g)$/i.test(f) || /\.(orig|bg)\./i.test(f)) continue;
+      const p = path.join(dir, f);
+      const d = dimensoesDeImagem(p);
+      if (d && d.w && d.h) cands.push({ p, area: d.w * d.h, nome: f });
+    }
+  }
+  if (!cands.length) return "";
+  // feed.png antes de square.png quando ambas existem (é a arte que a peça publica).
+  cands.sort((a, b) => (b.area - a.area) || a.nome.localeCompare(b.nome));
+  return cands[0].p;
+}
+
 async function renderStory(folder, opts) {
   const loc = requireActive(folder);
   const logoV = pickLogo(loc, opts && opts.logo);
@@ -4257,7 +4333,7 @@ module.exports = {
   // regressão conseguir montar UMA capa e olhar o HTML, sem escrever um carrossel inteiro em disco.
   TEMPLATES, fundoNoTemplate, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   storyCardsHtml, storyArchetype,   // idem, para o story
-  renderStoryDeFeed,  // peca de feed/imagem ganha a arte 9:16 (senao o Instagram corta as laterais)
+  renderStoryDeFeed, enquadraStory,  // arte 9:16: redesenhada (peca do painel) ou enquadrada (arte que chegou pronta)
   prepararImportada, dimensoesDeImagem,   // arte importada -> prancheta editavel
   htmlToPng, sanitizeArtHtml,   // usados pelo recebimento do squad: HTML de FORA vira PNG (limpo + sem rede)
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)

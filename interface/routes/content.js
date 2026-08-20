@@ -264,9 +264,6 @@ router.post("/:folder/render", async (req, res) => {
 router.post("/:folder/versao-story", async (req, res) => {
   const t = content.getTask(req.params.folder);
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
-  if (t.status && t.status.imported) {
-    return res.status(409).json({ error: "Esta peça foi importada por você — o painel não tem os dados da arte para redesenhá-la em 9:16.", code: "E_PECA_IMPORTADA" });
-  }
   if (t.kind === "story") {
     return res.status(409).json({ error: "Esta peça já é um Story: a arte dela já nasce 1080×1920.", code: "E_JA_E_STORY" });
   }
@@ -278,11 +275,20 @@ router.post("/:folder/versao-story", async (req, res) => {
     });
   }
   try {
-    const r = await render.renderStoryDeFeed(req.params.folder, {});
+    // DOIS caminhos, e a peça decide qual:
+    //  - arte que o painel desenhou → REDESENHA em 1080×1920 com os mesmos dados (melhor resultado:
+    //    o texto é recomposto para a proporção, não esticado).
+    //  - arte que chegou pronta (squad, importada) → ENQUADRA a arte inteira em 9:16, com a própria
+    //    imagem desfocada preenchendo as faixas. Redesenhar aqui jogaria fora o design de quem fez.
+    const veioPronta = !!(t.status && (t.status.imported || (t.status.origem && t.status.origem.sistema)));
+    const r = veioPronta
+      ? await render.enquadraStory(req.params.folder, {})
+      : await render.renderStoryDeFeed(req.params.folder, {});
     const task = content.getTask(req.params.folder);
-    if (!r.ok) return res.status(400).json({ error: (r.stderr && String(r.stderr).slice(0, 300)) || "Não consegui desenhar a versão 9:16.", task });
-    return res.json({ ok: true, rels: r.rels, task });
+    if (!r.ok) return res.status(400).json({ error: (r.stderr && String(r.stderr).slice(0, 300)) || "Não consegui gerar a versão 9:16.", task });
+    return res.json({ ok: true, modo: veioPronta ? "enquadrada" : "redesenhada", rels: r.rels, task });
   } catch (e) {
+    if (e.code === "E_SEM_ARTE") return res.status(409).json({ error: e.message, code: e.code });
     const code = e.code === "E_NOT_EDITABLE" ? 409 : 500;
     return res.status(code).json({ error: e.message, code: e.code });
   }

@@ -86,7 +86,12 @@ function briefingLongo() {
   checa((p2.slides || []).length === 5, "5 slides, como o texto pediu", "(" + (p2.slides || []).length + ")");
   checa(!/sabe que [ée] selet/i.test(semNotas), "sem a frase-tag proibida");
   checa(!/#[0-9A-F]{6}/i.test(semNotas), "sem código de cor no conteúdo");
-  checa(((g2.body.governance || {}).errors || []).length === 0, "governança sem erro duro");
+  // Esta verificação depende do que a IA ESCREVEU nesta execução, não do código: se o modelo
+  // escrever algo que a governança barra, ela fica vermelha sem nada estar quebrado. Por isso
+  // imprime QUAL regra acionou — vermelho mudo aqui manda procurar bug onde não há.
+  const errsGov = ((g2.body.governance || {}).errors || []);
+  checa(errsGov.length === 0, "governança sem erro duro",
+    errsGov.length ? "a IA escreveu algo que a governança barra: " + errsGov.map((e) => (e && (e.rule || e.message)) || String(e)).join(" · ") : "");
 
   secao("3. Foto inventada pelo modelo");
   checa(render.imagemExiste("/uploads/acervo_livros_leitura.jpg"), "foto real: reconhecida");
@@ -1365,6 +1370,23 @@ function briefingLongo() {
     checa(/228 px de cada lado/.test(app), "e o aviso na tela diz o numero medido");
     checa(/versaoStory: \(folder\)/.test(fs.readFileSync(path.join(__dirname, "public/js/api.js"), "utf8")),
       "com a chamada ligada");
+
+    // -- ENQUADRAR: a arte que CHEGOU PRONTA (squad/importada) ------------
+    // Redesenhar aqui jogaria fora o design de quem fez — o painel só tem o PNG chapado.
+    checa(typeof rr.enquadraStory === "function", "existe o caminho que ENQUADRA a arte pronta");
+    checa(/const veioPronta = !!\(t\.status && \(t\.status\.imported \|\| \(t\.status\.origem && t\.status\.origem\.sistema\)\)\)/.test(rota),
+      "e a rota escolhe sozinha: veio pronta -> enquadra; nasceu aqui -> redesenha");
+    checa(/function arteVeioPronta\(/.test(app) && /encaixa a arte inteira/.test(app),
+      "a tela DIZ qual dos dois vai acontecer (o resultado e diferente)");
+    // A geometria: 4:5 na largura cheia cai entre 285 e 1635 — dentro da zona segura (250..1670).
+    const altNoStory = Math.round(1350 * (1080 / 1080));
+    const topo = Math.round((1920 - altNoStory) / 2), base = topo + altNoStory;
+    checa(topo >= 250 && base <= 1670,
+      "arte 4:5 enquadrada cai inteira dentro da area que o aplicativo nao cobre", "y=" + topo + ".." + base);
+    checa(/filter:blur\(64px\)/.test(src), "as faixas levam a propria arte desfocada, nao tarja preta");
+    checa(/\/\\\.\(orig\|bg\)\\\./.test(src) || src.indexOf("/\\.(orig|bg)\\./i.test(f)") >= 0,
+      "e o .orig/.bg do editor NAO pode virar a origem (devolveria a versao pre-edicao)");
+    checa(/E_SEM_ARTE/.test(src) && /E_SEM_ARTE/.test(rota), "peca sem arte recusa em vez de gerar vazio");
   }
 
   // ============================================================================

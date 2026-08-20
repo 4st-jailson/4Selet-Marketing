@@ -2204,18 +2204,28 @@ function temArteDeStory(task) {
 }
 function podeGerarVersaoStory(task) {
   if (!task || task.kind === "story" || task.kind === "video") return false;
-  if (task.status && task.status.imported) return false;
   return KINDS_COM_VERSAO_STORY.indexOf(task.kind) >= 0;
+}
+// A arte chegou pronta (squad ou importada por você)? Então o painel não tem manchete, foto e
+// superfície separados para redesenhar — só o PNG. Nesse caso ele ENQUADRA em vez de redesenhar,
+// e a tela precisa dizer qual dos dois vai acontecer: o resultado é visivelmente diferente.
+function arteVeioPronta(task) {
+  const s = (task && task.status) || {};
+  return !!(s.imported || (s.origem && s.origem.sistema));
 }
 function versaoStoryHtml(task) {
   if (!podeGerarVersaoStory(task)) return "";
   const tem = temArteDeStory(task);
+  const pronta = arteVeioPronta(task);
+  const comoFaz = pronta
+    ? "Como esta arte chegou pronta, o painel não a redesenha — ele <strong>encaixa a arte inteira</strong> em 1080×1920 e preenche as faixas de cima e de baixo com a própria imagem desfocada. Nada do original se perde."
+    : "Gerar a versão vertical <strong>redesenha o mesmo conteúdo</strong> em 1080×1920 — manchete, apoio e foto recompostos para a proporção, dentro da área que o aplicativo não cobre.";
   return `<div class="vs-box mt">
     <div class="vs-txt">
       <strong>${tem ? "Versão para o Story: pronta" : "Publicar isto no Story?"}</strong>
       <p class="hint">${tem
         ? "Esta peça já tem a arte vertical 1080×1920. Ao publicar no Story é ela que vai ao ar, inteira."
-        : "A arte desta peça é 1080×1350. O Instagram não completa com borda no Story: ele amplia até preencher a tela e corta as laterais — cerca de <strong>228 px de cada lado</strong>, que é onde o texto começa. Gerar a versão vertical desenha o mesmo conteúdo em 1080×1920, dentro da área que o aplicativo não cobre."}</p>
+        : "A arte desta peça é 1080×1350. O Instagram não completa com borda no Story: ele amplia até preencher a tela e corta as laterais — cerca de <strong>228 px de cada lado</strong>, que é onde o texto costuma começar. " + comoFaz}</p>
     </div>
     <button class="btn" id="btn-versao-story">${tem ? "Gerar de novo" : "Gerar versão 9:16"}</button>
   </div>`;
