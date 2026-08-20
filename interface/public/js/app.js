@@ -1063,6 +1063,7 @@ async function viewDashboard() {
   const aprovadas = tasks.filter((t) => t.status === "approved" || t.zone === "approved");
   const publicadas = aprovadas.filter((t) => t.published_at).length;
   const approved = aprovadas.length - publicadas;
+  const aprovadasTotal = aprovadas.length;   // o denominador da razao: tudo que ja passou pela aprovacao
   const draft = tasks.filter((t) => t.status === "draft").length;
   // O cartão dizia 20 e a tela Conteúdo mostrava 15: ele somava as três zonas (inclusive
   // aprovadas e arquivadas) e levava a uma tela que filtra as duas. Número que não bate com
@@ -1126,14 +1127,43 @@ async function viewDashboard() {
         + '<a class="btn btn-primary" href="#/settings">Resolver</a></div></div>';
     }
   }
+  // A ORDEM segue o caminho da peça, da esquerda para a direita: o que está sendo feito, o que
+  // espera decisão, o que já passou e quanto disso foi ao ar. Assim os quatro números se
+  // comparam entre si em vez de serem quatro fatos soltos — e a campanha, que é contexto e não
+  // etapa, fica por último.
+  const stat = (accent, href, titulo, ico, num, rot) =>
+    '<a class="card stat" data-accent="' + accent + '" href="' + href + '" title="' + titulo + '">'
+    + '<span class="stat-ico">' + ico + "</span>"
+    + '<div class="stat-body"><span class="num">' + num + '</span><span class="lbl">' + rot + "</span></div></a>";
+  const ICO_GRADE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>';
+  const ICO_RELOGIO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>';
+  const ICO_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg>';
+  const ICO_AVIAO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>';
+  const acao = (href, ico, titulo, meta) =>
+    '<a class="dash-acao" href="' + href + '"><span class="dash-acao-ico">' + ico + "</span>"
+    + '<span class="dash-acao-txt"><strong>' + titulo + "</strong><span>" + meta + "</span></span></a>";
+
   setView(`
     <div class="dash-stack">
     ${keyWarn}${igWarn}
     <div class="stat-grid">
-      <a class="card stat" data-accent="sky" href="#/campaigns" title="Ver campanhas"><span class="stat-ico">${CAMP_SVG}</span><div class="stat-body"><span class="num">${campaigns.length}</span><span class="lbl">Campanhas <em>${active} ativas</em></span></div></a>
-      <a class="card stat" data-accent="blue" href="#/content" title="Ver todas as peças"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><div class="stat-body"><span class="num">${noAcervo}</span><span class="lbl">Peças de conteúdo</span></div></a>
-      <a class="card stat" data-accent="warn" href="#/content?status=in_review" title="Ver peças em revisão"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg></span><div class="stat-body"><span class="num">${inReview}</span><span class="lbl">Em revisão</span></div></a>
-      <a class="card stat" data-accent="ok" href="#/approved" title="Ver peças aprovadas"><span class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg></span><div class="stat-body"><span class="num">${approved}</span><span class="lbl">Prontas para publicar${publicadas ? " <em>"+plural(publicadas, "já publicada", "já publicadas")+"</em>" : ""}</span></div></a>
+      ${stat("blue", "#/content", "Ver as peças em produção", ICO_GRADE, noAcervo, "Em produção")}
+      ${stat("warn", "#/content?status=in_review", "Ver peças em revisão", ICO_RELOGIO, inReview, "Esperando seu OK")}
+      ${/* A RAZÃO, não dois números soltos. Uma peça fica aprovada E publicada ao mesmo tempo:
+           o cartão antigo mostrava "Prontas para publicar 2 já publicadas", como se fossem
+           coisas separadas, quando a segunda é parte da primeira. Assim se lê de um golpe
+           quanto do que já passou pela aprovação de fato foi ao ar. */""}
+      ${stat("ok", "#/approved", "Ver a biblioteca de aprovados", ICO_CHECK,
+        aprovadasTotal + ' <span class="num-de">/</span> ' + publicadas, "Aprovadas / publicadas")}
+      ${stat("sky", "#/campaigns", "Ver campanhas", CAMP_SVG, campaigns.length, "Campanhas <em>" + active + " ativas</em>")}
+    </div>
+    ${/* Os atalhos saíram da coluna da direita e viraram uma FAIXA logo abaixo dos números: é
+         o que se clica todo dia, e estava competindo em altura com a lista de conteúdo. */""}
+    <div class="dash-acoes">
+      ${acao("#/create", "＋", "Criar conteúdo", "com IA, no padrão da marca")}
+      ${acao("#/publicacoes", ICO_AVIAO, "Publicar ou agendar", "feed ou Story · e o que já foi ao ar")}
+      ${acao("#/approved", "✓", "Aprovados", "prontos para publicar")}
+      ${acao("#/campaigns", CAMP_SVG, "Nova campanha", "ângulo, pilar e mensagens")}
     </div>
     <div class="grid grid-2">
       <div class="card">
@@ -1141,44 +1171,20 @@ async function viewDashboard() {
         ${tasks.length ? '<div class="list">' + tasks.slice(0, 6).map(taskRow).join("") + "</div>" : '<div class="empty">Nenhuma peça ainda. <a href="#/create">Criar conteúdo</a></div>'}
       </div>
       <div class="card">
-        <div class="section-head"><h2>Ações rápidas</h2></div>
-        <div class="list">
-          <a class="list-row action-row" href="#/create"><span class="lr-ico">＋</span><div class="lr-main"><div class="lr-title">Criar conteúdo com IA</div><div class="lr-meta">Caption, carrossel, anúncio ou vídeo no padrão da marca</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
-          <a class="list-row action-row" href="#/campaigns"><span class="lr-ico">${CAMP_SVG}</span><div class="lr-main"><div class="lr-title">Nova campanha</div><div class="lr-meta">Defina ângulo, pilar e mensagens-chave</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
-          <a class="list-row action-row" href="#/publicacoes"><span class="lr-ico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></span><div class="lr-main"><div class="lr-title">Publicar ou agendar</div><div class="lr-meta">Feed ou Story, agora ou na hora marcada · e o que já foi ao ar</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
-          <a class="list-row action-row" href="#/approved"><span class="lr-ico">✓</span><div class="lr-main"><div class="lr-title">Biblioteca de aprovados</div><div class="lr-meta">Peças aprovadas e prontas para publicar</div></div><span class="lr-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span></a>
-        </div>
-      </div>
-    </div>
-    <div class="grid grid-2">
-      <div class="card">
-        <div class="section-head"><h2>Mix de conteúdo</h2></div>
-        ${mixHtml}
-        <div class="mix-pipe muted">Pipeline: <strong>${draft}</strong> rascunho · <strong>${inReview}</strong> em revisão · <strong>${approved}</strong> aprovadas</div>
-      </div>
-      <div class="card">
-        <div class="section-head"><h2>Campanhas ativas</h2><a class="muted-link" href="#/campaigns">ver todas →</a></div>
-        ${campsHtml}
-      </div>
-    </div>
-    ${/* O QUE FOI AO AR e O QUE CHEGOU DE FORA — os dois blocos que faltavam.
-         A publicação com destino (Feed/Story), o agendamento e a integração com o squad
-         chegaram depois desta tela, e nada disso aparecia aqui: dava para o Instagram ficar
-         semanas sem post, ou o squad mandar arte, sem nenhum sinal no painel de controle. */""}
-    <div class="grid grid-2">
-      <div class="card">
         <div class="section-head"><h2>Publicações</h2><a class="muted-link" href="#/publicacoes">histórico →</a></div>
         <div class="list">
-          <a class="list-row" href="#/publicacoes"><span class="lr-ico" aria-hidden="true">↑</span>
+          <a class="list-row" href="#/publicacoes"><span class="lr-ico" aria-hidden="true">${ICO_AVIAO}</span>
             <div class="lr-main"><div class="lr-title">${ultimaPub ? "Última publicação " + esc(haQuantoTempo(ultimaPub)) + (linhaUltima && DEST_ROT[linhaUltima.destino] ? " " + DEST_ROT[linhaUltima.destino] : "") : "Nenhuma publicação ainda"}</div>
             <div class="lr-meta">${plural(noMes, "publicação", "publicações")} nos últimos 30 dias</div></div></a>
-          <a class="list-row" href="#/publicacoes?tab=agendados"><span class="lr-ico" aria-hidden="true">◷</span>
+          <a class="list-row" href="#/publicacoes?tab=agendados"><span class="lr-ico" aria-hidden="true">${ICO_RELOGIO}</span>
             <div class="lr-main"><div class="lr-title">${pendentes.length ? plural(pendentes.length, "publicação agendada", "publicações agendadas") : "Nada agendado"}</div>
             <div class="lr-meta">${pendentes.length ? "a próxima em " + esc(fmtDateTime(pendentes[0].scheduled_at)) : "agende uma peça aprovada em “Publicar ou agendar”"}</div></div>
             ${falhados.length ? '<span class="badge rejected">' + plural(falhados.length, "falhou", "falharam") + "</span>" : ""}</a>
         </div>
         ${(ultimaPub && diasDesde(ultimaPub) >= 7) ? '<div class="mix-pipe muted">A conta está <strong>' + esc(haQuantoTempo(ultimaPub)) + "</strong> sem post" + (approved ? " — e há <strong>" + plural(approved, "peça pronta", "peças prontas") + "</strong> esperando." : ".") + "</div>" : ""}
       </div>
+    </div>
+    <div class="grid grid-2">
       <div class="card">
         <div class="section-head"><h2>Chegando de fora</h2><a class="muted-link" href="#/requisicoes">requisições →</a></div>
         ${sq.conectado
@@ -1193,6 +1199,16 @@ async function viewDashboard() {
             + "</div>"
           : '<div class="empty">A integração com o squad está desligada. <a href="#/settings">Conectar</a></div>'}
       </div>
+      <div class="card">
+        <div class="section-head"><h2>Campanhas ativas</h2><a class="muted-link" href="#/campaigns">ver todas →</a></div>
+        ${campsHtml}
+      </div>
+    </div>
+    ${/* O mix em largura inteira: as barras só se comparam bem quando têm régua longa. */""}
+    <div class="card">
+      <div class="section-head"><h2>Mix de conteúdo</h2><span class="muted">o que já foi produzido</span></div>
+      ${mixHtml}
+      <div class="mix-pipe muted">Pipeline: <strong>${draft}</strong> rascunho · <strong>${inReview}</strong> em revisão · <strong>${approved}</strong> prontas para publicar</div>
     </div>
     </div>`);
 }

@@ -1554,7 +1554,10 @@ function briefingLongo() {
     // -- 30a. A tela ANTERIOR está de volta, inteira -----------------------
     checa(dash.indexOf("Conteúdo recente") >= 0, "a lista 'Conteudo recente' voltou");
     checa(dash.indexOf("taskRow") >= 0, "com a MINIATURA da arte (era o que ele mais sentiu falta)");
-    checa(dash.indexOf("Ações rápidas") >= 0, "os atalhos rapidos voltaram");
+    checa(/class="dash-acoes"/.test(dash), "os atalhos continuam — viraram faixa horizontal");
+    checa(dash.indexOf("Criar conteúdo") >= 0 && dash.indexOf("Publicar ou agendar") >= 0
+      && dash.indexOf("Aprovados") >= 0 && dash.indexOf("Nova campanha") >= 0,
+      "com os quatro caminhos do dia a dia");
     checa(dash.indexOf("Mix de conteúdo") >= 0, "e o mix de conteudo tambem");
     checa(dash.indexOf("stat-ico") >= 0, "os contadores voltaram a ter icone");
     checa(dash.indexOf("dash-fila") < 0 && dash.indexOf("dash-alertas") < 0,
@@ -1566,9 +1569,9 @@ function briefingLongo() {
     // O cartão somava as duas coisas e a ação rápida prometia "prontas para publicar".
     checa(/const publicadas = aprovadas\.filter\(\(t\) => t\.published_at\)\.length/.test(dash),
       "o cartao desconta o que ja foi publicado");
-    checa(dash.indexOf("Prontas para publicar") >= 0, "e o rotulo diz o que o numero e");
-    checa(/plural\(publicadas, "já publicada", "já publicadas"\)/.test(dash),
-      "sem esconder as que sairam — elas viram nota ao lado, no plural certo");
+    checa(dash.indexOf("prontas para publicar") >= 0, "e o rotulo do pipeline diz o que o numero e");
+    checa(/const publicadas = aprovadas\.filter\(\(t\) => t\.published_at\)\.length/.test(dash),
+      "as que ja sairam sao contadas — viram o segundo numero da razao");
 
     // -- 30c. O aviso que faltava: Instagram --------------------------------
     // Era o buraco da tela: o único alerta era sobre a chave de IA, e uma conexão expirada com
@@ -1611,8 +1614,24 @@ function briefingLongo() {
     // -- 30f. O numero que nao batia com o destino --------------------------
     checa(/const noAcervo = tasks\.filter\(\(t\) => t\.zone !== "approved" && t\.status !== "rejected"\)/.test(dash),
       "'Pecas de conteudo' conta o que a tela de destino MOSTRA (dizia 20 e a tela abria com 15)");
-    checa(dash.indexOf("${noAcervo}") >= 0, "e o cartao usa esse numero");
+    checa(/ICO_GRADE, noAcervo, "Em produção"/.test(dash), "e o cartao usa esse numero");
     checa(app.indexOf("function haQuantoTempo(") >= 0, "existe a conta de distancia no tempo");
+
+    // -- 30g. A RAZAO, e a ordem do fluxo ----------------------------------
+    // Uma peca fica aprovada E publicada ao mesmo tempo. O cartao mostrava
+    // "Prontas para publicar 2 ja publicadas", como se fossem coisas separadas, quando a
+    // segunda e parte da primeira. Virou razao: quanto do que passou pela aprovacao foi ao ar.
+    checa(dash.indexOf("Aprovadas / publicadas") >= 0, "o cartao virou uma RAZAO");
+    checa(dash.indexOf("aprovadasTotal + ") >= 0 && dash.indexOf("num-de") >= 0
+      && dash.indexOf("+ publicadas,") >= 0, "aprovadas / publicadas, nessa ordem");
+    checa(css.indexOf(".num-de") >= 0, "com a barra mais leve que os dois numeros");
+    // A ordem segue o caminho da peca: em producao -> esperando OK -> aprovadas/publicadas.
+    const iProd = dash.indexOf("Em produção"), iOK = dash.indexOf("Esperando seu OK"), iApr = dash.indexOf("Aprovadas / publicadas");
+    checa(iProd > 0 && iOK > iProd && iApr > iOK, "e os contadores seguem o caminho da peca");
+    checa(/class="dash-acoes"/.test(dash) && css.indexOf(".dash-acao {") >= 0,
+      "os atalhos viraram faixa logo abaixo dos numeros (estavam competindo em altura com a lista)");
+    checa(/.dash-stack .grid-2 { align-items: start/.test(css),
+      "e cada cartao sobe ate o conteudo dele");
   }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });

@@ -2287,3 +2287,33 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 
 
 
+
+/* ---- Dashboard: a faixa de atalhos e a razão aprovadas/publicadas ----
+   Os atalhos eram um cartão na coluna da direita, competindo em altura com a lista de conteúdo.
+   Como são o que se clica todo dia, viraram uma faixa logo abaixo dos números: menos distância
+   até a ação, e a coluna da direita liberada para o que informa. */
+.dash-acoes { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s4, 12px); }
+.dash-acao {
+  display: flex; align-items: center; gap: 11px; min-width: 0;
+  padding: 13px 15px; border-radius: var(--r-sm); border: 1px solid var(--border);
+  background: var(--surface); color: inherit; text-decoration: none;
+  transition: border-color var(--tr), background var(--tr), transform var(--tr);
+}
+.dash-acao:hover { border-color: var(--brand-sky); background: var(--surface-2); transform: translateY(-1px); }
+.dash-acao-ico {
+  flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
+  border-radius: 8px; background: var(--surface-3, var(--surface-2)); color: var(--brand-blue);
+  font-size: 15px; line-height: 1;
+}
+.dash-acao-ico svg { width: 15px; height: 15px; }
+.dash-acao-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dash-acao-txt strong { font-size: 13.5px; font-weight: 650; }
+.dash-acao-txt span { font-size: 11.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A barra da razão: o "/" é separador, não número — fica mais leve que os dois lados. */
+.num-de { font-weight: 400; color: var(--text-2); margin: 0 1px; }
+@media (max-width: 1100px) { .dash-acoes { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .dash-acoes { grid-template-columns: 1fr; } }
+/* Cada cartão do dashboard sobe até o conteúdo dele. Sem isto a grade estica os dois lados até
+   a altura do MAIOR, e "Publicações" (2 linhas) ficava com meia tela de vazio ao lado de
+   "Conteúdo recente" (6 peças). */
+.dash-stack .grid-2 { align-items: start; }
