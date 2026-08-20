@@ -1496,6 +1496,15 @@ function briefingLongo() {
     checa(/Apagar do Instagram/.test(app) && /Só tirar desta lista/.test(app),
       "e a janela obriga a escolher qual dos dois");
     checa(/Não tem como desfazer|não tem como desfazer/.test(app), "avisando que apagar nao volta");
+    // O cache do APLICATIVO do Instagram no celular continua mostrando o post por alguns minutos,
+    // e atualizar a pagina nao limpa. Ninguem apaga esse cache de fora — ele e do app da Meta, no
+    // aparelho. O que o painel pode fazer e tirar a duvida ANTES de a pessoa ir olhar.
+    checa(app.indexOf("function confirmaSaidaDoAr(") >= 0, "apagou de verdade -> confirmacao que FICA na tela");
+    checa(app.indexOf("este post não existe mais") >= 0, "dizendo que a saida foi conferida com a Meta");
+    checa(app.indexOf("fechar o aplicativo por completo") >= 0, "e explicando o cache do celular antes de virar duvida");
+    checa(app.indexOf("instagram.com, ele já não aparece") >= 0, "com um jeito de conferir sem o app");
+    checa(/conferido: conferido/.test(rota) && /r.conferido/.test(app),
+      "e a tela so afirma conferi quando a conferencia respondeu mesmo");
 
     // -- 29c. A peca volta a poder ser publicada ---------------------------
     checa(typeof cnt.clearPublished === "function", "existe o caminho que tira a marca de publicada");

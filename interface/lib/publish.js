@@ -440,7 +440,10 @@ async function deleteMedia(postId) {
     e.code = "E_APAGAR_NAO_PEGOU"; throw e;
   }
   recordCheck(true);
-  return v;
+  // `conferido` diz se a saída do ar foi CONFIRMADA com a Meta ou apenas aceita por ela. A tela
+  // usa isso para escolher a frase: afirmar "confirmei" sem ter confirmado é como o painel
+  // anunciava conexão viva só por existir um token salvo.
+  return Object.assign({}, v, { conferido: aindaLa === false });
 }
 
 // O post ainda existe? true = existe, false = não existe, null = não deu para saber (rede, timeout).

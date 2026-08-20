@@ -65,11 +65,12 @@ router.delete("/publications/:id", adminOnly, async (req, res) => {
   if (!item) return res.status(404).json({ error: "este registro de publicação não existe mais." });
   const noInstagram = String(req.query.no_instagram || "") === "1";
   const who = req.user && (req.user.name || req.user.username);
-  let apagadoLa = false, aviso = null;
+  let apagadoLa = false, aviso = null, conferido = false;
   if (noInstagram) {
     try {
       const r = await publish.deleteMedia(item.post_id);
       apagadoLa = true;
+      conferido = !!(r && r.conferido);
       if (r && r.ja_nao_existia) aviso = "Este post já não existia no Instagram — provavelmente foi apagado pelo aplicativo. Tirei da lista do painel.";
     } catch (e) {
       // Não some da lista se o post continua no ar: sumir aqui daria a impressão de que foi
@@ -82,7 +83,7 @@ router.delete("/publications/:id", adminOnly, async (req, res) => {
   // "já publicado", para uma publicação que não existe mais.
   let task = null;
   try { content.clearPublished(item.folder, noInstagram ? "apagada no Instagram pelo painel" : "apagada por fora e tirada do histórico"); task = content.getTask(item.folder); } catch (e) { /* peça pode ter sido descartada; a lista já foi limpa */ }
-  res.json({ ok: true, removido: fora, apagado_no_instagram: apagadoLa, task: task, aviso: aviso });
+  res.json({ ok: true, removido: fora, apagado_no_instagram: apagadoLa, conferido: conferido, task: task, aviso: aviso });
 });
 
 // marca uma peça APROVADA como JÁ PUBLICADA manualmente — para publicações feitas por fora

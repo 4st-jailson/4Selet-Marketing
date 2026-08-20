@@ -4770,6 +4770,28 @@ async function viewPublications(arg, query) {
     abreTirarDoAr(p, () => viewPublications(arg, query));
   }; });
 }
+// A confirmação de que o post saiu do ar — e o aviso sobre o aplicativo do celular.
+// Existe por um episódio concreto (20/08/2026): a exclusão funcionou, mas o app do Instagram
+// continuou mostrando o Story mesmo com a página atualizada, e só parou depois de fechar e
+// reabrir o aplicativo. No intervalo, a conclusão natural foi "não apagou". O painel já sabia a
+// verdade — ele pergunta à Meta se o post sumiu — mas guardava para si.
+function confirmaSaidaDoAr(p, conferido) {
+  const ov = document.createElement("div"); ov.className = "modal-ov";
+  ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+    <h3>${conferido ? "Saiu do ar" : "Pedido enviado"}</h3>
+    <p class="hint mb"><strong>${esc(p.label || p.folder)}</strong></p>
+    <p class="${conferido ? "conf-ok" : "conf-parcial"}">${conferido
+      ? "Perguntei ao Instagram depois de apagar: <strong>este post não existe mais</strong> na conta."
+      : "O Instagram aceitou o pedido. Não consegui confirmar em seguida se ele já saiu — a consulta de conferência falhou. Confira no perfil daqui a pouco."}</p>
+    <p class="hint">Se você abrir o Instagram no celular agora, <strong>o post ainda pode aparecer</strong>. O aplicativo guarda o que já baixou e atualizar a página não limpa isso — é preciso <strong>fechar o aplicativo por completo e abrir de novo</strong>. Pelo navegador, em instagram.com, ele já não aparece.</p>
+    <div class="modal-actions"><button class="btn btn-primary" data-x="ok">Entendi</button></div>
+  </div>`;
+  document.body.appendChild(ov);
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const close = () => { ov.classList.remove("open"); setTimeout(() => ov.remove(), 160); };
+  ov.querySelector("[data-x='ok']").onclick = close;
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+}
 // A janela do "Tirar do ar". Fica separada porque a escolha é a parte importante: apagar de
 // verdade no Instagram, ou só limpar a lista de um post que você já apagou pelo celular.
 function abreTirarDoAr(p, aoTerminar) {
@@ -4807,7 +4829,13 @@ function abreTirarDoAr(p, aoTerminar) {
     try {
       const r = await API.removePublication(p.id, noIg);
       close();
-      toast(r && r.aviso ? r.aviso : (noIg ? "Publicação apagada do Instagram." : "Tirei da lista. O que está no Instagram não foi tocado."), "ok");
+      // Apagou de VERDADE: a confirmação vira uma janela, não um aviso que some em 4 segundos.
+      // O aplicativo do Instagram no celular guarda o que já baixou e continua mostrando o post
+      // por alguns minutos — foi exatamente isso que fez parecer que a exclusão não tinha
+      // funcionado, em 20/08. Ninguém pode limpar esse cache de fora: ele é do app da Meta, no
+      // aparelho. O que dá para fazer é tirar a dúvida antes de ela aparecer.
+      if (noIg && !(r && r.aviso)) confirmaSaidaDoAr(p, r && r.conferido);
+      else toast(r && r.aviso ? r.aviso : "Tirei da lista. O que está no Instagram não foi tocado.", "ok");
       if (aoTerminar) aoTerminar();
     } catch (e) {
       btn.disabled = false; btn.textContent = "Tirar do ar";

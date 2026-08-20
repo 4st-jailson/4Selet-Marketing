@@ -573,6 +573,14 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
   background: color-mix(in srgb, var(--err) 10%, transparent);
 }
 
+/* Confirmação de que o post saiu do ar. Verde quando foi CONFERIDO com a Meta; âmbar quando o
+   pedido foi aceito mas a conferência não respondeu — a diferença importa. */
+.conf-ok, .conf-parcial {
+  margin: 0 0 10px; padding: 11px 14px; border-radius: var(--r-sm); font-size: 13.5px; line-height: 1.5;
+}
+.conf-ok { border: 1px solid var(--ok); background: var(--ok-soft); }
+.conf-parcial { border: 1px solid var(--warn); background: var(--warn-soft); }
+
 /* ---- "Tirar do ar": escolher entre apagar no Instagram e só limpar a lista ---- */
 .tirar-op {
   display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
