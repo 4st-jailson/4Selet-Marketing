@@ -1387,6 +1387,38 @@ function briefingLongo() {
     checa(/\/\\\.\(orig\|bg\)\\\./.test(src) || src.indexOf("/\\.(orig|bg)\\./i.test(f)") >= 0,
       "e o .orig/.bg do editor NAO pode virar a origem (devolveria a versao pre-edicao)");
     checa(/E_SEM_ARTE/.test(src) && /E_SEM_ARTE/.test(rota), "peca sem arte recusa em vez de gerar vazio");
+
+    // -- A peca NAO troca de tipo por ganhar a arte vertical ---------------
+    // Enquanto a pasta story/ classificava a peca, um feed que ganhava a versao 9:16 virava
+    // "story" — e PERDIA o Feed da lista de destinos, porque feed.kinds nao aceita story.
+    const cSrc = fs.readFileSync(path.join(__dirname, "lib/content.js"), "utf8");
+    const trecho = (cSrc.match(/function classifyKind[\s\S]*?\n\}/) || [""])[0];
+    const posStoryPasta = trecho.indexOf("story\\/story_\\d+");
+    const posFeed = trecho.indexOf("instagram_caption\\.txt$");
+    checa(posStoryPasta > posFeed && posFeed > 0,
+      "a pasta story/ so classifica DEPOIS de feed e carrossel");
+    checa(/if \(has\(\/instagram_story\\\.json\$\/\)\) return "story";/.test(trecho),
+      "e o arquivo de conteudo continua ancorando o Story de verdade");
+    // A prova viva, com peça em disco: feed que ganha 9:16 segue feed, e cada destino pega a sua arte.
+    {
+      const cnt = require("./lib/content");
+      const pb = require("./lib/publish");
+      const cfg = require("./lib/config");
+      const d = peca("regtipo_" + Date.now(), {
+        "copy/instagram_caption.txt": "teste\n\n#4Selet",
+        "ads/feed.png": "x",
+      });
+      const folder = path.basename(d);
+      checa(cnt.getTask(folder).kind === "feed", "peca de feed nasce feed");
+      fs.mkdirSync(path.join(d, "story"), { recursive: true });
+      fs.writeFileSync(path.join(d, "story", "story_1.png"), "x");
+      const t = cnt.getTask(folder);
+      checa(t.kind === "feed", "e CONTINUA feed depois da arte 9:16", t.kind);
+      const dests = (cfg.DESTINOS || []).filter((x) => x.modo === "auto" && (x.kinds || []).indexOf(t.kind) >= 0).map((x) => x.id);
+      checa(dests.indexOf("feed") >= 0 && dests.indexOf("story") >= 0, "com os dois destinos na mao", dests.join(","));
+      checa(path.basename(pb.pickImages(d, t.kind, "story")[0] || "") === "story_1.png", "Story usa a vertical");
+      checa(path.basename(pb.pickImages(d, t.kind, "feed")[0] || "") === "feed.png", "e o feed usa a de feed");
+    }
   }
 
   // ============================================================================

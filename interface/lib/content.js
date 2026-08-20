@@ -89,9 +89,12 @@ function classifyKind(files, status) {
   if (status && status.content_type === "instagram_story") return "story";
   const rels = files.map((f) => (typeof f === "string" ? f : f.rel));
   const has = (re) => rels.some((r) => re.test(r));
-  // Antes do ramo de carrossel e do de feed: os cartoes se chamam story_N.png de proposito, para
-  // nao caírem no regex de slide_N, mas o arquivo de conteudo tambem ancora.
-  if (has(/instagram_story\.json$/) || has(/story\/story_\d+\.(png|jpe?g)$/i)) return "story";
+  // O ARQUIVO DE CONTEUDO ancora o Story. A pasta story/ NAO ancora aqui — ela e conferida la
+  // embaixo, depois de feed e carrossel. Motivo medido: uma peca de FEED que ganha a versao 9:16
+  // para o Story passa a ter story/story_1.png, e enquanto essa pasta classificava a peca ela
+  // virava "story" — perdendo o Feed da lista de destinos, porque feed.kinds nao aceita story.
+  // A peca continuava sendo de feed; so tinha uma arte a mais.
+  if (has(/instagram_story\.json$/)) return "story";
   if (rels.some(isVideo) || has(/video\/(scenes|concept)\.json$/)) return "video";
   const slidePngs = rels.filter((r) => /slide_\d+\.(png|jpe?g)$/i.test(r));
   if (slidePngs.length > 1 || has(/instagram_carousel\.json$/)) return "carousel";
@@ -100,6 +103,10 @@ function classifyKind(files, status) {
   // Feed antes de image: o feed tem copy/instagram_caption.txt e renderiza em
   // ads/feed.png — sem esta checagem cairia no ramo generico de ads/*.png (image).
   if (has(/instagram_caption\.txt$/) || has(/ads\/feed\.(png|jpg|jpeg)$/)) return "feed";
+  // story/ SOZINHA — sem legenda de feed, sem slides, sem ads. E uma peca de Story cujo arquivo
+  // de conteudo se perdeu (peca antiga, ou trazida de fora). Aqui embaixo ela nao pode mais
+  // confundir uma peca de feed que so ganhou a arte vertical de brinde.
+  if (has(/story\/story_\d+\.(png|jpe?g)$/i)) return "story";
   if (has(/ads\/.+\.(png|jpg|jpeg)$/) || has(/ads\/(concept|layout)\.json$/)) return "image";
   if (rels.some(isImage)) return "image";
   return "other";
