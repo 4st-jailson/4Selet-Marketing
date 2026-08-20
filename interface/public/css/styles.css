@@ -492,9 +492,17 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .pub-status { margin-bottom: 10px; }
 /* Rodapé no FINAL da coluna (margin-top:auto empurra pro fundo, alinhado com a prévia): agendamento em cima, botões embaixo */
 .pub-foot { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-soft); }
-/* Story não tem legenda: sem a caixa de texto, o "margin-top:auto" abria meia tela de vazio
-   entre a explicação e o rodapé. Sem legenda o rodapé sobe e encosta no conteúdo. */
-.pub-form.sem-legenda .pub-foot { margin-top: 22px; }
+/* QUEM MANDA NA ALTURA É O FORMULÁRIO, não a prévia. Enquanto a prévia 9:16 definia a altura da
+   janela, a coluna da direita era esticada até ela e sobrava um buraco — entre o texto e os
+   botões (com o rodapé ancorado embaixo) ou depois dos botões (com ele solto). Empurrar o rodapé
+   só mudava o buraco de lugar. Agora a tela mede o conteúdo do formulário e diz à prévia que
+   altura ter (--alt-previa, posta em aplicaDestino); a proporção 9:16 deriva a largura. Sem a
+   variável — Story fora deste modal — vale a largura fixa de sempre. */
+.pub-preview .ig-story { width: auto; }
+.pub-preview .ig-story .ig-st-media {
+  height: var(--alt-previa, 477px); width: auto; margin: 0 auto;
+  aspect-ratio: 9 / 16;
+}
 
 /* ---- Prévia de Story: tela cheia 9:16, barrinhas no topo, sem curtidas nem legenda ---- */
 .ig-post.ig-story { border: none; background: none; box-shadow: none; }
@@ -532,6 +540,38 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .vs-txt { flex: 1 1 320px; min-width: 240px; }
 .vs-txt .hint { margin: 4px 0 0; }
 .vs-box .btn { flex: 0 0 auto; }
+
+/* ---- Lista de Publicados: uma ação forte por linha, e o resto quieto ----
+   Antes cada linha tinha três botões, dois deles gritando: "Ver no Instagram" cheio de cor e
+   "Tirar do ar" em vermelho — repetido em toda linha, como se apagar fosse a tarefa da tela.
+   Agora sobra uma ação de leitura e uma discreta de saída, que só fica vermelha ao passar o mouse. */
+/* A coluna da PEÇA absorve a sobra; as outras abraçam o próprio conteúdo. Sem isto a tabela
+   distribuía a largura igualmente e abria um vão entre o selo de destino e os botões — a mesma
+   sensação de "espaço vago" que a janela de publicar tinha, mas na horizontal. */
+.utable-pub .pub-peca { width: 100%; }
+.utable-pub .pub-quando,
+.utable-pub tbody td:nth-child(3),
+.utable-pub .pub-acoes { width: 1%; white-space: nowrap; }
+.utable-pub tbody td:nth-child(3) { padding-right: 28px; } /* respiro entre o selo e os botões */
+.pub-nome { max-width: 62ch; } /* linha de leitura confortável mesmo em tela larga */
+.pub-nome {
+  display: block; font-weight: 650; color: var(--text); text-decoration: none; line-height: 1.35;
+  /* Duas linhas e reticências limpas: o titulo vinha cortado no meio da palavra pelo servidor. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.pub-nome:hover { color: var(--brand-sky); text-decoration: underline; }
+.pub-pasta { margin-top: 2px; font-size: 11.5px; color: var(--text-3, var(--text-2)); opacity: .75; word-break: break-all; }
+.pub-quando { white-space: nowrap; }
+.pub-perto { font-weight: 600; }
+.pub-exata { margin-top: 2px; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pub-como { margin-top: 4px; font-size: 11.5px; color: var(--text-2); }
+.pub-acoes { white-space: nowrap; }
+/* Saída destrutiva sem alarde: neutra parada, vermelha quando a pessoa mira nela. */
+.btn-quieto-perigo { color: var(--text-2); }
+.btn-quieto-perigo:hover, .btn-quieto-perigo:focus-visible {
+  color: var(--err); border-color: var(--err);
+  background: color-mix(in srgb, var(--err) 10%, transparent);
+}
 
 /* ---- "Tirar do ar": escolher entre apagar no Instagram e só limpar a lista ---- */
 .tirar-op {

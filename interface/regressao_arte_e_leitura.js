@@ -1281,8 +1281,15 @@ function briefingLongo() {
     checa(/aspect-ratio: 9 \/ 16/.test(css), "em tela cheia 9:16");
     checa(/pv\.dataset\.modo !== destino/.test(app), "trocar o destino troca a previa na hora");
     checa(/cx\.hidden = noStory/.test(app), "e a caixa de legenda some no Story (o texto mora na arte)");
-    checa(/sem-legenda/.test(app) && /\.pub-form\.sem-legenda \.pub-foot/.test(css),
-      "sem a legenda o rodape sobe (senao fica meia tela de vazio)");
+    // O vazio na coluna da direita NAO se resolve empurrando o rodape — isso so muda o buraco de
+    // lugar (de antes dos botoes para depois deles). Quem manda na altura passa a ser o
+    // FORMULARIO: a tela mede o conteudo dele e diz a previa 9:16 que altura ter.
+    checa(/function ajustaAlturaDaPrevia\(/.test(app), "a previa recebe a altura do formulario");
+    checa(/--alt-previa/.test(app) && /height: var\(--alt-previa/.test(css), "por uma variavel de CSS");
+    checa(/aspect-ratio: 9 \/ 16/.test(css), "e a proporcao 9:16 deriva a largura");
+    checa(/classList\.contains\("pub-foot"\)\) return;/.test(app),
+      "a margem automatica do rodape fica FORA da conta (era ela o buraco)");
+    checa(!/\.pub-form\.sem-legenda/.test(css), "e a regra antiga que empurrava o rodape saiu");
     checa(/bn\.disabled = soManual/.test(app),
       "e destino que o painel nao publica nem deixa clicar em publicar");
 
@@ -1462,6 +1469,8 @@ function briefingLongo() {
     checa(sp.code === "E_SEM_PERMISSAO_APAGAR", "sem permissao tem codigo proprio", sp.code);
     checa(/instagram_manage_contents/.test(sp.message), "e a frase NOMEIA a permissao que falta");
     checa(/Permissões e recursos/.test(sp.message), "dizendo onde adicionar");
+    checa(/Acesso Padrão basta/.test(sp.message), "e que NAO precisa de Analise do App (a conta e dele)");
+    checa(/Tornar permanente/.test(sp.message), "com o passo do token ate o fim");
     const jaFoi = L(400, { error: { code: 100, message: "Object with ID '1' does not exist" } }, "1");
     checa(jaFoi.ok && jaFoi.ja_nao_existia, "post ja apagado pelo celular nao e erro, e o resultado");
     checa(L(400, { error: { code: 190, message: "expired" } }, "1").code === "E_TOKEN", "token vencido tem saida propria");

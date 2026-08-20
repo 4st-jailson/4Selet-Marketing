@@ -442,10 +442,12 @@ function leituraDoApagar(status, body, id) {
   // instagram_content_publish, não tem manage_contents), e o único que a pessoa resolve sozinha.
   if (cod === 200 || cod === 10 || /permission|manage_contents/i.test(msg)) {
     return { ok: false, code: "E_SEM_PERMISSAO_APAGAR", message:
-      "O app da Meta ainda não tem permissão para apagar posts. "
-      + "Em developers.facebook.com › app “Painel 4Selet Marketing” › Permissões e recursos, adicione "
-      + "instagram_manage_contents, gere um token novo e cole em Configurações › Publicação Instagram. "
-      + "Enquanto isso, apague pelo aplicativo e use “Só tirar desta lista” aqui." };
+      "Falta a permissão instagram_manage_contents no app da Meta — é ela que autoriza apagar post, "
+      + "Story e Reel. Como a conta @4selet é sua e você tem papel no app, o Acesso Padrão basta: "
+      + "não precisa passar por Análise do App. Caminho: developers.facebook.com › app “Painel 4Selet "
+      + "Marketing” › Permissões e recursos › procure instagram_manage_contents › Obter acesso padrão. "
+      + "Depois gere um token com essa permissão, cole em Configurações › Publicação Instagram e clique "
+      + "em “Tornar permanente”. Enquanto isso, apague pelo aplicativo e use “Só tirar desta lista”." };
   }
   // O post já não existe (apagado pelo celular antes): não é erro, é o resultado que se queria.
   if (cod === 100 && /does not exist|Unsupported|cannot be loaded|nonexisting/i.test(msg)) {

@@ -4235,7 +4235,6 @@ function instagramStoryPreview(imgUrls, username) {
       <div class="ig-st-foot">Enviar mensagem</div>
     </div>
     <p class="hint ig-st-leg">${multi ? "Arte <strong class=\"igp-idx\">1</strong> de " + imgUrls.length + " — cada uma vira um Story separado." : "Uma arte, um Story."}</p>
-    <p class="aviso-formato" id="ig-st-formato" hidden></p>
   </div>`;
 }
 // A arte cabe no Story? Story é 9:16 (1080×1920). Arte de outro formato NÃO ganha borda: o
@@ -4243,6 +4242,36 @@ function instagramStoryPreview(imgUrls, username) {
 // 19/08/2026 saiu com o texto cortado nas laterais, e isso só se descobriu no aparelho, depois
 // de publicado. Aqui a janela mede o arquivo de verdade (naturalWidth/naturalHeight), faz a
 // mesma conta que o app faz, e diz QUANTOS PIXELS somem — antes do clique.
+// A prévia do Story ganha a altura do FORMULÁRIO. Sem isto, a prévia 9:16 (mais alta que o
+// formulário) esticava a coluna da direita e abria um buraco: entre o texto e os botões, ou
+// depois deles. Medimos o conteúdo real — sem contar o esticão que o próprio flex causa — e
+// devolvemos essa altura para a prévia. Teto e piso para a janela não virar um cartão de bolso
+// numa peça sem legenda, nem estourar a tela numa peça com legenda longa.
+function ajustaAlturaDaPrevia(ov) {
+  const form = ov.querySelector(".pub-form"), pv = ov.querySelector("#pub-preview");
+  if (!form || !pv) return;
+  const medir = () => {
+    // A soma das partes, e não offsetHeight: a coluna já vem esticada pelo align-items:stretch,
+    // então perguntar a altura dela devolveria a altura da prévia — a conta circular.
+    let alto = 0;
+    Array.from(form.children).forEach((c) => {
+      if (c.hidden || !c.getBoundingClientRect().height) return;
+      alto += c.getBoundingClientRect().height;
+      // As margens do RODAPÉ ficam de fora: a dele é `margin-top:auto`, e o navegador devolve
+      // esse auto já resolvido no tamanho do buraco. Somá-lo seria pedir de volta o problema.
+      if (c.classList.contains("pub-foot")) return;
+      const cs = getComputedStyle(c);
+      alto += parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
+    });
+    alto += 16; // respiro entre o corpo e o rodapé, no lugar do auto
+    // Desconta a legenda sob a prévia: quem precisa bater com o formulário é a coluna inteira.
+    const legenda = pv.querySelector(".ig-st-leg");
+    const extra = legenda ? legenda.getBoundingClientRect().height + 8 : 0;
+    const alvo = Math.max(380, Math.min(620, Math.round(alto - extra)));
+    pv.style.setProperty("--alt-previa", alvo + "px");
+  };
+  requestAnimationFrame(medir); // depois do layout, senão as alturas vêm zeradas
+}
 function avisaFormatoDoStory(root) {
   const img = root.querySelector(".ig-st-media .ig-post-img");
   const alvo = root.querySelector("#ig-st-formato");
@@ -4368,6 +4397,10 @@ async function openPublishModal(task) {
           <button type="button" class="pub-dest-op${d.id === destino ? " on" : ""}" data-dest="${esc(d.id)}">${esc(d.label)}</button>`).join("")}</div>`
         : ""}
         <p class="hint" id="pub-dest-hint"></p>
+        ${/* O aviso de formato mora AQUI, do lado da escolha do destino — é dela que ele fala.
+             Debaixo da prévia ele ficava longe da decisão e deixava a coluna da direita com meia
+             tela de vazio, porque a prévia 9:16 é bem mais alta que o formulário. */ ""}
+        <p class="aviso-formato" id="ig-st-formato" hidden></p>
         <div id="pub-cap-box">
           <label class="layer-lab">Legenda</label>
           <textarea id="pub-caption" rows="6">${esc(caption)}</textarea>
@@ -4404,7 +4437,6 @@ async function openPublishModal(task) {
   ov.querySelector("[data-x='close']").onclick = close;
   ov.addEventListener("click", (e) => { if (e.target === ov) close(); }); // close() ignora o clique durante a publicação
   wireIgPreview(ov, imgs);
-  if (destino === "story") avisaFormatoDoStory(ov); // a peça já abriu no Story: mede na hora
   const capEl = ov.querySelector("#pub-caption");
   capEl.addEventListener("input", () => { const c = ov.querySelector(".igp-cap"); if (c) c.innerHTML = esc(capEl.value).replace(/\n/g, "<br>"); });
   const publishing = ov.querySelector(".pub-publishing");
@@ -4414,16 +4446,18 @@ async function openPublishModal(task) {
     const noStory = destino === "story";
     const cx = ov.querySelector("#pub-cap-box");
     if (cx) cx.hidden = noStory; // Story não tem legenda: o texto mora dentro da arte
-    // Sem a legenda a coluna ficava com um vazio de meia tela até o rodapé ancorado embaixo.
-    ov.querySelector(".pub-form").classList.toggle("sem-legenda", noStory);
     // A prévia acompanha a escolha: post de feed ou tela cheia de Story.
     const pv = ov.querySelector("#pub-preview");
     if (pv && pv.dataset.modo !== destino) {
       pv.dataset.modo = destino;
       pv.innerHTML = instagramPreview(imgs, capEl.value, uname, destino);
       wireIgPreview(ov, imgs);
-      if (noStory) avisaFormatoDoStory(ov);
     }
+    // O aviso de corte é sobre o STORY. Voltando para o feed ele some — o aviso mora fora da
+    // prévia agora, então não some sozinho quando a prévia é redesenhada.
+    const av = ov.querySelector("#ig-st-formato");
+    if (av) { if (noStory) avisaFormatoDoStory(ov); else av.hidden = true; }
+    if (noStory) ajustaAlturaDaPrevia(ov);
     const dh = ov.querySelector("#pub-dest-hint");
     // A explicação aparece SEMPRE — inclusive quando o destino é único e não há o que escolher.
     if (dh) dh.textContent = soManual
@@ -4652,6 +4686,38 @@ async function viewPublications(arg, query) {
   const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], failed: ["rejected", "Falhou"], cancelled: ["plain", "Cancelado"], skipped: ["plain", "Pulado"], simulated: ["plain", "Simulado"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
   // Para ONDE foi. Registro antigo, gravado antes deste campo existir, era sempre feed.
   const DEST = { feed: "Feed", story: "Story", reels: "Reels", outro: "Outro" };
+  // QUANDO foi ao ar. "20/08/2026, 10:18:55" é preciso e ilegível: os segundos não dizem nada e
+  // a data absoluta obriga a fazer a conta de cabeça. Aqui vem a distância primeiro ("hoje",
+  // "há 6 dias") — que é o que se quer saber ao bater o olho — e a data exata logo abaixo.
+  const quandoFoi = (iso) => {
+    let d; try { d = new Date(iso); } catch (e) { d = null; }
+    if (!d || isNaN(d.getTime())) return '<span class="muted">—</span>';
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const dia = new Date(d); dia.setHours(0, 0, 0, 0);
+    const dias = Math.round((hoje - dia) / 86400000);
+    const perto = dias === 0 ? "hoje" : dias === 1 ? "ontem"
+      : dias < 7 ? "há " + dias + " dias"
+        : dias < 60 ? "há " + Math.round(dias / 7) + (Math.round(dias / 7) === 1 ? " semana" : " semanas")
+          : "há " + Math.round(dias / 30) + " meses";
+    // Montada à mão: o toLocaleDateString com month:"short" devolve "20 de ago. de 2026" em
+    // pt-BR — três preposições para dizer uma data numa célula estreita.
+    const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    const exata = String(d.getDate()).padStart(2, "0") + " " + MES[d.getMonth()] + " " + d.getFullYear()
+      + " · " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return '<span class="pub-perto">' + esc(perto) + '</span><div class="pub-exata">' + esc(exata) + "</div>";
+  };
+  // ONDE foi: um selo só. O "Automático" aparecia em toda linha e não informava nada — todas as
+  // publicações do painel são automáticas, é o caso normal. O que vale dizer é a EXCEÇÃO: a que
+  // você registrou à mão, e a que saiu de um agendamento.
+  const seloDestino = (x) => {
+    const d = DEST[x && x.destino] ? x.destino : "feed";
+    return '<span class="badge dest-' + d + '">' + esc(DEST[d]) + "</span>";
+  };
+  const comoFoi = (p) => {
+    if (p.manual) return '<div class="pub-como">registrada por você</div>';
+    if (p.scheduled_at) return '<div class="pub-como">saiu de um agendamento</div>';
+    return "";
+  };
   const selosDe = (x) => {
     const d = DEST[x && x.destino] ? x.destino : "feed";
     // O modo vem da MESMA lista que o servidor usa (config.DESTINOS, servida em /api/meta). Estava
@@ -4676,12 +4742,20 @@ async function viewPublications(arg, query) {
     body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Destino</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`;
   } else {
     const rows = pubs.length ? pubs.map((p) => `<tr>
-      <td><strong>${esc(p.label || p.folder)}</strong><div class="muted">${esc(p.folder)}</div></td>
-      <td>${esc(fmt(p.published_at))}</td>
-      <td>${selosDe(p)}${p.scheduled_at ? '<div class="hint">agendada</div>' : (p.manual ? '<div class="hint">registrada por você</div>' : "")}</td>
-      <td class="u-actions"><a class="btn btn-sm btn-ghost" href="#/task/${encodeURIComponent(p.folder)}">Ver peça</a>${p.permalink ? '<a class="btn btn-sm btn-primary" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>' : (p.post_id ? ' <span class="hint">post ' + esc(p.post_id) + "</span>" : "")}<button class="btn btn-sm btn-danger" data-tirar="${esc(p.id)}">Tirar do ar</button></td>
-    </tr>`).join("") : '<tr><td colspan="4" class="utable-vazio">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>';
-    body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Publicado em</th><th>Destino</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      <td class="pub-peca">
+        <a class="pub-nome" href="#/task/${encodeURIComponent(p.folder)}" title="${esc(p.label || p.folder)}">${esc(p.label || p.folder)}</a>
+        <div class="pub-pasta">${esc(p.folder)}</div>
+      </td>
+      <td class="pub-quando">${quandoFoi(p.published_at)}</td>
+      <td>${seloDestino(p)}${comoFoi(p)}</td>
+      <td class="u-actions pub-acoes">
+        ${p.permalink
+          ? '<a class="btn btn-sm" href="' + esc(p.permalink) + '" target="_blank" rel="noopener">Ver no Instagram</a>'
+          : '<a class="btn btn-sm" href="#/task/' + encodeURIComponent(p.folder) + '">Ver peça</a>'}
+        <button class="btn btn-sm btn-quieto-perigo" data-tirar="${esc(p.id)}" title="Apagar do Instagram ou tirar desta lista">Tirar do ar</button>
+      </td>
+    </tr>`).join("") : `<tr><td colspan="4" class="utable-vazio">Nada publicado ainda. Publique uma peça aprovada em “Publicar ou agendar”.</td></tr>`;
+    body = `<div class="card"><table class="utable utable-pub"><thead><tr><th>Peça</th><th>Publicado</th><th>Onde</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   setView(`<div class="section-head"><div><h2>Publicações</h2><p class="muted">O que já foi ao ar no Instagram e o que está agendado.</p></div></div>${segs}${body}`);
   $$("#sched-rows [data-cancel]").forEach((b) => { b.onclick = async () => {
