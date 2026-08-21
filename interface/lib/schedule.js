@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { PATHS, DESTINO_IDS } = require("./config");
+const { PATHS, DESTINO_IDS, publicaSozinho, destinoById } = require("./config");
 const publications = require("./publications");
 
 const FILE = path.join(PATHS.DATA_DIR, "schedule.json");
@@ -49,6 +49,15 @@ function add({ folder, kind, caption, scheduled_at, by, label, destino }) {
   // Um agendamento pendente por peça. Duplo clique no botão "Agendar" (ou um retry) criava dois
   // itens iguais, e cada um virava um post no horário marcado.
   const dest = DESTINO_IDS.indexOf(destino) >= 0 ? destino : "feed";
+  // Agendar só vale para o que o painel publica SOZINHO. Reels e "Outro" são manuais: a tela já
+  // recusa "Publicar agora" neles, mas o agendamento aceitava — e o disparador, sem ninguém
+  // olhando, mandava para o feed assim mesmo. Recusar aqui é melhor que publicar no lugar errado.
+  if (kind && !publicaSozinho(dest, kind)) {
+    const d = destinoById(dest);
+    const e = new Error("O painel não publica " + ((d && d.label) || dest) + " sozinho, então não dá para agendar."
+      + " Deixe a peça aprovada e poste na hora — o painel prepara os arquivos para você.");
+    e.code = "E_DESTINO_MANUAL"; throw e;
+  }
   if (pendingFor(folder, dest).length) {
     const e = new Error("Esta peça já tem um agendamento pendente para " + dest + ". Cancele o atual antes de criar outro.");
     e.code = "E_ALREADY_SCHEDULED"; throw e;
@@ -123,7 +132,11 @@ function startWorker(publishFn, isPublishedFn) {
       }
       update(it.id, { status: "publishing", started_at: new Date().toISOString() });
       try {
-        const r = await publishFn(it.folder, { kind: it.kind, caption: it.caption });
+        // O DESTINO tem que viajar junto. Sem ele, o publicador caía no destino padrão do tipo
+        // da peça — ou seja, FEED — e um Story agendado saía como post de feed, com a arte do
+        // feed, sozinho, no horário marcado. E o histórico logo abaixo registrava "Story"
+        // (destinoDe(it)), então nem olhando a aba Publicados dava para descobrir o que saiu.
+        const r = await publishFn(it.folder, { kind: it.kind, destino: destinoDe(it), caption: it.caption });
         update(it.id, { status: r && r.dry_run ? "simulado" : "published", post_id: (r && r.post_id) || null, published_at: new Date().toISOString() });
         if (r && r.ok && !r.dry_run) {
           // MARCA A PEÇA como publicada — sem isto, o post agendado não deixa rastro no

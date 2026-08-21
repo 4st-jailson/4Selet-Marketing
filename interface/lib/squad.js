@@ -862,6 +862,7 @@ async function receberAgora(payload, opcoes) {
     const carrossel = p.cards.length > 1;
     const avisos = [];
     let enquadradas = 0;   // quantas artes o painel teve de encaixar em 9:16 por conta propria
+    const falharam = [];   // e quais nem encaixar deu — estas viram AVISO, nunca silencio
 
     // Entrega sem `post_id` não tem como ser reconhecida num reenvio: o painel só sabe que dois
     // envios são o mesmo post porque o identificador bate. Enquanto isso passava calado, cada
@@ -953,12 +954,24 @@ async function receberAgora(payload, opcoes) {
         // imagem desfocada preenchendo as faixas. Nada se perde, mas a composição foi pensada para
         // outra proporção. Por isso o aviso continua — ele só mudou de "você vai ter que" para
         // "eu já fiz, e olha a ressalva".
+        //
+        // E TODA saída desta porta vira palavra na peça — inclusive a saída ruim. O aviso não
+        // pode ficar pendurado no SUCESSO do encaixe: se o render falha, a peça nascia sem
+        // story/ E sem uma linha dizendo isso, que é exatamente o Story cortado de 20/08, só
+        // que agora silencioso. Duas armadilhas moram aqui, e por isso o `catch` sozinho não
+        // bastava: htmlToPng NÃO lança quando o Chromium morre ou estoura o tempo — devolve
+        // { ok:false } (render.js) —, e o `if (r && r.ok)` sem `else` engolia esse caso inteiro.
+        let deuCerto = false;
+        let porque = "";
         try {
           const r = await render.enquadraStory(folder, { arte: relArte, n: n });
-          if (r && r.ok) { enquadradas++; log("Arte " + n + ": enquadrada em 9:16 para o Story."); }
+          deuCerto = !!(r && r.ok);
+          if (!deuCerto) porque = (r && r.stderr) ? String(r.stderr).slice(0, 160) : "o desenho da versão vertical não ficou pronto";
         } catch (e) {
-          log("Arte " + n + ": não consegui enquadrar em 9:16 (" + (e.code || e.message) + ").");
+          porque = e.code || e.message;
         }
+        if (deuCerto) { enquadradas++; log("Arte " + n + ": enquadrada em 9:16 para o Story."); }
+        else { falharam.push(n); log("Arte " + n + ": não consegui enquadrar em 9:16 (" + porque + ")."); }
       }
     }
     // Dito UMA vez por entrega, não uma vez por card: repetir dez vezes o mesmo recado transforma
@@ -966,10 +979,36 @@ async function receberAgora(payload, opcoes) {
     if (enquadradas) {
       avisos.push("Esta entrega não trouxe a versão vertical das artes (campo cards[].story), então "
         + (enquadradas === 1 ? "encaixei a arte" : "encaixei as " + enquadradas + " artes")
-        + " em 1080×1920 e a peça já pode ir para o Story sem corte. Só que encaixar não é desenhar: a arte"
+        + " em 1080×1920"
+        // "já pode ir para o Story sem corte" só vale se TODAS entraram. Com uma arte de fora, a
+        // promessa vira mentira justo na peça que precisa de atenção.
+        + (falharam.length ? "" : " e a peça já pode ir para o Story sem corte")
+        + ". Só que encaixar não é desenhar: a arte"
         + " aparece inteira, com as faixas de cima e de baixo preenchidas pela própria imagem desfocada."
         + " Para o Story sair como foi pensado, o time do squad precisa mandar a versão 9:16 junto"
         + " (está na seção 4 do documento da integração).");
+    }
+    // A FALHA tem o mesmo direito de ser dita que o conserto. Sem esta faixa, a peça chegava sem
+    // arte de Story e sem uma palavra: quem publicasse no Story só descobriria o corte depois de
+    // postar. Aqui o recado diz o estado real, o tamanho do estrago e por onde sair.
+    if (falharam.length) {
+      // "as artes 1, 2" é jeito de máquina falar. Em português a última entra com "e".
+      const quais = falharam.length === 1 ? "a arte " + falharam[0]
+        : "as artes " + falharam.slice(0, -1).join(", ") + " e " + falharam[falharam.length - 1];
+      avisos.push((enquadradas
+        ? "Ainda sobrou arte sem versão de Story: não consegui encaixar "
+        : "Esta entrega não trouxe a versão vertical das artes (campo cards[].story) e eu também não consegui encaixar ")
+        + quais
+        + " em 1080×1920. Do jeito que está, publicar no Story corta cerca de 228 pixels de cada lado da arte —"
+        // As saidas sao ditas como elas REALMENTE funcionam: a peca do squad nasce aprovada, e
+        // peca aprovada e selada (a rota da versao 9:16 recusa com E_PRECISA_REABRIR), entao
+        // "clique em Gerar versao 9:16" sozinho seria um caminho que nao anda. E o botao refaz a
+        // arte principal, nao um cartao especifico do carrossel — quem refaz a entrega inteira e
+        // o reprocessamento na tela de Requisicoes.
+        + " o que estiver na beirada some. Três saídas: reabra a peça para edição e use “Gerar versão 9:16”"
+        + " (refaz o encaixe da arte principal); peça ao time do squad a versão vertical (está na seção 4 do"
+        + " documento da integração); ou reprocesse esta entrega na tela de Requisições, que refaz tudo.");
+      log("Aviso na peça: " + falharam.length + " arte(s) sem versão de Story.");
     }
     log("Artes gravadas.");
 

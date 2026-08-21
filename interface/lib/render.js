@@ -1945,6 +1945,12 @@ function watermark(spec, theme) {
 // conseguindo encolher a pílula quando o slide fica cheio.
 const CSS_PILULA_CTA = ".ac-cta { align-self:flex-start; margin-top:44px; font-weight:800; font-size:36px;"
   + " background:" + PALETTE.blue + "; color:#FFFFFF; padding:26px 48px; border-radius:999px; }";
+// A geometria vertical do cartão em números, e não espalhada pelo texto do CSS: o recuo de cima e
+// de baixo e a altura do logo. Quem precisa saber quanto espaço sobra no miolo (o arranjo de print
+// precisa, para calcular o respiro do cabeçalho) lê daqui em vez de repetir "90" e "46" na mão —
+// era assim que uma conta ficava para trás quando alguém mexia no recuo do cartão.
+const CAR_PAD_Y = 90;
+const CAR_LOGO_H = 46;
 function carBase(width, height, theme) {
   const t = theme || THEME_DARK;
   return `* { margin:0; padding:0; box-sizing:border-box; }
@@ -1957,14 +1963,14 @@ function carBase(width, height, theme) {
      formato que o Instagram corta nas bordas. Conferido antes de mexer: os 5 layouts de slide
      (fluxo cheio, grade de 4 números, lista de 6 itens, texto longo e fecho) cabem em 86, 88, 92,
      96 e até 104 — então subir para dentro da faixa não aperta nada. */
-  display:flex; flex-direction:column; padding:90px 92px; }
+  display:flex; flex-direction:column; padding:${CAR_PAD_Y}px 92px; }
   .dots { position:absolute; inset:0; background-image:radial-gradient(${t.dotTex} 2px, transparent 2px); background-size:46px 46px; opacity:.5; }
   /* Foto de fundo opcional do slide (atras de tudo) + scrim de leitura acima dela. */
   .s-photo { position:absolute; inset:0; z-index:0; background-size:cover; background-position:center; }
   .s-scrim { position:absolute; inset:0; z-index:1; }
   .card.has-photo .dots { opacity:.16; z-index:1; }
   .top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; }
-  .logo { height:46px; }
+  .logo { height:${CAR_LOGO_H}px; }
   .pageno { font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.8; }
   .eyebrow { font-family:'JetBrains Mono',monospace; color:${t.eyebrow}; font-size:30px; letter-spacing:3px; text-transform:uppercase; margin-bottom:26px; }
   .mid { position:relative; z-index:2; flex:1; display:flex; flex-direction:column; justify-content:center; }
@@ -1972,6 +1978,21 @@ function carBase(width, height, theme) {
   .s-title .accent { color:${t.eyebrow}; font-weight:900; }
   .footer { position:relative; font-family:'JetBrains Mono',monospace; font-size:26px; color:${PALETTE.mist}; opacity:.85; }
   ${CSS_PILULA_CTA}`;
+}
+// COMO OCUPAR A SOBRA DO MIOLO SEM COLAR O TÍTULO NO LOGO.
+// O `.mid` da base centraliza o conteúdo com `justify-content:center` — e isso só funciona enquanto
+// SOBRA espaço. Basta um filho que cresce (`flex:1`) para a sobra virar zero: a centralização deixa
+// de ter o que distribuir e o primeiro bloco de texto nasce grudado no cabeçalho. Foi o que
+// aconteceu no arranjo "Print em aparelho": medido no Chromium, 0px entre a base do logo e o topo
+// do título, com a tinta do título passando POR CIMA do "4Selet" (os outros treze arranjos ficam
+// entre 95 e 1067px). Como o cabeçalho não tem margem própria, quem toma a sobra tem de devolver o
+// respiro. Por isso as duas regras saem SEMPRE juntas daqui: não existe fazer um filho do `.mid`
+// crescer sem repor a distância do logo. Todo arranjo novo que precisar disso chama esta função.
+// Sem o combinador ">" de propósito: o editor de arte salva o HTML de volta e nada garante que o
+// bloco continue como filho DIRETO do miolo depois de alguém mexer na peça à mão.
+function cssOcupaOMid(seletor, respiro) {
+  return ".mid { padding-top:" + Math.max(0, Math.round(respiro || 0)) + "px; }"
+    + " " + seletor + " { flex:1 1 0; min-height:0; }";
 }
 function carDoc(ctx, extraCss, bodyInner) {
   // Continuidade visual entre slides: desloca os Selet Dots como se os slides
@@ -2162,6 +2183,21 @@ function slideList(slide, ctx) {
 // Sem véu por cima da tela e sem perspectiva, de propósito: o pedido dizia "não alterar os textos,
 // números, proporções ou elementos reais da interface", e a lição de 29/07 sobre a matéria torta
 // vale igual — warp entorta o print e derruba justamente esse requisito.
+// Altura NATURAL do desenho de cada aparelho do mediaDevice, antes do zoom. Serve para saber quanto
+// espaço sobra no miolo do cartão. Os valores são os do próprio desenho (o notebook, por exemplo,
+// tem 512px de tampa + 30px de base), arredondados para CIMA de propósito: errar para mais aqui só
+// encolhe o respiro do cabeçalho, nunca espreme o print — que é o conteúdo da peça.
+const ALTURA_APARELHO = { notebook: 545, janela: 675, celular: 850, tablet: 825 };
+// Quanto de respiro cabe entre o logo e o texto neste slide de aparelho. O aparelho é servido
+// primeiro (é o print que a peça foi feita para mostrar); o respiro fica com 30% do que sobra do
+// miolo depois dele, com piso de 32px — abaixo disso o título volta a encostar no cabeçalho — e
+// teto de 96px, que é a distância que os arranjos vizinhos têm no formato quadrado (lista 101px,
+// medidor 106px, grade de números 116px). Passar do teto empurraria o aparelho para baixo à toa.
+function respiroDoCabecalho(ctx, model, zoom) {
+  const miolo = Math.max(0, Number(ctx.height || 1350) - CAR_PAD_Y * 2 - CAR_LOGO_H);
+  const sobra = miolo - Math.round((ALTURA_APARELHO[model] || ALTURA_APARELHO.notebook) * zoom);
+  return Math.max(32, Math.min(96, Math.round(sobra * 0.3)));
+}
 function slideDevice(slide, ctx) {
   ctx.theme = resolveTheme(slide.theme);
   const claro = ctx.theme === THEME_LIGHT;
@@ -2175,8 +2211,14 @@ function slideDevice(slide, ctx) {
   // gigante atrás dele, com o texto ilegível por cima. Medido na primeira montagem.
   ctx.image = "";
   const v = cede(cargaSlide(slide, ctx, 3, true), 4.6, 6.2);
+  const zoomDev = v(0.95, 0.78, 0.66);
+  // O respiro entre o logo e o texto (ver cssOcupaOMid). Só faz sentido quando existe texto no alto:
+  // slide sem rótulo e sem título não tem o que separar do cabeçalho, e aí o aparelho continua
+  // centralizado como sempre esteve.
+  const respiro = (slide.eyebrow || slide.title) ? respiroDoCabecalho(ctx, model, zoomDev) : 0;
   const css = ".s-title.sm { font-size:" + v(58, 50, 44) + "px; margin-bottom:" + v(30, 20, 14) + "px; line-height:1.04; }"
-    + ".dev-wrap { display:flex; align-items:center; justify-content:center; flex:1; min-height:0; }"
+    + ".dev-wrap { display:flex; align-items:center; justify-content:center; }"
+    + cssOcupaOMid(".dev-wrap", respiro)
     // O aparelho é desenhado em px fixos (herdados da peça de imprensa). O `zoom` encolhe o
     // conjunto inteiro para caber no slide sem reamostrar o print em sub-pixel, que é o que
     // amoleceria a captura — a mesma armadilha do backdrop-filter no lightbox.
@@ -2186,7 +2228,7 @@ function slideDevice(slide, ctx) {
     // 0,95 é o teto: a base do notebook tem 928px e 928 × 0,95 = 882px, o que deixa 99px de margem
     // de cada lado, dentro da margem segura de 88–104px do platform_guidelines.md. Passar disso
     // encosta o aparelho na borda de corte do Instagram.
-    + ".dev { zoom:" + v(0.95, 0.78, 0.66) + "; }"
+    + ".dev { zoom:" + zoomDev + "; }"
     + ".dev .scr { overflow:hidden; background:#0d1317; }"
     + ".dev .scr img { width:100%; height:100%; object-fit:cover; object-position:top center; display:block; }"
     + ".dev .scr-empty { display:flex; align-items:center; justify-content:center; height:100%; color:" + PALETTE.mist + "; font-size:26px; }"

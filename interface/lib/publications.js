@@ -17,13 +17,43 @@ function save(list) {
   fs.renameSync(tmp, FILE);
 }
 
-// Registra uma publicação real. rec: { folder, label?, kind?, caption?, post_id?, permalink?,
-// scheduled_at? (null se direta), by?, published_at? (data informada), manual? (marcação manual) }.
-// Evita duplicar o MESMO post (idempotência por post_id).
+// TODOS os identificadores de post que este registro representa, na ordem em que foram ao ar.
+// Um carrossel publicado no Story vira N stories na conta — N ids —, e por muito tempo só o
+// primeiro era guardado: "Apagar do Instagram" apagava o cartão 1, dizia que tinha confirmado, e
+// os outros N-1 ficavam no ar sem nenhum botão do painel que os alcançasse. Registro ANTIGO tem
+// só `post_id`, e continua sendo lido aqui — por isso toda leitura de ids passa por esta função,
+// em vez de cada lugar escolher entre um campo e outro.
+function idsDe(rec) {
+  const out = [];
+  const guarda = (v) => {
+    const s = String(v == null ? "" : v).trim();
+    if (s && out.indexOf(s) < 0) out.push(s);
+  };
+  if (rec && Array.isArray(rec.cartoes)) rec.cartoes.forEach(guarda);
+  if (rec) guarda(rec.post_id);
+  return out;
+}
+
+// Registra uma publicação real. rec: { folder, label?, kind?, caption?, post_id?, cartoes?,
+// permalink?, scheduled_at? (null se direta), by?, published_at? (data informada),
+// manual? (marcação manual) }.
+// Evita duplicar o MESMO post (idempotência por qualquer id em comum).
 function add(rec) {
   rec = rec || {};
   const list = load();
-  if (rec.post_id && list.some((x) => x.post_id === rec.post_id)) return null;
+  // Os ids que saíram juntos. Quem chama pode não passar `cartoes` — o disparador do
+  // agendamento registra só o `post_id` —, e nesse caso perguntamos a quem acabou de publicar,
+  // que guarda a lista completa por alguns posts. Sem esta pergunta, um Story agendado nasceria
+  // no histórico com um id só e cairia no mesmo buraco, por outra porta.
+  let cartoes = idsDe({ cartoes: rec.cartoes });
+  if (!cartoes.length && rec.post_id) {
+    try { cartoes = idsDe({ cartoes: require("./publish").cartoesDe(rec.post_id) }); }
+    catch (e) { cartoes = []; }
+  }
+  // Idempotência por QUALQUER id em comum: o mesmo Story chegando por outro caminho traria o
+  // mesmo conjunto de cartões, e comparar só o primeiro id deixaria entrar uma linha repetida.
+  const novos = idsDe({ cartoes: cartoes, post_id: rec.post_id });
+  if (novos.length && list.some((x) => idsDe(x).some((id) => novos.indexOf(id) >= 0))) return null;
   const item = {
     id: crypto.randomBytes(8).toString("hex"),
     folder: String(rec.folder || ""),
@@ -33,7 +63,11 @@ function add(rec) {
     // destino que existia quando ele foi gravado — assim o historico nao fica com buraco.
     destino: DESTINO_IDS.indexOf(rec.destino) >= 0 ? rec.destino : "feed",
     caption: rec.caption || null,
-    post_id: rec.post_id || null,
+    // `post_id` continua sendo o PRIMEIRO cartão: é o que a tela lê para oferecer "Apagar do
+    // Instagram" e o que os registros antigos têm. `cartoes` é a lista inteira — quem apaga usa
+    // ela, e é ela que impede o painel de dizer que tirou tudo do ar tendo tirado um cartão só.
+    post_id: rec.post_id || cartoes[0] || null,
+    cartoes: cartoes.length ? cartoes : null,
     permalink: rec.permalink || null,
     scheduled_at: rec.scheduled_at || null, // preenchido = veio de agendamento
     by: rec.by || null,
@@ -61,4 +95,17 @@ function remove(id, motivo, quem) {
   return Object.assign({}, fora, { removido_em: new Date().toISOString(), removido_motivo: motivo || null, removido_por: quem || null });
 }
 
-module.exports = { add, list, get, remove };
+// Ajusta um registro que CONTINUA no histórico. Existe para o desfecho parcial de "Apagar do
+// Instagram": quando só alguns cartões saem, a linha precisa ficar na lista apontando apenas
+// para os que continuam no ar — senão a tentativa seguinte bate de novo nos que já sumiram e o
+// painel perde a conta do que resta. Não cria registro: id desconhecido devolve null.
+function update(id, patch) {
+  const list = load();
+  const i = list.findIndex((x) => x.id === String(id || ""));
+  if (i < 0) return null;
+  list[i] = Object.assign({}, list[i], patch || {});
+  save(list);
+  return list[i];
+}
+
+module.exports = { add, list, get, remove, update, idsDe };

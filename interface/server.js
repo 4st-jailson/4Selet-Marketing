@@ -259,7 +259,29 @@ app.get(["/", "/index.html"], serveIndex);
 // Material de marca nao publicado nao pode sair por ai. O canal publico de midia continua
 // sendo so o /m/:token (link temporario que a Meta usa na hora de publicar), e o render nao
 // depende destas URLs (resolve para file:// local).
-app.use(["/uploads", "/outputs", "/propostas"], (req, res, next) => {
+// ATENCAO: o gate NAO pode depender do casamento de rota do Express.
+// Com `app.use(["/uploads", ...])`, um pedido por "//uploads/foto.png" (barra dobrada) ou por
+// "/%75ploads/foto.png" (a letra "u" codificada) NAO casa com o caminho montado — entao o gate
+// nem roda. So que o express.static logo abaixo, montado na raiz, NORMALIZA e DECODIFICA o
+// caminho antes de procurar o arquivo, e entrega a imagem. Medido: sem cookie nenhum,
+// "//uploads/_art_hand_11.png" devolvia 200 com o PNG inteiro (1.157.873 bytes), enquanto
+// "/uploads/_art_hand_11.png" devolvia 401. Qualquer pessoa na internet que acertasse o nome do
+// arquivo baixava material de marca nao publicado.
+// A regra passa a olhar o caminho JA decodificado e normalizado — o mesmo que o express.static
+// vai olhar — em vez de confiar na montagem.
+const PASTAS_SOB_LOGIN = ["uploads", "outputs", "propostas"];
+function primeiraPasta(req) {
+  var p = req.path || "/";
+  // UMA decodificacao, igual a do serve-static: decodificar duas vezes recusaria um arquivo cujo
+  // nome contenha "%" de verdade, e o static nao chegaria nele de qualquer forma.
+  try { p = decodeURIComponent(p); } catch (e) { /* caminho malformado: segue com o cru */ }
+  p = p.split("\\").join("/");              // barra invertida (Windows) vira barra normal
+  p = p.replace(new RegExp("/{2,}", "g"), "/"); // barras repetidas viram uma
+  var partes = p.split("/").filter(function (x) { return x && x !== "."; });
+  return partes.length ? partes[0].toLowerCase() : "";
+}
+app.use(function (req, res, next) {
+  if (PASTAS_SOB_LOGIN.indexOf(primeiraPasta(req)) < 0) return next();
   if (auth.userFromRequest(req)) return next();
   res.status(401).type("text").send("Faça login no painel para ver este arquivo.");
 });

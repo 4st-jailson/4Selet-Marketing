@@ -239,6 +239,38 @@ function assertApproved(folder) {
   return { dir, status };
 }
 
+// A peça que o gate vai publicar é a cópia que está em `approved` — não a que a busca por nome
+// encontra primeiro. A busca do content.js olha a zona ATIVA antes da aprovada, então, com uma
+// peça de mesmo nome nas duas zonas, a trava de "já publicado" lia uma cópia e o gate publicava
+// a outra: o post que já estava no ar não aparecia como publicado e saía de novo na conta real.
+// Aqui é leitura pura, sem gate nenhum — serve para a trava enxergar a MESMA cópia que o gate.
+// Devolve o status.json da cópia aprovada, ou null se ela não existir.
+function statusAprovado(folder) {
+  try {
+    const dir = path.join(APPROVED_DIR, String(folder));
+    if (!dir.startsWith(APPROVED_DIR + path.sep)) return null;
+    return JSON.parse(fs.readFileSync(path.join(dir, "status.json"), "utf8").replace(/^﻿/, ""));
+  } catch (e) { return null; }
+}
+
+// Memória curta de quais cartões saíram JUNTOS. Quem escreve o histórico é quem chamou (a rota
+// e o disparador do agendamento), e o disparador só sabe passar um id — o primeiro. Guardar aqui
+// a lista inteira por alguns posts deixa o histórico nascer completo pelos DOIS caminhos, sem
+// depender de cada chamador lembrar disso. Em memória basta: o registro é escrito segundos
+// depois, no mesmo processo; e se o processo cair no meio, não há registro para completar.
+const CARTOES_LEMBRADOS = new Map();   // post_id do primeiro cartão -> [todos os ids]
+const CARTOES_LEMBRADOS_MAX = 50;
+function lembraCartoes(postId, ids) {
+  const chave = String(postId == null ? "" : postId).trim();
+  const lista = (Array.isArray(ids) ? ids : []).map((v) => String(v == null ? "" : v).trim()).filter(Boolean);
+  if (!chave || lista.length < 2) return;   // um cartão só não precisa de memória: o post_id basta
+  CARTOES_LEMBRADOS.set(chave, lista);
+  while (CARTOES_LEMBRADOS.size > CARTOES_LEMBRADOS_MAX) {
+    CARTOES_LEMBRADOS.delete(CARTOES_LEMBRADOS.keys().next().value);
+  }
+}
+function cartoesDe(postId) { return CARTOES_LEMBRADOS.get(String(postId == null ? "" : postId).trim()) || null; }
+
 // Descobre as imagens a publicar (na ordem) a partir da pasta aprovada.
 // Depois que uma arte importada é preparada para edição, o slide passa a existir em dois
 // arquivos ao mesmo tempo (slide_1.jpg trazido pela pessoa + slide_1.png redesenhado).
@@ -332,7 +364,12 @@ async function publishStories(igUserId, token, imageUrls) {
       const err = new Error("Publiquei " + feitos.length + " de " + imageUrls.length
         + " cartões do story e o seguinte falhou: " + e.message
         + " Os que já saíram estão no ar — poste só os que faltam, pelo celular.");
-      err.code = "E_STORY_PARCIAL"; err.publicados = feitos; throw err;
+      err.code = "E_STORY_PARCIAL"; err.publicados = feitos;
+      // Os que JÁ SAÍRAM precisam continuar alcançáveis pelo painel: sem esta lembrança, quem
+      // registra o parcial no histórico só teria o primeiro id, e os demais ficariam no ar sem
+      // nenhum botão que os apagasse.
+      lembraCartoes(feitos[0], feitos);
+      throw err;
     }
   }
   return { post_id: feitos[0], cartoes: feitos };
@@ -444,6 +481,58 @@ async function deleteMedia(postId) {
   // usa isso para escolher a frase: afirmar "confirmei" sem ter confirmado é como o painel
   // anunciava conexão viva só por existir um token salvo.
   return Object.assign({}, v, { conferido: aindaLa === false });
+}
+
+// Códigos de falha que valem para a publicação INTEIRA, não para um cartão só: sem permissão ou
+// sem token, o segundo cartão vai falhar exatamente como o primeiro. Insistir nos outros só
+// gastaria chamadas e deixaria a pessoa esperando pelo mesmo desfecho.
+const APAGAR_VALE_PARA_TODOS = ["E_NO_TOKEN", "E_SEM_PERMISSAO_APAGAR", "E_TOKEN"];
+
+// Apaga TODOS os posts de uma publicação, um a um, conferindo cada um. Um carrossel publicado no
+// Story vira N stories na conta: apagar só o primeiro e anunciar "saiu do ar" é o pior desfecho
+// possível — os outros continuam publicados e a linha some do histórico levando junto a única
+// pista que existia deles. Aqui nada é afirmado por atacado: devolve o que saiu e o que ficou,
+// para quem chamou poder dizer QUANTOS de QUANTOS e o que fazer com o resto.
+// Nunca lança por falha de um cartão — só quando não há id nenhum para apagar.
+async function deleteMedias(ids) {
+  const lista = (Array.isArray(ids) ? ids : [ids])
+    .map((v) => String(v == null ? "" : v).trim())
+    .filter((v, i, a) => v && a.indexOf(v) === i);
+  if (!lista.length) {
+    const e = new Error("Este registro não guardou o identificador do post no Instagram, então o painel não sabe qual apagar. Apague pelo aplicativo e use “Tirar do histórico”.");
+    e.code = "E_SEM_POST_ID"; throw e;
+  }
+  const apagados = [];
+  const falharam = [];
+  let conferidos = 0, jaNaoExistiam = 0;
+  for (let i = 0; i < lista.length; i++) {
+    const id = lista[i];
+    try {
+      const r = await deleteMedia(id);
+      apagados.push(id);
+      if (r && r.conferido) conferidos++;
+      if (r && r.ja_nao_existia) jaNaoExistiam++;
+    } catch (e) {
+      const cod = e.code || "E_APAGAR";
+      falharam.push({ id: id, code: cod, message: e.message });
+      if (APAGAR_VALE_PARA_TODOS.indexOf(cod) >= 0) {
+        // O motivo é o mesmo para os que sobraram; anota todos com a mesma explicação e para.
+        for (let j = i + 1; j < lista.length; j++) falharam.push({ id: lista[j], code: cod, message: e.message });
+        break;
+      }
+    }
+  }
+  return {
+    total: lista.length,
+    apagados: apagados,
+    falharam: falharam,
+    conferidos: conferidos,
+    ja_nao_existiam: jaNaoExistiam,
+    todos: falharam.length === 0,
+    // Só afirma "conferi" quando TODOS saíram E todos foram conferidos com a Meta. É a mesma
+    // regra do cartão único, aplicada ao conjunto: meia confirmação não vira confirmação.
+    conferido: falharam.length === 0 && conferidos === lista.length,
+  };
 }
 
 // O post ainda existe? true = existe, false = não existe, null = não deu para saber (rede, timeout).
@@ -566,6 +655,9 @@ async function publishTask(folder, opts) {
     : (images.length > 1
       ? await publishCarousel(c.ig_user_id, c.access_token, urls, caption)
       : await publishImage(c.ig_user_id, c.access_token, urls[0], caption));
+  // Guarda quais cartões saíram juntos ANTES de devolver: o histórico é escrito logo em seguida,
+  // e por dois caminhos diferentes — só um deles sabe repassar a lista inteira.
+  lembraCartoes(res.post_id, res.cartoes);
   // Busca o link público do post (pra "ver no Instagram" no histórico). Best-effort.
   let permalink = "";
   try { const pl = await graphGet("/" + res.post_id, { fields: "permalink", access_token: c.access_token }, "buscar o link do post"); if (pl.ok && pl.body && pl.body.permalink) permalink = pl.body.permalink; } catch (e) { /* segue sem link: o post ja saiu */ }
@@ -579,5 +671,9 @@ module.exports = {
   // decisão precisa ser verificável sem chamar a Meta.
   pickImages,
   inspecionaToken, tornarPermanente,   // diz o QUE o token e e ate quando vale; e deriva o da Pagina
-  deleteMedia, leituraDoApagar,         // apaga um post publicado; a leitura da resposta e testavel sem rede
+  deleteMedia, deleteMedias, leituraDoApagar, // apaga um post (ou TODOS os cartoes de um story); a leitura da resposta e testavel sem rede
+  // Quais cartoes sairam juntos no ultimo story publicado, e o status da copia APROVADA —
+  // as duas coisas que o registro do historico e a trava de post repetido precisam saber
+  // para nao enxergar metade do que foi publicado.
+  cartoesDe, statusAprovado,
 };

@@ -286,7 +286,8 @@ hr.sep { border: none; border-top: 1px solid var(--border-soft); margin: var(--s
 
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--s3); padding: 0 4px; }
 .key-status { font-size: 12.5px; }
-.key-status a { display: inline-flex; align-items: center; gap: 7px; color: var(--text-dim); font-weight: 500; }
+/* O selo "IA conectada" é clicável (leva a Configurações) e media 19px de altura. */
+.key-status a { display: inline-flex; align-items: center; gap: 7px; color: var(--text-dim); font-weight: 500; min-height: 24px; }
 .key-status a::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-mut); flex: none; }
 .key-status.ok a { color: var(--text-2); }
 .key-status.ok a::before { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
@@ -340,7 +341,10 @@ hr.sep { border: none; border-top: 1px solid var(--border-soft); margin: var(--s
 .btn-danger { background: transparent; border-color: color-mix(in srgb, var(--err) 50%, var(--border)); color: var(--err); }
 .btn-danger:hover { background: var(--err-soft); border-color: var(--err); color: var(--err); }
 .btn-sm { padding: 6px 11px; font-size: 12.5px; }
-.btn-icon { padding: 0; width: 36px; height: 36px; border-radius: var(--r-sm); }
+/* flex: none — o botão quadrado (Voltar, fechar) vive dentro de barras flex e ESPREMIA quando a
+   tela é estreita: num aparelho de 320px o Voltar chegava a 22px de largura, abaixo do mínimo
+   para o dedo, embora o CSS dissesse 36. Largura fixa só vale se ele não puder encolher. */
+.btn-icon { padding: 0; width: 36px; height: 36px; border-radius: var(--r-sm); flex: none; }
 .ico-svg { display: inline-flex; }
 
 /* ---- cards ---- */
@@ -370,7 +374,9 @@ a.stat:focus-visible, .type-card:focus-visible { outline: 2px solid var(--accent
 .mb { margin-bottom: var(--s5); }
 .dim { color: var(--text-dim); }
 .muted { color: var(--text-dim); font-size: 13.5px; }
-.muted-link { color: var(--accent-strong); font-size: 13px; font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; font-family: inherit; }
+/* Atalhos de seção ("ver tudo", "histórico", "requisições"). Mediam 20px de altura: abaixo do
+   mínimo de 24px para o dedo. Cresce a área de toque, não a letra — o desenho fica igual. */
+.muted-link { color: var(--accent-strong); font-size: 13px; font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; font-family: inherit; display: inline-flex; align-items: center; min-height: 24px; }
 .muted-link:hover { color: var(--accent); }
 .hint { color: var(--text-mut); font-weight: 400; font-size: 12px; }
 .codeblock { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--r-xs); padding: 1px 6px; color: var(--text-2); }
@@ -1432,7 +1438,9 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .he-safe-tag { position: absolute; top: 4px; left: 6px; font-size: 10px; font-weight: 600; letter-spacing: .3px; color: #cfe3ec; background: rgba(7,33,43,.6); padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
 
 /* ---- Usuários: nome de exibição + ações pequenas ---- */
-.btn-xs { padding: 1px 7px; font-size: 11px; line-height: 1.5; }
+/* min-height junto do padding miúdo: sem ele o botão "editar" da lista de pessoas saía com 21px
+   de altura e ficava difícil de acertar no telefone. */
+.btn-xs { padding: 1px 7px; font-size: 11px; line-height: 1.5; min-height: 24px; }
 .u-name-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .u-username { font-size: 12px; }
 
@@ -1487,7 +1495,15 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
   .utable .u-actions .btn { margin-left: 0; }
   .utable .u-role { width: 100%; }
 }
-.modal-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
+/* Três saídas numa linha só ("Continuar editando" / "Fechar sem salvar" / "Salvar e fechar")
+   estouram a largura do modal em tela estreita e o botão do meio sai pela borda — justamente
+   o que a pessoa precisa ler antes de decidir. Quebrar a linha resolve e não muda em nada os
+   modais de dois botões, que continuam cabendo numa linha. */
+.modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
+/* Modal de três saídas: nos 440px do modal padrão os três botões quebram a linha e o principal
+   fica sozinho embaixo, com cara de defeito. Em 560px os três cabem lado a lado; o flex-wrap
+   acima continua sendo a rede de segurança em tela estreita. */
+.modal.modal-3x { max-width: 560px; }
 /* Aviso de painel desatualizado. Fica embaixo, discreto, e não cobre nada: é informação, não
    interrupção — quem está no meio de uma peça termina antes de recarregar. z-index abaixo dos
    toasts (1700) e do modal (1660), acima do resto. */
@@ -2220,7 +2236,8 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .sq-fita .hint { margin: 0; }
 /* Alinhado com a PRIMEIRA linha, não centrado: quando a fita cresce por causa de um aviso, o
    link centralizado ficava boiando no meio do bloco, longe do que ele complementa. */
-.sq-fita-link { flex: none; align-self: flex-start; margin-top: 1px; font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+/* Mesma conta dos outros atalhos: 20px de altura vira 24px de área de toque, sem crescer a letra. */
+.sq-fita-link { flex: none; align-self: flex-start; margin-top: 1px; font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; display: inline-flex; align-items: center; min-height: 24px; }
 .sq-fita-link:hover { color: var(--brand-sky); }
 /* Com alerta ela ganha o tom de atenção — e aí o espaço extra se justifica. */
 .sq-fita-alerta { border-color: var(--warn); border-left-color: var(--warn); background: var(--warn-soft); }
@@ -2337,14 +2354,21 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 .dash-par { align-items: stretch; }
 .dash-par > .card { display: flex; flex-direction: column; }
 .dash-par > .card > .list, .dash-par > .card > .mix { flex: 1 1 auto; }
-.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* A regra de 3 colunas do .grid-3 mora lá em cima, junto com a do .grid-2. A cópia que
+   existia aqui estava FORA de media query e DEPOIS do ponto em que o telefone manda a grade
+   virar uma coluna só — ou seja, ela desfazia esse colapso. Só não aparecia porque a regra de
+   1100px logo abaixo corrigia de novo. Duas regras se anulando foi como o defeito de 320px
+   ficou escondido. */
 
 /* A barra da razão: separador, não número — mais leve que os dois lados. */
 .num-de { font-weight: 400; color: var(--text-2); margin: 0 2px; }
 
 @media (max-width: 1100px) {
   .dash-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid-3 { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr), nunca "1fr" puro: "1fr" significa minmax(auto, 1fr), e esse auto impede a
+     coluna de ficar MENOR que o conteúdo dela. Num telefone de 320px a coluna media 317px dentro
+     de um espaço de 280px, e a página inteira passava a rolar de lado. */
+  .grid-3 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 620px) { .dash-grade { grid-template-columns: 1fr; } }
 /* Bloco esticado para fechar a linha: o conteúdo se DISTRIBUI na altura em vez de ficar

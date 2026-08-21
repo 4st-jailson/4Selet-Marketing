@@ -723,8 +723,11 @@ router.post("/slide", async (req, res, next) => {
     // preserva a foto de fundo do slide se a IA não devolver uma
     if (!newSlide.image && slides[index] && slides[index].image) newSlide.image = slides[index].image;
 
-    // governança sobre o texto do slide novo
-    const gov = runBrandGovernance(textForGovernanceSlide(newSlide), { type: "instagram_carousel" });
+    // governança sobre o texto do slide novo. Aqui o PEDIDO é a orientação que a pessoa digitou
+    // na janela "Regerar slide" — é ela que faz o papel do brief para a exceção da frase-tag.
+    // Sem passá-la, pedir a frase neste slide virava beco sem saída: a IA obedecia, o gate
+    // reprovava e a tela só sabia dizer "tente outra orientação" (medido: 3 de 3 tentativas).
+    const gov = runBrandGovernance(textForGovernanceSlide(newSlide), { type: "instagram_carousel", brief: body.instruction });
     if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
 
     paletteWarn(gov, body.instruction); // alerta de marca se pediram cor fora da paleta (branco puro/neon)
@@ -773,7 +776,8 @@ router.post("/slide-mem", async (req, res, next) => {
     // preserva a foto de fundo do slide se a IA não devolver uma
     if (!newSlide.image && slides[index] && slides[index].image) newSlide.image = slides[index].image;
 
-    const gov = runBrandGovernance(textForGovernanceSlide(newSlide), { type: "instagram_carousel" });
+    // Mesma regra do /slide: a orientação digitada é o pedido, e é ela que libera a frase-tag.
+    const gov = runBrandGovernance(textForGovernanceSlide(newSlide), { type: "instagram_carousel", brief: body.instruction });
     if (gov.errors.length && !body.force) return res.status(422).json({ error: "o slide viola regras de marca", governance: gov });
     paletteWarn(gov, body.instruction);
     // MERGE só com instrução pontual (preserva omitidos); sem instrução = versão nova direta.

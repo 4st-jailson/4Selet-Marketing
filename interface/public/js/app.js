@@ -403,12 +403,13 @@ function uiModal(opts) {
         : "";
       return `<div class="field"><label>${esc(f.label || "")}</label>${ctrl}${copiar}${sugg}</div>`;
     }).join("");
-    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+    ov.innerHTML = `<div class="modal${opts.altText ? " modal-3x" : ""}" role="dialog" aria-modal="true">
       <h3>${esc(opts.title || "")}</h3>
       ${opts.message ? '<p class="muted mt">' + esc(opts.message) + "</p>" : ""}
       ${fieldHtml}
       <div class="modal-actions">
         ${opts.noCancel ? "" : '<button class="btn btn-ghost" data-mx="cancel">' + esc(opts.cancelText || "Cancelar") + "</button>"}
+        ${opts.altText ? '<button class="btn" data-mx="alt">' + esc(opts.altText) + "</button>" : ""}
         <button class="btn ${opts.confirmKind === "danger" ? "btn-danger" : "btn-primary"}" data-mx="ok">${esc(opts.confirmText || "Confirmar")}</button>
       </div></div>`;
     document.body.appendChild(ov);
@@ -481,6 +482,11 @@ function uiModal(opts) {
       else if (e.key === "Tab") trapTabKey(ov, e);
     };
     ov.querySelector("[data-mx='ok']").onclick = () => done(fields.length ? collect() : true);
+    // Terceira saída (opts.altText): há decisões com TRÊS respostas de verdade — "salvar e fechar",
+    // "fechar sem salvar" e "continuar editando". Espremer isso em dois botões obrigava a tratar
+    // "fechar sem salvar" como se fosse cancelar, e aí Esc/clique fora descartariam o trabalho.
+    // Resolve com a string "alt" (o cancelar continua sendo o único caminho do null).
+    const altBtn = ov.querySelector("[data-mx='alt']"); if (altBtn) altBtn.onclick = () => done("alt");
     const cancelBtn = ov.querySelector("[data-mx='cancel']"); if (cancelBtn) cancelBtn.onclick = () => done(null);
     ov.addEventListener("click", (e) => { if (e.target === ov && !opts.noCancel) done(null); });
     document.addEventListener("keydown", onKey);
@@ -983,7 +989,60 @@ function goBack(fallback) {
   if (NAV_COUNT > 1) history.back();
   else location.hash = fallback || "#/content";
 }
+/* ---- Guarda de saída: nenhuma tela sai levando trabalho junto ----------------------------
+   O painel é uma página só: qualquer clique no menu troca o # e o roteador reescreve o #view
+   inteiro. O que a pessoa digitou — e o que a IA acabou de gerar — vive só no DOM. Resultado
+   medido: um clique de curiosidade em "Aprovados" apagava o carrossel recém-gerado sem uma
+   palavra, sem rascunho e sem volta. Agora a tela que tem algo a perder registra aqui uma
+   descrição do que está pendente, e o roteador PERGUNTA antes de trocar; o beforeunload cobre
+   F5 e fechar a aba.
+   Regra: só pergunta quando há MESMO o que perder. Pergunta que aparece à toa ensina a pessoa
+   a clicar em "sim" sem ler — e aí a próxima, a de verdade, também passa batido. */
+const _guardasDeSaida = new Map(); // nome -> função que devolve o pendente (ou null quando não há)
+function registraGuardaDeSaida(nome, fn) { _guardasDeSaida.set(nome, fn); }
+function esqueceGuardaDeSaida(nome) { _guardasDeSaida.delete(nome); }
+// Devolve { titulo, mensagem, sairText, ficarText, aoSair } da 1ª guarda com algo pendente.
+function trabalhoPendente() {
+  for (const fn of _guardasDeSaida.values()) {
+    try { const p = fn(); if (p) return p; } catch (e) { /* guarda quebrada jamais trava a navegação */ }
+  }
+  return null;
+}
+let _rotaNaTela = "";        // o # que está REALMENTE desenhado (não o que a barra de endereço mostra)
+let _perguntandoSaida = false;
+
 async function router() {
+  // A troca de tela é o ponto onde o trabalho não salvo morre — a pergunta vem antes de tudo,
+  // inclusive antes de mexer no menu, para "ficar" não deixar rastro de uma navegação que não houve.
+  const alvo = location.hash || "#/dashboard";
+  if (alvo !== _rotaNaTela) {
+    const pend = trabalhoPendente();
+    if (pend) {
+      if (_perguntandoSaida) return;   // a pergunta já está na tela: não empilhar outra por cima
+      _perguntandoSaida = true;
+      let sair = false;
+      try {
+        sair = await uiConfirm(pend.mensagem, {
+          title: pend.titulo || "Sair desta tela?",
+          confirmText: pend.sairText || "Sair sem salvar",
+          cancelText: pend.ficarText || "Ficar nesta tela",
+          confirmKind: "danger",
+        });
+      } finally { _perguntandoSaida = false; }
+      if (!sair) {
+        // Devolve o endereço SEM re-rotear: chamar o roteador de novo remontaria a tela, ou seja,
+        // apagaria exatamente o trabalho que a pessoa acabou de escolher manter. replaceState não
+        // dispara hashchange — é o que permite desfazer a navegação sem destruir a tela.
+        try { history.replaceState(null, "", _rotaNaTela); } catch (e) { /* navegador antigo: fica o # novo, a tela não muda */ }
+        return;
+      }
+      if (typeof pend.aoSair === "function") { try { pend.aoSair(); } catch (e) { /* fechar a sobreposição é cortesia, não pré-requisito */ } }
+    }
+  }
+  _guardasDeSaida.clear();   // a tela que sai leva a guarda dela junto
+  // Relê o endereço em vez de reusar `alvo`: a pergunta é assíncrona e alguém pode ter clicado de
+  // novo enquanto ela estava na tela. O que vale é o que o parseHash logo abaixo vai desenhar.
+  _rotaNaTela = location.hash || "#/dashboard";
   NAV_COUNT++;
   if (typeof resetBusy === "function") resetBusy(); // nunca deixar uma cortina de loading órfã ao trocar de tela
   const { route, arg, query } = parseHash();
@@ -3756,17 +3815,54 @@ async function openHtmlEditor(folder, task, rel, opts) {
     loadInto(targets[ni].rel);
   }
   if (multiSlide) { $("#he-prev").onclick = () => goSlide(-1); $("#he-next").onclick = () => goSlide(1); }
-  const close = () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove(); if (dirty || changed) router(); };
+  // Fecha de fato. Separado da pergunta abaixo porque quem escolhe "sair mesmo assim" pela guarda
+  // de saída (botão voltar do navegador) também precisa que o editor saia da frente — senão a arte
+  // ficaria por cima da tela nova.
+  const fecharEditor = (semRefrescar) => {
+    esqueceGuardaDeSaida("editor-arte");
+    document.removeEventListener("keydown", onKey); document.body.classList.remove("no-scroll"); ov.remove();
+    if (!semRefrescar && (dirty || changed)) router();
+  };
+  // "Fechar" jogava a edição fora calado — enquanto o botão vizinho, o de trocar de slide, já
+  // parava e perguntava. Mesma perda, mesma pergunta. E aqui cabe a saída que a pessoa quer de
+  // verdade: salvar e fechar. Sem edição pendente fecha direto, sem interromper por nada.
+  // Devolve true quando o editor realmente fechou (quem chama precisa saber para não seguir adiante).
+  const close = async () => {
+    if (!dirty) { fecharEditor(); return true; }
+    const r = await uiModal({
+      title: "Fechar o editor?",
+      message: "Esta arte tem edições que ainda não foram salvas. Se fechar agora, elas se perdem.",
+      confirmText: "Salvar e fechar",
+      altText: "Fechar sem salvar",
+      cancelText: "Continuar editando",
+    });
+    if (r === null) return false;                            // continuar editando (ou Esc): nada se perde
+    if (r !== "alt" && !(await salvarArte())) return false;  // salvar falhou: não fechar por cima do erro
+    fecharEditor();
+    return true;
+  };
   $("#he-close").onclick = close;
+  // Enquanto o editor está aberto, ele é a tela: se alguém usar o "voltar" do navegador ou der F5,
+  // a pergunta tem que ser a mesma (ver "Guarda de saída", junto do roteador).
+  registraGuardaDeSaida("editor-arte", () => dirty ? {
+    titulo: "Sair sem salvar a arte?",
+    mensagem: "Esta arte tem edições que ainda não foram salvas. Se sair agora, elas se perdem.",
+    sairText: "Sair e descartar", ficarText: "Continuar editando",
+    aoSair: () => fecharEditor(true),
+  } : null);
   // "Voltar ao quadro": fecha o editor e reabre o quadro do carrossel restaurando a montagem.
   // Re-busca a peça (mtimes atualizados) pro slide que acabou de ser editado aparecer atualizado.
   if (opts && opts.backToBoard && $("#he-board")) $("#he-board").onclick = async () => {
-    const f = folder; let t = task; close();
+    const f = folder; let t = task;
+    if (!(await close())) return;   // escolheu continuar editando: o quadro não rouba a edição
     try { const r = await API.task(f); if (r && r.task) t = r.task; } catch (e) {}
     openCarouselBoard(f, t);
   };
   let savedT = null;
-  $("#he-save").onclick = async () => {
+  // Virou função com nome (e com resposta) porque o "Fechar" agora oferece "Salvar e fechar":
+  // ele precisa esperar o salvamento e saber se deu certo — fechar em cima de um erro seria
+  // exatamente a perda silenciosa que se está corrigindo. Devolve true só quando o servidor confirma.
+  async function salvarArte() {
     const btn = $("#he-save"); btn.disabled = true; const o = btn.dataset.label || btn.textContent; btn.dataset.label = o;
     btn.classList.remove("is-saved"); btn.textContent = "Salvando…";
     try {
@@ -3790,20 +3886,22 @@ async function openHtmlEditor(folder, task, rel, opts) {
       // com erro claro em vez de fingir que salvou.
       if (!/html\s*,\s*body\s*\{[^}]*?width:\s*\d+px[^}]*?height:\s*\d+px/i.test(html)) {
         toast("Não consegui preservar o tamanho da arte. Recarregue a peça e tente de novo.", "error");
-        btn.disabled = false; btn.textContent = o; return;
+        btn.disabled = false; btn.textContent = o; return false;
       }
       const r = await API.saveEditedHtml(folder, curRel, html);
       // NÃO mascarar falha: só marca "salvo" e agenda o refresh da peça se o backend confirmou.
-      if (!r || !r.ok) { toast((r && r.error) || "A arte não foi salva. Verifique e tente de novo.", "error"); btn.disabled = false; btn.textContent = o; return; }
+      if (!r || !r.ok) { toast((r && r.error) || "A arte não foi salva. Verifique e tente de novo.", "error"); btn.disabled = false; btn.textContent = o; return false; }
       dirty = false; changed = true; // 'changed' garante o refresh da peça ao fechar (sem F5)
       toast("Arte salva. A peça foi atualizada.", "success");
       // Confirmação visível no próprio botão: fica verde "Salvo ✓" por alguns segundos.
       btn.disabled = false; btn.classList.add("is-saved"); btn.textContent = "Salvo ✓";
       clearTimeout(savedT); savedT = setTimeout(() => { btn.classList.remove("is-saved"); btn.textContent = o; }, 2600);
-      return;
+      return true;
     } catch (e) { toast((e && e.message) || "Erro ao salvar.", "error"); }
     btn.disabled = false; btn.textContent = o;
-  };
+    return false;
+  }
+  $("#he-save").onclick = salvarArte;
   loadInto(curRel);
 }
 
@@ -3916,6 +4014,9 @@ async function saveImportedCaption(folder) {
    IMPORTAR CONTEÚDO PRONTO (feito fora do painel)
    ===================================================================== */
 let IMPORT_IMGS = []; // dataURLs das imagens escolhidas, na ordem
+// Mesma ideia do GEN_SALVO do Criar Conteúdo: depois que a importação deu certo, o painel vai
+// sozinho para a peça — e a guarda de saída não pode barrar essa ida com uma pergunta à toa.
+let IMPORT_FEITO = false;
 
 // Lê um File de imagem e devolve um dataURL JPEG redimensionado (lado maior <= maxDim).
 // Reduz o tamanho do request (limite global de 16mb) e padroniza em formato IG-safe.
@@ -3993,6 +4094,7 @@ async function runImport() {
     const r = await API.importContent(payload);
     toast("Conteúdo importado como rascunho", "success");
     IMPORT_IMGS = [];
+    IMPORT_FEITO = true;   // já virou peça: a guarda de saída não tem mais o que segurar
     location.hash = "#/task/" + encodeURIComponent(r.folder);
   } catch (e) {
     toast((e && e.message) || "Falha ao importar", "error");
@@ -4007,6 +4109,7 @@ async function viewImport(arg, query) {
   const campOpts = '<option value="">— sem campanha —</option>' + campaigns.map((c) => `<option value="${esc(c.id)}"${c.id === preCamp ? " selected" : ""}>${esc(c.name)}</option>`).join("");
   const pillarOpts = '<option value="">— sem pilar —</option>' + (State.meta.content_pillars || []).map((p) => `<option value="${esc(p.id)}" title="${esc(p.description)}">${esc(p.label)}</option>`).join("");
   IMPORT_IMGS = [];
+  IMPORT_FEITO = false;   // tela nova, do zero: o que houver aqui volta a ser trabalho a perder
   setView(`
     <div class="grid grid-2">
       <div class="card">
@@ -4073,6 +4176,22 @@ async function viewImport(arg, query) {
     renderImportThumbs();
   };
   $("#imp-run").onclick = runImport;
+  // Mesma perda silenciosa do Criar Conteúdo, e pelo mesmo motivo: escolher as imagens e escrever
+  // a legenda é trabalho que só existe no navegador até alguém clicar em "Importar". Um clique no
+  // menu levava tudo. (Ver "Guarda de saída", junto do roteador.)
+  registraGuardaDeSaida("importar-conteudo", () => {
+    if (IMPORT_FEITO) return null;
+    const leg = (($("#imp-caption") && $("#imp-caption").value) || "").trim();
+    const tit = (($("#imp-title") && $("#imp-title").value) || "").trim();
+    if (!IMPORT_IMGS.length && leg.length < 12 && tit.length < 3) return null;
+    return {
+      titulo: "Sair sem importar?",
+      mensagem: IMPORT_IMGS.length
+        ? "As imagens escolhidas e o texto desta tela ainda não viraram peça. Se sair agora, você terá que escolher e escrever tudo de novo."
+        : "O texto desta tela ainda não virou peça. Se sair agora, ele se perde.",
+      sairText: "Sair e descartar", ficarText: "Ficar nesta tela",
+    };
+  });
   renderImportThumbs();
 }
 
@@ -5213,8 +5332,17 @@ window.closeLightbox = closeLightbox;
    CRIAR CONTEÚDO (geração com IA)
    ===================================================================== */
 let LAST_GEN = null;
+// O resultado que está na tela já virou peça salva? É o que separa "tem trabalho a perder" de
+// "já está guardado" na guarda de saída. Sem isso a tela perguntaria DEPOIS de salvar — e a
+// própria ida automática para a peça salva bateria numa pergunta sem sentido.
+let GEN_SALVO = false;
 async function viewCreate(arg, query) {
   setTitle("Criar conteúdo");
+  // A tela é remontada do zero — o que tinha sido gerado não está mais aqui. Se estas duas
+  // atravessassem a remontagem, a guarda de saída acharia que há trabalho pendente numa tela
+  // vazia e perguntaria à toa, que é o jeito mais rápido de ensinar a ignorar a pergunta.
+  LAST_GEN = null;
+  GEN_SALVO = false;
   // Estas duas são globais de módulo e atravessavam a remontagem da tela: sair do Criar Conteúdo e
   // voltar deixava a leitura anterior "grudada", e digitar o MESMO tema não reinterpretava.
   ultimoTemaLido = "";
@@ -5662,6 +5790,28 @@ async function viewCreate(arg, query) {
     if ($("#g-task").value === "" || $("#g-task").dataset.auto) { $("#g-task").value = slugify(t.value).slice(0, 40); $("#g-task").dataset.auto = "1"; }
   };
   $("#g-brief").addEventListener("input", () => { briefCount(); suggestTitle(); }); briefCount();
+  // Guarda de saída desta tela (ver "Guarda de saída", junto do roteador). Tudo aqui existe só no
+  // navegador: o briefing digitado e o resultado da IA que ainda não foi salvo. Sair sem perguntar
+  // custava o texto inteiro e uma geração paga — era o pior defeito do painel, porque é silencioso.
+  registraGuardaDeSaida("criar-conteudo", () => {
+    if (GEN_SALVO) return null;                         // já virou peça: não há o que perder aqui
+    if (LAST_GEN) return {
+      titulo: "Sair sem salvar a peça?",
+      mensagem: "A IA já escreveu esta peça e ela ainda não foi salva. Se sair agora, o conteúdo se perde e você terá que gerar tudo de novo.",
+      sairText: "Sair e descartar", ficarText: "Ficar nesta tela",
+    };
+    const brief = (($("#g-brief") && $("#g-brief").value) || "").trim();
+    const tit = $("#g-title");
+    const tituloAMao = !!(tit && tit.dataset.touched && tit.value.trim().length >= 3);
+    // Abaixo de 12 caracteres não é briefing (a geração já exige 8): interromper por isso seria
+    // ensinar a pessoa a ignorar a pergunta.
+    if (brief.length < 12 && !tituloAMao) return null;
+    return {
+      titulo: "Sair sem gerar a peça?",
+      mensagem: "Você escreveu o que quer publicar, mas ainda não gerou nada. Se sair agora, esse texto se perde.",
+      sairText: "Sair e descartar", ficarText: "Ficar nesta tela",
+    };
+  });
   const ctaChipSync = () => {
     const v = ($("#g-cta") && $("#g-cta").value.trim()) || "";
     $$("#g-cta-sugg .sugg-chip").forEach((b) => b.classList.toggle("on", b.dataset.cta === v));
@@ -6173,6 +6323,7 @@ async function geraComPayload(prog) {
   const r = await API.generate(payload);
   prog.fim();
   LAST_GEN = { req: payload, res: r };
+  GEN_SALVO = false;                        // resultado novo na tela = trabalho a perder de novo
   renderGenResult(r, { autoPreview: true }); // prévia automática só aqui (1ª geração), não a cada refino
   // Faltou imagem? Perguntar AGORA, com o resultado já na tela. Antes disto a peça saía com um
   // aviso no meio de outros avisos e o slide errado ficava lá até alguém reparar — o "usuário no
@@ -7531,7 +7682,7 @@ function showSaveBanner(folder) {
   const stop = () => { cancelled = true; clearInterval(timer); const sub = el.querySelector(".muted"); if (sub) sub.textContent = "Use o botão para abrir quando quiser."; };
   el.querySelector('[data-sb="stay"]').onclick = stop;
   // #1 — "Criar novo conteúdo": cancela o redirect e recarrega o formulário limpo.
-  el.querySelector('[data-sb="new"]').onclick = () => { stop(); LAST_GEN = null; viewCreate(null, {}); };
+  el.querySelector('[data-sb="new"]').onclick = () => { stop(); LAST_GEN = null; GEN_SALVO = false; viewCreate(null, {}); };
   const timer = setInterval(() => {
     if (cancelled) return;
     n -= 1;
@@ -7661,6 +7812,7 @@ async function saveGenerated() {
     const r = await API.save(payload);
     $("#g-gov").innerHTML = govHtml(r.governance) + capaHtml(r.capa);
     saved = true;
+    GEN_SALVO = true;   // a partir daqui o conteúdo está no servidor: sair não perde mais nada
     const regen = $("#g-regen"); if (regen) regen.style.display = "none";
     // Renderiza a arte automaticamente ao salvar (feed/imagem/carrossel): a peça já nasce
     // com os slides/PNG, então a prévia (celular, publicar) funciona na hora — sem depender
@@ -9168,6 +9320,14 @@ async function boot() {
   ]);
   if (metaFail) { setView('<div class="empty">Não foi possível conectar ao servidor.</div>'); return; }
   window.addEventListener("hashchange", router);
+  // F5, fechar a aba, digitar outro endereço: o roteador não enxerga nada disso. Só o navegador
+  // pode perguntar aí — com a caixa dele, cujo texto não dá para escrever. Por isso ela só aparece
+  // quando existe trabalho pendente de verdade (a mesma guarda que o roteador consulta).
+  window.addEventListener("beforeunload", (e) => {
+    if (!trabalhoPendente()) return;
+    e.preventDefault();
+    e.returnValue = "";   // exigido por parte dos navegadores para a pergunta aparecer
+  });
   window.addEventListener("auth:expired", onAuthExpired);
   router();
 }
