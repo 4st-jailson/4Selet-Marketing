@@ -1403,6 +1403,7 @@ function briefingLongo() {
 
     // -- O squad pode mandar a 9:16 junto, e o painel ja recebe -------------
     const sq2 = fs.readFileSync(path.join(__dirname, "lib/squad.js"), "utf8");
+    const srcRender = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
     const doc = fs.readFileSync(path.join(__dirname, "..", "SQUAD_FORMATO_STORY.md"), "utf8");
     // indexOf, nao regex: estas frases tem barra, chave e barra-vertical — escapa-las num regex
     // so cria oportunidade de errar o escape (ja aconteceu duas vezes nesta bateria).
@@ -1412,8 +1413,25 @@ function briefingLongo() {
       "e grava no lugar de onde a publicacao tira a arte do Story");
     checa(sq2.indexOf('h.update("|story|")') >= 0,
       "a versao vertical entra na impressao digital (senao o reenvio vira duplicata)");
-    checa(sq2.indexOf("} else if (!carrossel || n === 1) {") >= 0,
+    checa(sq2.indexOf("if (enquadradas) {") >= 0,
       "e o aviso de que faltou sai UMA vez por entrega, nao por card");
+
+    // -- Entrega no formato ERRADO: o painel conserta na CHEGADA ----------
+    // Antes esta porta so avisava, e a peca nascia sem arte de Story. Enquadrar aqui e o
+    // unico momento sem atrito: a peca ainda esta em rascunho, entao a arte nova entra no
+    // calculo dos content_hashes. Feito depois, com a peca aprovada, qualquer arquivo novo
+    // derruba o gate de publicacao com E_HASH_MISMATCH.
+    checa(sq2.indexOf("render.enquadraStory(folder, { arte: relArte, n: n })") >= 0,
+      "entrega sem a vertical e ENQUADRADA sozinha, na chegada");
+    checa(sq2.indexOf("let relArte") >= 0, "a partir da arte que acabou de ser gravada");
+    checa(srcRender.indexOf("const n = Number(opts.n) > 0 ? Number(opts.n) : 1;") >= 0,
+      "e cada slide vira um Story proprio (antes gravavam por cima do mesmo story_1)");
+    checa(sq2.indexOf("encaixei a arte") >= 0 || sq2.indexOf("encaixei as ") >= 0,
+      "o aviso diz que JA resolveu, em vez de mandar a pessoa resolver");
+    checa(sq2.indexOf("encaixar não é desenhar") >= 0,
+      "sem esconder que enquadrar e remendo, nao desenho");
+    // A porta so age quando falta: arte que veio pronta nao pode ser sobrescrita.
+    checa(sq2.indexOf("if (c.story) {") >= 0, "e quando a vertical VEM, o painel nao mexe nela");
     checa(doc.indexOf("228 px de cada lado") >= 0, "o documento traz a conta do corte");
     checa(doc.indexOf("cards[].story") >= 0 && doc.indexOf("1080 × 1920") >= 0, "o contrato e a medida");
     checa(/## 6. Aceite/.test(doc), "com aceite escrito, para nao virar opiniao");

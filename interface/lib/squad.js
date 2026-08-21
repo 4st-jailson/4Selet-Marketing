@@ -861,6 +861,7 @@ async function receberAgora(payload, opcoes) {
   try {
     const carrossel = p.cards.length > 1;
     const avisos = [];
+    let enquadradas = 0;   // quantas artes o painel teve de encaixar em 9:16 por conta propria
 
     // Entrega sem `post_id` não tem como ser reconhecida num reenvio: o painel só sabe que dois
     // envios são o mesmo post porque o identificador bate. Enquanto isso passava calado, cada
@@ -903,9 +904,13 @@ async function receberAgora(payload, opcoes) {
         }
       }
 
+      // O caminho da arte gravada: o HTML vira PNG (gravarDeHtml sempre grava .png), e a imagem
+      // chapada guarda a extensao que veio. E dela que o enquadramento 9:16 parte.
+      let relArte = base + ".png";
       if (!usouHtml) {
         if (!c.buf) { const e = new Error("a arte " + n + " não pôde ser gravada"); e.code = "E_SEM_ARTE"; throw e; }
         content.writeMediaFile(folder, base + "." + c.ext, c.buf);
+        relArte = base + "." + c.ext;
         // O desenho editável NÃO veio, e isso passava calado: a peça nascia chapada e quem
         // abrisse o editor ia procurar o texto e não achar. O contrato pede o `html` junto do
         // `png` (seção 3.2 do PROMPT_SQUAD_WEBHOOK.md, com o aceite escrito) — quando ele falta,
@@ -934,14 +939,37 @@ async function receberAgora(payload, opcoes) {
           usouSt = true;
         }
         if (usouSt) log("Arte " + n + ": veio também na versão 9:16 — o Story sai inteiro, sem corte.");
-      } else if (!carrossel || n === 1) {
-        // Dito UMA vez por entrega, não uma vez por card: repetir dez vezes o mesmo recado
-        // transforma aviso em ruído e ninguém lê nenhum.
-        avisos.push("Esta entrega não trouxe a versão vertical das artes (campo cards[].story). Publicar no Story"
-          + " uma arte de feed faz o Instagram ampliar e cortar cerca de 228 px de cada lado — onde o texto"
-          + " costuma começar. O painel contorna encaixando a arte inteira em 1080×1920, mas o resultado ideal"
-          + " é o time do squad mandar a arte já desenhada em 9:16 (está na seção 4 do documento da integração).");
+      } else {
+        // NÃO VEIO A VERTICAL — e o painel resolve sozinho, aqui, na chegada.
+        //
+        // Antes esta porta só avisava, e a peça nascia sem arte de Story: quem fosse publicar no
+        // Story descobria o corte depois de postar (foi o que aconteceu em 20/08, com ~228px
+        // sumindo de cada lado). Enquadrar na hora da ENTREGA é o único momento em que dá para
+        // fazer isso sem atrito: a peça ainda está em rascunho, então a arte nova entra no
+        // cálculo dos content_hashes da aprovação. Feito depois, com a peça já aprovada, qualquer
+        // arquivo novo derruba o gate de publicação com E_HASH_MISMATCH.
+        //
+        // O enquadramento é REMENDO, não desenho: a arte inteira entra em 1080×1920 com a própria
+        // imagem desfocada preenchendo as faixas. Nada se perde, mas a composição foi pensada para
+        // outra proporção. Por isso o aviso continua — ele só mudou de "você vai ter que" para
+        // "eu já fiz, e olha a ressalva".
+        try {
+          const r = await render.enquadraStory(folder, { arte: relArte, n: n });
+          if (r && r.ok) { enquadradas++; log("Arte " + n + ": enquadrada em 9:16 para o Story."); }
+        } catch (e) {
+          log("Arte " + n + ": não consegui enquadrar em 9:16 (" + (e.code || e.message) + ").");
+        }
       }
+    }
+    // Dito UMA vez por entrega, não uma vez por card: repetir dez vezes o mesmo recado transforma
+    // aviso em ruído e ninguém lê nenhum.
+    if (enquadradas) {
+      avisos.push("Esta entrega não trouxe a versão vertical das artes (campo cards[].story), então "
+        + (enquadradas === 1 ? "encaixei a arte" : "encaixei as " + enquadradas + " artes")
+        + " em 1080×1920 e a peça já pode ir para o Story sem corte. Só que encaixar não é desenhar: a arte"
+        + " aparece inteira, com as faixas de cima e de baixo preenchidas pela própria imagem desfocada."
+        + " Para o Story sair como foi pensado, o time do squad precisa mandar a versão 9:16 junto"
+        + " (está na seção 4 do documento da integração).");
     }
     log("Artes gravadas.");
 

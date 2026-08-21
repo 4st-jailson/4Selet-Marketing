@@ -3619,12 +3619,15 @@ async function enquadraStory(folder, opts) {
   <img class="arte" src="${escAttr(url)}" alt=""/></div></body></html>`;
   const dir = path.join(loc.path, "story");
   fs.mkdirSync(dir, { recursive: true });
-  const htmlPath = path.join(dir, "story_1.html");
-  const outPng = path.join(dir, "story_1.png");
+  // O NUMERO do cartao: um carrossel de 3 slides vira 3 Stories, na ordem — sem ele, os tres
+  // enquadramentos gravavam por cima do mesmo story_1 e a sequencia virava um cartao so.
+  const n = Number(opts.n) > 0 ? Number(opts.n) : 1;
+  const htmlPath = path.join(dir, "story_" + n + ".html");
+  const outPng = path.join(dir, "story_" + n + ".png");
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
   return {
-    ok: !!r.ok, modo: "enquadrada", rels: r.ok ? ["story/story_1.png"] : [],
+    ok: !!r.ok, modo: "enquadrada", rels: r.ok ? ["story/story_" + n + ".png"] : [],
     origem: path.relative(loc.path, origem).replace(/\\/g, "/"),
     ocupa: { topo: Math.round((S.h - alt) / 2), base: Math.round((S.h + alt) / 2) },
     stderr: r.ok ? null : (r.stderr || r.stdout),
