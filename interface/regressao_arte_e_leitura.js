@@ -1554,10 +1554,10 @@ function briefingLongo() {
     // -- 30a. A tela ANTERIOR está de volta, inteira -----------------------
     checa(dash.indexOf("Conteúdo recente") >= 0, "a lista 'Conteudo recente' voltou");
     checa(dash.indexOf("taskRow") >= 0, "com a MINIATURA da arte (era o que ele mais sentiu falta)");
-    checa(/class="dash-acoes"/.test(dash), "os atalhos continuam — viraram faixa horizontal");
-    checa(dash.indexOf("Criar conteúdo") >= 0 && dash.indexOf("Publicar ou agendar") >= 0
-      && dash.indexOf("Aprovados") >= 0 && dash.indexOf("Nova campanha") >= 0,
-      "com os quatro caminhos do dia a dia");
+    checa(dash.indexOf("dash-grade dash-acoes") >= 0, "os atalhos continuam — viraram faixa horizontal");
+    checa(dash.indexOf("Criar conteúdo") >= 0 && dash.indexOf("Revisar") >= 0
+      && dash.indexOf("Publicar ou agendar") >= 0 && dash.indexOf("Nova campanha") >= 0,
+      "com os quatro caminhos do dia a dia — um por contador");
     checa(dash.indexOf("Mix de conteúdo") >= 0, "e o mix de conteudo tambem");
     checa(dash.indexOf("stat-ico") >= 0, "os contadores voltaram a ter icone");
     checa(dash.indexOf("dash-fila") < 0 && dash.indexOf("dash-alertas") < 0,
@@ -1601,7 +1601,7 @@ function briefingLongo() {
       && /API\.squadStatus\(\)\.catch/.test(dash),
       "a tela passa a olhar historico, agendamento e squad");
     checa(dash.indexOf("<h2>Publicações</h2>") >= 0, "bloco Publicacoes: ha quanto tempo a conta nao posta");
-    checa(dash.indexOf("nos últimos 30 dias") >= 0, "com o ritmo do mes");
+    checa(dash.indexOf("em 30 dias") >= 0, "com o ritmo do mes");
     checa(dash.indexOf("Nada agendado") >= 0, "e o proximo agendamento");
     checa(/falhados\.length \? /.test(dash), "agendamento que FALHOU vira selo (senao some da vista)");
     checa(dash.indexOf("<h2>Chegando de fora</h2>") >= 0, "bloco do squad: quantas artes chegaram");
@@ -1626,12 +1626,29 @@ function briefingLongo() {
       && dash.indexOf("+ publicadas,") >= 0, "aprovadas / publicadas, nessa ordem");
     checa(css.indexOf(".num-de") >= 0, "com a barra mais leve que os dois numeros");
     // A ordem segue o caminho da peca: em producao -> esperando OK -> aprovadas/publicadas.
-    const iProd = dash.indexOf("Em produção"), iOK = dash.indexOf("Esperando seu OK"), iApr = dash.indexOf("Aprovadas / publicadas");
-    checa(iProd > 0 && iOK > iProd && iApr > iOK, "e os contadores seguem o caminho da peca");
-    checa(/class="dash-acoes"/.test(dash) && css.indexOf(".dash-acao {") >= 0,
+    // A ordem dos CARTOES, nao das palavras: o comentario do codigo tambem cita os rotulos, e
+    // procurar por texto solto media o comentario em vez da tela.
+    const so = dash.slice(dash.indexOf(String.fromCharCode(60) + "div class=\"dash-grade\"" + String.fromCharCode(62)), dash.indexOf("dash-grade dash-acoes"));
+    const i1 = so.indexOf("#/content\""), i2 = so.indexOf("#/content?status=in_review");
+    const i3 = so.indexOf("#/approved"), i4 = so.indexOf("#/campaigns");
+    checa(i1 >= 0 && i2 > i1 && i3 > i2 && i4 > i3,
+      "e os contadores seguem o caminho da peca", [i1, i2, i3, i4].join(" < "));
+    checa(dash.indexOf("dash-grade dash-acoes") >= 0 && css.indexOf(".dash-acao {") >= 0,
       "os atalhos viraram faixa logo abaixo dos numeros (estavam competindo em altura com a lista)");
-    checa(/.dash-stack .grid-2 { align-items: start/.test(css),
-      "e cada cartao sobe ate o conteudo dele");
+    // A MESMA grade para numeros e acoes: e isso que faz cada acao cair sob o numero a que
+    // responde. Grades separadas, com calhas diferentes, era o que deixava tudo solto.
+    // indexOf, e nao regex: estas regras tem chave, barra e parenteses, e escapar tudo isso num
+    // regex so cria oportunidade de errar o escape — ja aconteceu tres vezes nesta bateria.
+    checa(css.indexOf(".dash-grade { display: grid; grid-template-columns: repeat(4") >= 0,
+      "numeros e acoes na MESMA grade de 4 colunas");
+    checa(css.indexOf(".dash-topo { display: flex; flex-direction: column; gap: var(--s3); }") >= 0,
+      "e coladas num bloco de cabecalho, com folga menor entre si que para o resto");
+    // Blocos EMPARELHADOS POR TAMANHO: dois longos numa linha, tres curtos na outra. Esticar
+    // aqui e o certo — o par tem conteudo parecido, entao o estirao e de poucos pixels.
+    checa(css.indexOf(".dash-par { align-items: stretch; }") >= 0, "os pares fecham a linha na mesma altura");
+    checa(css.indexOf(".dash-par > .card > .mix { justify-content: space-between") >= 0,
+      "e o bloco esticado DISTRIBUI o conteudo (nao amontoa em cima com vazio embaixo)");
+    checa(dash.indexOf("grid grid-3 dash-par") >= 0, "os tres blocos curtos ficam em tres colunas");
   }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });

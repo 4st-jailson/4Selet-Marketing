@@ -1146,69 +1146,75 @@ async function viewDashboard() {
   setView(`
     <div class="dash-stack">
     ${keyWarn}${igWarn}
-    <div class="stat-grid">
-      ${stat("blue", "#/content", "Ver as peças em produção", ICO_GRADE, noAcervo, "Em produção")}
-      ${stat("warn", "#/content?status=in_review", "Ver peças em revisão", ICO_RELOGIO, inReview, "Esperando seu OK")}
-      ${/* A RAZÃO, não dois números soltos. Uma peça fica aprovada E publicada ao mesmo tempo:
-           o cartão antigo mostrava "Prontas para publicar 2 já publicadas", como se fossem
-           coisas separadas, quando a segunda é parte da primeira. Assim se lê de um golpe
-           quanto do que já passou pela aprovação de fato foi ao ar. */""}
-      ${stat("ok", "#/approved", "Ver a biblioteca de aprovados", ICO_CHECK,
-        aprovadasTotal + ' <span class="num-de">/</span> ' + publicadas, "Aprovadas / publicadas")}
-      ${stat("sky", "#/campaigns", "Ver campanhas", CAMP_SVG, campaigns.length, "Campanhas <em>" + active + " ativas</em>")}
+    ${/* CABEÇALHO: os quatro números e as quatro ações na MESMA grade de 4 colunas, com a mesma
+         calha, e coladas uma na outra. Cada ação cai debaixo do número a que ela responde —
+         "Em produção" sobre "Criar conteúdo", "Aprovadas / publicadas" sobre "Publicar ou
+         agendar". Antes eram duas grades independentes, com folgas diferentes: liam-se como
+         duas coisas soltas em vez de um painel de comando. */""}
+    <div class="dash-topo">
+      <div class="dash-grade">
+        ${stat("blue", "#/content", "Ver as peças em produção", ICO_GRADE, noAcervo, "Em produção")}
+        ${stat("warn", "#/content?status=in_review", "Ver peças em revisão", ICO_RELOGIO, inReview, "Esperando seu OK")}
+        ${/* A RAZÃO, não dois números soltos. Uma peça fica aprovada E publicada ao mesmo tempo:
+             o cartão antigo mostrava "Prontas para publicar 2 já publicadas", como se fossem
+             coisas separadas, quando a segunda é parte da primeira. */""}
+        ${stat("ok", "#/approved", "Ver a biblioteca de aprovados", ICO_CHECK,
+          aprovadasTotal + ' <span class="num-de">/</span> ' + publicadas, "Aprovadas / publicadas")}
+        ${stat("sky", "#/campaigns", "Ver campanhas", CAMP_SVG, campaigns.length, "Campanhas <em>" + active + " ativas</em>")}
+      </div>
+      <div class="dash-grade dash-acoes">
+        ${acao("#/create", "＋", "Criar conteúdo", "com IA, no padrão da marca")}
+        ${acao("#/content?status=in_review", ICO_RELOGIO, "Revisar", "abrir a fila de aprovação")}
+        ${acao("#/publicacoes", ICO_AVIAO, "Publicar ou agendar", "feed ou Story · e o histórico")}
+        ${acao("#/campaigns", CAMP_SVG, "Nova campanha", "ângulo, pilar e mensagens")}
+      </div>
     </div>
-    ${/* Os atalhos saíram da coluna da direita e viraram uma FAIXA logo abaixo dos números: é
-         o que se clica todo dia, e estava competindo em altura com a lista de conteúdo. */""}
-    <div class="dash-acoes">
-      ${acao("#/create", "＋", "Criar conteúdo", "com IA, no padrão da marca")}
-      ${acao("#/publicacoes", ICO_AVIAO, "Publicar ou agendar", "feed ou Story · e o que já foi ao ar")}
-      ${acao("#/approved", "✓", "Aprovados", "prontos para publicar")}
-      ${acao("#/campaigns", CAMP_SVG, "Nova campanha", "ângulo, pilar e mensagens")}
-    </div>
-    <div class="grid grid-2">
+    ${/* LINHA 1 — os dois blocos LONGOS, lado a lado: seis peças e seis barras. Emparelhar por
+         tamanho é o que faz a linha fechar reta embaixo, em vez de um cartão terminar no meio
+         do outro. */""}
+    <div class="grid grid-2 dash-par">
       <div class="card">
         <div class="section-head"><h2>Conteúdo recente</h2><a class="muted-link" href="#/content">ver tudo →</a></div>
         ${tasks.length ? '<div class="list">' + tasks.slice(0, 6).map(taskRow).join("") + "</div>" : '<div class="empty">Nenhuma peça ainda. <a href="#/create">Criar conteúdo</a></div>'}
       </div>
       <div class="card">
+        <div class="section-head"><h2>Mix de conteúdo</h2><span class="muted">o que já foi produzido</span></div>
+        ${mixHtml}
+        <div class="mix-pipe muted">Pipeline: <strong>${draft}</strong> rascunho · <strong>${inReview}</strong> em revisão · <strong>${approved}</strong> prontas para publicar</div>
+      </div>
+    </div>
+    ${/* LINHA 2 — os três blocos CURTOS, em três colunas: duas linhas cada, altura igual. */""}
+    <div class="grid grid-3 dash-par">
+      <div class="card">
         <div class="section-head"><h2>Publicações</h2><a class="muted-link" href="#/publicacoes">histórico →</a></div>
         <div class="list">
           <a class="list-row" href="#/publicacoes"><span class="lr-ico" aria-hidden="true">${ICO_AVIAO}</span>
-            <div class="lr-main"><div class="lr-title">${ultimaPub ? "Última publicação " + esc(haQuantoTempo(ultimaPub)) + (linhaUltima && DEST_ROT[linhaUltima.destino] ? " " + DEST_ROT[linhaUltima.destino] : "") : "Nenhuma publicação ainda"}</div>
-            <div class="lr-meta">${plural(noMes, "publicação", "publicações")} nos últimos 30 dias</div></div></a>
+            <div class="lr-main"><div class="lr-title">${ultimaPub ? "Última " + esc(haQuantoTempo(ultimaPub)) + (linhaUltima && DEST_ROT[linhaUltima.destino] ? " " + DEST_ROT[linhaUltima.destino] : "") : "Nenhuma ainda"}</div>
+            <div class="lr-meta">${plural(noMes, "publicação", "publicações")} em 30 dias</div></div></a>
           <a class="list-row" href="#/publicacoes?tab=agendados"><span class="lr-ico" aria-hidden="true">${ICO_RELOGIO}</span>
-            <div class="lr-main"><div class="lr-title">${pendentes.length ? plural(pendentes.length, "publicação agendada", "publicações agendadas") : "Nada agendado"}</div>
-            <div class="lr-meta">${pendentes.length ? "a próxima em " + esc(fmtDateTime(pendentes[0].scheduled_at)) : "agende uma peça aprovada em “Publicar ou agendar”"}</div></div>
+            <div class="lr-main"><div class="lr-title">${pendentes.length ? plural(pendentes.length, "agendada", "agendadas") : "Nada agendado"}</div>
+            <div class="lr-meta">${pendentes.length ? "a próxima em " + esc(fmtDateTime(pendentes[0].scheduled_at)) : "agende uma peça aprovada"}</div></div>
             ${falhados.length ? '<span class="badge rejected">' + plural(falhados.length, "falhou", "falharam") + "</span>" : ""}</a>
         </div>
-        ${(ultimaPub && diasDesde(ultimaPub) >= 7) ? '<div class="mix-pipe muted">A conta está <strong>' + esc(haQuantoTempo(ultimaPub)) + "</strong> sem post" + (approved ? " — e há <strong>" + plural(approved, "peça pronta", "peças prontas") + "</strong> esperando." : ".") + "</div>" : ""}
       </div>
-    </div>
-    <div class="grid grid-2">
       <div class="card">
         <div class="section-head"><h2>Chegando de fora</h2><a class="muted-link" href="#/requisicoes">requisições →</a></div>
         ${sq.conectado
           ? '<div class="list">'
             + '<a class="list-row" href="#/requisicoes"><span class="lr-ico" aria-hidden="true">↓</span>'
-            + '<div class="lr-main"><div class="lr-title">' + plural(sq.entregas || 0, "arte recebida do squad", "artes recebidas do squad") + "</div>"
+            + '<div class="lr-main"><div class="lr-title">' + plural(sq.entregas || 0, "arte do squad", "artes do squad") + "</div>"
             + '<div class="lr-meta">' + (sq.ultima_entrega ? "a última " + esc(haQuantoTempo(sq.ultima_entrega)) : "nenhuma ainda") + "</div></div>"
-            + (sq.entregas_falhas ? '<span class="badge rejected">' + sq.entregas_falhas + " não virou peça</span>" : "") + "</a>"
-            + (doSquad.length ? '<a class="list-row" href="#/content"><span class="lr-ico" aria-hidden="true">◫</span>'
-              + '<div class="lr-main"><div class="lr-title">' + plural(doSquad.length, "peça no painel veio de fora", "peças no painel vieram de fora") + "</div>"
-              + '<div class="lr-meta">a arte chega pronta e entra no mesmo fluxo de aprovação</div></div></a>' : "")
+            + (sq.entregas_falhas ? '<span class="badge rejected">' + sq.entregas_falhas + "</span>" : "") + "</a>"
+            + '<a class="list-row" href="#/content"><span class="lr-ico" aria-hidden="true">◫</span>'
+            + '<div class="lr-main"><div class="lr-title">' + plural(doSquad.length, "peça veio de fora", "peças vieram de fora") + "</div>"
+            + '<div class="lr-meta">entram no mesmo fluxo de aprovação</div></div></a>'
             + "</div>"
-          : '<div class="empty">A integração com o squad está desligada. <a href="#/settings">Conectar</a></div>'}
+          : '<div class="empty">A integração com o squad está desligada.<br><a href="#/settings">Conectar</a></div>'}
       </div>
       <div class="card">
         <div class="section-head"><h2>Campanhas ativas</h2><a class="muted-link" href="#/campaigns">ver todas →</a></div>
         ${campsHtml}
       </div>
-    </div>
-    ${/* O mix em largura inteira: as barras só se comparam bem quando têm régua longa. */""}
-    <div class="card">
-      <div class="section-head"><h2>Mix de conteúdo</h2><span class="muted">o que já foi produzido</span></div>
-      ${mixHtml}
-      <div class="mix-pipe muted">Pipeline: <strong>${draft}</strong> rascunho · <strong>${inReview}</strong> em revisão · <strong>${approved}</strong> prontas para publicar</div>
     </div>
     </div>`);
 }

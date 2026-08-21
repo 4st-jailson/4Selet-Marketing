@@ -2288,32 +2288,67 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
 
 
 
-/* ---- Dashboard: a faixa de atalhos e a razão aprovadas/publicadas ----
-   Os atalhos eram um cartão na coluna da direita, competindo em altura com a lista de conteúdo.
-   Como são o que se clica todo dia, viraram uma faixa logo abaixo dos números: menos distância
-   até a ação, e a coluna da direita liberada para o que informa. */
-.dash-acoes { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s4, 12px); }
+
+/* =====================================================================
+   DASHBOARD — proporção e ritmo
+   ---------------------------------------------------------------------
+   O problema era falta de RITMO: cada faixa tinha grade própria, calha
+   própria e alturas que não conversavam, então os blocos liam-se como
+   peças soltas. Três regras resolvem: (1) uma grade só, de 4 colunas,
+   valendo para os números E para as ações, de modo que cada ação caia
+   exatamente sob o número a que responde; (2) as duas faixas coladas num
+   bloco de cabeçalho, separado do resto por uma folga maior; (3) blocos
+   emparelhados por TAMANHO — dois longos numa linha, três curtos noutra —
+   e esticados à mesma altura, para a linha fechar reta embaixo.
+   ===================================================================== */
+
+/* (1) e (2): o cabeçalho de comando */
+.dash-topo { display: flex; flex-direction: column; gap: var(--s3); }
+.dash-grade { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s4); }
+.dash-stack > .dash-topo { margin-bottom: var(--s2); }
+
+/* Os cartões de número e de ação compartilham a mesma coluna e a mesma calha.
+   O de número é o volume; o de ação é o eco dele, mais baixo e mais leve. */
+.dash-grade .stat { padding: var(--s5) var(--s5); min-height: 92px; }
 .dash-acao {
-  display: flex; align-items: center; gap: 11px; min-width: 0;
-  padding: 13px 15px; border-radius: var(--r-sm); border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 12px var(--s5); border-radius: var(--r); border: 1px solid var(--border-soft);
   background: var(--surface); color: inherit; text-decoration: none;
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--tr), background var(--tr), transform var(--tr);
 }
 .dash-acao:hover { border-color: var(--brand-sky); background: var(--surface-2); transform: translateY(-1px); }
 .dash-acao-ico {
-  flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
-  border-radius: 8px; background: var(--surface-3, var(--surface-2)); color: var(--brand-blue);
-  font-size: 15px; line-height: 1;
+  flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: 7px; background: var(--surface-2); color: var(--brand-blue);
+  font-size: 14px; line-height: 1;
 }
-.dash-acao-ico svg { width: 15px; height: 15px; }
-.dash-acao-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.dash-acao-txt strong { font-size: 13.5px; font-weight: 650; }
-.dash-acao-txt span { font-size: 11.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A barra da razão: o "/" é separador, não número — fica mais leve que os dois lados. */
-.num-de { font-weight: 400; color: var(--text-2); margin: 0 1px; }
-@media (max-width: 1100px) { .dash-acoes { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 620px) { .dash-acoes { grid-template-columns: 1fr; } }
-/* Cada cartão do dashboard sobe até o conteúdo dele. Sem isto a grade estica os dois lados até
-   a altura do MAIOR, e "Publicações" (2 linhas) ficava com meia tela de vazio ao lado de
-   "Conteúdo recente" (6 peças). */
-.dash-stack .grid-2 { align-items: start; }
+.dash-acao-ico svg { width: 14px; height: 14px; }
+.dash-acao-txt { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.dash-acao-txt strong { font-size: 13px; font-weight: 650; line-height: 1.35; }
+.dash-acao-txt span {
+  font-size: 11px; color: var(--text-2); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* (3): blocos emparelhados fecham a linha na mesma altura. Aqui esticar é o
+   certo — os pares foram escolhidos com conteúdo de tamanho parecido, então
+   o estirão é de poucos pixels e não abre buraco. */
+.dash-par { align-items: stretch; }
+.dash-par > .card { display: flex; flex-direction: column; }
+.dash-par > .card > .list, .dash-par > .card > .mix { flex: 1 1 auto; }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* A barra da razão: separador, não número — mais leve que os dois lados. */
+.num-de { font-weight: 400; color: var(--text-2); margin: 0 2px; }
+
+@media (max-width: 1100px) {
+  .dash-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) { .dash-grade { grid-template-columns: 1fr; } }
+/* Bloco esticado para fechar a linha: o conteúdo se DISTRIBUI na altura em vez de ficar
+   amontoado em cima com um vazio embaixo. Espaçamento generoso lê como escolha; um bolo de
+   barras seguido de meia tela em branco lê como bloco que sobrou. */
+.dash-par > .card > .mix { justify-content: space-between; }
+.dash-par > .card > .list { display: flex; flex-direction: column; }
