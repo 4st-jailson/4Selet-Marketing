@@ -26,6 +26,12 @@ const post = (c, b) => new Promise((ok, err) => {
   });
   r.on("error", err); r.write(d); r.end();
 });
+const get = (c) => new Promise((ok, err) => {
+  const r = http.request({ host: "127.0.0.1", port: srv.address().port, path: c, method: "GET" }, (res) => {
+    let s = ""; res.on("data", (x) => (s += x)); res.on("end", () => { try { ok({ status: res.statusCode, body: JSON.parse(s || "{}") }); } catch (e) { ok({ status: res.statusCode, body: s }); } });
+  });
+  r.on("error", err); r.end();
+});
 const RAIZ = path.join(__dirname, "..", "outputs");
 const DATA = "2026-08-06";
 const criadas = [];
@@ -111,7 +117,23 @@ function briefingLongo() {
 
   secao("4. Editor: o <input> que apagava quebra de linha");
   const app_ = fs.readFileSync(path.join(__dirname, "public", "js", "app.js"), "utf8");
-  checa((app_.match(/\$\{esc1\(/g) || []).length === 8, "os 8 campos do editor normalizam a quebra");
+  // Era uma CONTAGEM ("exatamente 8 campos"), e contagem quebra por acrescentar campo legítimo —
+  // quebrou ao chegarem os campos de cena do vídeo (número, rótulo, itens, duração). O que
+  // importa não é quantos são: é que NENHUM input de uma linha do editor estruturado escape com
+  // `esc`, porque `esc` deixa passar a quebra que o <input> depois engole calada.
+  const zonaEd = app_.slice(app_.indexOf("const esc1 = "), app_.indexOf("function structToParsed()"));
+  const contaEm = (txt, alvo) => txt.split(alvo).length - 1;
+  checa(zonaEd.length > 500, "achei o bloco do editor estruturado", zonaEd.length + " chars");
+  // A regra vale para o campo em que a PESSOA digita. <option> e <input type="hidden"> carregam
+  // id de lista fechada, não texto digitado — não têm quebra de linha para engolir.
+  const forasDaRegra = zonaEd.split("<input").slice(1)
+    .map((pedaco) => pedaco.slice(0, pedaco.indexOf(">") + 1))
+    .filter((tag) => tag.indexOf("type=\"hidden\"") < 0 && tag.indexOf("value=\"${esc(") >= 0);
+  checa(forasDaRegra.length === 0,
+    "nenhum campo digitável do editor escapa com esc (só esc1, que normaliza a quebra)",
+    forasDaRegra.length ? forasDaRegra[0].slice(0, 90) : "");
+  checa(contaEm(zonaEd, "value=\"${esc1(") >= 8, "e os campos de uma linha usam esc1",
+    contaEm(zonaEd, "value=\"${esc1(") + " campos");
   checa(!/<textarea[^>]*>\$\{esc1\(/.test(app_), "nenhum campo de texto longo foi tocado");
   const esc1 = (v) => String(v || "").replace(/[ \t]*[\r\n]+[ \t]*/g, " ");
   checa(esc1("Uma plataforma. ==Toda a sua\noperação.==") === "Uma plataforma. ==Toda a sua operação.==", "quebra vira espaço, sem colar");
@@ -1668,6 +1690,303 @@ function briefingLongo() {
       "e o bloco esticado DISTRIBUI o conteudo (nao amontoa em cima com vazio embaixo)");
     checa(dash.indexOf("grid grid-3 dash-par") >= 0, "os tres blocos curtos ficam em tres colunas");
   }
+
+    secao("31. Vídeo: os campos do conceito viram imagem (antes eram jogados fora)");
+    {
+      const rd = require("./lib/render.js");
+      const capa = require("./lib/capa_foto.js");
+      const prompts31 = fs.readFileSync(path.join(__dirname, "lib", "prompts.js"), "utf8");
+      const tsx = fs.readFileSync(path.join(__dirname, "..", "src", "BrandStory.tsx"), "utf8");
+      const semFoto = () => "";   // injeta "sem foto" para a função ficar pura no teste
+
+      // O DEFEITO DE ORIGEM: a IA escrevia direção de arte em prosa no campo `visual`, o
+      // adaptador gravava no conceito e a composition nunca desenhava. Ninguém via.
+      const comProsa = rd.cenaParaProps({
+        type: "hook", text: "O mercado cobra 7,9%.", subtitle: "Da sua margem.",
+        visual: "Fundo Selet Darker com Selet Dots 8%. Inter Black 200px. Logo no canto.",
+      }, semFoto);
+      checa(!("visual" in comProsa), "a direção de arte em prosa NÃO atravessa para o Remotion");
+      checa(comProsa.subtitle === "Da sua margem.", "e o subtexto atravessa");
+
+      const dado = rd.cenaParaProps({
+        type: "benefit", text: "Saindo da sua margem.", numero: "R$ 7.900",
+        rotulo: "taxa sobre R$ 100 mil", fundo: "darker", duracao: 4,
+      }, semFoto);
+      checa(dado.numero === "R$ 7.900", "o NÚMERO em destaque chega na composition");
+      checa(dado.rotulo === "taxa sobre R$ 100 mil", "com o rótulo que diz o que ele significa");
+      checa(dado.fundo === "darker" && dado.duracao === 4, "e o fundo e a duração da cena");
+
+      const lista = rd.cenaParaProps({ text: "As condições.", itens: ["0% por 3 meses", "", "PIX D+10", "quarto", "quinto"] }, semFoto);
+      checa(Array.isArray(lista.itens) && lista.itens.length === 3, "a lista aceita no máximo 3 itens", (lista.itens || []).length + "");
+      checa(lista.itens.indexOf("") < 0, "e descarta item vazio");
+
+      // Limites: valor fora da faixa não pode virar cena de 40 segundos nem piscar em 0,2s.
+      checa(rd.cenaParaProps({ text: "x", duracao: 99 }, semFoto).duracao === 6, "duração acima do teto cai para 6s");
+      checa(rd.cenaParaProps({ text: "x", duracao: 0.4 }, semFoto).duracao === 2.5, "e abaixo do piso sobe para 2,5s");
+      checa(rd.cenaParaProps({ text: "x", duracao: "abacaxi" }, semFoto).duracao === undefined,
+        "duração que não é número é ignorada (a composition usa o padrão)");
+      checa(rd.cenaParaProps({ text: "x", fundo: "rosa-choque" }, semFoto).fundo === undefined,
+        "fundo fora da paleta é ignorado (não vira cor inventada)");
+      checa(rd.cenaParaProps({ text: "x", numero: "1234567890123456789" }, semFoto).numero.length === 14,
+        "número gigante é cortado antes de estourar a tela");
+
+      // A composition: as correções que o Hugo viu no vídeo dele.
+      checa(tsx.indexOf("logo-4selet-light.png") >= 0, "a arte do vídeo desenha a MARCA (o vídeo saía sem 4Selet em cena nenhuma)");
+      checa(tsx.indexOf("MarcaFinal") >= 0 && tsx.indexOf("MarcaDiscreta") >= 0,
+        "com assinatura na cena final e marca discreta nas demais");
+      checa(tsx.indexOf("{index + 1}/{total}") < 0, "e NÃO desenha mais o contador '3/7' (é régua de carrossel, não de Reels)");
+      checa(tsx.indexOf("mesmaFrase(chamada, scene.text") >= 0,
+        "a pílula do CTA some quando a manchete JÁ é a chamada");
+      checa(tsx.indexOf("mesmaFrase(chamada, apoioBruto)") >= 0, "e o apoio some quando ele repete a chamada");
+      checa(tsx.indexOf("brandStoryDuration") >= 0 && tsx.indexOf("t + framesDaCena(s)") >= 0,
+        "a duração do vídeo SOMA as cenas (era nº de cenas × 3s cravado)");
+      checa(tsx.indexOf("FotoDeFundo") >= 0 && tsx.indexOf("objectFit: \"cover\"") >= 0,
+        "a cena aceita FOTO de fundo (o vídeo não aceitava imagem nenhuma)");
+      checa(tsx.indexOf("linear-gradient(180deg, rgba(7,33,43") >= 0, "com véu de leitura por cima da foto");
+
+      // O prompt: pedir os campos que desenham, em vez de prosa que ninguém lê.
+      checa(prompts31.indexOf("\"numero\"") >= 0 && prompts31.indexOf("\"itens\"") >= 0 && prompts31.indexOf("\"duracao\"") >= 0,
+        "o prompt do vídeo PEDE numero/itens/duracao");
+      checa(prompts31.indexOf("NAO escreva direcao de arte em prosa") >= 0,
+        "e proíbe explicitamente a direção de arte em prosa");
+      checa(prompts31.indexOf("a manchete NAO repete esse numero") >= 0,
+        "avisa para a manchete não repetir o número que já vai gigante");
+      checa(prompts31.indexOf("DIRECAO DE ARTE (nao aparece na tela)") < 0,
+        "e o campo de prosa saiu do schema do vídeo");
+
+      // Foto de cena: o teto existe e a cena que já tem foto não vai ao banco de imagens.
+      checa(capa.MAX_FOTOS_POR_VIDEO === 2, "no máximo 2 fotos por vídeo", String(capa.MAX_FOTOS_POR_VIDEO));
+      checa(typeof capa.buscarPorTermo === "function", "a busca por termo é reaproveitada da capa do carrossel");
+      const jaTem = { scenes: [{ foto: "/uploads/x.jpg", foto_busca: "office" }, { text: "sem foto" }] };
+      const rFoto = await capa.fotosDasCenas(jaTem, {});
+      checa(rFoto.pedidas === 0, "cena que já tem foto anexada não vai ao banco de imagens", "pedidas=" + rFoto.pedidas);
+
+      // A TELA. O motor aceitar os campos não serve de nada se o formulário de cenas não os
+      // oferece — e, pior, se ele APAGA o que não sabe editar ao salvar. Foi exatamente esse o
+      // padrão dos pedidos que ficaram pela metade: desenho novo no motor, invisível na tela.
+      const app = fs.readFileSync(path.join(__dirname, "public", "js", "app.js"), "utf8");
+      const css31 = fs.readFileSync(path.join(__dirname, "public", "css", "styles.css"), "utf8");
+      ["numero", "rotulo", "itens", "fundo", "duracao"].forEach((k) => {
+        checa(app.indexOf("data-k=\"" + k + "\"") >= 0, "o editor de cena tem o campo " + k);
+      });
+      checa(app.indexOf("placeholder=\"Direção de arte (não aparece na tela)\"") < 0,
+        "e não pede mais a direção de arte que não aparece na tela");
+      checa(app.indexOf("[\"foto\", \"foto_busca\", \"foto_credito\"].forEach") >= 0,
+        "a foto da cena viaja no data-extra (editar a cena não pode apagar a foto)");
+      checa(app.indexOf("vsb-num") >= 0 && app.indexOf("vsb-itens") >= 0 && app.indexOf("vsb-foto") >= 0,
+        "o storyboard mostra o número, a lista e a foto — não só o texto");
+      checa(app.indexOf("a soma das cenas") >= 0, "e diz a duração total do vídeo na tela");
+      checa(app.indexOf("VSB_DUR_PADRAO = 3.5") >= 0,
+        "com a MESMA duração padrão do render (dois relógios que discordam já aconteceu aqui)");
+      checa(css31.indexOf(".se-row { display: grid; grid-template-columns: 1fr 1fr;") >= 0,
+        "os campos curtos da cena ficam em duas colunas (empilhados, o editor passava da tela)");
+      checa(css31.indexOf(".vsb-num {") >= 0 && css31.indexOf(".vsb-dur {") >= 0,
+        "e o storyboard tem estilo para o número e a duração");
+    }
+
+    secao("32. A prévia de publicação mostra a arte que VAI AO AR");
+    {
+      // O defeito, medido: numa peça de FEED que já tinha a versão 9:16 em story/story_1.png, a
+      // janela de publicar mostrava o feed 4:5 recortado e ainda avisava "vão sumir 228 px de cada
+      // lado" — enquanto o painel publicaria a vertical INTEIRA. A prévia mentia, e mentia para
+      // baixo: dava para desistir de publicar por causa de um corte que não ia acontecer.
+      // A raiz era ter DUAS contas para a mesma pergunta (a tela tinha a dela, `editorTargets`;
+      // a publicação tinha `pickImages`). Agora a resposta vem de quem publica.
+      const rdz = require("./lib/render.js");
+      const pub32 = require("./lib/publish.js");
+      const nome32 = "zz_previa_destino_" + un();
+      const dir32 = peca(nome32 + "_" + DATA, { "copy/instagram_caption.txt": "peça de feed com versão vertical\n\n#4Selet" });
+      // Duas artes de VERDADE, nas duas proporções — medir proporção em arquivo inventado não vale.
+      await rdz.render(nome32 + "_" + DATA, "feed", {});
+      await rdz.renderStoryDeFeed(nome32 + "_" + DATA, {});
+      const dFeed32 = rdz.dimensoesDeImagem(path.join(dir32, "ads", "feed.png"));
+      const dSt32 = rdz.dimensoesDeImagem(path.join(dir32, "story", "story_1.png"));
+      checa(!!dFeed32 && Math.abs(dFeed32.w / dFeed32.h - 0.8) < 0.02, "a peça tem a arte de feed 4:5",
+        dFeed32 ? dFeed32.w + "x" + dFeed32.h : "não gerou");
+      checa(!!dSt32 && Math.abs(dSt32.w / dSt32.h - 9 / 16) < 0.005, "e a versão vertical 9:16",
+        dSt32 ? dSt32.w + "x" + dSt32.h : "não gerou");
+
+      const rota32 = await get("/api/content/" + nome32 + "_" + DATA);
+      const mapa32 = (rota32.body.task || {}).artes_por_destino;
+      checa(!!mapa32, "a peça diz à tela qual arte vai em cada destino", JSON.stringify(mapa32 || null));
+      if (mapa32) {
+        checa((mapa32.story || [])[0] === "story/story_1.png",
+          "no STORY a prévia recebe a VERTICAL (era o feed recortado)", (mapa32.story || []).join(","));
+        checa((mapa32.feed || [])[0] === "ads/feed.png",
+          "e no FEED continua a arte de feed", (mapa32.feed || []).join(","));
+        // A prova de que é UM relógio só: a lista tem de bater com a da publicação, arquivo a arquivo.
+        const t32 = rota32.body.task;
+        ["feed", "story"].forEach((d) => {
+          const daPublicacao = pub32.pickImages(dir32, t32.kind, d)
+            .map((p) => path.relative(dir32, p).split(path.sep).join("/"));
+          checa(JSON.stringify(daPublicacao) === JSON.stringify(mapa32[d] || []),
+            "a lista do destino " + d + " é a MESMA que a publicação usa",
+            daPublicacao.join(",") + "  vs  " + (mapa32[d] || []).join(","));
+        });
+      }
+
+      // A tela: usar a lista e RECALCULAR ao trocar de destino. Sem o recálculo, quem abrisse no
+      // feed e clicasse em Story continuaria vendo o 4:5.
+      const app32 = fs.readFileSync(path.join(__dirname, "public", "js", "app.js"), "utf8");
+      checa(app32.indexOf("const artesDoDestino = (dest)") >= 0, "a janela de publicar pergunta a arte por destino");
+      checa(app32.indexOf("task.artes_por_destino") >= 0, "lendo o que o backend respondeu");
+      const janela = app32.slice(app32.indexOf("const aplicaDestino = "), app32.indexOf("const dh = ov.querySelector(\"#pub-dest-hint\")"));
+      checa(janela.indexOf("imgs = artesDoDestino(destino)") >= 0,
+        "e trocar de destino RECALCULA a arte da prévia (não só a moldura)");
+      checa(app32.indexOf("editorTargets(task).map((t) => t.rel)") >= 0,
+        "com a regra antiga de reserva, para peça que o backend não souber responder");
+    }
+
+    secao("33. Instagram: o token bom acusado de vencido, e o carrossel publicado cedo demais");
+    {
+      const pub33 = require("./lib/publish.js");
+      const fonte33 = fs.readFileSync(path.join(__dirname, "lib", "publish.js"), "utf8");
+
+      // (a) A TRADUÇÃO. `type: "OAuthException"` NÃO quer dizer token vencido — a Meta usa esse
+      // mesmo tipo até para "campo inexistente". Medido em 21/08/2026 na conta real: um GET com um
+      // campo errado devolveu OAuthException/100, e a régra antiga chamaria isso de token morto.
+      const recusa = (err) => pub33.gerr("publicar o carrossel", { ok: false, status: 400, body: { error: err } });
+      const vencido = recusa({ code: 190, type: "OAuthException", message: "Session has expired" });
+      checa(/expirou ou o token está inválido/.test(vencido.message), "erro 190 continua pedindo para reconectar");
+      checa(/erro 190 da Meta/.test(vencido.message), "e agora diz o número do erro (sem ele não dá para investigar)");
+
+      const semPerm = recusa({ code: 200, type: "OAuthException", message: "Requires instagram_content_publish" });
+      checa(/PERMISSÃO, não por token/.test(semPerm.message), "erro 200 é PERMISSÃO — não manda mais trocar o token");
+      checa(/Requires instagram_content_publish/.test(semPerm.message), "e repassa o que a Meta disse, na íntegra");
+
+      const limite = recusa({ code: 4, type: "OAuthException", message: "Application request limit reached" });
+      checa(/LIMITE/.test(limite.message), "erro 4 é limite de posts");
+
+      const campoErrado = recusa({ code: 100, error_subcode: 33, type: "OAuthException", message: "Tried accessing nonexisting field" });
+      checa(!/expirou/.test(campoErrado.message), "e um erro banal com OAuthException NÃO vira mais 'token vencido'");
+      checa(/erro 100\/33 da Meta/.test(campoErrado.message), "com código e subcódigo para rastrear");
+      checa(campoErrado.meta_code === 100 && campoErrado.meta_subcode === 33, "os números viajam no erro, não só no texto");
+
+      // Só 190/102 podem carimbar a conexão como caída — era o segundo estrago: a mensagem errada
+      // AINDA gravava `last_check{code:190}`, e aí colar um token novo não tirava o selo de expirada.
+      checa(pub33.CODIGOS_DE_TOKEN.join(",") === "190,102", "só dois códigos derrubam a conexão",
+        pub33.CODIGOS_DE_TOKEN.join(","));
+      const zona = fonte33.slice(fonte33.indexOf("function gerr(step, r)"), fonte33.indexOf("// Memória do ÚLTIMO contato"));
+      checa((zona.split("recordCheck(").length - 1) === 1, "e o gerr só toca no estado da conexão UMA vez (no ramo do token)");
+
+      // (b) A ESPERA. O painel disparava `media_publish` no quadro seguinte ao POST /media. Com 6
+      // artes de ~4 MB a Meta ainda estava processando, e a recusa caía sempre no último passo.
+      checa(typeof pub33.esperaMidiaPronta === "function", "existe a espera pela mídia ficar pronta");
+      const trechos = fonte33.split("media_publish");
+      checa(trechos.length - 1 === 3, "há 3 publicações (imagem, story, carrossel)", (trechos.length - 1) + "");
+      // Cada media_publish tem que ter uma espera ANTES dele, no mesmo bloco.
+      let semEspera = 0;
+      for (let i = 1; i < trechos.length; i++) {
+        const antes = trechos[i - 1].slice(-600);
+        if (antes.indexOf("esperaMidiaPronta") < 0) semEspera++;
+      }
+      checa(semEspera === 0, "e NENHUMA publica sem antes esperar a Meta terminar de processar",
+        semEspera + " sem espera");
+      checa(fonte33.indexOf("status_code") >= 0 && fonte33.indexOf("FINISHED") >= 0,
+        "a espera olha o status_code até FINISHED (o contrato da Meta)");
+      checa(fonte33.indexOf("esperaMidiaPronta(c.body.id, token, \"o slide \"") >= 0,
+        "no carrossel, cada SLIDE é conferido antes de entrar (item inacabado quebra lá na frente)");
+
+      // (c) Trocar o token descarta o veredito do token anterior.
+      const arq33 = path.join(__dirname, "data", "publish.json");
+      const tinha33 = fs.existsSync(arq33);
+      const copia33 = tinha33 ? fs.readFileSync(arq33) : null;
+      try {
+        fs.mkdirSync(path.join(__dirname, "data"), { recursive: true });
+        fs.writeFileSync(arq33, JSON.stringify({ instagram: { access_token: "TOKEN_VELHO", ig_user_id: "1",
+          last_check: { ok: false, at: "2026-08-21T21:48:25.000Z", code: 190, message: "venceu" } } }));
+        checa(pub33.publicConfig().connection.state === "expirado", "parte de uma conexão marcada como expirada");
+        const r33 = pub33.setInstagram({ access_token: "TOKEN_NOVO_EM_FOLHA" });
+        checa(r33.trocouToken === true, "salvar um token diferente é reconhecido como troca");
+        checa(r33.config.connection.state === "nao_testado",
+          "e o veredito do token ANTIGO é descartado (antes ficava preso em 'expirada' para sempre)",
+          r33.config.connection.state);
+        const r33b = pub33.setInstagram({ public_base_url: "https://mkt.4st.co" });
+        checa(r33b.trocouToken === false, "salvar só o endereço não conta como troca (não chama a Meta à toa)");
+      } finally {
+        if (tinha33) fs.writeFileSync(arq33, copia33); else fs.rmSync(arq33, { force: true });
+      }
+    }
+
+    secao("34. Entrega do squad: o nome cortado e o acento quebrado na arte");
+    {
+      const sqd = require("./lib/squad.js");
+
+      // (a) O NOME. Era `legenda.split("\n")[0].slice(0, 70)` — a primeira LINHA inteira cortada no
+      // caractere 70, no meio da palavra. Legenda REAL da peça de 21/08/2026.
+      const legendaReal = "A porta de entrada do seu produto mudou de lugar. Uma parte do seu público já não "
+        + "digita seu nome no Google: pergunta pra uma IA se vale a pena comprar de você.";
+      const nome = sqd.tituloDaLegenda(legendaReal);
+      checa(nome === "A porta de entrada do seu produto mudou de lugar",
+        "o nome vira a primeira FRASE inteira, não um pedaço da linha", JSON.stringify(nome));
+      checa(!/pú$|pub$|púb$/.test(nome), "e não termina no meio de uma palavra");
+      checa(sqd.tituloDaLegenda("Você calculou quanto a taxa tira? A conta assusta.") === "Você calculou quanto a taxa tira?",
+        "a interrogação fica (ela carrega sentido); o ponto final sai");
+      const semPonto = sqd.tituloDaLegenda("Split payment muda o jogo do seu caixa e da sua operacao inteira quando o volume cresce de verdade e nao para mais");
+      checa(semPonto.length <= 81 && /…$/.test(semPonto), "texto sem pontuação nenhuma corta com reticências", semPonto);
+      checa(/ \S+…$/.test(semPonto), "e as reticências entram depois de uma palavra inteira", semPonto.slice(-24));
+      checa(sqd.slugify("A porta de entrada do seu produto mudou de lugar") === "a_porta_de_entrada_do_seu_produto_mudou",
+        "o identificador corta no separador e NÃO deixa o '_' solto no fim",
+        sqd.slugify("A porta de entrada do seu produto mudou de lugar"));
+      checa(!/_$/.test(sqd.slugify("palavra ".repeat(20))), "nunca termina em '_'");
+
+      // (b) O ACENTO. O HTML do squad chega como documento COMPLETO e SEM <meta charset>. O texto
+      // no disco está certo em UTF-8, mas o detector do navegador só olha o começo do arquivo — e
+      // essa arte abre com ~1,1 MB de fonte em base64 antes da primeira letra. Sem pista, o
+      // Chromium assume windows-1252 e desenha "NinguÃ©m". Medido em produção em 21/08/2026:
+      // document.characterSet === "windows-1252".
+      const doSquad = "<!doctype html><html><head><style>body{margin:0}</style></head><body>Ninguém</body></html>";
+      checa(!/charset/i.test(doSquad), "a entrega chega sem declarar codificação");
+      const corrigido = sqd.garanteCharset(doSquad);
+      checa(/<meta charset="utf-8">/i.test(corrigido), "o painel passa a declarar UTF-8 no documento completo");
+      checa(corrigido.indexOf("<meta charset") < corrigido.indexOf("<style"),
+        "e a declaração vem ANTES do conteúdo (o detector só lê o começo)");
+      checa(sqd.garanteCharset(corrigido).split("charset").length - 1 === 1, "não duplica se já houver");
+      checa(/<head><meta charset="utf-8"><\/head>/i.test(sqd.garanteCharset("<!doctype html><html><body>oi</body></html>")),
+        "cria o <head> quando o documento não tem");
+      const fonte34 = fs.readFileSync(path.join(__dirname, "lib", "squad.js"), "utf8");
+      checa((fonte34.split("garanteCharset(").length - 1) >= 3,
+        "e os DOIS caminhos usam (a arte e a versão de story) — não só um");
+    }
+
+    secao("35. Codificação: a arte não sai mais com 'NinguÃ©m'");
+    {
+      const rd35 = require("./lib/render.js");
+      const sq35 = require("./lib/squad.js");
+
+      // A CAUSA REAL tinha DOIS andares. (1) A entrega do squad chega sem <meta charset>. (2) O
+      // sanitizador de HTML externo REMOVE toda tag <meta> — então mesmo uma arte que declarasse
+      // UTF-8 perderia a declaração ali. Sem pista nenhuma, o Chromium adivinha pelo começo do
+      // arquivo; numa arte que abre com 1,1 MB de fonte em base64 ele assume windows-1252.
+      const doSquad = "<!doctype html><html><head><style>b{}</style></head><body><div>Ninguém</div></body></html>";
+      const limpo = rd35.sanitizeArtHtml(doSquad);
+      checa(/<meta[^>]+charset/i.test(limpo), "o HTML externo sai da limpeza DECLARANDO utf-8");
+      checa(limpo.indexOf("charset") < limpo.indexOf("<style"),
+        "e a declaração vem antes do conteúdo (o detector só lê o começo do arquivo)");
+      checa(rd35.sanitizeArtHtml(limpo).split("charset").length - 1 === 1, "sem duplicar quando já existe");
+      // A arte que JÁ declarava utf-8 não pode perder a declaração na limpeza — era isso que
+      // acontecia, porque a regra de segurança tira <meta> junto com <iframe>, <object> e cia.
+      const jaTinha = "<!doctype html><html><head><meta charset=\"utf-8\"><style>b{}</style></head><body>oi</body></html>";
+      checa(/<meta[^>]+charset/i.test(rd35.sanitizeArtHtml(jaTinha)), "e quem já declarava continua declarando");
+      checa(/<head><meta charset="utf-8"><\/head>/i.test(rd35.declaraUtf8("<!doctype html><html><body>oi</body></html>")),
+        "documento sem <head> ganha um");
+
+      // O ponto de estrangulamento é UM SÓ: a arte do squad e o HTML que o editor devolve passam
+      // os dois por aqui. Corrigir um caminho e esquecer o outro é o defeito clássico deste projeto.
+      const fonte35 = fs.readFileSync(path.join(__dirname, "lib", "render.js"), "utf8");
+      checa(fonte35.indexOf("return declaraUtf8(s);") >= 0,
+        "o sanitizador SEMPRE devolve o HTML com a declaração (não é opcional do chamador)");
+
+      // O DETECTOR: quando o texto chega quebrado DA ORIGEM, desenhar certo não conserta —
+      // o painel precisa dizer, em vez de publicar calado.
+      checa(rd35.temAcentoQuebrado("NinguÃ©m mais"), "reconhece 'é' lido como latin-1");
+      checa(rd35.temAcentoQuebrado("OperaÃ§Ã£o"), "e 'ç'/'ã' também");
+      checa(!rd35.temAcentoQuebrado("Ninguém mais pergunta pro Google."), "e NÃO acusa texto correto");
+      checa(!rd35.temAcentoQuebrado("Operação, coração, ação, à noite, três"), "nem acento legítimo variado");
+      const fonteSq = fs.readFileSync(path.join(__dirname, "lib", "squad.js"), "utf8");
+      checa(fonteSq.indexOf("temAcentoQuebrado(p.legenda)") >= 0,
+        "a entrega do squad é conferida (legenda e artes) e vira aviso na peça");
+    }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();

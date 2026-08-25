@@ -14,7 +14,11 @@ export const SceneWrapper: React.FC<{
   // A ULTIMA cena nao deve sumir: com o fade-out ligado, o video terminava num quadro
   // praticamente vazio — e no Reels o ultimo quadro e o que muitos players congelam.
   keepEnd?: boolean;
-}> = ({ children, slide, keepEnd }) => {
+  // Margem interna da cena. O padrao (90px por todos os lados) centraliza no quadro INTEIRO, e
+  // no Reels o rodape do aplicativo — perfil, legenda, botoes — come os ~280px de baixo. Quem
+  // desenha para o Reels passa uma folga maior embaixo para o texto subir acima dessa faixa.
+  pad?: string;
+}> = ({ children, slide, keepEnd, pad }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   // 8 quadros, nao 12. Como as cenas deixaram de se sobrepor, a entrada e a saida viraram tempo de
@@ -51,7 +55,7 @@ export const SceneWrapper: React.FC<{
         alignItems: "center",
         opacity,
         transform: `translateY(${translateY}px)`,
-        padding: 90,
+        padding: pad || 90,
       }}
     >
       {children}

@@ -59,6 +59,61 @@ function melhorFoto(fotos) {
   return (retrato[0] || lista[0]);
 }
 
+// Busca, baixa e guarda UMA foto por termo. Tudo o que é genérico mora aqui — a checagem da
+// chave, a busca, a escolha do retrato, as guardas de arquivo (é imagem mesmo? passa de 12 MB?) e
+// a gravação no acervo. Quem chama decide o que fazer com o achado.
+// Nasceu de dentro de `buscarCapa`: quando as CENAS DE VÍDEO também passaram a poder pedir foto,
+// copiar essas oito guardas para o outro lado seria a receita de esquecer uma delas.
+async function buscarPorTermo(busca, opts) {
+  busca = String(busca || "").trim();
+  opts = opts || {};
+  if (!busca) return { ok: false, motivo: "sem_foto", explica: "Sem termo de busca." };
+  if (!pexels.isConfigured()) {
+    return { ok: false, motivo: "sem_chave", busca,
+      explica: "Pediu a foto “" + busca + "”, mas o banco de imagens não está conectado. "
+        + "Cole a chave em Configurações › Banco de imagens para o painel buscar sozinho." };
+  }
+
+  const r = await pexels.search(busca, { perPage: 24, orientation: opts.orientacao || "portrait" });
+  if (!r || !r.ok) {
+    return { ok: false, motivo: "busca_falhou", busca,
+      explica: "Procurei “" + busca + "” no banco de imagens e a busca não respondeu." };
+  }
+  const foto = melhorFoto(r.photos || r.results || []);
+  if (!foto) {
+    return { ok: false, motivo: "sem_resultado", busca,
+      explica: "Procurei “" + busca + "” e o banco não devolveu nenhuma foto. Vale trocar o termo." };
+  }
+
+  // lib/pexels já normaliza a resposta: `full` é a versão grande, `thumb` a miniatura.
+  const url = foto.full || foto.thumb;
+  if (!url) return { ok: false, motivo: "sem_arquivo", busca, explica: "A foto encontrada veio sem arquivo." };
+
+  let img;
+  try { img = await pexels.fetchImage(url); }
+  catch (e) { return { ok: false, motivo: "download", busca, explica: "Não consegui baixar a foto: " + e.message }; }
+  const ext = magicExt(img.buffer);
+  if (!ext) return { ok: false, motivo: "nao_imagem", busca, explica: "O que veio do banco não é uma imagem válida." };
+  if (img.buffer.length > 12 * 1024 * 1024) {
+    return { ok: false, motivo: "grande", busca, explica: "A foto encontrada passa de 12 MB." };
+  }
+
+  fs.mkdirSync(UP_DIR, { recursive: true });
+  const nome = (opts.prefixo || "capa") + "_" + safeStem(opts.nome || busca) + "_"
+    + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36) + ext;
+  fs.writeFileSync(path.join(UP_DIR, nome), img.buffer);
+
+  return {
+    ok: true,
+    url: "/uploads/" + nome,
+    busca,
+    autor: (foto.photographer || "").trim() || null,
+    autor_url: foto.photographer_url || null,
+    largura: foto.width || null,
+    altura: foto.height || null,
+  };
+}
+
 // Busca, baixa e guarda a foto da capa. NÃO altera a peça: devolve o que achou para quem
 // chamou decidir — assim o mesmo código serve para a geração e para um botão "trocar a capa".
 async function buscarCapa(conceito, opts) {
@@ -73,50 +128,46 @@ async function buscarCapa(conceito, opts) {
         + "da nossa tela, e usar a de outra empresa seria enganoso — anexe um print, ou capture o site.",
     };
   }
-  if (!pexels.isConfigured()) {
-    return { ok: false, motivo: "sem_chave", busca: pedido.busca,
-      explica: "A capa pediu a foto “" + pedido.busca + "”, mas o banco de imagens não está conectado. "
-        + "Cole a chave em Configurações › Banco de imagens para o painel buscar sozinho." };
+  const achado = await buscarPorTermo(pedido.busca, { nome: (opts && opts.nome) || pedido.busca, prefixo: "capa" });
+  if (!achado.ok) return achado;
+  return Object.assign({}, achado, { porque: pedido.porque });
+}
+
+// As CENAS DE VÍDEO podem pedir foto de fundo pelo campo `foto_busca`. Mesma máquina da capa, com
+// duas diferenças que importam: o teto de 2 fotos por vídeo (fundo fotográfico em toda cena vira
+// clipe de banco de imagem, não peça da marca) e a falha que NÃO derruba nada — a cena volta ao
+// fundo em gradiente, que é o padrão.
+const MAX_FOTOS_POR_VIDEO = 2;
+
+async function fotosDasCenas(conceito, opts) {
+  const cenas = (conceito && Array.isArray(conceito.scenes)) ? conceito.scenes : [];
+  const pedidos = [];
+  for (let i = 0; i < cenas.length; i++) {
+    const c = cenas[i] || {};
+    if (String(c.foto || "").trim()) continue;          // já tem foto anexada: respeita
+    const termo = String(c.foto_busca || "").trim();
+    if (termo) pedidos.push({ i, termo });
   }
-
-  const r = await pexels.search(pedido.busca, { perPage: 24, orientation: "portrait" });
-  if (!r || !r.ok) {
-    return { ok: false, motivo: "busca_falhou", busca: pedido.busca,
-      explica: "Procurei “" + pedido.busca + "” no banco de imagens e a busca não respondeu." };
+  const resultado = { pedidas: pedidos.length, aplicadas: 0, avisos: [] };
+  if (!pedidos.length) return resultado;
+  if (pedidos.length > MAX_FOTOS_POR_VIDEO) {
+    resultado.avisos.push("O roteiro pediu foto em " + pedidos.length + " cenas; usei nas "
+      + MAX_FOTOS_POR_VIDEO + " primeiras para o vídeo não virar clipe de banco de imagem.");
   }
-  const foto = melhorFoto(r.photos || r.results || []);
-  if (!foto) {
-    return { ok: false, motivo: "sem_resultado", busca: pedido.busca,
-      explica: "Procurei “" + pedido.busca + "” e o banco não devolveu nenhuma foto. Vale trocar o termo." };
+  for (const p of pedidos.slice(0, MAX_FOTOS_POR_VIDEO)) {
+    let achado;
+    try { achado = await buscarPorTermo(p.termo, { nome: (opts && opts.nome) || p.termo, prefixo: "cena" }); }
+    catch (e) { achado = { ok: false, explica: "Não consegui buscar “" + p.termo + "”: " + e.message }; }
+    if (achado && achado.ok) {
+      cenas[p.i].foto = achado.url;
+      cenas[p.i].fundo = "foto";
+      cenas[p.i].foto_credito = achado.autor || null;
+      resultado.aplicadas++;
+    } else {
+      resultado.avisos.push("Cena " + (p.i + 1) + ": " + ((achado && achado.explica) || "a foto não veio."));
+    }
   }
-
-  // lib/pexels já normaliza a resposta: `full` é a versão grande, `thumb` a miniatura.
-  const url = foto.full || foto.thumb;
-  if (!url) return { ok: false, motivo: "sem_arquivo", busca: pedido.busca, explica: "A foto encontrada veio sem arquivo." };
-
-  let img;
-  try { img = await pexels.fetchImage(url); }
-  catch (e) { return { ok: false, motivo: "download", busca: pedido.busca, explica: "Não consegui baixar a foto: " + e.message }; }
-  const ext = magicExt(img.buffer);
-  if (!ext) return { ok: false, motivo: "nao_imagem", busca: pedido.busca, explica: "O que veio do banco não é uma imagem válida." };
-  if (img.buffer.length > 12 * 1024 * 1024) {
-    return { ok: false, motivo: "grande", busca: pedido.busca, explica: "A foto encontrada passa de 12 MB." };
-  }
-
-  fs.mkdirSync(UP_DIR, { recursive: true });
-  const nome = "capa_" + safeStem((opts && opts.nome) || pedido.busca) + "_" + Date.now().toString(36) + ext;
-  fs.writeFileSync(path.join(UP_DIR, nome), img.buffer);
-
-  return {
-    ok: true,
-    url: "/uploads/" + nome,
-    busca: pedido.busca,
-    porque: pedido.porque,
-    autor: (foto.photographer || "").trim() || null,
-    autor_url: foto.photographer_url || null,
-    largura: foto.width || null,
-    altura: foto.height || null,
-  };
+  return resultado;
 }
 
 // Aplica no conceito: a foto vira o `image` da CAPA (primeiro slide), e o rastro do que foi
@@ -135,4 +186,4 @@ function aplicarNaCapa(conceito, achado) {
   return conceito;
 }
 
-module.exports = { buscarCapa, aplicarNaCapa, pedidoDeCapa, melhorFoto };
+module.exports = { buscarCapa, aplicarNaCapa, pedidoDeCapa, melhorFoto, buscarPorTermo, fotosDasCenas, MAX_FOTOS_POR_VIDEO };

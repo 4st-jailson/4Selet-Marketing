@@ -4644,7 +4644,18 @@ async function openPublishModal(task) {
   const conn = igConnLabel(st);
   const connected = conn.pode;
   const uname = st.username || "4selet";
-  const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
+  // A prévia mostra a arte que VAI AO AR naquele destino — a lista vem do backend (`pickImages`,
+  // a mesma da publicação). Antes ela usava a arte principal da peça, sempre: no Story, uma peça
+  // de feed que já tinha a versão 9:16 aparecia como o 4:5 cortado, com aviso de corte e tudo,
+  // enquanto o painel publicaria a vertical inteira.
+  const artesDoDestino = (dest) => {
+    const mapa = task.artes_por_destino || {};
+    const rels = Array.isArray(mapa[dest]) && mapa[dest].length
+      ? mapa[dest]
+      : editorTargets(task).map((t) => t.rel);   // peça antiga / backend sem o campo
+    return rels.map((rel) => API.rawUrl(task.folder, rel));
+  };
+  let imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
   if (!imgs.length) { toast("Esta peça não tem imagem publicável.", "error"); return; }
   const caption = await loadCaption(task);
   // ONDE a peça vai. Antes o painel mandava tudo para o feed e nem perguntava: a peça de Story
@@ -4655,6 +4666,8 @@ async function openPublishModal(task) {
   // Nenhum destino automático (Reels, hoje): o painel NÃO publica sozinho. Dizer isso aqui,
   // e não depois que a pessoa confirmou — era o modal prometendo "vai para o Feed" e falhando.
   const soManual = destinos.length === 0;
+  // Já abre mostrando a arte do destino inicial — e não a arte principal da peça.
+  imgs = artesDoDestino(destino);
 
   const ov = document.createElement("div"); ov.className = "modal-ov pub-ov";
   ov.innerHTML = `<div class="modal pub-modal" role="dialog" aria-modal="true">
@@ -4724,6 +4737,9 @@ async function openPublishModal(task) {
     const pv = ov.querySelector("#pub-preview");
     if (pv && pv.dataset.modo !== destino) {
       pv.dataset.modo = destino;
+      // Trocar de destino troca a ARTE, não só o enquadramento da moldura: no Story a peça pode
+      // ter uma versão 9:16 própria, que é a que vai ao ar.
+      imgs = artesDoDestino(destino);
       pv.innerHTML = instagramPreview(imgs, capEl.value, uname, destino);
       wireIgPreview(ov, imgs);
     }
@@ -6599,19 +6615,38 @@ function socialMock(kind, text) {
 // #R5 — storyboard do vídeo: uma prévia honesta das cenas (o que aparece na tela), em
 // cards na paleta da marca. Não renderiza o vídeo (BrandStory/Remotion é pesado) — mostra
 // a sequência hook → cenas → CTA, atualizando conforme se edita as cenas.
-const VSB_LABEL = { hook: "Hook", product: "Produto", benefit: "Benefício", cta: "CTA" };
+const VSB_LABEL = { hook: "Hook", problem: "Problema", product: "Produto", benefit: "Benefício", cta: "CTA" };
+// Duração de uma cena, com a MESMA conta do render (interface/lib/render.js e src/BrandStory.tsx).
+// Repetir o número aqui à mão seria criar dois relógios que discordam — já aconteceu neste projeto.
+const VSB_DUR_PADRAO = 3.5, VSB_DUR_MIN = 2.5, VSB_DUR_MAX = 6;
+function duracaoDaCena(s) {
+  const d = Number(s && s.duracao);
+  return isFinite(d) && d > 0 ? Math.min(VSB_DUR_MAX, Math.max(VSB_DUR_MIN, d)) : VSB_DUR_PADRAO;
+}
 function videoStoryboard(parsed) {
   const scenes = (parsed && Array.isArray(parsed.scenes)) ? parsed.scenes : [];
   if (!scenes.length && !(parsed && parsed.cta)) return '<p class="muted" style="font-size:12px;margin:0">Adicione cenas para ver o storyboard.</p>';
   const cards = scenes.map((s, i) => {
     const kind = String(s.type || "").toLowerCase();
     const tag = Object.prototype.hasOwnProperty.call(VSB_LABEL, kind) ? VSB_LABEL[kind] : (s.type ? esc(s.type) : "Cena");
-    return `<div class="vsb-card"><div class="vsb-top"><span class="vsb-n">${i + 1}</span><span class="vsb-type">${tag}</span></div>
-      <div class="vsb-text">${esc(s.text || "—")}</div>${s.subtitle ? `<div class="vsb-sub">${esc(s.subtitle)}</div>` : ""}</div>`;
+    const itens = (Array.isArray(s.itens) ? s.itens : []).filter(Boolean);
+    // O storyboard mostra o que a cena VAI DESENHAR. Enquanto ele só listava texto e subtexto,
+    // quem montava o roteiro na tela não tinha como saber se o número ia entrar em destaque.
+    return `<div class="vsb-card"><div class="vsb-top"><span class="vsb-n">${i + 1}</span><span class="vsb-type">${tag}</span>
+        <span class="vsb-dur">${String(duracaoDaCena(s)).replace(".", ",")}s</span></div>
+      ${s.numero ? `<div class="vsb-num">${esc(s.numero)}</div>` : ""}
+      ${s.rotulo ? `<div class="vsb-rot">${esc(s.rotulo)}</div>` : ""}
+      <div class="vsb-text">${esc(s.text || "—")}</div>${s.subtitle ? `<div class="vsb-sub">${esc(s.subtitle)}</div>` : ""}
+      ${itens.length ? `<ul class="vsb-itens">${itens.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${s.foto ? '<div class="vsb-foto">Foto de fundo</div>' : ""}</div>`;
   }).join("");
   const cta = parsed && parsed.cta;
   const ctaCard = cta ? `<div class="vsb-card vsb-cta"><div class="vsb-top"><span class="vsb-type">CTA final</span></div><div class="vsb-text">${esc(cta)}</div></div>` : "";
-  return `<div class="vsb-strip">${cards}${ctaCard}</div>`;
+  const total = scenes.reduce((t, s) => t + duracaoDaCena(s), 0);
+  const regua = scenes.length
+    ? `<p class="muted" style="font-size:12px;margin:6px 0 0">Vídeo de ${String(Math.round(total * 10) / 10).replace(".", ",")}s — a soma das cenas.</p>`
+    : "";
+  return `<div class="vsb-strip">${cards}${ctaCard}</div>${regua}`;
 }
 
 async function refineGenerated() {
@@ -7295,19 +7330,40 @@ function carouselEditor(p) {
   </div>`;
 }
 
+// Fundos de cena que a arte do vídeo sabe desenhar. Só estes — cor fora daqui não vira arte,
+// vira campo ignorado, e a pessoa fica achando que escolheu alguma coisa.
+const FUNDOS_CENA = [["", "Fundo automático"], ["navy", "Azul-marinho"], ["darker", "Escuro"], ["blue", "Azul"]];
+
 function sceneItem(s, i, total) {
-  return `<div class="se-item" data-i="${i}">
+  s = s || {};
+  // A foto que o painel buscou (e o termo/crédito dela) viaja no data-extra e volta inteira no
+  // salvamento. Sem isto, abrir a cena e salvar APAGAVA a foto — o formulário só devolvia os
+  // campos que ele mesmo desenha. É o mesmo cuidado que o editor do carrossel já tinha.
+  const extra = {};
+  ["foto", "foto_busca", "foto_credito"].forEach((k) => { if (s[k]) extra[k] = s[k]; });
+  const itens = (Array.isArray(s.itens) ? s.itens : []).filter(Boolean).join("; ");
+  const fundos = extra.foto ? FUNDOS_CENA.concat([["foto", "Foto de fundo"]]) : FUNDOS_CENA;
+  return `<div class="se-item" data-i="${i}" data-extra="${esc1(JSON.stringify(extra))}">
     <div class="se-head"><span class="se-n">Cena ${i + 1}</span><div class="se-ctrls">${seCtrls(i, total)}</div></div>
-    <input class="se-f se-type" data-k="type" list="se-types" placeholder="tipo (hook, product, benefit, cta)" value="${esc1(s.type || "")}" />
+    <input class="se-f se-type" data-k="type" list="se-types" placeholder="tipo (hook, problem, product, benefit, cta)" value="${esc1(s.type || "")}" />
     <textarea class="se-f" data-k="text" rows="2" placeholder="Texto que aparece na tela (título da cena)">${esc(s.text || "")}</textarea>
     <input class="se-f" data-k="subtitle" placeholder="Subtexto (segunda linha, opcional)" value="${esc1(s.subtitle || "")}" />
-    <textarea class="se-f se-dim" data-k="visual" rows="2" placeholder="Direção de arte (não aparece na tela)">${esc(s.visual || "")}</textarea>
+    <div class="se-row">
+      <input class="se-f" data-k="numero" placeholder="Número em destaque (ex.: 7,9%)" value="${esc1(s.numero || "")}" />
+      <input class="se-f" data-k="rotulo" placeholder="O que esse número significa" value="${esc1(s.rotulo || "")}" />
+    </div>
+    <input class="se-f" data-k="itens" placeholder="Lista da cena, até 3, separadas por ponto e vírgula" value="${esc1(itens)}" />
+    <div class="se-row">
+      <select class="se-f" data-k="fundo">${fundos.map((o) => `<option value="${o[0]}"${String(s.fundo || "") === o[0] ? " selected" : ""}>${o[1]}</option>`).join("")}</select>
+      <input class="se-f" data-k="duracao" type="number" min="2.5" max="6" step="0.5" placeholder="Segundos na tela (2,5 a 6)" value="${esc1(s.duracao || "")}" />
+    </div>
+    ${extra.foto ? `<p class="hint" style="margin:6px 0 0">Foto de fundo aplicada nesta cena${extra.foto_credito ? " — foto de " + esc(extra.foto_credito) : ""}.</p>` : ""}
   </div>`;
 }
 function videoEditor(p) {
-  const scenes = (Array.isArray(p.scenes) && p.scenes.length) ? p.scenes : [{ type: "hook", text: "", subtitle: "", visual: "" }];
+  const scenes = (Array.isArray(p.scenes) && p.scenes.length) ? p.scenes : [{ type: "hook", text: "", subtitle: "" }];
   return `<div class="struct-ed" data-type="video_idea">
-    <datalist id="se-types"><option value="hook"></option><option value="product"></option><option value="benefit"></option><option value="cta"></option></datalist>
+    <datalist id="se-types"><option value="hook"></option><option value="problem"></option><option value="product"></option><option value="benefit"></option><option value="cta"></option></datalist>
     <div class="field"><label>Conceito</label><input class="se-concept" placeholder="Ideia central do vídeo" value="${esc1(p.concept || "")}" /></div>
     <div class="se-list">${scenes.map((s, i) => sceneItem(s, i, scenes.length)).join("")}</div>
     <button class="btn btn-ghost btn-sm mt" data-se-add="scene" type="button">+ Adicionar cena</button>
@@ -7351,7 +7407,26 @@ function structToParsed() {
     base.cta = (ed.querySelector(".se-cta") || {}).value || "";
   } else if (type === "video_idea") {
     base.concept = (ed.querySelector(".se-concept") || {}).value || "";
-    base.scenes = items.map((it) => ({ type: val(it, "type"), text: val(it, "text"), subtitle: val(it, "subtitle"), visual: val(it, "visual") }));
+    base.scenes = items.map((it) => {
+      // `extra` traz de volta a foto que o formulário não edita. Campo vazio SAI do JSON em vez
+      // de ir como "" — senão toda cena carregaria numero:"", itens:[], fundo:"" sem servir a nada.
+      let extra = {};
+      if (it.dataset.extra) { try { extra = JSON.parse(it.dataset.extra); } catch (e) { extra = {}; } }
+      const cena = Object.assign({}, extra, {
+        type: val(it, "type"), text: val(it, "text"), subtitle: val(it, "subtitle"),
+      });
+      const numero = val(it, "numero").trim();
+      if (numero) cena.numero = numero; else delete cena.numero;
+      const rotulo = val(it, "rotulo").trim();
+      if (rotulo) cena.rotulo = rotulo; else delete cena.rotulo;
+      const itens = val(it, "itens").split(";").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+      if (itens.length) cena.itens = itens; else delete cena.itens;
+      const fundo = val(it, "fundo");
+      if (fundo) cena.fundo = fundo; else delete cena.fundo;
+      const dur = parseFloat(String(val(it, "duracao")).replace(",", "."));
+      if (isFinite(dur) && dur > 0) cena.duracao = Math.min(6, Math.max(2.5, dur)); else delete cena.duracao;
+      return cena;
+    });
     base.cta = (ed.querySelector(".se-cta") || {}).value || "";
   } else if (type === "ad_creative") {
     ["headline", "subtext", "cta", "layout_type"].forEach((k) => {
@@ -8442,13 +8517,31 @@ async function viewSettings() {
       const payload = { ig_user_id: $("#ig-id").value.trim(), public_base_url: $("#ig-base").value.trim() };
       const tok = $("#ig-token").value.replace(/\s+/g, ""); if (tok) payload.access_token = tok; // remove espaços/quebras coladas junto do token
       const r = await API.savePublishConfig(payload);
+      out.textContent = "";
       // O painel SABE o que acabou de receber: diz na hora, em vez de deixar a pessoa descobrir
       // pela publicação que não saiu daqui a uma hora.
       mostraTokenInfo(r && r.token);
-      if (r && r.token && r.token.ok && !r.token.permanente) {
+      const teste = r && r.teste;
+      if (teste && teste.ok) {
+        toast("Conexão salva e testada — conectado como @" + (teste.username || "4selet") + ".", "success");
+      } else if (teste && !teste.ok) {
+        toast(teste.error || "Salvei o token, mas a Meta recusou. Confira a mensagem na conexão.", "error");
+      } else if (r && r.token && r.token.ok && !r.token.permanente) {
         toast("Conexão salva — mas este token vence. Veja o aviso abaixo.", "warn");
       } else {
         toast("Conexão salva.", "ok");
+      }
+      // O SELO precisa ser redesenhado. Sem isto, salvar um token novo deixava o cabeçalho preso
+      // em "Conexão expirada" — com a data de uma falha antiga — mesmo depois de o token novo ser
+      // aceito. A tela ficava contando uma história que o servidor já não contava mais.
+      if (teste) {
+        const tokenInfo = r && r.token;
+        await viewSettings();
+        // A linha do Instagram continua aberta, onde a pessoa estava — redesenhar e fechar tudo
+        // faria ela perder o lugar logo depois de mexer justamente ali.
+        const cab = document.querySelector('.conn-item[data-conn="instagram"] .conn-head');
+        if (cab && cab.getAttribute("aria-expanded") !== "true") cab.click();
+        mostraTokenInfo(tokenInfo);   // busca o container pelo id: acha o novo, depois do redesenho
       }
     } catch (e) { out.textContent = ""; toast((e && e.message) || "Erro ao salvar.", "error"); }
   };

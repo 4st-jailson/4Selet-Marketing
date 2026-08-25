@@ -35,7 +35,7 @@ router.get("/status", (req, res) => {
 router.post("/config", adminOnly, async (req, res) => {
   try {
     const b = req.body || {};
-    const cfg = publish.setInstagram({ access_token: b.access_token, ig_user_id: b.ig_user_id, public_base_url: b.public_base_url });
+    const salvo = publish.setInstagram({ access_token: b.access_token, ig_user_id: b.ig_user_id, public_base_url: b.public_base_url });
     // DIZ O QUE FOI COLADO. O painel aceitava um token de 1 hora em silêncio e chamava de
     // "conectado" — a conexão caiu duas vezes por isso, e a informação estava a uma chamada de
     // distância. Agora a resposta traz tipo, validade e se dá para publicar; a tela mostra na hora.
@@ -43,7 +43,17 @@ router.post("/config", adminOnly, async (req, res) => {
     if (b.access_token) {
       try { token = await publish.inspecionaToken(b.access_token); } catch (e) { token = null; }
     }
-    res.json({ ok: true, instagram: cfg, token });
+    // TOKEN NOVO JÁ SAI CONFERIDO. Salvar deixava o selo em "não testado" e exigia um segundo
+    // clique em "Testar" — e, antes disso, deixava o selo preso em "Conexão expirada", falando de
+    // um token que nem estava mais salvo. Já estamos falando com a Meta aqui; então o veredito
+    // que a tela mostra passa a ser o de agora, e não o da falha antiga.
+    let teste = null;
+    if (salvo.trocouToken) {
+      try { teste = await publish.testConnection(); }
+      catch (e) { teste = { ok: false, error: (e && e.message) || "Não consegui conferir com a Meta." }; }
+    }
+    // A configuração vai DEPOIS do teste: é ela que carrega o estado da conexão para a tela.
+    res.json({ ok: true, instagram: publish.publicConfig(), token, teste });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 

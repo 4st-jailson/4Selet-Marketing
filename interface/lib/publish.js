@@ -60,12 +60,21 @@ function publicConfig() {
 function setInstagram({ access_token, ig_user_id, public_base_url }) {
   const cfg = loadConfig();
   cfg.instagram = cfg.instagram || {};
+  const tokenAntes = cfg.instagram.access_token || "";
   if (access_token != null) cfg.instagram.access_token = String(access_token).replace(/\s+/g, "");
   if (ig_user_id != null) cfg.instagram.ig_user_id = String(ig_user_id).trim();
   if (public_base_url != null) cfg.public_base_url = String(public_base_url).trim();
+  // O veredito guardado (`last_check`) é sobre o token ANTIGO. Trocar o token e MANTER o veredito
+  // fazia o painel acusar de vencido um token que tinha acabado de chegar — e não havia saída pela
+  // tela: colar outro token dava o mesmo "Conexão expirada", com a data da falha antiga. O token
+  // novo ainda não foi conferido com a Meta, então o estado honesto é "não testado".
+  const trocouToken = cfg.instagram.access_token !== tokenAntes;
+  if (trocouToken) cfg.instagram.last_check = null;
   cfg.instagram.connected_at = new Date().toISOString();
   saveConfig(cfg);
-  return publicConfig();
+  // Devolve `trocouToken` porque só faz sentido conferir com a Meta quando o token é outro —
+  // salvar apenas o endereço público não precisa de chamada nenhuma.
+  return { config: publicConfig(), trocouToken };
 }
 
 // Inspeciona um token na própria Meta: que TIPO ele é e até quando vale.
@@ -191,6 +200,13 @@ async function graphPost(p, params, token, step) {
   return { ok: r.ok, status: r.status, body: j };
 }
 
+// Como a Meta classifica a recusa. Ficam AQUI, acima de quem usa, porque duas funções
+// diferentes (`testConnection` e `gerr`) precisam da mesma régua — foi ter réguas diferentes
+// que produziu o defeito.
+const CODIGOS_DE_TOKEN = [190, 102];              // só estes pedem reconectar de verdade
+const CODIGOS_DE_PERMISSAO = [10, 200, 3, 803];   // o app/usuário não pode fazer isto
+const CODIGOS_DE_LIMITE = [4, 17, 32, 613];       // pediu demais, ou estourou a cota de posts
+
 // Verifica o token e, se preciso, DESCOBRE o ID da conta IG pela Página ligada — assim o
 // usuário só precisa colar o TOKEN. Retorna { ok, username?, ig_user_id?, error? }.
 async function testConnection() {
@@ -214,10 +230,12 @@ async function testConnection() {
   const r = await graphGet("/" + c.ig_user_id, { fields: "username,name", access_token: c.access_token }, "conferir a conta");
   if (!r.ok || r.body.error) {
     const e = r.body && r.body.error;
-    const expirou = e && (e.code === 190 || e.type === "OAuthException");
+    // Mesma correção do `gerr`: é o CÓDIGO que diz se o token morreu. Tratar todo OAuthException
+    // como token vencido mandava a pessoa trocar um token que estava bom.
+    const expirou = e && CODIGOS_DE_TOKEN.indexOf(Number(e.code)) >= 0;
     const msg = expirou
       ? "A conexão com o Instagram expirou. Cole um token novo em Configurações › Publicação Instagram e clique em Testar."
-      : ((e && e.message) || ("HTTP " + r.status));
+      : ((e && e.message) || ("HTTP " + r.status)) + (e && e.code != null ? " (erro " + e.code + " da Meta)" : "");
     recordCheck(false, { code: (e && e.code) || null, message: msg });
     return { ok: false, configured: true, error: msg };
   }
@@ -340,6 +358,8 @@ function readCaption(dir) {
 async function publishImage(igUserId, token, imageUrl, caption) {
   const c = await graphPost("/" + igUserId + "/media", { image_url: imageUrl, caption: caption || "" }, token, "preparar a imagem");
   if (!c.ok || !c.body.id) throw gerr("criar o contêiner da imagem", c);
+  // Mesma espera do carrossel: a Meta ainda vai buscar e processar a arte antes de deixar publicar.
+  await esperaMidiaPronta(c.body.id, token, "a imagem");
   const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: c.body.id }, token, "publicar a imagem");
   if (!p.ok || !p.body.id) throw gerr("publicar a imagem", p);
   return { post_id: p.body.id, creation_id: c.body.id };
@@ -354,6 +374,7 @@ async function publishStories(igUserId, token, imageUrls) {
       const c = await graphPost("/" + igUserId + "/media",
         { image_url: imageUrls[i], media_type: "STORIES" }, token, "preparar o cartão " + (i + 1) + " do story");
       if (!c.ok || !c.body.id) throw gerr("criar o cartão " + (i + 1) + " do story", c);
+      await esperaMidiaPronta(c.body.id, token, "o cartão " + (i + 1) + " do story");
       const p = await graphPost("/" + igUserId + "/media_publish",
         { creation_id: c.body.id }, token, "publicar o cartão " + (i + 1) + " do story");
       if (!p.ok || !p.body.id) throw gerr("publicar o cartão " + (i + 1) + " do story", p);
@@ -374,29 +395,94 @@ async function publishStories(igUserId, token, imageUrls) {
   }
   return { post_id: feitos[0], cartoes: feitos };
 }
+// ESPERA a Meta terminar de preparar a mídia antes de mandar publicar.
+//
+// O `POST /media` devolve o id NA HORA, mas o conteúdo ainda está `IN_PROGRESS`: a Meta ainda vai
+// buscar a imagem no link temporário, processar e só então marcar `FINISHED`. Publicar antes disso
+// falha — e o painel não esperava em lugar nenhum do arquivo. Deu certo por muito tempo porque com
+// arte pequena o processamento acaba antes do próximo pedido; com um carrossel de 6 artes de ~4 MB
+// (24 MB para a Meta buscar) a conta não fecha mais, e a falha caía sempre no MESMO passo:
+// "publicar o carrossel", o último. Como a recusa vem com `type: OAuthException`, o painel ainda
+// traduzia para "o seu token venceu" — e mandava trocar um token que estava perfeito.
+async function esperaMidiaPronta(containerId, token, oQue) {
+  const LIMITE_MS = 90 * 1000, PASSO_MS = 2000;
+  const ateQuando = Date.now() + LIMITE_MS;
+  let visto = "";
+  while (Date.now() < ateQuando) {
+    const r = await graphGet("/" + containerId, { fields: "status_code,status", access_token: token }, "conferir se " + oQue + " está pronto");
+    const sc = String((r.body && r.body.status_code) || "");
+    visto = String((r.body && r.body.status) || sc || visto);
+    if (sc === "FINISHED") return true;
+    if (sc === "ERROR" || sc === "EXPIRED") {
+      const e = new Error("Falha ao preparar " + oQue + ": o Instagram não conseguiu processar a imagem (" + visto + "). "
+        + "Normalmente é a arte: confira se ela abre e se não passa de 8 MB.");
+      e.code = "E_MIDIA_NAO_PRONTA"; throw e;
+    }
+    // Erro de verdade na consulta (token, permissão): não insiste, devolve o motivo certo.
+    if (!r.ok && r.body && r.body.error) throw gerr("conferir se " + oQue + " está pronto", r);
+    await new Promise((segue) => setTimeout(segue, PASSO_MS));
+  }
+  const e = new Error("Falha ao publicar: o Instagram ainda estava preparando " + oQue + " depois de 90 segundos"
+    + (visto ? " (último estado: " + visto + ")" : "") + ". A peça NÃO foi publicada — tente de novo em alguns minutos.");
+  e.code = "E_MIDIA_DEMOROU"; throw e;
+}
+
 async function publishCarousel(igUserId, token, imageUrls, caption) {
   const children = [];
   for (const url of imageUrls) {
     const c = await graphPost("/" + igUserId + "/media", { image_url: url, is_carousel_item: "true" }, token, "preparar um slide do carrossel");
     if (!c.ok || !c.body.id) throw gerr("criar um slide do carrossel", c);
+    // Cada slide precisa estar pronto ANTES de entrar no carrossel — montar com item inacabado é
+    // o que a Meta recusa lá na frente, quando já não dá para saber qual dos seis era o problema.
+    await esperaMidiaPronta(c.body.id, token, "o slide " + (children.length + 1));
     children.push(c.body.id);
   }
   const car = await graphPost("/" + igUserId + "/media", { media_type: "CAROUSEL", children: children.join(","), caption: caption || "" }, token, "montar o carrossel");
   if (!car.ok || !car.body.id) throw gerr("montar o carrossel", car);
+  await esperaMidiaPronta(car.body.id, token, "o carrossel");
   const p = await graphPost("/" + igUserId + "/media_publish", { creation_id: car.body.id }, token, "publicar o carrossel");
   if (!p.ok || !p.body.id) throw gerr("publicar o carrossel", p);
   return { post_id: p.body.id, creation_id: car.body.id };
 }
+// Traduz o erro da Meta. O CÓDIGO é que manda — não o "type".
+//
+// Antes, QUALQUER `type: "OAuthException"` virava "a conexão expirou, cole um token novo". Só que
+// a Meta usa esse mesmo tipo para falta de permissão (#10, #200), limite de posts e outras coisas
+// que não têm nada a ver com o token. O estrago foi duplo: a mensagem mandava trocar um token que
+// estava bom, e o `recordCheck(false, {code:190})` ainda carimbava a conexão como expirada — então
+// o painel passava a mostrar "Conexão expirada" e colar um token novo não tirava esse selo.
+// Medido em 21/08/2026: o token tinha `instagram_content_publish`, respondia 200 em /me,
+// /<ig_user_id> e /me/accounts, e ainda assim o painel dizia que tinha vencido.
+
 function gerr(step, r) {
-  const err = r.body && r.body.error;
-  let msg = (err && err.message) || ("HTTP " + r.status);
-  // Erro 190 / OAuthException = token expirado, revogado ou malformado. Troca o texto cru da
-  // Meta ("Invalid OAuth access token - Cannot parse access token") por orientação clara.
-  if (err && (err.code === 190 || err.type === "OAuthException")) {
-    msg = "a conexão com o Instagram expirou ou o token está inválido. Reconecte em Configurações › Publicação Instagram (cole um token novo e clique em Testar).";
-    recordCheck(false, { code: 190, message: msg }); // o painel para de dizer "Conectado"
+  const err = (r.body && r.body.error) || null;
+  const code = err && err.code != null ? Number(err.code) : null;
+  const sub = err && err.error_subcode != null ? Number(err.error_subcode) : null;
+  const daMeta = (err && err.message) || ("HTTP " + r.status);
+  // A referência técnica vai junto SEMPRE: sem o número, uma falha destas não tem como ser
+  // investigada depois — foi exatamente o que aconteceu aqui.
+  const ref = code != null ? " (erro " + code + (sub != null ? "/" + sub : "") + " da Meta)" : "";
+  let msg;
+  if (code != null && CODIGOS_DE_TOKEN.indexOf(code) >= 0) {
+    msg = "a conexão com o Instagram expirou ou o token está inválido. Reconecte em Configurações › "
+      + "Publicação Instagram (cole um token novo e clique em Testar)." + ref;
+    recordCheck(false, { code: code, message: msg }); // aqui SIM: o painel para de dizer "Conectado"
+  } else if (code != null && CODIGOS_DE_PERMISSAO.indexOf(code) >= 0) {
+    // NÃO mexe no estado da conexão: o token está vivo, o que falta é permissão do app.
+    msg = "o Instagram recusou por PERMISSÃO, não por token: “" + daMeta + "”." + ref
+      + " O token continua válido — confira em Permissões e recursos do app na Meta se o acesso de "
+      + "publicação está liberado para esta conta.";
+  } else if (code != null && CODIGOS_DE_LIMITE.indexOf(code) >= 0) {
+    msg = "o Instagram recusou por LIMITE: “" + daMeta + "”." + ref
+      + " A conta publica no máximo 25 posts por 24 horas pela API. Tente de novo mais tarde.";
+  } else {
+    // Sem palpite: repassa o que a Meta disse, com o número, e deixa a conexão em paz.
+    msg = daMeta + ref;
   }
-  const e = new Error("Falha ao " + step + ": " + msg); e.code = "E_GRAPH"; return e;
+  const e = new Error("Falha ao " + step + ": " + msg);
+  e.code = "E_GRAPH";
+  e.meta_code = code; e.meta_subcode = sub; e.meta_message = daMeta;
+  return e;
 }
 
 // Memória do ÚLTIMO contato real com a Meta. Sem isto, o painel dizia "Conectado" só porque
@@ -667,6 +753,8 @@ async function publishTask(folder, opts) {
 module.exports = {
   connectionState,
   isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved,
+  // A tradução da recusa da Meta: exportada para a bateria medir caso a caso, sem rede.
+  gerr, CODIGOS_DE_TOKEN, CODIGOS_DE_PERMISSAO, CODIGOS_DE_LIMITE, esperaMidiaPronta,
   // Exportado para a bateria: é ele que decide QUAL arte vai ao ar por destino, e essa
   // decisão precisa ser verificável sem chamar a Meta.
   pickImages,

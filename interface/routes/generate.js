@@ -679,6 +679,20 @@ router.post("/save", async (req, res, next) => {
       }
     }
 
+    // 2f.2) As CENAS DE VÍDEO que pediram foto de fundo (`foto_busca`) recebem a foto aqui, pelo
+    // mesmo caminho da capa do carrossel. Antes o vídeo não aceitava imagem nenhuma: a composition
+    // desenhava só tipografia, e qualquer foto que a IA descrevesse morria no conceito.
+    // Falhar aqui NÃO derruba a geração — a cena volta ao fundo em gradiente, que é o padrão.
+    let fotosCena = null;
+    if (body.content_type === "video_idea" && parsed && Array.isArray(parsed.scenes)) {
+      try {
+        fotosCena = await capaFoto.fotosDasCenas(parsed, { nome: body.task_name });
+      } catch (e) {
+        fotosCena = { pedidas: 0, aplicadas: 0, avisos: ["Não consegui buscar as fotos das cenas: " + e.message] };
+        console.error("[cena-foto] falhou:", e && e.message);
+      }
+    }
+
     // 3) grava o arquivo de conteudo
     const text = formatContentFile(ct, parsed, body.raw);
     let rel;
@@ -688,7 +702,7 @@ router.post("/save", async (req, res, next) => {
       return res.status(e.code === "E_NOT_EDITABLE" ? 409 : 500).json({ error: e.message, code: e.code });
     }
 
-    res.json({ ok: true, folder, file: rel, governance: gov, capa, task: content.getTask(folder) });
+    res.json({ ok: true, folder, file: rel, governance: gov, capa, fotos_cena: fotosCena, task: content.getTask(folder) });
   } catch (e) { next(e); }
 });
 

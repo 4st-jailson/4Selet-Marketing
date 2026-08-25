@@ -124,9 +124,9 @@ Adapte estrutura, pacing e composition size por plataforma. O motion style da 4S
 
 Converta a estratégia em scenes sequenciais. Cada scene é uma unidade que o renderer Remotion traduz em visual.
 
-**Scene types com rótulo (eyebrow) próprio no renderer:** `hook`, `problem`, `product`, `benefit`, `cta`.
+**Scene types reconhecidos:** `hook`, `problem`, `product`, `benefit`, `cta`.
 
-> **Não use `proof`, `offer` nem `testimonial`.** O mapeamento de eyebrow do `BrandStory` (`eyebrowFor`, em `src/BrandStory.tsx`) só conhece os cinco acima; qualquer outro valor cai no rótulo genérico "4SELET" na tela. Para prova-âncora ("95% de aprovação"), use `benefit` ou `product` com o número no `text`. O schema que o painel pede à IA é ainda mais estreito — `hook|product|benefit|cta` — e `problem`, embora suportado no render, não é oferecido lá.
+> **Não use `proof`, `offer` nem `testimonial`.** O mapeamento de eyebrow do `BrandStory` (`eyebrowFor`, em `src/BrandStory.tsx`) só conhece esses cinco; qualquer outro valor **não desenha rótulo nenhum** (o antigo fallback "4SELET" saiu junto com o contador de cena). Para prova-âncora ("95% de aprovação"), use `benefit` ou `product` — e ponha o número no campo `numero`, não no `text`.
 
 Estrutura mínima de uma scene (campos obrigatórios):
 
@@ -134,16 +134,23 @@ Estrutura mínima de uma scene (campos obrigatórios):
 { "type": "hook", "text": "Vou perder vendas migrando?" }
 ```
 
-Cada scene **deve** ter `type` e `text` (headline on-screen). Campos opcionais:
+Cada scene **deve** ter `type` e `text` (headline on-screen). Campos opcionais — **todos estes desenham de verdade**:
 
 - `subtitle` — **subtexto on-screen** (segunda linha, voltada ao espectador).
-- `visual` — **direção de arte** (background da paleta, layout, asset). No contrato do autor, não aparece como texto na tela.
-- `transition` — `fade` | `slide` | `wipe` (nunca hard cut). Metadado de estratégia.
-- `animation` — ex.: `"word-by-word easeOut"`, `"spring contido"`, `"pulse 1x Selet Blue"`. Metadado de estratégia.
+- `numero` — o **dado que vira o protagonista** da cena (`"7,9%"`, `"R$ 7.900"`, `"0%"`). Até 14 caracteres; entra gigante, com mola contida, e a headline recua para papel de apoio. **A headline não deve repetir esse número.** No máximo 3 cenas do vídeo.
+- `rotulo` — rótulo curto em maiúsculas (mono) que diz **o que o número significa** (`"taxa sobre R$ 100 mil"`). Até 34 caracteres. Sem `numero`, vira o eyebrow da cena.
+- `itens` — até **3 linhas curtas** para cena de condições; entram uma a uma, com marcador. **Nunca junto de `numero`** na mesma cena.
+- `fundo` — `navy` | `darker` | `blue` | `foto`. Sem isso, o render **alterna navy/darker** sozinho. Valor fora da lista é ignorado (não vira cor inventada).
+- `foto_busca` — 2 a 4 palavras (em inglês) para o painel buscar a foto de fundo no banco de imagens. **Teto de 2 fotos por vídeo**; nunca na cena de `numero` (a foto briga com o dado).
+- `foto` — caminho de foto já escolhida (`/uploads/...`) ou URL. Preenchido pelo painel a partir de `foto_busca`, ou à mão.
+- `duracao` — **segundos de tela desta cena**, de 2,5 a 6. Fora da faixa, o render corta para o limite. Sem o campo, a cena leva 3,5 s.
+- `transition` / `animation` — metadados de estratégia. **Não desenham.**
 
-> **Tradução importante entre o contrato do autor e o componente.** O tipo de cena do `BrandStory` é `{ type, text, visual }` — **não existe `subtitle` lá**, e o que o componente desenha como segunda linha é o campo `visual`. Quem faz a ponte é o adaptador do painel (`interface/lib/render.js`): ele monta os props como `visual: s.subtitle`. Ou seja: **pelo painel, escreva `subtitle` normalmente**; se for montar props à mão para o CLI/Studio do Remotion, o subtexto tem que ir no campo `visual`, senão a sua direção de arte ("Background Selet Darker com Selet Dots 8%…") vai impressa na tela e o `subtitle` é descartado.
+> **Escreva os campos, não a prosa.** O campo `visual` (direção de arte em texto corrido — "Bloco SVG raio 16px, Inter Black 200px, logo no canto") **existiu e nunca foi desenhado**: o adaptador o descartava e a composition só sabia texto. Ele saiu do schema. Hoje quem desenha são os campos acima; prosa ali continua não virando imagem. Em conceito antigo, `visual` ainda é lido como **subtexto de reserva**, para peça velha continuar rendendo o mesmo texto.
 
-**Fundo por cena não existe.** O `BrandStory` aplica **um único gradiente global** para o vídeo inteiro e o `SceneWrapper` não aceita prop de cor. Não escreva mapeamento de background por cena — trate cor como direção de arte para futuras compositions. Accent e números-âncora aparecem no destaque padrão do componente.
+**A marca entra sozinha.** O `BrandStory` desenha o logo 4Selet discreto no alto de cada cena e a assinatura na cena final. **Não peça logo em campo nenhum** — e não escreva cena só para o logo.
+
+**A pílula do CTA não repete.** Ela some quando a headline (ou o subtexto) da cena final já é a própria chamada. Escreva a headline contando com isso: headline `"Acesso por convite."` com `cta` `"Falar com o time"`, e não as duas iguais.
 
 ## Step 4: Output — `video/concept.json`
 
@@ -168,30 +175,45 @@ Este é o arquivo canônico do tipo `video_idea` (`interface/lib/config.js`). O 
   "scenes": [
     {
       "type": "hook",
-      "text": "Taxa média do mercado: 7,9%.",
-      "subtitle": "E você ainda divide isso com prazos longos.",
-      "visual": "Direção de arte: Selet Darker com Selet Dots 8%; Inter Black."
+      "text": "Sai da sua margem.",
+      "subtitle": "Em cada venda, todo mês.",
+      "numero": "7,9%",
+      "rotulo": "taxa média do mercado",
+      "fundo": "darker",
+      "duracao": 3
     },
     {
       "type": "product",
-      "text": "0% por 3 meses.",
-      "subtitle": "R$ 1,99 por transação. Sem letra miúda.",
-      "visual": "Direção de arte: número 0% gigante em Selet Blue."
+      "text": "Taxa Zero na 4Selet.",
+      "subtitle": "Por 3 meses, ou até R$ 300 mil em vendas.",
+      "numero": "0%",
+      "rotulo": "pela plataforma",
+      "fundo": "navy",
+      "duracao": 4
     },
     {
       "type": "benefit",
-      "text": "PIX em D+10. Cartão em D+30.",
-      "subtitle": "95% de aprovação no cartão.",
-      "visual": "Direção de arte: bullets com indicador em Selet Blue."
+      "text": "As condições, sem letra miúda.",
+      "itens": ["R$ 1,99 por transação", "PIX em D+10", "Cartão em D+30"],
+      "fundo": "blue",
+      "duracao": 5.5
+    },
+    {
+      "type": "benefit",
+      "text": "Migração sem trauma.",
+      "subtitle": "A equipe faz junto, do checkout à área de membros.",
+      "foto_busca": "team working laptop office",
+      "duracao": 4
     },
     {
       "type": "cta",
-      "text": "Solicitar convite.",
-      "subtitle": "Acesso por convite.",
-      "visual": "Direção de arte: logo light em fade-in."
+      "text": "Acesso por convite.",
+      "subtitle": "A plataforma é para quem opera com seriedade.",
+      "fundo": "navy",
+      "duracao": 4.5
     }
   ],
-  "cta": "Solicitar convite",
+  "cta": "Falar com o time",
   "notes": "Pilar taxa_zero; regra completa da campanha no beat de produto."
 }
 ```
@@ -200,9 +222,11 @@ Este é o arquivo canônico do tipo `video_idea` (`interface/lib/config.js`). O 
 
 ### O que realmente vai para a tela
 
-Quatro coisas: **`scenes[].type`** (vira o eyebrow), **`scenes[].text`** (a headline), **o subtexto** (que o adaptador do painel entrega ao componente como `visual`) e o **`cta`**, que vira a pílula azul do card final.
+De cada cena: **`type`** (vira o eyebrow, quando não há `rotulo`), **`text`** (a headline), **`subtitle`** (segunda linha), **`numero` + `rotulo`** (o dado em destaque), **`itens`** (a lista), **`fundo`/`foto`** (a superfície) e **`duracao`** (o tempo de tela). Do topo do arquivo, só o **`cta`** — que vira a pílula azul do card final, quando não repete a headline.
 
 `concept`, `hook`, `emotional_arc`, `visual_style` e `notes` são **metadados** — servem à peça, à legenda e ao racional, **não são desenhados**.
+
+> **A duração do vídeo é a SOMA das cenas.** Era número-de-cenas × 3 s cravado, e a `duracao` que o roteiro declarava não chegava a lugar nenhum: um roteiro escrito para 31 s saía com 21 s. Agora `brandStoryDuration` soma cena a cena (`src/BrandStory.tsx`), com piso de 2,5 s e teto de 6 s por cena. Um vídeo de 5 a 7 cenas fica entre 20 e 32 s.
 
 > **Corrigido (agosto/2026) — o `cta` vai para a tela e a frase-tag saiu.** O card final do `BrandStory` desenha **`props.cta`**; com `cta` vazio, **nenhuma pílula é desenhada** (`src/BrandStory.tsx`). A frase-tag fixa que o componente carimbava saiu, e as cenas de exemplo do `src/Root.tsx` (as que o Remotion Studio abre e o CLI usa sem `--props`) fecham com *"Acesso por convite."*.
 >
@@ -210,7 +234,7 @@ Quatro coisas: **`scenes[].type`** (vira o eyebrow), **`scenes[].text`** (a head
 
 ### Duração real
 
-O ritmo é de **90 frames por cena (3,0s @ 30fps)**, sem sobreposição — uma cena sai e a outra entra: `duração = n_cenas × 3,0s`.
+O ritmo é **por cena**: cada uma leva o que o campo `duracao` pedir (2,5 s a 6 s), e sem `duracao` leva 3,5 s. As cenas não se sobrepõem — uma sai e a outra entra. **Duração do vídeo = soma das cenas** (`brandStoryDuration`, `src/BrandStory.tsx`). Era `n_cenas × 3,0s` cravado.
 
 | Cenas | Duração |
 |---|---|
@@ -232,7 +256,7 @@ Para 15–20s, use **5 a 6 cenas** (7 já passa de 20s). Não existe campo `dura
 - **CTAs aprovados (9):** "Solicitar convite", "Ver as condições", "Conhecer a plataforma", "Migrar minha operação", "Calcular minha economia", "Falar com o time", "Acessar o material", "Ler o playbook", "Ver como funciona". **Proibidos:** "Compre já!", "Última chance!", "Garanta sua vaga gratuita", urgência fake.
 - **Números da Taxa Zero (precisão obrigatória):** 0% por **3 meses OU até R$ 300 mil** (o que vier primeiro); R$ 1,99/transação; PIX D+10; cartão D+30; prova-âncora 95% de aprovação. Nunca "0% pra sempre" nem "100% grátis".
 - **Concorrentes:** **nunca** citar Greenn, Hubla, Kiwify, Hotmart, Eduzz, Ticto, Cakto, Monetizze, Perfect Pay — nem por nome, sigla, descrição ou logo. Mercado só em abstrato ("taxas de mercado em torno de 7,9%").
-- **Motion:** transições fade/slide/wipe, texto animado word-by-word, `easeOut`. Sem footage/live-action, sem personagens fictícios, sem trending audio cliché. *(O ritmo efetivo é de 3,0s por cena — ver Step 4.)*
+- **Motion:** transições fade/slide/wipe, texto animado word-by-word, `easeOut`. Sem footage/live-action, sem personagens fictícios, sem trending audio cliché. *(Foto de banco de imagem É permitida como fundo de cena, com véu de leitura — teto de 2 por vídeo, campo `foto_busca`. O ritmo é por cena, campo `duracao` — ver Step 4.)*
 - **Tom:** sócio experiente, sóbrio. Cada claim com número/prazo/processo. Sem motivacional vazio, sem promessa mágica.
 
 ## Examples
@@ -241,7 +265,7 @@ Para 15–20s, use **5 a 6 cenas** (7 já passa de 20s). Não existe campo `dura
 
 **Usuário diz:** "Cria um Reels respondendo a dúvida de quem tem medo de migrar."
 **Actions:** Carrega knowledge files → pilar `prova_plataforma`, estratégia `problem_solution`, base no Conceito 4 → 6 cenas: hook(problem) → problem → product (migração assistida) → benefit → benefit (95%) → cta "Falar com o time" → salva em `outputs/.../video/concept.json`.
-**Result:** JSON plano com `concept`, `hook`, `scenes[]` (6 cenas ≈ 16s) e `cta`.
+**Result:** JSON plano com `concept`, `hook`, `scenes[]` (6 cenas, ≈ 24 s pela soma das `duracao`) e `cta`.
 
 ### Example 2: Short da mecânica (limited_offer)
 
@@ -265,7 +289,7 @@ Para 15–20s, use **5 a 6 cenas** (7 já passa de 20s). Não existe campo `dura
 **Solution:** salvar o schema plano em `video/concept.json`.
 
 ### A direção de arte apareceu escrita na tela
-**Cause:** props montados à mão para o CLI/Studio com o subtexto em `subtitle`. O componente desenha `visual`.
+**Cause:** conceito antigo, anterior à reformulação de agosto/2026. Hoje a composition desenha `subtitle`; `visual` só é lido como reserva.
 **Solution:** ao montar props direto para o Remotion, coloque o subtexto em `visual`. Pelo painel, `subtitle` funciona (o adaptador traduz).
 
 ### Número da campanha errado
@@ -283,7 +307,9 @@ Para 15–20s, use **5 a 6 cenas** (7 já passa de 20s). Não existe campo `dura
 - [ ] Estratégia escolhida tem fit 4Selet (não `meme_style`/`lifestyle`)
 - [ ] Schema **plano** (sem `composition`/`props`); `concept`, `cta` e `scenes[]` preenchidos
 - [ ] Tipos de cena restritos a `hook`/`problem`/`product`/`benefit`/`cta`
-- [ ] Nº de cenas calibrado pela conta real (n × 3,0s) para a faixa da plataforma
+- [ ] Nº de cenas e `duracao` de cada uma somando a faixa da plataforma (20 a 32 s)
+- [ ] `numero` só onde o dado É o assunto (máx. 3 cenas), e a headline não repete esse número
+- [ ] Nenhuma direção de arte em prosa: o que precisa desenhar está nos campos
 - [ ] **Nenhuma cena assina com a frase-tag**
 - [ ] Paleta, fontes, CTA aprovado (grafia canônica) e números da Taxa Zero corretos
 - [ ] Nenhum concorrente citado; sem urgência fake

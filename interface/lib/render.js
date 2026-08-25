@@ -3825,27 +3825,98 @@ async function renderCarouselSlide(folder, n) {
 }
 
 // ---- Video (Remotion parametrizado) ---------------------------------------
+// ---- Fotos de cena do video ---------------------------------------------
+// O Remotion so enxerga arquivo pelo `staticFile()`, que resolve dentro de `public/` na RAIZ do
+// projeto (remotion.config.ts: Config.setPublicDir("public")). A foto da peca mora em
+// interface/public/uploads — outra pasta, que o bundle do render nao alcanca. Entao a foto e
+// COPIADA para public/video/ antes de renderizar, com nome derivado do conteudo (o mesmo arquivo
+// nao vira duas copias) e o caminho relativo vai nas props.
+const VIDEO_ASSETS_DIR = path.join(PATHS.PROJECT_ROOT, "public", "video");
+
+function limpaFotosAntigas() {
+  // Sem isto a pasta so cresce: cada geracao com foto deixa um arquivo para tras. 7 dias cobre
+  // com folga o intervalo entre gerar a peca e re-renderizar depois de editar.
+  try {
+    const limite = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const nome of fs.readdirSync(VIDEO_ASSETS_DIR)) {
+      const p = path.join(VIDEO_ASSETS_DIR, nome);
+      try { if (fs.statSync(p).mtimeMs < limite) fs.unlinkSync(p); } catch (e) { /* arquivo em uso */ }
+    }
+  } catch (e) { /* pasta ainda nao existe */ }
+}
+
+function encenaFoto(valor) {
+  const bruto = String(valor || "").trim();
+  if (!bruto) return "";
+  // URL externa o proprio <Img> baixa; nao ha o que copiar.
+  if (/^https?:\/\//i.test(bruto)) return bruto;
+  const origem = bruto.startsWith("/uploads/")
+    ? path.join(PATHS.INTERFACE_DIR, "public", "uploads", bruto.slice("/uploads/".length))
+    : (path.isAbsolute(bruto) ? bruto : path.join(PATHS.INTERFACE_DIR, "public", bruto.replace(/^\/+/, "")));
+  let buf;
+  try { buf = fs.readFileSync(origem); } catch (e) { return ""; }
+  const ext = (path.extname(origem) || ".jpg").toLowerCase();
+  if (!/^\.(jpe?g|png|webp)$/.test(ext)) return "";
+  const chave = require("crypto").createHash("sha1").update(buf).digest("hex").slice(0, 12);
+  fs.mkdirSync(VIDEO_ASSETS_DIR, { recursive: true });
+  const destino = path.join(VIDEO_ASSETS_DIR, chave + ext);
+  if (!fs.existsSync(destino)) fs.writeFileSync(destino, buf);
+  return "video/" + chave + ext;
+}
+
+const FUNDOS_DE_CENA = ["navy", "darker", "blue", "foto"];
+
+// Traduz UMA cena do conceito para as props da composition. Pura de proposito (a unica I/O e a
+// copia da foto, injetavel pelo 2o argumento): e aqui que mora a regra de o que atravessa e o que
+// NAO atravessa — e o que nao atravessa e justamente o campo `visual`, a direcao de arte em prosa
+// que durante meses foi escrita pela IA, gravada no conceito e nunca desenhada.
+function cenaParaProps(s, encena) {
+  s = s || {};
+  const cena = {
+    type: s.type || "benefit",
+    text: s.text || "",
+    subtitle: String(s.subtitle != null ? s.subtitle : "") || "",
+  };
+  const numero = String(s.numero || s.destaque || "").trim();
+  if (numero) cena.numero = numero.slice(0, 14);
+  const rotulo = String(s.rotulo || "").trim();
+  if (rotulo) cena.rotulo = rotulo.slice(0, 34);
+  const itens = (Array.isArray(s.itens) ? s.itens : [])
+    .map((x) => String(x || "").trim()).filter(Boolean).slice(0, 3);
+  if (itens.length) cena.itens = itens;
+  const fundo = String(s.fundo || "").toLowerCase().trim();
+  if (FUNDOS_DE_CENA.indexOf(fundo) >= 0) cena.fundo = fundo;
+  const foto = (encena || encenaFoto)(s.foto);
+  if (foto) cena.foto = foto;
+  const dur = Number(s.duracao);
+  if (Number.isFinite(dur) && dur > 0) cena.duracao = Math.min(6, Math.max(2.5, dur));
+  return cena;
+}
+
 async function renderVideo(folder) {
   const loc = requireActive(folder);
   const concept = readJson(path.join(loc.path, "video", "concept.json")) || {};
   const scenes = Array.isArray(concept.scenes) && concept.scenes.length ? concept.scenes : [
-    { type: "hook", text: concept.hook || "4Selet.", visual: "" },
+    { type: "hook", text: concept.hook || "4Selet.", subtitle: "" },
   ];
+  limpaFotosAntigas();
   // Props para a composition BrandStory (src/BrandStory.tsx).
-  // IMPORTANTE: o campo `visual` do conceito e DIRECAO DE ARTE (ex.: "Fundo Selet
-  // Darker. Inter Black 88pt...") — NAO aparece na tela. A copy on-screen de cada
-  // cena e: headline = `text`; segunda linha (subtexto) = `subtitle` (voltada ao
-  // espectador). A composition exibe o prop `visual` como subtexto, entao passamos
-  // o `subtitle` ali — nunca a direcao de arte.
+  //
+  // O campo `visual` do conceito e DIRECAO DE ARTE em prosa ("Fundo Selet Darker. Inter Black
+  // 88pt...") e NAO aparece na tela — por isso ele nao entra aqui. Antes esse era o unico
+  // tratamento: tudo o que a IA descrevia de arte morria neste ponto, e o video saia sempre com a
+  // mesma cara. Agora o conceito tem campos ESTRUTURADOS que desenham de verdade — numero, rotulo,
+  // itens, fundo, foto e duracao — e eles atravessam daqui para a composition.
+  //
   // A chamada e a que a IA escreveu — nao uma inventada aqui. Quando o roteiro e institucional,
   // ela deixa `cta` vazio de proposito (e chega a anotar o porque no conceito); o padrao antigo
   // carimbava "Conhecer a plataforma" por cima disso, e nao havia como tirar pela tela, porque o
   // campo da peca estava vazio mesmo. O BrandStory ja trata o vazio: so desenha a pilula quando o
-  // texto nao e vazio.
+  // texto nao e vazio E ela nao repete a manchete da cena.
   const props = {
     concept: concept.concept || "",
     cta: typeof concept.cta === "string" ? concept.cta : "",
-    scenes: scenes.map((s) => ({ type: s.type || "benefit", text: s.text || "", visual: s.subtitle || "" })),
+    scenes: scenes.map((s) => cenaParaProps(s)),
   };
   const videoDir = path.join(loc.path, "video");
   fs.mkdirSync(videoDir, { recursive: true });
@@ -4153,8 +4224,34 @@ function sanitizeArtHtml(html) {
     s = s.replace(/<link\b[^>]*>/gi, (m) => /fonts\.googleapis\.com/i.test(m) ? m : ""); // so <link> de fonte
     if (s === before) break;
   }
-  return s;
+  return declaraUtf8(s);
 }
+
+// A DECLARAÇÃO DE CODIFICAÇÃO tem que sobreviver à limpeza.
+//
+// A limpeza acima remove TODA tag <meta> (é defesa legítima: meta refresh, truques de CSP). Só que
+// junto ia embora o `<meta charset>` — e sem ele o Chromium tem que ADIVINHAR a codificação
+// olhando o começo do arquivo. Numa arte que abre com 1,1 MB de fonte em base64 antes da primeira
+// letra, ele não acha pista nenhuma e assume windows-1252: o texto está perfeito em UTF-8 no disco
+// e sai "NinguÃ©m" desenhado no PNG. Medido em produção em 21/08/2026 na peça "A porta de entrada
+// do seu produto mudou de lugar" (document.characterSet === "windows-1252").
+//
+// Aqui é o ponto por onde passa TODO HTML que vem de fora — a arte do squad e o HTML que o editor
+// devolve. Reconstituir a declaração num lugar só evita a versão do defeito em que um caminho é
+// corrigido e o outro fica para trás.
+function declaraUtf8(html) {
+  const s = String(html || "");
+  if (/<meta[^>]+charset/i.test(s)) return s;
+  const meta = '<meta charset="utf-8">';
+  if (/<head\b[^>]*>/i.test(s)) return s.replace(/<head\b[^>]*>/i, (m) => m + meta);
+  if (/<html\b[^>]*>/i.test(s)) return s.replace(/<html\b[^>]*>/i, (m) => m + "<head>" + meta + "</head>");
+  return meta + s;
+}
+
+// Assinatura de acento quebrado: UTF-8 lido como latin-1 ("é" -> "Ã©", "ã" -> "Ã£", "ç" -> "Ã§").
+// Serve para o painel DIZER quando a arte chega assim de fora, em vez de publicar calado.
+const ACENTO_QUEBRADO = /Ã[-¿©¡£§µ¢´¨ª«»]|Ã‡|Ãƒ|â€œ|â€|â€™/;
+function temAcentoQuebrado(texto) { return ACENTO_QUEBRADO.test(String(texto || "")); }
 
 // Re-localiza os caminhos de asset (foto em /uploads/, logo em /assets|/brand-assets/) para o
 // file:// do AMBIENTE ATUAL. A arte editada pode carregar file:// ABSOLUTO de OUTRO ambiente
@@ -4376,6 +4473,11 @@ module.exports = {
   hashDoNome, TEMPLATES_ROTACAO,
   // Os 4 templates de arte e a tradução da superfície para eles: exportados para a bateria de
   // regressão conseguir montar UMA capa e olhar o HTML, sem escrever um carrossel inteiro em disco.
+  // O mapeamento cena-do-conceito -> props do Remotion, puro: a bateria mede o que atravessa e o
+  // que NAO atravessa (a direcao de arte em prosa) sem precisar renderizar um video.
+  cenaParaProps,
+  // A declaracao de codificacao e o detector de acento quebrado: exportados para a bateria.
+  declaraUtf8, temAcentoQuebrado,
   TEMPLATES, fundoNoTemplate, // pura (sem I/O): montagem HTML dos slides — reutilizavel/testavel
   storyCardsHtml, storyArchetype,   // idem, para o story
   renderStoryDeFeed, enquadraStory,  // arte 9:16: redesenhada (peca do painel) ou enquadrada (arte que chegou pronta)

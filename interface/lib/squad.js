@@ -725,7 +725,9 @@ function normalizar(payload) {
     // "descartar em silêncio" é justamente o que não pode acontecer com arte de terceiro.
     const htmlBruto = typeof obj.html === "string" ? obj.html.trim() : "";
     const html = htmlBruto && /<[a-z!]/i.test(htmlBruto)
-      ? (/<html[\s>]/i.test(htmlBruto) ? htmlBruto
+      // Documento COMPLETO passa por `garanteCharset`: era aqui que a arte com acento virava
+      // "NinguÃ©m" no PNG — o pedaço solto já era embrulhado com charset, o documento inteiro não.
+      ? (/<html[\s>]/i.test(htmlBruto) ? garanteCharset(htmlBruto)
         : "<!doctype html><html><head><meta charset=\"utf-8\"></head><body>" + htmlBruto + "</body></html>")
       : null;
     let buf = imagem ? dataUriParaBuffer(imagem) : null;
@@ -748,7 +750,7 @@ function normalizar(payload) {
       const imgSt = st.png || st.imagem || st.image || null;
       const brutoSt = typeof st.html === "string" ? st.html.trim() : "";
       const htmlSt = brutoSt && /<[a-z!]/i.test(brutoSt)
-        ? (/<html[\s>]/i.test(brutoSt) ? brutoSt
+        ? (/<html[\s>]/i.test(brutoSt) ? garanteCharset(brutoSt)
           : "<!doctype html><html><head><meta charset=\"utf-8\"></head><body>" + brutoSt + "</body></html>")
         : null;
       let bufSt = imgSt ? dataUriParaBuffer(imgSt) : null;
@@ -783,7 +785,7 @@ function normalizar(payload) {
     ? p.hashtags.map((h) => String(h).trim()).filter(Boolean).map((h) => (h[0] === "#" ? h : "#" + h))
     : [];
   const titulo = String(p.titulo || p.title || "").trim()
-    || legenda.split(/\n/)[0].slice(0, 70)
+    || tituloDaLegenda(legenda)
     || "Arte recebida do squad";
 
   return {
@@ -801,9 +803,87 @@ function hoje() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
+// Corta um texto sem partir palavra. O corte cego no caractere N é o que produziu, na peça real,
+// o título "A porta de entrada do seu produto mudou de lugar. Uma parte do seu púb".
+// GARANTE a declaração de codificação no HTML que vem de fora.
+//
+// O painel já embrulhava o PEDAÇO de HTML num documento com `<meta charset="utf-8">`. Só que
+// quando a entrega vem como documento COMPLETO (com a etiqueta <html>), ele era usado como estava
+// — e o do squad não declara charset nenhum: vai direto de `<html><head><style>`.
+//
+// Sem a declaração, o Chromium carrega o arquivo por file:// e assume Windows-1252. O texto está
+// certo no disco (UTF-8), mas o PNG sai com "NinguÃ©m" no lugar de "Ninguém". Aconteceu na peça
+// "A porta de entrada do seu produto mudou de lugar" (21/08/2026), na CAPA do carrossel — e atinge
+// qualquer entrega com acento, que em português é praticamente toda.
+function garanteCharset(html) {
+  const s = String(html || "");
+  if (/<meta[^>]+charset/i.test(s)) return s;
+  const meta = "<meta charset=\"utf-8\">";
+  if (/<head\b[^>]*>/i.test(s)) return s.replace(/<head\b[^>]*>/i, (m) => m + meta);
+  if (/<html\b[^>]*>/i.test(s)) return s.replace(/<html\b[^>]*>/i, (m) => m + "<head>" + meta + "</head>");
+  return meta + s;
+}
+
+// TIRA a instrução de arrastar quando a arte do CARROSSEL vira arte de STORY.
+//
+// "ARRASTE PARA O LADO →" é afordância de carrossel: no feed ela ensina o gesto certo, no Story
+// ela ensina um gesto que não existe — quem arrasta para o lado no Story PULA o conteúdo. É a
+// mesma família do contador "1/6" que saiu do vídeo: régua de um formato desenhada em outro.
+//
+// Só sai o elemento cujo texto INTEIRO é a instrução, e curto. Nunca mexe em manchete ou corpo:
+// "arraste" no meio de uma frase de verdade continua intacto.
+const AFORDANCIA = /^(arraste|arrasta|deslize|desliza|swipe|puxe)\b/i;
+function semAfordanciaDeCarrossel(html) {
+  return String(html || "").replace(
+    /<(div|span|p)\b[^>]*>((?:[^<]|&[a-z#0-9]+;)*)<\/\1>/gi,
+    (inteiro, tag, texto) => {
+      const limpo = texto
+        .replace(/&rarr;|&#8594;|&raquo;|&gt;/gi, "")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/[→»>]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!limpo || limpo.length > 40) return inteiro;
+      return AFORDANCIA.test(limpo) ? "" : inteiro;
+    }
+  );
+}
+
+function cortaNaPalavra(s, max, sufixo) {
+  const t = String(s || "").trim();
+  if (t.length <= max) return t;
+  const pedaco = t.slice(0, max);
+  const espaco = pedaco.lastIndexOf(" ");
+  // Só volta até o espaço se ainda sobrar texto suficiente; palavra única gigante corta mesmo.
+  const base = espaco > max * 0.55 ? pedaco.slice(0, espaco) : pedaco;
+  return base.replace(/[\s,;:.\-–—]+$/, "") + (sufixo == null ? "…" : sufixo);
+}
+
+// O NOME da peça a partir da legenda.
+//
+// Antes: `legenda.split("\n")[0].slice(0, 70)` — a primeira LINHA inteira (que costuma ter várias
+// frases) cortada no caractere 70, no meio da palavra. A primeira FRASE é quase sempre a manchete
+// que alguém escreveu para prender a atenção; é ela que vira o nome.
+const TITULO_MAX = 80;
+function tituloDaLegenda(legenda) {
+  const primeiraLinha = String(legenda || "").split(/\n/)[0].trim();
+  if (!primeiraLinha) return "";
+  const frase = (primeiraLinha.match(/^[^.!?]+[.!?]?/) || [primeiraLinha])[0].trim();
+  // Frase curta demais ("Olha só.") não serve de nome — nesse caso vale a linha.
+  const alvo = frase.length >= 12 && frase.length <= TITULO_MAX ? frase : primeiraLinha;
+  // O ponto final não acrescenta nada num título; "?" e "!" sim, então ficam.
+  return cortaNaPalavra(alvo, TITULO_MAX).replace(/\.$/, "");
+}
+
 function slugify(s) {
-  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+  const bruto = String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (bruto.length <= 40) return bruto;
+  // O corte em 40 vinha DEPOIS de tirar os "_" das pontas — e reintroduzia um: a peça real ficou
+  // com o identificador `a_porta_de_entrada_do_seu_produto_mudou_`, com o rabo solto.
+  const pedaco = bruto.slice(0, 40);
+  const corte = pedaco.lastIndexOf("_");
+  return (corte > 20 ? pedaco.slice(0, corte) : pedaco).replace(/_+$/, "");
 }
 // Nome livre: se já existe peça com esse identificador e data, tenta _2, _3… Sem isso,
 // reprocessar uma requisição bateria em "já existe" e não sairia do lugar.
@@ -974,6 +1054,23 @@ async function receberAgora(payload, opcoes) {
         else { falharam.push(n); log("Arte " + n + ": não consegui enquadrar em 9:16 (" + porque + ")."); }
       }
     }
+    // ACENTO QUEBRADO que já chegou assim. O painel passou a garantir a declaração de codificação
+    // no desenho (render.sanitizeArtHtml), então o defeito não nasce mais aqui. Mas se o texto
+    // chegar corrompido DA ORIGEM ("NinguÃ©m" já no que eles mandaram), desenhar bonito não
+    // conserta — e publicar calado é o pior desfecho. Então o painel diz.
+    try {
+      const suspeitos = [];
+      if (render.temAcentoQuebrado(p.legenda)) suspeitos.push("a legenda");
+      (p.cards || []).forEach((c, i) => {
+        if (render.temAcentoQuebrado(c && c.html)) suspeitos.push("a arte " + (i + 1));
+      });
+      if (suspeitos.length) {
+        avisos.push("O texto de " + suspeitos.slice(0, 4).join(", ") + " chegou com os acentos quebrados"
+          + " (\"NinguÃ©m\" no lugar de \"Ninguém\"). Isso veio assim da origem — o painel desenha o que"
+          + " recebe. Peça ao time do squad para gerar o conteúdo em UTF-8 antes de reenviar.");
+      }
+    } catch (e) { /* o aviso nunca pode derrubar a entrega */ }
+
     // Dito UMA vez por entrega, não uma vez por card: repetir dez vezes o mesmo recado transforma
     // aviso em ruído e ninguém lê nenhum.
     if (enquadradas) {
@@ -1143,6 +1240,9 @@ async function gravarDeHtml(render, content, folder, base, c, log, avisos, n, ob
 }
 
 module.exports = {
+  // O nome da peça a partir da legenda, e o corte que não parte palavra: exportados para a
+  // bateria medir com a legenda REAL que produziu o defeito.
+  tituloDaLegenda, cortaNaPalavra, slugify, garanteCharset, semAfordanciaDeCarrossel,
   gerarToken, salvarToken, removerToken, estado, confere, marcarRequisicao, tokenDaRequisicao, clientIp,
   registrar, registrarRecusa, atualizar, guardarPayload, lerPayload, listar, obter, podar,
   normalizar, receber, cancelar, refsExternas, dimensoesDoHtml,

@@ -112,6 +112,24 @@ router.get("/:folder", (req, res) => {
   if (!t) return res.status(404).json({ error: "task nao encontrada" });
   // #4 — carimba a primeira visualizacao (remove o selo "Novo" na biblioteca).
   try { content.markViewed(req.params.folder); } catch (e) { /* nao critico */ }
+  // Qual arte VAI AO AR em cada destino — respondido por quem publica, não pela tela.
+  //
+  // A prévia de publicação tinha a própria conta (a arte principal da peça) e a publicação tinha
+  // outra (`pickImages`, que no Story prefere story/story_N). Dois relógios para a mesma pergunta:
+  // numa peça de feed que JÁ tinha a versão 9:16, a janela mostrava o feed 4:5 cortado e ainda
+  // avisava que 228 px iam sumir de cada lado — enquanto o painel publicaria a 9:16 inteira.
+  // Falhar aqui não derruba a peça: sem o campo, a tela cai na regra antiga.
+  try {
+    const publish = require("../lib/publish");
+    const config = require("../lib/config");
+    const loc = content.findTask(req.params.folder);
+    if (loc) {
+      const rel = (p) => path.relative(loc.path, p).split(path.sep).join("/");
+      const mapa = {};
+      config.DESTINO_IDS.forEach((d) => { mapa[d] = publish.pickImages(loc.path, t.kind, d).map(rel); });
+      t.artes_por_destino = mapa;
+    }
+  } catch (e) { console.error("[artes_por_destino]", e && e.message); }
   res.json({ task: t });
 });
 

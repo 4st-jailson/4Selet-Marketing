@@ -165,9 +165,10 @@ Output Típico (salvo em `outputs/<task_name>_<date>/video/`):
 - **`concept.json`** — o arquivo canônico, com schema **plano** (`concept`, `hook`, `emotional_arc`, `visual_style`, `scenes[]`, `cta`, `notes`). É o que o painel e o pipeline leem.
 - `scenes.json` — **arquivo de SAÍDA**, gerado pelo render como props do Remotion. Não escrever à mão.
 - `video.mp4` — render da composition **`BrandStory`** (`src/BrandStory.tsx`; `AdVideo` é estática de referência), sempre **1080×1920 (9:16)**.
-- Na tela aparecem `scenes[].type` (eyebrow), `scenes[].text` (headline), o subtexto e — no card final — o **`cta`**, que vira a pílula azul (com `cta` vazio, nenhuma pílula aparece). `concept`, `hook`, `emotional_arc` e `visual_style` são metadados. Duração real = **nº de cenas × 3,0s** (90 frames por cena, sem sobreposição).
+- **Reformulado em ago/2026.** Cada cena desenha: `text` (headline), `subtitle`, `numero` + `rotulo` (o dado vira protagonista), `itens[]` (lista escalonada, máx. 3), `fundo` (`navy`/`darker`/`blue`, alterna sozinho sem o campo), `foto`/`foto_busca` (**foto de fundo com véu de leitura — teto de 2 por vídeo**, buscada no Pexels ao salvar) e `duracao` (2,5 s a 6 s). O **`cta`** vira a pílula azul do card final — e **some** quando a headline ou o subtexto já são a própria chamada. A **marca 4Selet** entra sozinha (discreta no alto, assinatura na cena final); antes o vídeo saía sem logo em cena nenhuma. **Duração = SOMA das `duracao`** (era nº de cenas × 3,0s cravado). `concept`, `hook`, `emotional_arc` e `visual_style` seguem metadados.
+- ⚠️ O campo `scenes[].visual` (direção de arte em prosa) **saiu do schema**: ele era escrito pela IA, gravado no conceito e NUNCA desenhado. Em conceito antigo ainda é lido como subtexto de reserva. Quem desenha são os campos acima.
 - ✅ Corrigido (ago/2026): o card final não carimba mais a frase-tag — usa `props.cta`. As cenas de exemplo do `src/Root.tsx` (o que o Remotion Studio abre e o CLI usa sem `--props`) fecham com *"Acesso por convite."*.
-- ⚠️ Aberto: pelo painel, o adaptador de props troca `cta` vazio por `"Conhecer a plataforma"` (`renderVideo` em `interface/lib/render.js`) — a peça sai com uma chamada que a IA não escreveu.
+- ✅ Fechado: o adaptador NÃO carimba mais `"Conhecer a plataforma"` sobre `cta` vazio — a chamada que vai à tela é a que a IA escreveu, e vazio significa sem pílula (conferido em `cenaParaProps`/`renderVideo`).
 - Schema detalhado e regras: `skills/video-ad-specialist/SKILL.md` (fonte de verdade).
 
 ---

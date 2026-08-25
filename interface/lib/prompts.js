@@ -147,7 +147,17 @@ const SCHEMAS = {
   "emotional_arc": "arco em 1 frase (ex.: tensao do problema -> alivio da solucao)",
   "visual_style": "estilo visual (editorial sobrio azul, tipografia, motion)",
   "scenes": [
-    { "type": "hook|product|benefit|cta", "text": "headline on-screen da cena (curta, <=6 palavras)", "subtitle": "1 linha curta de apoio VISIVEL ao espectador (opcional)", "visual": "DIRECAO DE ARTE (nao aparece na tela): fundo, cor, motion" }
+    {
+      "type": "hook|problem|product|benefit|cta",
+      "text": "manchete on-screen da cena (curta, <=6 palavras)",
+      "subtitle": "1 linha curta de apoio VISIVEL ao espectador (opcional)",
+      "numero": "o DADO que vira o protagonista da cena, sozinho e sem frase em volta (ex.: 7,9% | R$ 7.900 | 0% | 95% | D+10). Ate 14 caracteres. DEIXE FORA quando a cena nao gira em torno de um numero — numero em toda cena nao destaca nada.",
+      "rotulo": "rotulo curto em maiusculas que diz o que o numero significa (ex.: APROVACAO NO CARTAO). Ate 34 caracteres. So faz sentido junto de \\"numero\\".",
+      "itens": ["ate 3 itens CURTOS quando a cena e uma lista de condicoes (ex.: PIX em D+10). Entram um a um na tela. Deixe FORA se a cena nao e lista."],
+      "fundo": "navy | darker | blue — cor de fundo desta cena. Deixe FORA para o padrao (alterna sozinho).",
+      "foto_busca": "2 a 4 palavras em ingles para procurar a foto de fundo desta cena, quando a cena ganha com imagem real. NO MAXIMO 2 cenas do video inteiro; nunca na cena de numero (a foto briga com o dado).",
+      "duracao": "segundos de tela desta cena, de 2.5 a 6. Cena de 3 palavras pede 3; cena com lista de 3 itens pede 5 ou mais."
+    }
   ],
   "cta": "CTA aprovado",
   "notes": "1-2 frases de racional"
@@ -280,6 +290,28 @@ function generationPrompt(req) {
     lines.push("COMO USAR: sao dados do SETOR, para abrir a peca ou dar contexto — nunca dados sobre a 4Selet.");
     lines.push("Se usar um numero destes, CITE A FONTE junto (ex.: 'segundo a CNDL'): numero sem dono soa como promessa nossa.");
     lines.push("Nao e obrigatorio usar. Se nao couber na peca sem forcar, ignore.");
+    lines.push("");
+  }
+  // DIRECAO DE CENA. Durante muito tempo o modelo escreveu, cena a cena, uma direcao de arte em
+  // prosa ("bloco SVG raio 16px, '0%' em Inter Black 200px, logo light no canto") que era gravada
+  // no conceito e NUNCA desenhada — a composition so sabia texto. Os campos estruturados do schema
+  // desenham de verdade; entao o pedido aqui e o contrario do que era: descreva MENOS em prosa e
+  // PREENCHA os campos.
+  if (req.content_type === "video_idea") {
+    lines.push("DIRECAO DE CENA (o que vira imagem de verdade):");
+    lines.push("- 5 a 7 cenas. A soma das duracoes deve ficar entre 20 e 32 segundos.");
+    lines.push("- A cena de ABERTURA leva no maximo 3 segundos: no Reels os primeiros segundos decidem se a pessoa fica.");
+    lines.push("- NAO escreva direcao de arte em prosa (fonte, pixel, cor em hexadecimal, posicao do logo).");
+    lines.push("  Quem desenha sao os campos numero/rotulo/itens/fundo/foto_busca/duracao. Prosa ali nao vira imagem.");
+    lines.push("- Use \"numero\" so na cena cujo peso E o dado, e no maximo em 3 cenas. Numero em toda cena nao destaca nada.");
+    lines.push("- Quando a cena tem \"numero\", a manchete NAO repete esse numero: ele ja vai gigante na tela. "
+      + "Errado: numero \"R$ 7.900\" com manchete \"R$ 7.900 saindo da sua margem\". Certo: numero \"R$ 7.900\" "
+      + "com rotulo \"taxa sobre R$ 100 mil\" e manchete \"Saindo da sua margem.\".");
+    lines.push("- O \"subtitle\" NUNCA repete o CTA: a chamada ja aparece sozinha na cena final.");
+    lines.push("- \"itens\" e para cena de condicoes (2 ou 3 linhas curtas). NUNCA junto de \"numero\" na mesma cena.");
+    lines.push("- A ULTIMA cena e o fechamento. Se a manchete dela JA for a propria chamada, o painel nao repete a "
+      + "chamada embaixo — escreva a manchete pensando nisso (ex.: manchete \"Acesso por convite.\" com cta \"Falar com o time\").");
+    lines.push("- A marca 4Selet entra sozinha na peca (discreta no alto, e o logo na cena final). Nao peca logo em campo nenhum.");
     lines.push("");
   }
   lines.push("FORMATO DE SAIDA — responda APENAS com um objeto JSON valido, sem texto fora do JSON, neste schema:");
@@ -625,9 +657,9 @@ function simulate(req) {
         emotional_arc: "Curiosidade -> raciocinio concreto -> conviccao.",
         visual_style: "Editorial sobrio azul, Inter, motion contido, Selet Dots.",
         scenes: [
-          { type: "hook", text: p.headline, subtitle: p.subtext, visual: "numero/dado grande em fundo Navy" },
-          { type: "benefit", text: "Por que importa", subtitle: p.caption.split("\n")[0], visual: "destaque do dado" },
-          { type: "cta", text: "Acesso por convite.", subtitle: p.cta, visual: "logo light em Navy + CTA" },
+          { type: "hook", text: p.headline, subtitle: p.subtext, fundo: "darker", duracao: 3 },
+          { type: "benefit", text: "Por que importa", subtitle: p.caption.split("\n")[0], fundo: "navy", duracao: 4 },
+          { type: "cta", text: "Acesso por convite.", subtitle: p.cta, fundo: "navy", duracao: 4 },
         ],
         cta: p.cta,
         notes: p.notes + tag,
@@ -638,10 +670,10 @@ function simulate(req) {
         emotional_arc: "Tensao do custo invisivel -> clareza dos 4 numeros -> alivio da solucao.",
         visual_style: "Editorial sobrio azul, tipografia Inter, motion contido, Selet Dots.",
         scenes: [
-          { type: "hook", text: "7,9% nao e o seu problema.", subtitle: "O custo invisivel esta nos outros numeros.", visual: "numero grande em fundo Navy" },
-          { type: "benefit", text: "95% de aprovacao no cartao.", subtitle: "Mais vendas aprovadas, menos margem perdida.", visual: "comparativo de barras" },
-          { type: "benefit", text: "PIX em D+10. " + offer + ".", subtitle: "Previsibilidade real de recebimento.", visual: "linha do tempo de recebimento" },
-          { type: "cta", text: "Conhecer a plataforma.", subtitle: "Acesso por convite.", visual: "logo light em Navy + CTA" },
+          { type: "hook", text: "Nao e o seu problema.", subtitle: "E o que o mercado tira de cada venda sua.", numero: "7,9%", rotulo: "da sua margem", fundo: "darker", duracao: 3 },
+          { type: "benefit", text: "Aprovacao no cartao.", subtitle: "Mais vendas aprovadas, menos margem perdida.", numero: "95%", rotulo: "aprovacao", fundo: "navy", duracao: 4 },
+          { type: "product", text: "As condicoes, sem letra miuda.", itens: [offer, "PIX em D+10", "Cartao em D+30"], fundo: "blue", duracao: 5.5 },
+          { type: "cta", text: "Acesso por convite.", subtitle: "A plataforma e para quem opera com seriedade.", fundo: "navy", duracao: 4.5 },
         ],
         cta: "Conhecer a plataforma",
         notes: "Conceito 'Os 4 Numeros', schema de cenas." + tag,

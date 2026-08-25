@@ -46,3 +46,7 @@ interface/_mediatest/
 interface/public/propostas/
 interface/public/propostas.html
 interface/public/outputs/
+
+# Fotos encenadas para o render de video (copiadas de interface/public/uploads em cada render).
+# Sao derivadas e efemeras — o renderVideo recria e limpa sozinho.
+public/video/
