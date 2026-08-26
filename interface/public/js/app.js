@@ -1830,7 +1830,7 @@ async function approvedPieces(query) {
 
   const resolvidas = grupos.agendada.length + grupos.publicada.length;
   const blocoResolvidas = resolvidas ? `
-    <details class="ap-resolvidas">
+    <details class="ap-resolvidas" open>
       <summary>
         <span class="ap-res-tit">Já resolvidas</span>
         <span class="ap-res-sub">${[grupos.agendada.length ? plural(grupos.agendada.length, "agendada", "agendadas") : "",
@@ -1842,19 +1842,25 @@ async function approvedPieces(query) {
       </div>
     </details>` : "";
 
+  // A FOLHA: tudo o que é a biblioteca de aprovados mora dentro de um contêiner só. Sem ele, as
+  // abas, os filtros, os títulos de seção e a grade flutuavam soltos sobre o fundo da página —
+  // cada bloco parecia um pedaço separado, em vez de uma tela. O contêiner é a folha branca; os
+  // cartões, para não sumirem em cima dela, passam a ter o tom claro no lugar do branco.
   setView(`
-    ${approvedTabs("pieces")}
-    <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${plural(approved.length, "peça aprovada", "peças aprovadas")}</span></div>
-    ${faixa}
-    ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
-    ${kindsPresentes.length > 1 ? '<div class="filter-bar filter-kind">' + kindFilters + "</div>" : ""}
-    ${shown.length ? (
-      secao("nunca_aberta", "Nunca abertas", "chegaram e ninguém olhou", "warn")
-      + secao("vista", "Vistas, esperando publicação", "você já olhou; falta decidir quando vai ao ar", "")
-      + blocoResolvidas
-    ) : '<div class="empty">' + (fk === "all" && fc === "all"
-        ? 'Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.'
-        : "Nenhuma peça aprovada com esses filtros.") + "</div>"}`);
+    <div class="ap-folha">
+      ${approvedTabs("pieces")}
+      <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${plural(approved.length, "peça aprovada", "peças aprovadas")}</span></div>
+      ${faixa}
+      ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
+      ${kindsPresentes.length > 1 ? '<div class="filter-bar filter-kind">' + kindFilters + "</div>" : ""}
+      ${shown.length ? (
+        secao("nunca_aberta", "Nunca abertas", "chegaram e ninguém olhou", "warn")
+        + secao("vista", "Vistas, esperando publicação", "você já olhou; falta decidir quando vai ao ar", "")
+        + blocoResolvidas
+      ) : '<div class="empty">' + (fk === "all" && fc === "all"
+          ? 'Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.'
+          : "Nenhuma peça aprovada com esses filtros.") + "</div>"}
+    </div>`);
 
   const vai = (par, v) => { location.hash = "#/approved?" + par + "=" + encodeURIComponent(v) + (par === "kind" && fc !== "all" ? "&campaign=" + encodeURIComponent(fc) : "") + (par === "campaign" && fk !== "all" ? "&kind=" + encodeURIComponent(fk) : ""); };
   $$(".filter-bar .chip-filter[data-camp]").forEach((b) => { b.onclick = () => vai("campaign", b.dataset.camp); });

@@ -888,6 +888,22 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .cc-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .kind-group { margin-bottom: var(--s7); }
 
+/* A FOLHA de Aprovados: um contêiner só para a tela inteira, em vez de blocos soltos sobre o
+   fundo da página. Como a folha é branca, o cartão branco sumiria em cima dela — dentro daqui
+   ele passa a usar o tom claro e a borda firme, invertendo a relação de fora (onde o cartão é
+   que é branco). O mesmo vale para a faixa de triagem e para o bloco recolhido. */
+.ap-folha {
+  background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--r-lg);
+  padding: var(--s6); box-shadow: var(--shadow-sm);
+}
+.ap-folha .content-card { background: var(--surface-2); border-color: var(--border); }
+.ap-folha .content-card:hover { background: var(--surface); border-color: var(--accent); }
+.ap-folha .triagem { background: var(--surface-2); }
+.ap-folha .ap-resolvidas { background: transparent; border-color: var(--border); }
+.ap-folha .kind-group:last-child { margin-bottom: 0; }
+.ap-folha > .seg-group { margin-bottom: var(--s5); }
+@media (max-width: 640px) { .ap-folha { padding: var(--s4); border-radius: var(--r); } }
+
 /* ---- Aprovados por ESTADO DE ATENÇÃO ----
    A faixa de triagem é a única coisa acima da dobra que responde "o que precisa de mim agora".
    Âmbar, não vermelho: é fila esperando, não erro. */
