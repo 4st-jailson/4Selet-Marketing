@@ -231,7 +231,7 @@ try {
 if (target === "approved" || target === "rejected" || src.zone === "approved") {
   const refreshScript = path.resolve("scripts", "refresh_index.js");
   if (fs.existsSync(refreshScript)) {
-    const r = spawnSync(process.execPath, [refreshScript], { stdio: "inherit" });
+    const r = spawnSync(process.execPath, [refreshScript], { stdio: "inherit", windowsHide: true });
     if (r.status !== 0) warn("refresh_index.js retornou exit " + r.status + " (nao fatal)");
   } else {
     warn("scripts/refresh_index.js nao encontrado — INDEX nao atualizado");

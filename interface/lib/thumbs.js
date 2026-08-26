@@ -56,7 +56,7 @@ function proximo() {
 function gera(abs, destino) {
   return new Promise((resolve) => {
     const tmp = destino + ".parcial";
-    const p = spawn(process.execPath, [SCRIPT, abs, tmp, String(LARGURA)], { cwd: RAIZ, stdio: ["ignore", "pipe", "pipe"] });
+    const p = spawn(process.execPath, [SCRIPT, abs, tmp, String(LARGURA)], { cwd: RAIZ, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let erro = "";
     let encerrado = false;
     const relogio = setTimeout(() => { encerrado = true; try { p.kill(); } catch (e) {} }, PRAZO_MS);

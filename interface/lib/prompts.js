@@ -17,6 +17,7 @@ const GOVERNANCE = `REGRAS DURAS (brand governance 4Selet) — cumpra TODAS:
 - NUNCA use a frase-tag "Para quem sabe que e Selet." como rodape, fecho ou assinatura automatica de peca (headline, body de slide, legenda ou cena de video). NAO assine as pecas com ela. So use uma frase-tag da marca se o brief pedir explicitamente.
 - NUNCA INVENTE um caminho de arquivo no campo "image". Voce NAO enxerga o acervo de fotos e NAO navega em sites. So preencha "image" com um caminho que apareca LITERALMENTE nesta conversa (uma foto que a pessoa anexou ou escolheu). Se o pedido descreve uma imagem que nao esta aqui — um print do dashboard, a captura de uma materia, a tela do checkout — deixe "image" FORA do JSON e declare em "limitacoes" o que era para estar ali. Escrever "/uploads/print-dashboard.jpg" na esperanca de que exista faz a peca sair sem imagem e sem ninguem saber. O painel sabe capturar sites e receber arquivos: quem resolve isso e a pessoa, na tela, depois — o seu trabalho e AVISAR, nao adivinhar.
 - NUNCA substitua em SILENCIO um elemento que o pedido descreveu. Se o pedido pede algo que o formato nao entrega (um print de tela que ninguem anexou, um video dentro de um carrossel, um QR code, uma foto de pessoa real especifica), NAO troque por outra coisa parecida calado: entregue o melhor possivel E declare o que faltou no campo "limitacoes". Trocar calado e o pior desfecho — quem pediu so descobre olhando a arte pronta.
+- DIRECAO DE ARTE EM PROSA VOCE NAO CUMPRE — e tem que DIZER. Cor por codigo ("#FF6600", "rgb(...)"), nome de familia tipografica ("em Manrope", "titulo em Montserrat"), posicao de elemento ("logo no canto inferior direito", "texto alinhado a esquerda") e moldura de aparelho ("dentro de um iPhone", "mockup de notebook") NAO existem como campo neste JSON: quem escolhe isso e a pessoa, na tela, antes ou depois de gerar. Voce escreve TEXTO. Entao nao ignore o pedido calado e nao finja no texto que atendeu — declare cada um em "limitacoes" com o trecho que a pessoa escreveu. Pedido engolido em silencio faz ela achar que escolheu uma coisa que nunca aconteceu.
 - Dados numericos sobre a 4Selet (taxa, prazo, % de aprovacao, valores) vem EXCLUSIVAMENTE dos knowledge files — NUNCA de pesquisa de mercado. Pesquisa externa jamais sobrescreve um numero oficial da marca nem introduz nome/dado de concorrente na peca.
 - NUMERO QUE A PESSOA CITOU NO PEDIDO TEM QUE APARECER NA PECA, COM O MESMO VALOR. Se o pedido diz "PIX em D+10", "95% de aprovacao" ou "R$ 1,99", esse valor precisa estar ESCRITO em algum slide ou na legenda — nao vale falar do assunto sem o numero ("prazo curto", "alta aprovacao", "custo baixo"). Numero e o que separa a peca da 4Selet de um anuncio generico.
 - E QUANDO O SLIDE E SOBRE UM NUMERO, SEJA ESPECIFICO. Layout de numero (numero, stat_grid, medidor) exige o VALOR e o ROTULO do que ele mede: "95%" sozinho nao diz nada; "95% de aprovacao no cartao" diz. Nunca escreva um numero sem dizer do que ele e.`;
@@ -416,6 +417,16 @@ function interpretSystem() {
     "  o pedido se contradisser (ex.: pedir video e post de texto na mesma frase), use confianca",
     "  \"baixa\" e diga em `porque` qual e a ambiguidade. Nunca use \"alta\" quando o texto admite",
     "  mais de uma leitura razoavel.",
+    // A leitura preenche QUATRO campos. Cor, aparelho, posicao de elemento e fonte que o motor nao
+    // tem nao entram em campo nenhum e sumiam sem uma palavra — a pessoa lia "preenchi 3 campos" e
+    // supunha que o resto do briefing tinha entrado junto. O painel reconhece boa parte disso por
+    // conta propria (expressao regular), mas nao alcanca o pedido escrito por extenso ("num azul
+    // petroleo bem escuro"). Aqui voce SO APONTA o trecho: quem decide o que fazer com ele e o
+    // painel, e a frase que a pessoa le e escrita por ele, nao por voce.
+    "- `direcao_de_arte`: aponte os trechos que pedem algo sobre o DESENHO da peca — cor, tipografia,",
+    "  posicao de elemento, aparelho/mockup, imagem. NAO julgue se da para fazer e NAO explique.",
+    "  COPIE o trecho LITERALMENTE do texto, palavra por palavra. Trecho que voce nao conseguir",
+    "  copiar literal NAO entra na lista — inventar trecho aqui e pior do que deixar de fora.",
     "- Portugues do Brasil.",
   ].join("\n");
 }
@@ -458,7 +469,8 @@ function interpretPrompt(req) {
   "cta_ausente": false,
   "confianca": { "content_type": "alta|media|baixa", "pillar": "alta|media|baixa", "cta": "alta|media|baixa" },
   "porque": { "content_type": "o trecho do texto que sustenta", "pillar": "o trecho", "cta": "o trecho" },
-  "faltou": ["nome do campo que o texto nao deixa claro"]
+  "faltou": ["nome do campo que o texto nao deixa claro"],
+  "direcao_de_arte": [{ "categoria": "cor|tipografia|posicao|aparelho|imagem", "trecho": "COPIE literal do texto acima" }]
 }`,
   ].join("\n");
 }

@@ -294,7 +294,10 @@ function plural(n, sing, plur) { return n + " " + (n === 1 ? sing : plur); }
 function platformLabel(p) { const m = { x: "Threads/X", threads: "Threads/X", instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok", youtube: "YouTube", whatsapp: "WhatsApp", email: "E-mail" }; return m[String(p || "").toLowerCase()] || p; }
 
 /* ---- rótulos PT (status, zona) ---- */
-const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", published: "Publicado", rejected: "Rejeitado", active: "Ativa", paused: "Pausada", done: "Concluída" };
+// "problema" é o estado da peça cujo arquivo de controle (status.json) não abre. Ela passou a
+// APARECER na biblioteca em vez de sumir calada — e sem esta linha o selo dela sairia com a
+// palavra crua "problema", que não diz nada a quem está olhando a lista.
+const STATUS_LABELS = { draft: "Rascunho", in_review: "Em revisão", approved: "Aprovado", published: "Publicado", rejected: "Rejeitado", problema: "Precisa de atenção", active: "Ativa", paused: "Pausada", done: "Concluída" };
 const ZONE_LABELS = { active: "Em produção", approved: "Aprovado", archive: "Arquivado", archived: "Arquivado", rejected: "Rejeitado" };
 function statusLabel(s) { return STATUS_LABELS[s] || s || "—"; }
 function statusBadge(s) { return '<span class="badge ' + esc(s) + '">' + esc(statusLabel(s)) + "</span>"; }
@@ -1159,7 +1162,20 @@ async function viewDashboard() {
   const mixHtml = mixKinds.length
     ? '<div class="mix">' + mixKinds.map((k) => {
         const n = byKind[k], pct = Math.round((n / maxKind) * 100);
-        return `<div class="mix-row"><span class="mix-lbl">${esc(kindLabel(k))}</span><span class="mix-bar"><span class="mix-fill" style="width:${pct}%"></span></span><span class="mix-n">${n}</span></div>`;
+        // Cada linha leva para a biblioteca já filtrada por este tipo. A barra era informação
+        // morta: dava para ver que existem 10 carrosséis e não havia como chegar neles.
+        // ATENÇÃO ao número: o mix conta TODAS as zonas (inclusive aprovadas), e a biblioteca
+        // mostra só o acervo ativo — então o destino pode abrir com menos peças que o número da
+        // barra. Por isso o título do link diz quantas estão no acervo, em vez de deixar a
+        // pessoa contar e achar que perdeu peça.
+        const noAcervoDoTipo = tasks.filter((t) => t.kind === k && t.zone !== "approved" && t.status !== "rejected").length;
+        const dica = noAcervoDoTipo === n
+          ? "Ver as " + n + " peças de " + kindLabel(k)
+          : noAcervoDoTipo === 0
+            ? "Ver " + kindLabel(k) + " na biblioteca — " + (n === 1 ? "a única já saiu do acervo (está em Aprovados)" : "as " + n + " já saíram do acervo (estão em Aprovados)")
+            : "Ver " + kindLabel(k) + " na biblioteca — " + noAcervoDoTipo + " de " + n
+              + (noAcervoDoTipo === 1 ? " está" : " estão") + " no acervo; o resto já foi aprovado";
+        return `<a class="mix-row" href="#/content?kind=${encodeURIComponent(k)}" title="${esc(dica)}"><span class="mix-lbl">${esc(kindLabel(k))}</span><span class="mix-bar"><span class="mix-fill" style="width:${pct}%"></span></span><span class="mix-n">${n}</span></a>`;
       }).join("") + "</div>"
     : '<div class="empty">Sem peças ainda.</div>';
   const campsHtml = activeCamps.length
@@ -1195,6 +1211,10 @@ async function viewDashboard() {
     + '<span class="stat-ico">' + ico + "</span>"
     + '<div class="stat-body"><span class="num">' + num + '</span><span class="lbl">' + rot + "</span></div></a>";
   const ICO_GRADE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>';
+  // O "+" da faixa de ações era um GLIFO de texto no meio de três SVGs: medido, saía 14x17
+  // contra 14x14 dos vizinhos, e por ser mais alto desalinhava a fila inteira. Mesmo traço e
+  // mesma espessura dos outros três.
+  const ICO_MAIS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
   const ICO_RELOGIO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>';
   const ICO_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg>';
   const ICO_AVIAO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>';
@@ -1222,7 +1242,7 @@ async function viewDashboard() {
         ${stat("sky", "#/campaigns", "Ver campanhas", CAMP_SVG, campaigns.length, "Campanhas <em>" + active + " ativas</em>")}
       </div>
       <div class="dash-grade dash-acoes">
-        ${acao("#/create", "＋", "Criar conteúdo", "com IA, no padrão da marca")}
+        ${acao("#/create", ICO_MAIS, "Criar conteúdo", "com IA, no padrão da marca")}
         ${acao("#/content?status=in_review", ICO_RELOGIO, "Revisar", "abrir a fila de aprovação")}
         ${acao("#/publicacoes", ICO_AVIAO, "Publicar ou agendar", "feed ou Story · e o histórico")}
         ${acao("#/campaigns", CAMP_SVG, "Nova campanha", "ângulo, pilar e mensagens")}
@@ -1248,7 +1268,11 @@ async function viewDashboard() {
         <div class="section-head"><h2>Publicações</h2><a class="muted-link" href="#/publicacoes">histórico →</a></div>
         <div class="list">
           <a class="list-row" href="#/publicacoes"><span class="lr-ico" aria-hidden="true">${ICO_AVIAO}</span>
-            <div class="lr-main"><div class="lr-title">${ultimaPub ? "Última " + esc(haQuantoTempo(ultimaPub)) + (linhaUltima && DEST_ROT[linhaUltima.destino] ? " " + DEST_ROT[linhaUltima.destino] : "") : "Nenhuma ainda"}</div>
+            ${/* "Última hoje no Story" era telegrama: "Última" sem substantivo, e a hora colada no
+                 destino sem pausa. Com o substantivo e a vírgula vira frase — "Última publicação
+                 hoje, no Story" — e continua lendo bem em todos os casos que haQuantoTempo produz
+                 ("ontem", "há 3 dias", "há 2 semanas"). */""}
+            <div class="lr-main"><div class="lr-title">${ultimaPub ? "Última publicação " + esc(haQuantoTempo(ultimaPub)) + (linhaUltima && DEST_ROT[linhaUltima.destino] ? ", " + DEST_ROT[linhaUltima.destino] : "") : "Nenhuma publicação ainda"}</div>
             <div class="lr-meta">${plural(noMes, "publicação", "publicações")} em 30 dias</div></div></a>
           <a class="list-row" href="#/publicacoes?tab=agendados"><span class="lr-ico" aria-hidden="true">${ICO_RELOGIO}</span>
             <div class="lr-main"><div class="lr-title">${pendentes.length ? plural(pendentes.length, "agendada", "agendadas") : "Nada agendado"}</div>
@@ -1540,7 +1564,14 @@ function avisoDeOrigem(origem) {
   </div>`;
 }
 
-function taskCard(t) {
+// opts.aviso: mostra, dentro do cartão, o aviso que veio gravado na peça (ex.: chegou sem a
+// versão vertical, chegou só como imagem). Usado na seção "Nunca abertas" de Aprovados, onde a
+// pessoa decide o que abrir primeiro — em outros lugares o aviso continua dentro da peça.
+// ATENÇÃO: em vários pontos isto é chamado como `.map(taskCard)`, e aí o 2º argumento é o ÍNDICE
+// do array. Por isso o teste é por objeto, não por presença.
+function taskCard(t, opts) {
+  const mostrarAviso = !!(opts && typeof opts === "object" && opts.aviso);
+  const avisos = mostrarAviso ? ((t.origem && t.origem.avisos) || []) : [];
   const hasThumb = t.thumb && t.thumb.rel;
   const previewable = hasThumb && (t.thumb.type === "video" || t.thumb.type === "image" || /\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i.test(t.thumb.rel));
   const zoomBtn = previewable
@@ -1556,6 +1587,7 @@ function taskCard(t) {
       <div class="cc-title">${esc(displayName(t))}</div>
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}</div>
       ${tagsHtml}
+      ${avisos.length ? '<div class="cc-aviso" title="' + esc(avisos.join("\n\n")) + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg><span>' + esc(resumoDoAviso(avisos[0])) + (avisos.length > 1 ? " (+" + (avisos.length - 1) + ")" : "") + "</span></div>" : ""}
       <div class="cc-foot">${statusBadge(effStatus(t.status, t.published_at))}${origemTag(t.origem)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
     </div></a>`;
 }
@@ -1695,32 +1727,142 @@ function approvedTabs(active) {
   return `<div class="seg-group mb">${tab("pieces", "Peças aprovadas", "#/approved")}${tab("collections", "Coleções", "#/approved?view=collections")}</div>`;
 }
 
+// APROVADOS, organizado por ESTADO DE ATENÇÃO — não por tipo.
+//
+// Por que mudou: agrupado por tipo, o que chegou ontem e ninguém viu ficava misturado com o que
+// já foi resolvido semanas atrás, e nada na tela dizia o que precisava de decisão. Medido em
+// produção no dia da mudança: das 22 peças aprovadas, 16 nunca tinham sido abertas. Com a
+// integração do squad entregando peça sem ninguém pedir, uma arte passar despercebida deixou de
+// ser hipótese.
+//
+// O sinal que sustenta isto JÁ EXISTIA e não era usado: `first_viewed_at`, gravado quando a peça
+// é aberta pela primeira vez. Peça sem essa data é peça que ninguém olhou — vale igual para o que
+// nasce aqui dentro e para o que chega de fora.
+//
+// DE PROPÓSITO NÃO EXISTE SEÇÃO DO SQUAD: a origem continua sendo o mesmo selo discreto no
+// cartão. Quem organiza a tela é o estado da peça; a integração é complemento, não eixo.
+function estadoDaAprovada(t, agendadas) {
+  if (t.published_at) return "publicada";
+  if (agendadas.has(t.folder)) return "agendada";
+  return t.first_viewed_at ? "vista" : "nunca_aberta";
+}
+function avisosDaPeca(t) {
+  const a = (t && t.origem && t.origem.avisos) || [];
+  return Array.isArray(a) ? a : [];
+}
+// O aviso gravado na peça é um parágrafo — ele explica a causa E o que fazer, e está certo assim
+// DENTRO da peça. No cartão da grade ele precisa ser só o MOTIVO: despejar o parágrafo inteiro
+// fazia um cartão ficar três vezes mais alto que o vizinho e desmontava a grade. Fica a primeira
+// frase, com teto; o texto completo continua ao passar o mouse e dentro da peça.
+function resumoDoAviso(txt) {
+  const s = String(txt || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  const fim = s.search(/[.:]\s/);
+  const frase = fim > 20 ? s.slice(0, fim) : s;
+  return frase.length > 96 ? frase.slice(0, 95).replace(/[\s,;]+\S*$/, "") + "…" : frase;
+}
 async function approvedPieces(query) {
-  const [{ tasks }, { campaigns }] = await Promise.all([API.content(), API.campaigns()]);
+  const [{ tasks }, { campaigns }, agenda] = await Promise.all([
+    API.content(), API.campaigns(),
+    // Agendada não é "esperando decisão": já tem hora marcada. Sem esta lista ela cairia em
+    // "vista, esperando publicação" e apareceria como pendência que não é. Degrada sozinha.
+    API.listSchedule().catch(() => ({ items: [] })),
+  ]);
   setCampMap(campaigns);
   const approved = tasks.filter((t) => t.zone === "approved" || t.status === "approved");
+  const agendadas = new Set(((agenda && agenda.items) || []).filter((x) => x.status === "pending").map((x) => x.folder));
+
   const fc = (query && query.campaign) || "all";
-  const shown = fc === "all" ? approved : approved.filter((t) => (t.campaign_id || "") === fc);
+  const fk = (query && query.kind) || "all";
+  const porCampanha = fc === "all" ? approved : approved.filter((t) => (t.campaign_id || "") === fc);
+  const shown = fk === "all" ? porCampanha : porCampanha.filter((t) => t.kind === fk);
+
+  // O TIPO virou filtro. Era seção; virar filtro é o que libera a seção para dizer o estado.
+  const kindsPresentes = Array.from(new Set(porCampanha.map((t) => t.kind).filter(Boolean)));
+  const kindFilters = ['<button class="chip-filter ' + (fk === "all" ? "on" : "") + '" data-kind="all">Todos os tipos</button>']
+    .concat(kindsPresentes.map((k) => {
+      const n = porCampanha.filter((t) => t.kind === k).length;
+      return `<button class="chip-filter ${k === fk ? "on" : ""}" data-kind="${esc(k)}">${esc(kindLabel(k))} <b>${n}</b></button>`;
+    })).join("");
   const campSet = Array.from(new Set(approved.map((t) => t.campaign_id).filter(Boolean)));
   const campFilters = ['<button class="chip-filter ' + (fc === "all" ? "on" : "") + '" data-camp="all">Todas</button>']
     .concat(campSet.map((id) => {
       const c = campaigns.find((x) => x.id === id);
       return `<button class="chip-filter ${id === fc ? "on" : ""}" data-camp="${esc(id)}">${esc(c ? c.name : id)}</button>`;
     })).join("");
-  const byKind = {};
-  shown.forEach((t) => { (byKind[t.kind] = byKind[t.kind] || []).push(t); });
-  const order = Object.keys(State.meta.kind_labels || {}).filter((k) => byKind[k]);
-  const groups = order.map((k) => `
-    <div class="kind-group">
-      <div class="section-head"><h2>${esc(kindLabel(k))} <span class="dim">(${byKind[k].length})</span></h2></div>
-      <div class="content-grid">${byKind[k].map(taskCard).join("")}</div>
-    </div>`).join("");
+
+  const grupos = { nunca_aberta: [], vista: [], agendada: [], publicada: [] };
+  shown.forEach((t) => grupos[estadoDaAprovada(t, agendadas)].push(t));
+  const recente = (a, b) => String(b.created_at || b.task_date || "").localeCompare(String(a.created_at || a.task_date || ""));
+  Object.keys(grupos).forEach((k) => grupos[k].sort(recente));
+
+  // A idade da mais antiga que ninguém abriu é o número que dá urgência à faixa.
+  const idades = grupos.nunca_aberta.map((t) => diasDesde(t.created_at || t.task_date)).filter((d) => d >= 0);
+  const maisAntiga = idades.length ? Math.max.apply(null, idades) : 0;
+  const comAviso = grupos.nunca_aberta.filter((t) => avisosDaPeca(t).length).length;
+
+  const faixa = grupos.nunca_aberta.length ? `
+    <div class="triagem">
+      <div class="triagem-txt">
+        <div class="triagem-tit">${grupos.nunca_aberta.length === 1
+          ? "1 peça chegou e ninguém abriu"
+          : grupos.nunca_aberta.length + " peças chegaram e ninguém abriu"}</div>
+        <div class="triagem-sub">${maisAntiga >= 1 ? "A mais antiga está parada há " + plural(maisAntiga, "dia", "dias") + "." : "Todas chegaram hoje."}${comAviso ? " " + (comAviso === 1 ? "Uma delas tem um aviso na peça." : comAviso + " delas têm aviso na peça.") : ""}</div>
+      </div>
+      <div class="triagem-acao">
+        ${maisAntiga >= 1 ? '<span class="badge in_review">' + plural(maisAntiga, "dia parada", "dias parada") + "</span>" : ""}
+        <button class="btn btn-primary" id="ap-revisar">Revisar ${grupos.nunca_aberta.length === 1 ? "a peça" : "as " + grupos.nunca_aberta.length}</button>
+      </div>
+    </div>` : "";
+
+  const secao = (chave, titulo, explica, classe) => {
+    const lista = grupos[chave];
+    if (!lista.length) return "";
+    return `<div class="kind-group" id="ap-${chave}">
+      <div class="ap-head">
+        <h2>${esc(titulo)}</h2>
+        <span class="ap-conta ${classe || ""}">${lista.length}</span>
+        <span class="ap-explica">${esc(explica)}</span>
+      </div>
+      <div class="content-grid">${lista.map((t) => taskCard(t, { aviso: chave === "nunca_aberta" })).join("")}</div>
+    </div>`;
+  };
+
+  const resolvidas = grupos.agendada.length + grupos.publicada.length;
+  const blocoResolvidas = resolvidas ? `
+    <details class="ap-resolvidas">
+      <summary>
+        <span class="ap-res-tit">Já resolvidas</span>
+        <span class="ap-res-sub">${[grupos.agendada.length ? plural(grupos.agendada.length, "agendada", "agendadas") : "",
+          grupos.publicada.length ? plural(grupos.publicada.length, "publicada", "publicadas") : ""].filter(Boolean).join(" · ")} — nada aqui espera você</span>
+      </summary>
+      <div class="ap-res-corpo">
+        ${secao("agendada", "Agendadas", "já têm hora marcada", "")}
+        ${secao("publicada", "Publicadas", "já foram ao ar", "ok")}
+      </div>
+    </details>` : "";
+
   setView(`
     ${approvedTabs("pieces")}
     <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${plural(approved.length, "peça aprovada", "peças aprovadas")}</span></div>
+    ${faixa}
     ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
-    ${shown.length ? groups : '<div class="empty">Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.</div>'}`);
-  $$(".filter-bar .chip-filter").forEach((b) => { b.onclick = () => { location.hash = "#/approved?campaign=" + encodeURIComponent(b.dataset.camp); }; });
+    ${kindsPresentes.length > 1 ? '<div class="filter-bar filter-kind">' + kindFilters + "</div>" : ""}
+    ${shown.length ? (
+      secao("nunca_aberta", "Nunca abertas", "chegaram e ninguém olhou", "warn")
+      + secao("vista", "Vistas, esperando publicação", "você já olhou; falta decidir quando vai ao ar", "")
+      + blocoResolvidas
+    ) : '<div class="empty">' + (fk === "all" && fc === "all"
+        ? 'Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.'
+        : "Nenhuma peça aprovada com esses filtros.") + "</div>"}`);
+
+  const vai = (par, v) => { location.hash = "#/approved?" + par + "=" + encodeURIComponent(v) + (par === "kind" && fc !== "all" ? "&campaign=" + encodeURIComponent(fc) : "") + (par === "campaign" && fk !== "all" ? "&kind=" + encodeURIComponent(fk) : ""); };
+  $$(".filter-bar .chip-filter[data-camp]").forEach((b) => { b.onclick = () => vai("campaign", b.dataset.camp); });
+  $$(".filter-bar .chip-filter[data-kind]").forEach((b) => { b.onclick = () => vai("kind", b.dataset.kind); });
+  if ($("#ap-revisar")) $("#ap-revisar").onclick = () => {
+    const alvo = $("#ap-nunca_aberta");
+    if (alvo) alvo.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 }
 
 /* =====================================================================
@@ -2092,9 +2234,16 @@ function carouselStrip(folder, task) {
 
 // Regera UM slide do carrossel com a IA (mantém os outros). Só na zona active (peça reaberta/rascunho).
 async function regenSlide(folder, task, n) {
+  // Mesmo estrago do "Gerar arte final", só que num slide: regerar redesenha o slide pelo modelo e
+  // leva junto a montagem feita à mão NELE. O aviso vive aqui dentro para o defeito não voltar
+  // pelo caminho vizinho — e só aparece quando aquele slide específico foi montado à mão.
+  const montado = await artesMontadasAMao(folder, task, editorTargets(task).filter((t) => t.label === "Slide " + n));
+  const aviso = montado.length
+    ? "Atenção: este slide foi montado à mão no editor. Regerar desenha ele de novo pelo modelo, e o que você moveu, escreveu ou acrescentou ali não volta. "
+    : "";
   const r = await uiModal({
     title: "Regerar slide " + n,
-    message: "A IA refaz só este slide, mantendo os outros iguais. Diga o que mudar — ex.: “deixar o fundo claro”, “encurtar o título”, “trocar o número”, “mais direto ao ponto”, “trocar o ícone”. Deixe em branco para uma versão nova livre.",
+    message: aviso + "A IA refaz só este slide, mantendo os outros iguais. Diga o que mudar — ex.: “deixar o fundo claro”, “encurtar o título”, “trocar o número”, “mais direto ao ponto”, “trocar o ícone”. Deixe em branco para uma versão nova livre.",
     fields: [{ name: "instruction", label: "O que mudar? (opcional)", type: "textarea", placeholder: "ex.: fundo claro · título mais curto · número maior" }],
     confirmText: "Regerar slide",
   });
@@ -2552,17 +2701,49 @@ const MARCA_DAGUA_OPCOES = [
 // campanha específica, uma referência que o Hugo trouxe). Sair da identidade NÃO é escondido nem
 // bloqueado: o painel avisa e pergunta antes. ESPELHO de FAMILIAS em lib/render.js — mexeu lá,
 // mexe aqui, senão a caixa oferece uma fonte que o render não conhece.
+// O terceiro item de cada linha é o que a CAIXA DE FONTE DO EDITOR precisa: o `font-family` que
+// entra no HTML da arte e o nome da família no Google Fonts. Ele mora aqui, e não numa lista
+// separada do editor, porque a lista separada era exatamente o defeito: o editor oferecia Archivo
+// Black, Playfair, Bebas Neue e Georgia — e Archivo Black e Georgia o motor de arte nem conhece.
+// A arte só saía com elas porque o editor puxava a fonte do Google por conta própria; regerar a
+// peça devolvia outra fonte, e nada disso passava pelo aviso de identidade. Quem lê `[v, t]`
+// (montaOpcoes, nomeDaFamilia) ignora o terceiro item, então nada mais muda.
 const TIPOGRAFIA_OPCOES = [
-  ["", "Inter (identidade 4Selet)"],
-  ["playfair", "Playfair Display"],
-  ["dmserif", "DM Serif Display"],
-  ["montserrat", "Montserrat"],
-  ["poppins", "Poppins"],
-  ["oswald", "Oswald"],
-  ["bebas", "Bebas Neue"],
-  ["spacegrotesk", "Space Grotesk"],
+  ["", "Inter (identidade 4Selet)", { nome: "Inter", css: "'Inter',sans-serif", google: "Inter:wght@400;600;700;800;900", marca: true }],
+  ["playfair", "Playfair Display", { nome: "Playfair Display", css: "'Playfair Display',serif", google: "Playfair+Display:wght@400;600;700;800;900" }],
+  ["dmserif", "DM Serif Display", { nome: "DM Serif Display", css: "'DM Serif Display',serif", google: "DM+Serif+Display" }],
+  ["montserrat", "Montserrat", { nome: "Montserrat", css: "'Montserrat',sans-serif", google: "Montserrat:wght@400;600;700;800;900" }],
+  ["poppins", "Poppins", { nome: "Poppins", css: "'Poppins',sans-serif", google: "Poppins:wght@400;600;700;800;900" }],
+  ["oswald", "Oswald", { nome: "Oswald", css: "'Oswald',sans-serif", google: "Oswald:wght@400;600;700" }],
+  ["bebas", "Bebas Neue", { nome: "Bebas Neue", css: "'Bebas Neue',sans-serif", google: "Bebas+Neue" }],
+  ["spacegrotesk", "Space Grotesk", { nome: "Space Grotesk", css: "'Space Grotesk',sans-serif", google: "Space+Grotesk:wght@400;600;700" }],
 ];
 const nomeDaFamilia = (id) => { const o = TIPOGRAFIA_OPCOES.find((x) => x[0] === String(id || "")); return o ? o[1] : String(id || ""); };
+// A JetBrains Mono não é uma escolha de PEÇA (por isso fica fora da lista acima): ela é a outra
+// metade da identidade — os rótulos da marca — e o motor de arte a aplica sozinho no eyebrow, no
+// selo, no rodapé e na numeração. No EDITOR ela precisa existir na caixa, senão selecionar um
+// rótulo já desenhado deixava a caixa mostrando outra fonte, e qualquer ajuste ali carimbava a
+// fonte errada em cima do rótulo.
+const TIPOGRAFIA_ROTULOS = { nome: "JetBrains Mono", css: "'JetBrains Mono',monospace", google: "JetBrains+Mono:wght@400;500;700", marca: true };
+// A lista da caixa de fonte do editor: as MESMAS famílias da criação, na mesma ordem, mais os
+// rótulos da marca. `id` é a chave compartilhada com a criação — é ela que faz o aviso de
+// identidade sair com o nome certo, sem inventar um segundo texto.
+const EDITOR_FONTES = [
+  { id: "", nome: "Inter", css: TIPOGRAFIA_OPCOES[0][2].css, marca: true },
+  { id: "", nome: TIPOGRAFIA_ROTULOS.nome, rotulo: "JetBrains Mono (rótulos)", css: TIPOGRAFIA_ROTULOS.css, marca: true },
+].concat(TIPOGRAFIA_OPCOES.filter((o) => o[0]).map((o) => ({ id: o[0], nome: o[2].nome, css: o[2].css })));
+// O `value` da opção é o próprio font-family, que é o que vai para o estilo do elemento.
+const opcoesDeFonte = (lista) => lista
+  .map((f) => '<option value="' + esc(f.css) + '">' + esc(f.rotulo || f.nome) + "</option>").join("");
+const fonteDoEditor = (css) => EDITOR_FONTES.find((f) => f.css === css) || null;
+// As fontes que o editor manda o navegador baixar. Sai da MESMA lista: enquanto era um endereço
+// escrito à mão, ele e a caixa de seleção viviam se desencontrando — a caixa oferecia Bebas Neue e
+// o endereço a trazia, mas Montserrat, Poppins, Oswald, DM Serif e Space Grotesk não estavam em
+// nenhum dos dois. Famílias em ordem alfabética, como a documentação do endereço v2 pede.
+const EDITOR_FONTES_LINK = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+  + TIPOGRAFIA_OPCOES.map((o) => o[2].google).concat([TIPOGRAFIA_ROTULOS.google]).sort()
+      .map((f) => "family=" + f).join("&")
+  + '&display=swap">';
 // Cor da campanha — ESPELHO de PALETAS_CAMPANHA em lib/config.js. Mesma ideia da tipografia: o
 // padrão é a identidade oficial, sair dela é possível e avisado. Vale para a CAMPANHA (não para a
 // peça) porque é a campanha que é sazonal, e assim as peças dela saem coerentes entre si.
@@ -2875,6 +3056,55 @@ function editorTargets(task) {
   const arte = unicas.find((f) => /ads\/(ad|feed)\.(png|jpe?g|webp)$/i.test(f.rel)) || unicas[0];
   return arte ? [{ rel: arte.rel, label: kindLabel(task.kind) || "Arte" }] : [];
 }
+// "Esta peça tem montagem feita à mão?" — a resposta que faltava para o painel poder avisar antes
+// de redesenhar a arte pelo modelo. Quem montou a peça no editor e mandava gerar a arte final
+// perdia tudo, sem uma linha de aviso.
+// O sinal está no HTML da própria arte, e são dois: o carimbo data-montagem, que o editor passa a
+// deixar ao salvar, e o <link id="he-fonts">, que só o editor injeta e que ele preserva de
+// propósito ao salvar (o re-render precisa dele). O segundo existe para as peças montadas ANTES do
+// carimbo: sem ele, justamente o trabalho já feito ficaria sem aviso.
+const MONTAGEM_CACHE = new Map();   // "pasta|arquivo|mtime" -> tem montagem? (mtime muda a cada save)
+function temMarcaDeMontagem(html) { return /\sdata-montagem\s*=/i.test(html) || /id\s*=\s*["']?he-fonts/i.test(html); }
+// Devolve os RÓTULOS das artes montadas à mão ("Slide 2", "Cartão 1", "Carrossel"…), para o aviso
+// poder dizer o que exatamente está em jogo. `alvos` limita a busca (regerar UM slide só precisa
+// saber daquele slide, e ler os outros seria baixar o HTML de todos à toa).
+async function artesMontadasAMao(folder, task, alvos) {
+  const porRel = new Map(((task && task.files) || []).map((f) => [f.rel, f]));
+  const achadas = [];
+  for (const alvo of (alvos || editorTargets(task))) {
+    const relHtml = alvo.rel.replace(/\.[^./]+$/i, ".html");
+    const f = porRel.get(relHtml);
+    if (!f) continue;   // arte sem HTML (importada, ainda não preparada): não há montagem a perder
+    const chave = folder + "|" + relHtml + "|" + f.mtime;
+    let montada = MONTAGEM_CACHE.get(chave);
+    if (montada === undefined) {
+      try { montada = temMarcaDeMontagem(await API.taskFile(folder, relHtml)); }
+      catch (e) { montada = false; }   // não deu para ler o HTML: não inventa um aviso
+      MONTAGEM_CACHE.set(chave, montada);
+    }
+    if (montada) achadas.push(alvo.label);
+  }
+  return achadas;
+}
+// O aviso em si. Só é chamado quando HÁ montagem: pergunta que aparece sempre ensina a pessoa a
+// clicar em "sim" sem ler, e aí ela deixa de ser um aviso.
+// `nomeia` = a peça tem mais de uma arte (carrossel, story), então dizer QUAL foi montada é a
+// diferença entre a pessoa saber o que perde e ter que abrir slide por slide para descobrir.
+// Numa peça de arte única o rótulo seria só "Feed" — repetir isso não informa nada.
+// `acao` = o nome do que a pessoa acabou de clicar, porque mais de um botão redesenha a arte
+// ("Gerar a arte final" e "Ajustar com IA"). O aviso tem que falar do botão que ela apertou.
+function confirmaRefazerArte(rotulos, kind, nomeia, acao) {
+  const oque = kind === "video" ? "o vídeo" : "a arte";
+  const quais = (nomeia && rotulos.length)
+    ? " (" + rotulos.slice(0, 4).join(", ") + (rotulos.length > 4 ? " e mais " + (rotulos.length - 4) : "") + ")"
+    : "";
+  return uiConfirm(
+    "Esta peça tem montagem feita à mão no editor" + quais + ". " + (acao || "Gerar " + oque + " final")
+    + " desenha tudo de novo pelo modelo da marca: "
+    + "o que você moveu, escreveu, trocou ou acrescentou ali não volta. Deseja continuar?",
+    { title: "Isto refaz " + oque + " do zero", confirmText: "Sim, refazer do zero", cancelText: "Não, manter a montagem", confirmKind: "danger" }
+  );
+}
 // ===== Editor HTML (item A / Opção 1): edita o HTML REAL da arte (pixel-perfect,
 // preserva accent/gradiente/fontes) e re-renderiza pra PNG via Playwright. =====
 function rgbToHex(c) {
@@ -2908,7 +3138,17 @@ async function openHtmlEditor(folder, task, rel, opts) {
     + " .he-marquee{position:absolute;z-index:2147483000;border:2px solid #5499B5;background:rgba(84,153,181,.14);box-sizing:border-box;pointer-events:none;}"
     + " .card *:not([data-he]){pointer-events:none;} [data-he]{pointer-events:auto;}"
     + " [data-he][contenteditable=\"true\"] *{pointer-events:auto;}";
-  const FONTS = '<link id="he-fonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:wght@400;700;900&display=swap">';
+  const FONTS = EDITOR_FONTES_LINK;
+  // "A arte já tem ESTE <link> de fontes?" Precisa ser regra e não comparação de texto: ao salvar,
+  // o navegador serializa o endereço com "&amp;" no lugar de cada "&", então as duas strings nunca
+  // são iguais ao pé da letra. Medido: sem isto, cada abrir-e-salvar deixava mais uma cópia do
+  // mesmo <link> dentro do HTML da peça (3 depois do segundo salvamento).
+  const FONTES_JA_NA_ARTE = new RegExp(FONTS.split("&").map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("(?:&|&amp;)"));
+  // A fonte que a arte JÁ USA e que não está mais na caixa (peça montada quando o editor ainda
+  // oferecia Archivo Black e Georgia). Ela vira uma opção à parte assim que um texto assim é
+  // selecionado — sem isso a caixa mostrava a fonte do elemento anterior e mentia sobre o que está
+  // desenhado ali. A arte em si não muda: o <link> antigo continua dentro do HTML dela.
+  let fonteHerdada = null;
 
   const ov = document.createElement("div");
   ov.className = "editor-ov";
@@ -2949,13 +3189,17 @@ async function openHtmlEditor(folder, task, rel, opts) {
     +   '<input type="file" id="he-file" accept="image/*" hidden>'
     +   '<input type="file" id="he-replace-file" accept="image/*" hidden>'
     +   '<span class="ed-sep"></span>'
-    +   '<select id="he-font" title="Fonte">'
-    +     "<option value=\"'Inter',sans-serif\">Inter</option>"
-    +     "<option value=\"'Archivo Black',sans-serif\">Archivo Black</option>"
-    +     "<option value=\"'Playfair Display',serif\">Playfair</option>"
-    +     "<option value=\"'Bebas Neue',sans-serif\">Bebas Neue</option>"
-    +     "<option value=\"'JetBrains Mono',monospace\">JetBrains Mono</option>"
-    +     '<option value="Georgia,serif">Georgia</option>'
+    // As famílias saem de EDITOR_FONTES (as mesmas da criação). Separadas em dois grupos porque é
+    // a informação que faltava aqui: qual fonte é da marca e qual sai da identidade. O rótulo do
+    // grupo cabe onde a opção não caberia — a caixa é estreita, e "Inter (identidade 4Selet)"
+    // ficaria cortado.
+    +   '<select id="he-font" title="Fonte do texto. Inter e JetBrains Mono são as fontes da marca; as outras saem da identidade, e o painel pergunta antes de trocar.">'
+    +     '<optgroup label="Identidade 4Selet">'
+    +       opcoesDeFonte(EDITOR_FONTES.filter((f) => f.marca))
+    +     "</optgroup>"
+    +     '<optgroup label="Fora da identidade — pergunta antes">'
+    +       opcoesDeFonte(EDITOR_FONTES.filter((f) => !f.marca))
+    +     "</optgroup>"
     +   "</select>"
     +   '<div class="he-grp"><input type="number" id="he-size" value="40" min="6" max="600" title="Tamanho do texto">'
     +   '<button class="btn btn-sm ed-ico" id="he-bold" title="Negrito"><b>N</b></button>'
@@ -3039,6 +3283,10 @@ async function openHtmlEditor(folder, task, rel, opts) {
 
   function loadInto(r2) {
     curRel = r2; dirty = false; current = null; hist = []; hi = -1;
+    // A opção "Já usada nesta arte" é da arte que estava aberta. Trocar de slide sem limpá-la
+    // deixaria na caixa o nome de uma fonte que não está mais em lugar nenhum da tela.
+    fonteHerdada = null;
+    const gh = $("#he-font") && $("#he-font").querySelector("[data-he-herdada]"); if (gh) gh.remove();
     $("#he-piece").textContent = (targets.find((t) => t.rel === curRel) || {}).label || "Arte";
     updateNav();
     // Troca a extensão seja ela qual for: a arte importada é .jpg, e um replace preso
@@ -3056,7 +3304,13 @@ async function openHtmlEditor(folder, task, rel, opts) {
       const am = raw.match(/(file:\/\/\/[^"']*\/assets\/)/i); if (am) assetMaps.push([am[1], "/brand-assets/"]);
       const um = raw.match(/(file:\/\/\/[^"']*\/uploads\/)/i); if (um) assetMaps.push([um[1], "/uploads/"]);
       let disp = raw; assetMaps.forEach((mp) => { disp = disp.split(mp[0]).join(mp[1]); });
-      disp = disp.replace(/<\/head>/i, FONTS + '<style id="he-editstyle">' + SEL_CSS + "</style></head>");
+      // O <link> das fontes fica salvo dentro da arte (o re-render precisa dele). Por isso só
+      // injetamos quando ele ainda não está lá: sem esta conferência, cada abrir-e-salvar
+      // empilhava mais uma cópia do mesmo <link> no HTML da peça. E um <link> ANTIGO, diferente
+      // deste, NUNCA é removido — é ele que segura a fonte de uma peça montada quando a lista do
+      // editor era outra; tirá-lo faria a arte trocar de fonte sozinha só de reabrir.
+      const fontes = FONTES_JA_NA_ARTE.test(disp) ? "" : FONTS;
+      disp = disp.replace(/<\/head>/i, () => fontes + '<style id="he-editstyle">' + SEL_CSS + "</style></head>");
       frame.onload = () => { try { wireDoc(frame.contentDocument); } catch (e) { toast("Erro ao preparar a arte: " + e.message, "error"); } };
       frame.srcdoc = disp;
     }).catch(() => toast("Não achei o HTML da arte.", "error"));
@@ -3335,6 +3589,33 @@ async function openHtmlEditor(folder, task, rel, opts) {
     doc.querySelectorAll("[data-he-sel]").forEach((x) => x.removeAttribute("data-he-sel"));
     selection.forEach((x) => x.setAttribute("data-he-sel", "1"));
   }
+  // Aponta a caixa de fonte para a fonte que o texto selecionado REALMENTE usa.
+  // A versão antiga varria as opções e só atribuía quando achava; quando não achava — texto de uma
+  // peça montada com Archivo Black ou Georgia, que saíram da lista — a caixa continuava mostrando a
+  // fonte do elemento anterior. Aí bastava mexer em qualquer outro controle para a pessoa achar que
+  // o texto estava em Inter. Agora, fonte que não está na lista vira uma opção própria: a arte
+  // antiga continua exatamente como está e a caixa diz a verdade sobre ela.
+  const FAMILIA_GENERICA = ["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-sans-serif", "ui-serif", "ui-monospace"];
+  function refleteFonte(cs) {
+    const fs = $("#he-font"); if (!fs) return;
+    const grupo = fs.querySelector("[data-he-herdada]");
+    const limpa = () => { if (grupo) grupo.remove(); fonteHerdada = null; };
+    const bruto = (cs.fontFamily || "").trim();
+    const fam = bruto.split(",")[0].replace(/['"]/g, "").trim();
+    const alvo = fam && EDITOR_FONTES.find((f) => f.nome.toLowerCase() === fam.toLowerCase());
+    if (alvo) { limpa(); fs.value = alvo.css; return; }
+    // Sem nome de família de verdade (só "serif"/"sans-serif", ou nada): a caixa fica sem escolha
+    // marcada em vez de apontar uma fonte qualquer. Inventar uma opção chamada "sans-serif" seria
+    // oferecer para escolher aquilo que ninguém escolheu.
+    if (!fam || FAMILIA_GENERICA.indexOf(fam.toLowerCase()) >= 0) { limpa(); fs.selectedIndex = -1; return; }
+    fonteHerdada = { id: "", nome: fam, css: bruto, herdada: true };
+    const g = grupo || document.createElement("optgroup");
+    g.setAttribute("data-he-herdada", "1");
+    g.label = "Já usada nesta arte";
+    g.innerHTML = '<option value="' + esc(bruto) + '">' + esc(fam) + "</option>";
+    if (!grupo) fs.appendChild(g);
+    fs.value = bruto;
+  }
   // Reflete a barra de ferramentas a partir da ÂNCORA (el). Sem el = tudo desabilitado.
   function syncToolbar(el) {
     const isImg = !!el && el.tagName === "IMG";
@@ -3359,8 +3640,7 @@ async function openHtmlEditor(folder, task, rel, opts) {
     } else {
       $("#he-size").value = Math.round(parseFloat(cs.fontSize)) || 40;
       const c = rgbToHex(cs.color); if (c) $("#he-color").value = c;
-      const fam = (cs.fontFamily || "").split(",")[0].replace(/['"]/g, "").trim().toLowerCase();
-      const fs = $("#he-font"); if (fs) Array.from(fs.options).forEach((o) => { if (o.value.toLowerCase().indexOf(fam) >= 0) fs.value = o.value; });
+      refleteFonte(cs);
       $("#he-align").value = cs.textAlign === "center" ? "center" : (cs.textAlign === "right" || cs.textAlign === "end" ? "right" : "left");
       const lh = parseFloat(cs.lineHeight) / (parseFloat(cs.fontSize) || 1); $("#he-lh").value = isFinite(lh) ? Math.round(lh * 100) / 100 : "";
       $("#he-bold").classList.toggle("on", (parseInt(cs.fontWeight, 10) || 400) >= 700);
@@ -3487,7 +3767,21 @@ async function openHtmlEditor(folder, task, rel, opts) {
   const applyStyle = (fn) => { if (current && current.tagName !== "IMG") { fn(current); dirty = true; } };
   $("#he-size").oninput = () => applyStyle((el) => { el.style.fontSize = (parseInt($("#he-size").value, 10) || 40) + "px"; positionHandle(); });
   $("#he-size").onchange = () => { if (current) snapshot(); };
-  $("#he-font").onchange = () => { applyStyle((el) => { el.style.fontFamily = $("#he-font").value; }); positionHandle(); if (current) snapshot(); };
+  // Trocar a fonte aqui passa pelo MESMO aviso da criação. Antes a troca era imediata e sem
+  // pergunta — e a lista ainda oferecia famílias que o motor de arte não conhece —, então dava para
+  // deixar a peça fora da identidade da marca e publicar sem ninguém ter sido avisado.
+  $("#he-font").onchange = async () => {
+    const fs = $("#he-font"), escolhida = fs.value;
+    const op = fonteDoEditor(escolhida) || ((fonteHerdada && fonteHerdada.css === escolhida) ? fonteHerdada : null);
+    if (!op || !op.marca) {
+      if (!(await confirmaForaDaIdentidade(op ? (op.id || op.nome) : escolhida))) {
+        // Disse não: a caixa volta sozinha para a fonte que o texto realmente usa.
+        if (current) refleteFonte(gcs(current)); else fs.selectedIndex = -1;
+        return;
+      }
+    }
+    applyStyle((el) => { el.style.fontFamily = escolhida; }); positionHandle(); if (current) snapshot();
+  };
   $("#he-align").onchange = () => { applyStyle((el) => { el.style.textAlign = $("#he-align").value; }); positionHandle(); if (current) snapshot(); };
   $("#he-lh").oninput = () => applyStyle((el) => { el.style.lineHeight = $("#he-lh").value || ""; positionHandle(); });
   $("#he-lh").onchange = () => { if (current) snapshot(); };
@@ -3871,6 +4165,11 @@ async function openHtmlEditor(folder, task, rel, opts) {
       // voltariam para file:// (quebram na tela) e os elementos perderiam data-he (paravam de editar).
       const root = doc.documentElement.cloneNode(true);
       const st = root.querySelector("#he-editstyle"); if (st) st.remove(); // mantém #he-fonts (re-render precisa)
+      // Carimbo de MONTAGEM À MÃO. É por ele que "Gerar arte final" sabe que existe trabalho a
+      // perder e pergunta antes de redesenhar tudo pelo modelo. Fica no <html> porque é o único
+      // lugar que atravessa a limpeza do servidor inteiro (a limpeza remove <meta>, <script> e
+      // <link> que não seja de fonte).
+      root.setAttribute("data-montagem", "editor");
       root.querySelectorAll("[data-he]").forEach((el) => { el.removeAttribute("data-he"); el.removeAttribute("data-he-sel"); el.removeAttribute("contenteditable"); });
       // reverte assets (/brand-assets//uploads/ -> file://) SÓ nos atributos src/href,
       // não na string inteira (evita corromper texto que contenha o token).
@@ -3951,6 +4250,14 @@ async function refineTask(folder, task) {
   if (instruction.length < 3) { toast("Escreva a orientação do ajuste.", "error"); return; }
   const s = task.status;
   const ctId = btn.dataset.ct, file = btn.dataset.file;
+  // O ajuste com IA termina redesenhando a arte pelo modelo (autoRenders, logo abaixo) — ou seja,
+  // apaga a montagem feita à mão exatamente como "Gerar arte final" apagava. Mesmo aviso, mesmo
+  // critério: só pergunta quando existe montagem para perder.
+  if (autoRenders(task.kind)) {
+    const alvos = editorTargets(task);
+    const montadas = await artesMontadasAMao(folder, task, alvos);
+    if (montadas.length && !(await confirmaRefazerArte(montadas, task.kind, alvos.length > 1, "O ajuste com IA"))) return;
+  }
   btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> ajustando…';
   showBusy("Ajustando com IA…");
   try {
@@ -4277,7 +4584,17 @@ async function viewTaskDetail(folder) {
   if ($("#btn-render")) {
     $("#btn-render").onclick = async () => {
       const btn = $("#btn-render"); const out = $("#render-out");
-      btn.disabled = true; const orig = btn.textContent; btn.innerHTML = '<span class="spinner"></span> gerando arte…';
+      btn.disabled = true; const orig = btn.textContent;
+      // Gerar a arte final REDESENHA tudo pelo modelo — e apagava, sem avisar, a montagem feita à
+      // mão no editor. Conferir isso exige ler o HTML das artes, então o botão já fica travado
+      // aqui: um segundo clique durante a conferência dispararia dois renders.
+      btn.innerHTML = '<span class="spinner"></span> conferindo…';
+      const alvos = editorTargets(task);
+      const montadas = await artesMontadasAMao(folder, task, alvos);
+      if (montadas.length && !(await confirmaRefazerArte(montadas, btn.dataset.kind, alvos.length > 1))) {
+        btn.disabled = false; btn.textContent = orig; return;
+      }
+      btn.innerHTML = '<span class="spinner"></span> gerando arte…';
       out.textContent = task.kind === "video" ? "isto pode levar alguns minutos…" : "";
       showBusy(task.kind === "video" ? "Montando o vídeo… (pode levar alguns minutos)" : "Gerando a arte…");
       try {
@@ -4973,7 +5290,11 @@ async function viewPublications(arg, query) {
     pend = (sr.items || []).filter((it) => it.status !== "cancelled");
   } catch (e) { setView('<div class="empty">Erro ao carregar as publicações.</div>'); return; }
   const fmt = (iso) => { try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso; } };
-  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], failed: ["rejected", "Falhou"], cancelled: ["plain", "Cancelado"], skipped: ["plain", "Pulado"], simulated: ["plain", "Simulado"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
+  // Todo estado que o agendador sabe gravar precisa de nome em português aqui. Os que faltavam
+  // apareciam CRUS na tela — "published", "simulado", "perdido" —, e "perdido" é justamente o
+  // estado que mais precisa ser lido: é o agendamento que NÃO foi publicado porque o horário
+  // passou faz tempo demais, e quem vê a aba precisa entender isso de primeira.
+  const sb = (s) => { const m = { pending: ["warn", "Agendado"], publishing: ["warn", "Publicando…"], published: ["ok", "Publicado"], failed: ["rejected", "Falhou"], perdido: ["rejected", "Não saiu na hora"], cancelled: ["plain", "Cancelado"], skipped: ["plain", "Pulado"], simulado: ["plain", "Simulado"], simulated: ["plain", "Simulado"] }; const b = m[s] || ["plain", s]; return '<span class="badge ' + b[0] + '">' + esc(b[1]) + "</span>"; };
   // Para ONDE foi. Registro antigo, gravado antes deste campo existir, era sempre feed.
   const DEST = { feed: "Feed", story: "Story", reels: "Reels", outro: "Outro" };
   // QUANDO foi ao ar. "20/08/2026, 10:18:55" é preciso e ilegível: os segundos não dizem nada e

@@ -10,10 +10,21 @@ const { PATHS, DESTINO_IDS } = require("./config");
 const FILE = path.join(PATHS.DATA_DIR, "publications.json");
 
 function load() { try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch (e) { return []; } }
+// Gravação ATÔMICA e DURÁVEL. O tmp+rename já existia; faltavam duas coisas, e este arquivo é o
+// registro do que JÁ FOI AO AR — perder uma linha aqui é o painel esquecer um post publicado e
+// deixar alguém postar de novo:
+// (1) nome do tmp ÚNICO — com nome fixo, dois processos gravando ao mesmo tempo truncam o tmp um
+//     do outro e o rename publica um arquivo pela metade (que é o que o tmp existe para evitar);
+// (2) fsync ANTES do rename — sem ele, um desligamento logo depois pode deixar o arquivo com
+//     zero byte, e o histórico inteiro de publicações some sem uma palavra.
+// (Gêmeo do mesmo trecho em schedule.js e content.js — mesma razão, mesmo formato.)
+let _seqTmp = 0;
 function save(list) {
   if (!fs.existsSync(PATHS.DATA_DIR)) fs.mkdirSync(PATHS.DATA_DIR, { recursive: true });
-  const tmp = FILE + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(list, null, 2), { mode: 0o600 });
+  const tmp = FILE + "." + process.pid + "." + (++_seqTmp) + ".tmp";
+  const fd = fs.openSync(tmp, "w", 0o600);
+  try { fs.writeSync(fd, JSON.stringify(list, null, 2)); fs.fsyncSync(fd); }
+  finally { fs.closeSync(fd); }
   fs.renameSync(tmp, FILE);
 }
 

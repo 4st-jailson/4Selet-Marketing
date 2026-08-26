@@ -51,7 +51,7 @@ function rodaScript(args, env) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT, env: Object.assign({}, process.env, env) });
+      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT, env: Object.assign({}, process.env, env), windowsHide: true });
     } catch (e) {
       return resolve({ ok: false, code: -1, stdout: "", stderr: (e && e.message) || String(e) });
     }

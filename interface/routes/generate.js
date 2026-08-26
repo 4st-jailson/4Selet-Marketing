@@ -14,7 +14,7 @@ const numerosDoBrief = require("../lib/numeros_do_brief");
 const paletaAviso = require("../lib/paleta_aviso");
 const researchLib = require("../lib/research");
 const render = require("../lib/render");
-const { contentTypeById, pillarById, APPROVED_CTAS, BRIEF_MAX_CHARS } = require("../lib/config");
+const { contentTypeById, pillarById, APPROVED_CTAS, BRIEF_MAX_CHARS, PALETTE } = require("../lib/config");
 const { runBrandGovernance, validateContentRequest } = require("../lib/validation");
 
 // Extrai o primeiro objeto JSON de um texto (tolera code fences / texto ao redor).
@@ -152,11 +152,40 @@ function encurtaFrase(t, n) {
   return (esp > n * 0.6 ? corte.slice(0, esp) : corte).replace(/[,;:\-–—]$/, "") + "…";
 }
 
-function avisaLimitacoes(gov, parsed) {
+// Colhe o campo `limitacoes` do conceito e TIRA do JSON (é instrução para o modelo, não conteúdo
+// da peça — sem isto ele viraria arquivo). Separado do aviso de propósito: a lista precisa existir
+// ANTES, porque alimenta as pendências de imagem, e o aviso só sabe o que dizer depois de saber o
+// que o painel já vai dizer por conta própria.
+function colheLimitacoes(parsed) {
   const lista = parsed && Array.isArray(parsed.limitacoes) ? parsed.limitacoes.slice() : [];
-  if (!gov || !lista.length) { try { if (parsed) delete parsed.limitacoes; } catch (e) {} return lista; }
+  try { if (parsed) delete parsed.limitacoes; } catch (e) {}
+  return lista;
+}
+
+// A IA declara em `limitacoes` o que ela não conseguiu entregar — mas ela não enxerga a TELA, e
+// duas coisas saem erradas por causa disso:
+//
+//  1) Ela explica com o vocabulário de dentro do código ("a posição do logo é definida pelo
+//     renderizador"), e a frase ainda é cortada em 150 caracteres no meio. Quando a tabela
+//     PEDIDOS_DO_BRIEFING cobre o mesmo pedido (`cobertos`), quem fala é a tabela: mesma coisa em
+//     português e, principalmente, dizendo ONDE a pessoa resolve. Sem esta troca o aviso pior
+//     calava o melhor.
+//  2) Ela declara como "ficou de fora" coisa que a pessoa JÁ escolheu no campo certo. Medido: com
+//     Montserrat selecionado em Tipografia, a peça sai em Montserrat e a IA avisava que não ia
+//     sair — aviso mentindo sobre a arte que a pessoa tem na frente. Por isso `entregue`.
+function avisaLimitacoes(gov, lista, cobertos, ctx) {
+  lista = Array.isArray(lista) ? lista : [];
+  if (!gov || !lista.length) return lista;
   if (!Array.isArray(gov.warnings)) gov.warnings = [];
+  const ids = (cobertos || []).map((c) => c.id);
+  const jaExplicado = (pedido) => PEDIDOS_DO_BRIEFING.some((linha) => {
+    const achado = linha.acha(pedido);
+    if (!achado) return false;
+    if (ids.indexOf(linha.id) >= 0) return true;                       // a tabela diz melhor
+    return !!(linha.entregue && linha.entregue(ctx || {}, achado));    // a peça entregou mesmo
+  });
   for (const l of lista.slice(0, 6)) {
+    if (jaExplicado(String((l && l.pedido) || "") + " " + String((l && l.motivo) || ""))) continue;
     const pedido = encurtaFrase(l && l.pedido, 110);
     const motivo = encurtaFrase(l && l.motivo, 150);
     if (!pedido) continue;
@@ -168,8 +197,6 @@ function avisaLimitacoes(gov, parsed) {
     // e O QUE FAZER, não uma confissão por slide.
     gov.warnings.push(onde + "ficou de fora — " + pedido + (motivo ? ". " + motivo : "."));
   }
-  // O campo é instrução para o modelo, não conteúdo da peça: sai antes de virar arquivo.
-  try { delete parsed.limitacoes; } catch (e) {}
   return lista;
 }
 
@@ -321,11 +348,25 @@ router.post("/", async (req, res, next) => {
     // assinar peça, MAS é permitida quando quem pediu a peça pediu a frase. Sem passar o brief, o
     // gate reprovaria exatamente o caso legítimo.
     const gov = runBrandGovernance(textForGovernance(body.content_type, parsed) || result.text, { type: body.content_type, brief: body.brief });
-    const limitacoes = avisaLimitacoes(gov, parsed);
+    const limitacoes = colheLimitacoes(parsed);
     // Ordem importa: a lista de pendências é montada ANTES do aviso de foto inventada, porque o
     // aviso agora aponta para a janela ("resolva na janela que abriu") — e só faz sentido dizer isso
     // se a janela vai mesmo abrir.
     const pendencias = pendenciasDeImagem(body.content_type, fotosInventadas, limitacoes);
+
+    // O QUE O TEXTO PEDIU E A PEÇA NÃO LEVOU. Calculado ANTES de escrever qualquer aviso porque é
+    // ele quem decide o que a IA ainda precisa explicar: quando os dois falam da mesma coisa, vale
+    // esta frase (que diz onde resolver) e não a justificativa técnica dela. Sem isto, pedir
+    // "Manrope", "#FF6600" ou "logo no canto inferior direito" dava no mesmo que não ter pedido.
+    const ctxDaPeca = {
+      font: body.font,
+      content_type: body.content_type,
+      temImagem: !!(body.image || (parsed && parsed.image) || (parsed && Array.isArray(parsed.slides) && parsed.slides.some((s) => s && s.image))),
+      pendencias: pendencias.length,
+    };
+    const naoAproveitado = pedidosNaoAproveitados(body.brief, ctxDaPeca);
+
+    avisaLimitacoes(gov, limitacoes, naoAproveitado, ctxDaPeca);
     if (pendencias.length) avisaFotosInventadas(gov, fotosInventadas);
 
     // NÚMERO QUE SOME. Se a pessoa citou um valor no pedido ("PIX em D+10", "95%", "R$ 1,99") e
@@ -337,6 +378,15 @@ router.post("/", async (req, res, next) => {
     if (avisoNum) {
       if (!Array.isArray(gov.warnings)) gov.warnings = [];
       gov.warnings.push(avisoNum);
+    }
+
+    // Entra por último na faixa de propósito: os avisos acima são sobre o que a IA escreveu, este
+    // é sobre o que o painel não sabe fazer — e é o que fica mais perto do botão de ação.
+    if (naoAproveitado.length) {
+      if (!Array.isArray(gov.warnings)) gov.warnings = [];
+      // Teto de 3: a faixa já pode trazer limitação declarada pela IA, foto inventada e número
+      // que sumiu. Empilhar seis parágrafos faz a pessoa parar de ler todos.
+      naoAproveitado.slice(0, 3).forEach((p) => gov.warnings.push(p.aviso));
     }
 
     res.json({
@@ -352,6 +402,10 @@ router.post("/", async (req, res, next) => {
       research_facts: fatos,
       // O que faltou de imagem, em forma de pergunta com saídas. Lista vazia = nada a resolver.
       pendencias_imagem: pendencias,
+      // O que o texto pediu e a peça não levou, item a item ({ id, trecho, aviso }). As frases já
+      // vão na faixa de conferência da marca acima; a lista sai estruturada para a tela poder
+      // ancorar cada uma no campo certo depois, sem ter que reconhecer o pedido de novo.
+      nao_aproveitado: naoAproveitado,
       // A referência visual pediu uma cor que a identidade não tem? Não bloqueia nada: a tela abre
       // um aviso com saídas e quem decide é a pessoa. null = nada a avisar (o caso comum).
       aviso_paleta: paletaAviso.analisa(body.mood || ""),
@@ -491,6 +545,215 @@ function familiaPedidaNoTexto(texto) {
   }
   return null;
 }
+
+/* =============================================================================================
+   O QUE O BRIEFING PEDE E O PAINEL NÃO LEVA ATÉ A PEÇA
+
+   A leitura do tema preenche QUATRO campos: formato, assunto, chamada e tipografia. Todo o resto
+   do que a pessoa escreve — cor em hexadecimal, aparelho/mockup, onde cada elemento fica, foto —
+   não tem campo nenhum que o carregue até o desenho, e sumia sem UMA palavra. Num briefing de
+   8.140 caracteres isso era a maior parte do texto: a tela dizia "Preenchi 3 campos pelo seu
+   texto" e quem escreveu supunha que o resto tinha entrado junto. Fingir que aproveitou é pior
+   do que não aproveitar — a pessoa só descobre olhando a arte pronta, e nem sempre descobre.
+
+   O caso mais gritante era a TIPOGRAFIA: pedir "Manrope" não fazia nada porque a família não
+   existe no motor, e pedir "Montserrat" — que EXISTE — também terminava em Inter sempre que a
+   leitura do tema não rodava. Os dois desfechos eram silenciosos, e o silêncio era idêntico.
+
+   A tabela abaixo é o ÚNICO lugar onde se declara o que o briefing sabe pedir. Cada linha diz
+   como RECONHECER o pedido no texto, como saber se ele CHEGOU na peça, e o que DIZER quando não
+   chegou. Campo novo (ou capacidade nova) entra aqui e passa a ser avisado sozinho — é isso que
+   impede o mesmo buraco de voltar no próximo pedido que alguém inventar.
+   ============================================================================================= */
+
+// Nomes de fonte que aparecem em briefing de verdade e que o motor NÃO desenha. Não precisa ser
+// exaustiva: o reconhecimento por CONTEXTO (RE_FONTE_CONTEXTO) pega o resto. Ela existe para o
+// nome escrito solto, sem a palavra "tipografia" por perto — que é como "Manrope" foi pedido.
+// Nomes que também são palavra comum em português ficam DE FORA de propósito (Futura, Circular,
+// Lora, Karla, Impact, Georgia): num aviso, alarme falso custa mais caro do que o aviso que
+// faltou — a pessoa para de ler a faixa inteira.
+const FONTES_FORA_DO_MOTOR = [
+  "Manrope", "Roboto", "Open Sans", "Lato", "Nunito", "Raleway", "Rubik", "Work Sans",
+  "Source Sans", "Merriweather", "Helvetica", "Arial", "Times New Roman", "Garamond",
+  "Gotham", "Avenir", "Proxima Nova", "Satoshi", "Outfit", "Figtree", "Plus Jakarta",
+  "Barlow", "Mulish", "Quicksand", "Josefin Sans", "Archivo", "Libre Baskerville",
+  "Cormorant", "Fira Sans", "IBM Plex", "Noto Sans", "PT Sans", "DM Sans", "Space Mono",
+  "Comic Sans", "Verdana", "Tahoma", "Courier", "Gilroy",
+];
+// A identidade da marca. Pedir Inter (ou JetBrains Mono) não é "sair da identidade" — é pedir o
+// que já acontece, e avisar sobre isso seria ruído puro.
+const FONTES_DA_MARCA = ["Inter", "JetBrains Mono"];
+// "tipografia Bricolage Grotesque", "font-family: Chillax" — nome que não está em lista nenhuma.
+// A palavra "fonte" SOZINHA fica fora: no painel ela quase sempre quer dizer PROCEDÊNCIA
+// ("fonte: CNDL", nos fatos de mercado), e confundir as duas produziria aviso de tipografia em
+// cima de uma citação de reportagem.
+const RE_FONTE_CONTEXTO = /(?:tipografia|fam[íi]lia\s+tipogr[áa]fica|fonte\s+tipogr[áa]fica|font[\s-]?family|typeface)\s*(?:[:=]\s*)?(?:(?:em|na|no|da|do|de|seja|usar|use|usando|com)\s+)?["']?([A-Z][A-Za-zÀ-ÿ0-9]*(?:\s+[A-Z][A-Za-zÀ-ÿ0-9]*){0,2})/;
+// Cor por código. Só 6 dígitos: "#abc" casa com hashtag muito mais do que com cor, e hashtag é
+// coisa que todo briefing tem. Os hexadecimais da PRÓPRIA identidade não contam — pedir o azul
+// da marca é pedir o que a peça já faz.
+const RE_COR_HEX = /#[0-9a-fA-F]{6}\b|\brgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}/g;
+const HEX_DA_MARCA = Object.keys(PALETTE || {}).map((k) => String(PALETTE[k]).toLowerCase());
+// Moldura de aparelho. O painel só monta aparelho em cima de um PRINT — e print não vem de texto.
+const RE_APARELHO = /\b(mockups?|mock-ups?|celular|smartphone|iphone|android|notebook|laptop|macbook|tablet|ipad|moldura)\b/i;
+// Onde cada coisa fica. "logo" entra só colado a uma posição: sozinha, em português, ela quase
+// sempre é o advérbio ("logo depois", "logo no começo") e não a marca.
+const RE_COMPOSICAO = /\b(canto\s+(?:superior|inferior|esquerd|direit)|no\s+rodap[ée]|centralizad[oa]|alinhad[oa]\s+[àa]|[àa]\s+(?:esquerda|direita)\s+d[aeo]|grid\s*\d\s*x\s*\d|logo\s+(?:no\s+canto|no\s+rodap[ée]|em\s+cima|embaixo|maior|menor))/i;
+// Imagem pedida em prosa (sem arquivo anexado nem foto escolhida).
+const RE_IMAGEM = /\b(fotos?|fotografias?|imagem de fundo|foto de fundo|banco de imagens)\b/i;
+
+// Lista das famílias que o motor realmente desenha, escrita como gente fala.
+const emPortugues = (arr) => (arr.length <= 1 ? String(arr[0] || "") : arr.slice(0, -1).join(", ") + " e " + arr[arr.length - 1]);
+const LISTA_FAMILIAS = () => emPortugues(render.FAMILIA_IDS.map((id) => render.FAMILIAS[id].label));
+
+// Casa um nome respeitando a BORDA da palavra: sem isso "Lato" casaria dentro de "Latossolo" e
+// "Arial" dentro de "Arialdo". Tolerante à caixa e ao espaço a mais entre as palavras do nome.
+function achaNomeSolto(texto, nome) {
+  const re = new RegExp("(^|[^A-Za-zÀ-ÿ0-9])(" + nome.replace(/\s+/g, "\\s+") + ")($|[^A-Za-zÀ-ÿ0-9])", "i");
+  const m = re.exec(String(texto || ""));
+  return m ? m[2] : null;
+}
+
+// A tipografia que o texto pede — EXISTA ela no motor ou não. É o que `familiaPedidaNoTexto`
+// sozinha não dava: ela só enxerga a lista fechada, então "Manrope" caía no vazio.
+//   { id: "montserrat", nome, trecho }  -> dá para aplicar
+//   { id: "",           nome, trecho }  -> só dá para avisar que não vai valer
+//   null                                -> o texto não pediu fonte nenhuma
+function tipografiaNoTexto(texto) {
+  const t = String(texto || "");
+  const suportada = familiaPedidaNoTexto(t);
+  if (suportada) return { id: suportada.id, nome: suportada.nome, trecho: suportada.trecho };
+  for (const nome of FONTES_FORA_DO_MOTOR) {
+    const tr = achaNomeSolto(t, nome);
+    if (tr) return { id: "", nome, trecho: tr };
+  }
+  const m = RE_FONTE_CONTEXTO.exec(t);
+  if (m && m[1]) {
+    const nome = m[1].trim();
+    if (FONTES_DA_MARCA.some((f) => f.toLowerCase() === nome.toLowerCase())) return null;
+    return { id: "", nome, trecho: nome };
+  }
+  return null;
+}
+
+// ctx = { font, content_type, temImagem, pendencias } — o que a peça REALMENTE recebeu.
+const PEDIDOS_DO_BRIEFING = [
+  {
+    id: "tipografia",
+    acha: (t) => { const f = tipografiaNoTexto(t); return f ? { trecho: f.trecho, familia: f } : null; },
+    // "Chegou" tem um desfecho só: a peça está saindo NESSA família. Sair na Inter sem uma
+    // palavra não é um deles — nem quando a família existe, nem quando não existe.
+    // Na LEITURA do tema a peça ainda não existe: família que o motor tem já vira a pergunta
+    // "quer sair da identidade?" (campos.font), então avisar aqui seria falar duas vezes.
+    chegou: (ctx, a) => !!(a.familia && a.familia.id) && (!!ctx.leitura || String(ctx.font || "") === a.familia.id),
+    // A peça está SAINDO nessa família de verdade (não é "alguém já avisa por mim"). É o único
+    // pedido desta tabela que o painel realmente entrega, e é o que faz a IA parar de declarar
+    // "ficou de fora — Montserrat" numa arte que está saindo em Montserrat.
+    entregue: (ctx, a) => !!(a.familia && a.familia.id) && String(ctx.font || "") === a.familia.id,
+    aviso: (a) => {
+      const f = a.familia || tipografiaNoTexto(a.trecho) || { id: "", nome: a.trecho };
+      return f.id
+        ? "Você escreveu " + f.nome + " no texto e esta peça saiu na Inter, a fonte da marca. "
+          + "Trocar de fonte tira a peça da identidade, então o painel não troca sozinho: escolha "
+          + f.nome + " no campo Tipografia e gere de novo."
+        // Tempo verbal neutro de propósito: a mesma frase é dita ANTES de gerar (faixa de leitura)
+        // e DEPOIS (conferência da marca). "Esta peça saiu" seria mentira na primeira das duas.
+        : "Você pediu a tipografia " + f.nome + ", e ela não existe no desenho das peças — a arte sai "
+          + "na Inter, a fonte da marca. As famílias que dá para escolher são: " + LISTA_FAMILIAS() + ". "
+          + "Elas ficam no campo Tipografia, antes de gerar.";
+    },
+  },
+  {
+    id: "cor",
+    acha: (t) => {
+      RE_COR_HEX.lastIndex = 0;
+      let m;
+      while ((m = RE_COR_HEX.exec(String(t || "")))) {
+        if (HEX_DA_MARCA.indexOf(m[0].toLowerCase()) < 0) return { trecho: m[0] };
+      }
+      return null;
+    },
+    chegou: () => false,   // não existe campo que leve uma cor livre até o desenho
+    // O trecho pode vir de duas origens: o código que a expressão regular achou (#FF6600) ou a
+    // frase que a leitura apontou ("num azul petróleo bem escuro"). A frase precisa de aspas e
+    // NÃO pode ser chamada de código — "Você pediu a cor num azul petróleo no texto" não é
+    // português de gente.
+    aviso: (a) => {
+      const ehCodigo = /^(#|rgb)/i.test(a.trecho);
+      return (ehCodigo ? "Você pediu a cor " + a.trecho : "Você pediu \"" + a.trecho + "\"")
+        + " e a peça não sai nessa cor: as cores vêm da identidade da 4Selet"
+        + (ehCodigo ? ", e não existe campo para pedir uma cor por código" : "")
+        + ". O que dá para mudar é o tema de cada slide (claro ou escuro), a superfície da arte na "
+        + "criação, e a paleta da campanha — que é o único lugar onde a marca permite sair do azul.";
+    },
+  },
+  {
+    id: "aparelho",
+    acha: (t) => { const m = RE_APARELHO.exec(String(t || "")); return m ? { trecho: m[0] } : null; },
+    // Quando o painel já abriu a janela de imagem (pendência) ou a peça é a de Mídia, o assunto
+    // já está sendo tratado lá com saídas — repetir aqui seria falar duas vezes a mesma coisa.
+    chegou: (ctx) => ctx.pendencias > 0 || ctx.content_type === "media_mention",
+    aviso: (a) => "Você falou em " + a.trecho + " no texto, e a peça não monta o aparelho por conta "
+      + "própria: a moldura de celular ou notebook só existe em cima de um print, e print não vem de "
+      + "texto. Depois de gerar, o botão \"+ Imagem\" do editor de arte captura a tela de um site pelo "
+      + "link, recebe um arquivo seu ou busca uma foto de banco.",
+  },
+  {
+    id: "imagem",
+    acha: (t) => { const m = RE_IMAGEM.exec(String(t || "")); return m ? { trecho: m[0] } : null; },
+    // Na leitura do tema é cedo demais para dizer que a peça saiu sem imagem — ela nem existe.
+    chegou: (ctx) => !!ctx.leitura || ctx.temImagem || ctx.pendencias > 0,
+    aviso: () => "Você pediu imagem no texto e esta peça saiu sem nenhuma. A IA não enxerga o seu "
+      + "acervo e não escolhe foto por você. Na peça pronta dá para resolver: no carrossel, pela linha "
+      + "\"Foto de fundo\" de cada slide; nas outras, pelo botão \"+ Imagem\" do editor de arte.",
+  },
+  {
+    id: "composicao",
+    acha: (t) => { const m = RE_COMPOSICAO.exec(String(t || "")); return m ? { trecho: m[0] } : null; },
+    chegou: () => false,   // a posição vem do arranjo escolhido, nunca do texto
+    aviso: (a) => "Você descreveu onde uma coisa deveria ficar (\"" + a.trecho + "\"). A posição dos "
+      + "elementos vem do arranjo da peça, não do texto: escolha outro arranjo na criação, ou mova os "
+      + "elementos você mesmo no editor de arte, depois que a peça existir.",
+  },
+];
+
+// Categorias que o modelo pode devolver na leitura do tema (prompts.interpretPrompt). O nome vem
+// de fora, então é traduzido aqui para uma linha da tabela — e o que não casar é descartado.
+const CATEGORIA_PARA_PEDIDO = { cor: "cor", tipografia: "tipografia", fonte: "tipografia", posicao: "composicao", composicao: "composicao", aparelho: "aparelho", mockup: "aparelho", imagem: "imagem", foto: "imagem" };
+
+// O que o texto pediu e a peça não levou. `extras` são os trechos que o modelo apontou na leitura
+// (já conferidos contra o texto original por quem chama) — eles pegam o que a expressão regular
+// não alcança ("quero num azul petróleo bem escuro").
+function pedidosNaoAproveitados(texto, ctx, extras) {
+  const out = [];
+  const visto = new Set();
+  for (const linha of PEDIDOS_DO_BRIEFING) {
+    if (visto.has(linha.id)) continue;
+    const doModelo = (extras || []).find((e) => CATEGORIA_PARA_PEDIDO[e.categoria] === linha.id);
+    const achado = linha.acha(texto) || (doModelo ? { trecho: doModelo.trecho } : null);
+    if (!achado) continue;
+    if (linha.chegou(ctx || {}, achado)) continue;
+    // O trecho da leitura vem em frase inteira ("a arte toda num azul petroleo bem escuro, quase
+    // preto"). Dentro do aviso ele vira citação, e citação de 12 palavras faz a pessoa perder a
+    // frase. Corta no espaço, com reticência — o mesmo tratamento das limitações declaradas.
+    achado.trecho = encurtaFrase(achado.trecho, 70) || String(achado.trecho || "");
+    visto.add(linha.id);
+    out.push({ id: linha.id, trecho: String(achado.trecho || "").slice(0, 120), aviso: linha.aviso(achado) });
+  }
+  return out;
+}
+
+// A leitura do tema pode citar trechos que NÃO estão no texto (é o vetor de invenção deste
+// recurso desde sempre). Só passa o que aparece literalmente lá — comparado sem acento e sem
+// caixa, porque o modelo normaliza pontuação e maiúscula ao copiar.
+function direcaoDeArteConferida(cru, texto) {
+  const chato = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const base = chato(texto);
+  return (Array.isArray(cru && cru.direcao_de_arte) ? cru.direcao_de_arte : [])
+    .map((x) => ({ categoria: String((x && x.categoria) || "").toLowerCase().trim(), trecho: String((x && x.trecho) || "").trim().slice(0, 120) }))
+    .filter((x) => x.trecho.length >= 3 && CATEGORIA_PARA_PEDIDO[x.categoria] && base.indexOf(chato(x.trecho)) >= 0)
+    .slice(0, 8);
+}
+
 router.post("/interpret", async (req, res, next) => {
   try {
     const texto = String((req.body && req.body.texto) || "").trim();
@@ -504,7 +767,21 @@ router.post("/interpret", async (req, res, next) => {
       });
     }
     if (!ai.hasKey || !ai.hasKey()) {
-      return res.json({ disponivel: false, motivo: "Sem chave de IA configurada — não dá para interpretar o texto. Preencha os campos manualmente.", campos: {} });
+      // Sem chave não há interpretação — mas a TIPOGRAFIA é casamento de string, não precisa de
+      // IA nenhuma, e estava atrás desta porta sem motivo: quem escrevia "Montserrat" com o
+      // painel sem chave não ouvia uma palavra. Aqui ela sai junto do motivo, que é o texto que
+      // a faixa de leitura já mostra.
+      const fam = tipografiaNoTexto(texto);
+      const sobreFonte = !fam ? ""
+        : fam.id
+          ? " Uma coisa eu vi sem precisar de IA: você escreveu " + fam.nome + " — se quiser a peça nessa fonte, escolha em Tipografia antes de gerar."
+          : " Uma coisa eu vi sem precisar de IA: você pediu a tipografia " + fam.nome + ", que não existe no desenho das peças. As que dá para escolher são: " + LISTA_FAMILIAS() + ".";
+      return res.json({
+        disponivel: false,
+        motivo: "Sem chave de IA configurada — não dá para interpretar o texto. Preencha os campos manualmente." + sobreFonte,
+        campos: {},
+        nao_aproveitado: pedidosNaoAproveitados(texto, { leitura: true }, []),
+      });
     }
 
     const result = await ai.complete({
@@ -562,7 +839,13 @@ router.post("/interpret", async (req, res, next) => {
       .map((x) => String(x).trim())
       .filter((x) => CAMPOS_LIDOS.indexOf(x) >= 0 && !campos[x])
       .filter((x, i, a) => a.indexOf(x) === i);
-    res.json({ disponivel: true, simulated: !!result.simulated, model: result.model, provider: result.provider, campos, faltou });
+    // O QUE O TEXTO PEDE E A LEITURA NÃO SABE APROVEITAR. Os quatro campos acima são tudo o que
+    // ela preenche; cor, aparelho, posição e tipografia fora do motor não têm campo nenhum e
+    // sumiam sem uma palavra. Sai como lista para a faixa de leitura poder dizer o que ficou de
+    // fora ANTES de gastar uma geração — e a mesma frase reaparece na conferência da marca
+    // depois de gerar, porque é lá que a peça pronta é conferida.
+    const naoAproveitado = pedidosNaoAproveitados(texto, { leitura: true }, direcaoDeArteConferida(cru, texto));
+    res.json({ disponivel: true, simulated: !!result.simulated, model: result.model, provider: result.provider, campos, faltou, nao_aproveitado: naoAproveitado });
   } catch (e) { next(e); }
 });
 

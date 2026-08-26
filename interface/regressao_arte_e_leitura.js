@@ -7,6 +7,7 @@ require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const render = require("./lib/render.js");
 const { runBrandGovernance } = require("./lib/validation.js");
@@ -38,9 +39,36 @@ const criadas = [];
 let falhas = 0, total = 0;
 const checa = (ok, oq, extra) => { total++; if (!ok) falhas++; console.log("    " + (ok ? "ok     " : "FALHOU ") + oq + (extra ? "   " + extra : "")); };
 const secao = (t) => console.log("\n" + t + "\n" + "-".repeat(t.length));
+// Marcador nas peças que a bateria cria. Quando a bateria morre no meio (erro, Ctrl+C, a máquina
+// desligando), a limpeza do fim não roda e a peça de teste FICA em outputs/ para sempre —
+// aparecendo na biblioteca do Hugo como se fosse trabalho. Achei seis assim, de uma corrida
+// interrompida em 19/08. Com o marcador, a varredura logo abaixo apaga na próxima vez, e ela
+// nunca encosta em peça de gente: só some o que a própria bateria carimbou.
+const MARCA_BATERIA = ".peca-da-bateria";
+const varreSobrasDeCorridaAnterior = () => {
+  let nomes; try { nomes = fs.readdirSync(RAIZ); } catch (e) { return 0; }
+  let n = 0;
+  for (const nome of nomes) {
+    const d = path.join(RAIZ, nome);
+    try {
+      if (!fs.statSync(d).isDirectory() || !fs.existsSync(path.join(d, MARCA_BATERIA))) continue;
+      fs.rmSync(d, { recursive: true, force: true }); n++;
+    } catch (e) { /* pasta sumiu no meio: nada a fazer */ }
+  }
+  if (n) console.log("(limpei " + n + " peça(s) de teste que sobraram de uma corrida interrompida)");
+  return n;
+};
+// Peça criada pela API (não por peca()) também precisa do carimbo, senão ela é exatamente a que
+// sobra quando a bateria morre no meio — foi assim que as seis de 19/08 ficaram para trás.
+const registra = (dir) => {
+  criadas.push(dir);
+  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, MARCA_BATERIA), "Peça criada pela bateria de regressão. Pode apagar.\n"); } catch (e) {}
+  return dir;
+};
 const peca = (nome, arquivos) => {
   const d = path.join(RAIZ, nome); criadas.push(d);
   fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, MARCA_BATERIA), "Peça criada pela bateria de regressão. Pode apagar.\n");
   fs.writeFileSync(path.join(d, "status.json"), JSON.stringify({ task_name: nome, status: "draft" }));
   for (const [rel, conteudo] of Object.entries(arquivos)) {
     fs.mkdirSync(path.join(d, path.dirname(rel)), { recursive: true });
@@ -71,6 +99,7 @@ function briefingLongo() {
 }
 
 (async () => {
+  varreSobrasDeCorridaAnterior();
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
   const BRIEFING = briefingLongo();
 
@@ -110,7 +139,7 @@ function briefingLongo() {
       { title: "Capa", body: "b", layout: "cover" },
       { title: "Fantasma", body: "b", layout: "text", image: "/uploads/nao-existe-1.jpg" },
       { title: "Real", body: "b", layout: "text", image: "/uploads/acervo_livros_leitura.jpg" }] } });
-  criadas.push(path.join(RAIZ, T3 + "_" + DATA));
+  registra(path.join(RAIZ, T3 + "_" + DATA));
   const disco3 = JSON.parse(fs.readFileSync(path.join(RAIZ, T3 + "_" + DATA, "copy", "instagram_carousel.json"), "utf8"));
   checa(disco3.slides.filter((s) => s.image).length === 1, "só a foto real foi para o disco");
   checa(((s3.body.governance || {}).warnings || []).some((w) => /foto/i.test(w)), "o pedido não atendido virou aviso");
@@ -177,7 +206,7 @@ function briefingLongo() {
   const T6b = "regfeed" + un();
   await post("/api/generate/save", { task_name: T6b, task_date: DATA, content_type: "instagram_caption", brief: "Post de feed sobre prazo de recebimento.",
     parsed: { body: "O que quebra um produtor raramente é a taxa. É o prazo.\n\nVender bem e receber tarde trava a operação.", hashtags: ["#4Selet"], cta: "" }, raw: "", platforms: ["instagram"], image: "/uploads/acervo_livros_leitura.jpg" });
-  criadas.push(path.join(RAIZ, T6b + "_" + DATA));
+  registra(path.join(RAIZ, T6b + "_" + DATA));
   await post("/api/content/" + T6b + "_" + DATA + "/render", {});
   const hFeed = fs.readFileSync(path.join(RAIZ, T6b + "_" + DATA, "ads", "feed.html"), "utf8");
   checa(hFeed.indexOf("acervo_livros_leitura") >= 0, "foto do feed sobrevive ao salvamento");
@@ -662,9 +691,22 @@ function briefingLongo() {
       distintos.length + " de " + (fundosMotor.length - 1));
     // Papel é superfície CLARA: se o texto continuasse com as cores do fundo escuro, a arte
     // sairia ilegível — e ilegível de um jeito que a miniatura esconde.
-    const cs = fs.readFileSync(path.join(__dirname, "lib/render.js"), "utf8");
-    checa(/fundoDoSlide === "papel"[\s\S]{0,120}theme: "light"/.test(cs),
-      "o fundo de papel força o tema claro (senão o texto some na folha)");
+    //
+    // ESTA CHECAGEM JÁ FOI UM REGEX no texto-fonte do render.js, procurando o remendo
+    // `fundoDoSlide === "papel" ... theme: "light"`. Ela ficou VERDE durante todo o tempo em que a
+    // arte saía ilegível na folha creme, porque o remendo que ela encontrava só valia quando o
+    // slide NÃO declarava tema — e o modelo declara em quase toda geração. Teste de string
+    // encontra o remendo, não o resultado. Agora a pergunta é sobre o DESENHO: sobre superfície
+    // clara é a superfície que manda na tinta, então o mesmo slide tem que sair IGUAL com tema
+    // escuro ou claro. O par com a superfície padrão está aqui de propósito — é ele que prova
+    // que a checagem não é vazia (lá os dois temas TÊM que continuar diferentes).
+    const mkSlide = (fundo, t) => render.carouselSlidesHtml(
+      { fundo: fundo, slides: [{ layout: "list", theme: t, title: "T", items: ["a", "b"], body: "c" }] },
+      render.TEMPLATES.editorial, {})[0].html;
+    checa(mkSlide("papel", "dark") === mkSlide("papel", "light"),
+      "sobre papel a superfície manda na tinta: o slide sai igual com tema escuro ou claro");
+    checa(mkSlide("padrao", "dark") !== mkSlide("padrao", "light"),
+      "  e na superfície escura o tema do slide continua valendo (a checagem acima não é vazia)");
 
     // A CAPA com foto coerente com o assunto. O pedido do Hugo: "está sendo citado tecnologia,
     // procure uma imagem de circuito; está falando da plataforma 4Selet, apresente a imagem da
@@ -1270,7 +1312,7 @@ function briefingLongo() {
     fs.mkdirSync(path.join(dTmp, "story"), { recursive: true });
     fs.mkdirSync(path.join(dTmp, "slides"), { recursive: true });
     fs.mkdirSync(path.join(dTmp, "ads"), { recursive: true });
-    criadas.push(dTmp);
+    registra(dTmp);
     [["story/story_1.png"], ["story/story_2.png"], ["story/story_3.png"],
       ["slides/slide_01.png"], ["slides/slide_02.png"], ["ads/feed.png"]].forEach(([r]) =>
       fs.writeFileSync(path.join(dTmp, r), "x"));
@@ -1986,6 +2028,712 @@ function briefingLongo() {
       const fonteSq = fs.readFileSync(path.join(__dirname, "lib", "squad.js"), "utf8");
       checa(fonteSq.indexOf("temAcentoQuebrado(p.legenda)") >= 0,
         "a entrega do squad é conferida (legenda e artes) e vira aviso na peça");
+    }
+
+
+    // =================================================================================
+    secao("36. Contraste MEDIDO na imagem: superfície x arranjo");
+    // POR QUE ESTA SEÇÃO EXISTE. Os dois defeitos do fundo "Papel" — título branco sobre a folha
+    // creme e a caixa de nota Navy sobre cartão Navy — conviveram com a bateria inteira verde.
+    // Todas as checagens de superfície liam CÓDIGO: viam o remendo escrito e davam por bom.
+    // Nenhuma olhou a arte. Aqui a pergunta é feita ao PIXEL: desenha o slide no Chromium,
+    // apaga só a tinta do texto (color: transparent, que não mexe em layout nenhum), fotografa
+    // o que sobrou — que é exatamente o fundo atrás de cada palavra — e calcula o contraste WCAG
+    // entre a cor do texto e o pior pixel debaixo dele. É o único jeito de pegar "branco sobre
+    // creme" e "azul-escuro sobre azul-escuro", que é como a arte estava saindo.
+    {
+      // Navegador próprio: o da seção 8 já foi fechado, e esta seção precisa fotografar a arte.
+      const navC = await chromium.launch();
+      const pgC = await navC.newPage({ viewport: { width: 1080, height: 1350 }, deviceScaleFactor: 1 });
+
+      // --- WCAG ---------------------------------------------------------------------
+      const canal = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+      const lum = (rgb) => 0.2126 * canal(rgb[0]) + 0.7152 * canal(rgb[1]) + 0.0722 * canal(rgb[2]);
+      const contraste = (a, x) => {
+        const la = lum(a), lb = lum(x);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+      };
+      // 4,5:1 é o piso do texto NORMAL; texto GRANDE (>=24px, ou >=18,7px em negrito) tem piso de
+      // 3:1. Usar 4,5 para tudo reprovaria a paleta da marca em manchete de 84px, que é legível.
+      const ehGrande = (r) => r.fonte >= 24 || (r.fonte >= 18.66 && Number(r.peso) >= 700);
+      const piso = (r) => (ehGrande(r) ? 3.0 : 4.5);
+
+      // Coleta de cada folha de texto: cor, opacidade acumulada, caixa e tamanho.
+      const COLETA = `(() => {
+        const alvos = [];
+        const RUIM = new Set(["SCRIPT","STYLE","HEAD","HTML","BODY","SVG","PATH","CIRCLE","LINE","POLYLINE","RECT","IMG"]);
+        function opacidadeAcumulada(el) {
+          let o = 1, n = el;
+          while (n && n.nodeType === 1) { const v = parseFloat(getComputedStyle(n).opacity); if (!isNaN(v)) o *= v; n = n.parentElement; }
+          return o;
+        }
+        document.querySelectorAll("*").forEach((el) => {
+          if (RUIM.has(el.tagName)) return;
+          let proprio = "";
+          el.childNodes.forEach((n) => { if (n.nodeType === 3) proprio += n.textContent; });
+          proprio = proprio.replace(/\\s+/g, " ").trim();
+          if (!proprio) return;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === "hidden" || cs.display === "none") return;
+          const r = el.getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) return;
+          const m = cs.color.match(/rgba?\\(([^)]+)\\)/);
+          if (!m) return;
+          const p = m[1].split(",").map((x) => parseFloat(x));
+          alvos.push({
+            nome: (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\\s+/).join(".") : el.tagName.toLowerCase()),
+            texto: proprio.slice(0, 40),
+            cor: [p[0], p[1], p[2]],
+            alpha: (p.length > 3 ? p[3] : 1) * opacidadeAcumulada(el),
+            fonte: parseFloat(cs.fontSize), peso: cs.fontWeight,
+            x: r.left, y: r.top, w: r.width, h: r.height,
+          });
+        });
+        return alvos;
+      })()`;
+
+      const AMOSTRA = (dados) => {
+        const img = new Image();
+        return new Promise((ok) => {
+          img.onload = () => {
+            const cv = document.createElement("canvas");
+            cv.width = img.width; cv.height = img.height;
+            const cx = cv.getContext("2d");
+            cx.drawImage(img, 0, 0);
+            ok(dados.alvos.map((a) => {
+              // Recuo de 28% da altura de cada lado. A caixa de um texto dentro de uma PÍLULA
+              // (border-radius:999px) tem os cantos FORA da pílula, e o pixel do canto é a página,
+              // não o fundo do botão: sem o recuo, "branco sobre azul" era medido como "branco
+              // sobre creme" e a bateria reprovaria um defeito que não existe.
+              const rec = Math.min(Math.round(a.h * 0.28), Math.round(a.w * 0.28));
+              const x0 = Math.max(0, Math.round(a.x + rec)), y0 = Math.max(0, Math.round(a.y + rec));
+              const x1 = Math.min(cv.width, Math.round(a.x + a.w - rec)), y1 = Math.min(cv.height, Math.round(a.y + a.h - rec));
+              if (x1 <= x0 || y1 <= y0) return [];
+              const d = cx.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+              const larg = x1 - x0, alt = y1 - y0;
+              const passo = Math.max(1, Math.round(Math.min(larg, alt) / 12));
+              const px = [];
+              for (let y = 0; y < alt; y += passo) for (let x = 0; x < larg; x += passo) {
+                const i = (y * larg + x) * 4;
+                px.push([d[i], d[i + 1], d[i + 2]]);
+              }
+              return px;
+            }));
+          };
+          img.src = dados.png;
+        });
+      };
+
+      async function medeHtml(html, altura) {
+        // O story tem 1920px: com a janela em 1350 a foto cortava o miolo do cartão e os textos
+        // de baixo saíam SEM pixel amostrado — ou seja, sem medição nenhuma, passando batido.
+        await pgC.setViewportSize({ width: 1080, height: altura || 1350 });
+        await pgC.setContent(html, { waitUntil: "load" });
+        await pgC.evaluate(() => document.fonts && document.fonts.ready);
+        const alvos = await pgC.evaluate(COLETA);
+        await pgC.addStyleTag({ content: "* { color: transparent !important; -webkit-text-fill-color: transparent !important;"
+          + " text-shadow: none !important; text-decoration-color: transparent !important; }" });
+        const png = (await pgC.screenshot({ type: "png" })).toString("base64");
+        const amostras = await pgC.evaluate(AMOSTRA, { alvos, png: "data:image/png;base64," + png });
+        return alvos.map((a, i) => {
+          const px = amostras[i] || [];
+          if (!px.length) return null;
+          let pior = null, piorR = Infinity;
+          for (const p of px) {
+            // Tinta com transparência mistura com o fundo daquele pixel antes de comparar.
+            const tinta = a.alpha >= 0.999 ? a.cor : a.cor.map((c, k) => c * a.alpha + p[k] * (1 - a.alpha));
+            const r = contraste(tinta, p);
+            if (r < piorR) { piorR = r; pior = p; }
+          }
+          return { nome: a.nome, texto: a.texto, fonte: a.fonte, peso: a.peso, cor: a.cor, alpha: a.alpha, pixel: pior, ratio: piorR };
+        }).filter(Boolean);
+      }
+
+      // Texto DECORATIVO é desenho, não informação: a marca d'água, o algarismo fantasma da série
+      // e a palavra-conceito gigante existem para serem quase invisíveis. Medir contraste neles
+      // reprovaria a arte por um efeito proposital. A marca d'água "palavra" sai sem classe
+      // própria, então a opacidade é o que a separa: nenhum texto de CONTEÚDO deste motor passa
+      // de 0,62 de véu.
+      const DECORATIVO = /^\.(wm|watermark|sr-ghost|pw|qt-aspa|mk)\b/;
+      const ehDecorativo = (r) => DECORATIVO.test(r.nome) || r.alpha < 0.65;
+
+      const slidesDeTeste = (t) => [
+        ["text", { layout: "text", theme: t, title: "Título do slide de texto", body: "Frase de apoio com 0% e R$ 1,99.", eyebrow: "RÓTULO" }],
+        ["list", { layout: "list", theme: t, title: "Título da lista", items: ["Primeiro item da lista", "Segundo item da lista", "Terceiro item"], body: "Apoio embaixo da lista." }],
+        ["stat_grid", { layout: "stat_grid", theme: t, title: "Título da grade", stats: [{ value: "0%", label: "Taxa" }, { value: "R$ 1,99", label: "Por transação" }, { value: "D+10", label: "PIX" }, { value: "95%", label: "Aprovação" }] }],
+        ["flow_row", { layout: "flow", theme: t, orient: "row", title: "Título do fluxo em linha", flow: [{ label: "ACEITE", sub: "Condições", icon: "check" }, { label: "MIGRAÇÃO", sub: "Produtos", icon: "cart" }, { label: "NO AR", sub: "Publicado", icon: "money", mark: true }], note: "Observação da caixa de nota do fluxo em linha.", tone: "neutro" }],
+        ["flow_col", { layout: "flow", theme: t, title: "Título do fluxo vertical", flow: [{ label: "Cadastro", sub: "Dados da loja" }, { label: "Aprovação", sub: "Análise" }, { label: "Repasse", sub: "D+10", mark: true }], body: "Apoio do fluxo vertical.", note: "Observação da caixa de nota do fluxo vertical.", tone: "aviso" }],
+        ["cta", { layout: "cta", theme: t, title: "Pronto para começar?", body: "Frase de apoio do fecho." }],
+        ["palavra", { layout: "palavra", theme: t, word: "SELET", title: "Título sobre a palavra", body: "Apoio da palavra conceito." }],
+        ["numero", { layout: "numero", theme: t, title: "Título do número", stats: [{ value: "95%", label: "De aprovação no cartão" }], body: "Apoio do número gigante." }],
+        ["serie", { layout: "serie", theme: t, serie: { n: 2, total: 5, rotulo: "PRINCÍPIO" }, title: "Título do princípio", body: "Corpo do princípio da série." }],
+        ["serie_papel", { layout: "serie", theme: t, serie: { n: 3, total: 5, rotulo: "REGRA", estilo: "papel" }, title: "Título da regra", body: "Corpo da regra na folha." }],
+        ["comparacao", { layout: "comparacao", theme: t, versus: { a: "Liquidez", b: "Volume" }, body: "Apoio da comparação." }],
+        ["citacao", { layout: "citacao", theme: t, citacao: { text: "Uma frase de citação com tamanho razoável.", autor: "Fabrício Gonçalves", papel: "Sócio administrador" } }],
+        ["medidor", { layout: "medidor", theme: t, title: "Título do medidor", gauge: { value: "95%", label: "Aprovação no cartão" }, body: "Apoio do medidor." }],
+        ["mapa", { layout: "mapa", theme: t, title: "Título do mapa", tree: { root: "Pagamento", branches: [{ label: "PIX", sub: "D+10" }, { label: "Cartão", sub: "D+30" }, { label: "Boleto", sub: "D+2" }] }, body: "Apoio do mapa." }],
+        ["dialogo", { layout: "dialogo", theme: t, title: "Título do diálogo", dialog: [{ who: "produtor", text: "Quanto tempo leva a migração?" }, { who: "4selet", text: "Cinco etapas, com gestor dedicado." }], body: "Apoio do diálogo." }],
+        ["device", { layout: "device", theme: t, title: "Título do aparelho", device: "notebook", image: "", body: "Apoio do aparelho." }],
+      ];
+      const cardsDeTeste = (theme) => [
+        ["story_cover", { layout: "cover", theme, title: "Capa do story", body: "Apoio da capa.", eyebrow: "RÓTULO" }],
+        ["story_text", { layout: "text", theme, title: "Cartão de texto", body: "Corpo do cartão de texto." }],
+        ["story_number", { layout: "number", theme, title: "Cartão de número", stats: [{ value: "95%", label: "De aprovação" }] }],
+        ["story_quote", { layout: "quote", theme, quote: { text: "Uma frase para o cartão de citação.", autor: "Hugo Belo" } }],
+        ["story_poll", { layout: "poll", theme, poll: { question: "Você já migrou?", options: ["Sim", "Ainda não"] } }],
+        ["story_link", { layout: "link", theme, title: "Fecho do story", body: "Apoio do fecho.", link: { label: "Fale com a gente" } }],
+      ];
+      const templatesDeTeste = (fundo) => render.TEMPLATE_IDS.filter((id) => id !== "photo").map((id) => [
+        "tpl_" + id, render.TEMPLATES[id]({
+          width: 1080, height: 1350, eyebrow: "RÓTULO DA PEÇA",
+          headline: "Manchete da peça com 0% de taxa",
+          subtext: "Frase de apoio da peça, com um pouco mais de texto.",
+          cta: "Fale com a gente", badge: "", footer: "4selet.com.br",
+          dots: "", logo: "", watermark: "", fundo: fundo,
+        }),
+      ]);
+
+      const linhas = [];
+      for (const fundo of render.FUNDO_IDS) {
+        for (const t of ["dark", "light"]) {
+          for (const [arq, s] of slidesDeTeste(t)) {
+            const built = render.carouselSlidesHtml({ slides: [s], fundo: fundo, cta: "" },
+              render.TEMPLATES.editorial, { fundo: fundo, logo: "", watermark: "" });
+            for (const r of await medeHtml(built[0].html)) linhas.push(Object.assign({ fundo, tema: t, arq }, r));
+          }
+          for (const [arq, c] of cardsDeTeste(t)) {
+            const built = render.storyCardsHtml({ cards: [c], fundo: fundo, cta: "" }, { fundo: fundo, logo: "", watermark: "" });
+            for (const r of await medeHtml(built[0].html, 1920)) linhas.push(Object.assign({ fundo, tema: t, arq }, r));
+          }
+        }
+        for (const [arq, html] of templatesDeTeste(fundo)) {
+          for (const r of await medeHtml(html)) linhas.push(Object.assign({ fundo, tema: "-", arq }, r));
+        }
+      }
+      await pgC.close(); await navC.close();
+
+      const conteudo = linhas.filter((r) => !ehDecorativo(r));
+      const reprovado = (r) => r.ratio < piso(r);
+      const nome = (r) => r.fundo + "/" + r.tema + "/" + r.arq + " " + r.nome;
+
+      // A medição não pode virar um teste que passa por não ter medido nada. Se um arranjo deixar
+      // de desenhar (erro de dado, arquétipo renomeado), o número de textos despenca e a bateria
+      // avisa em vez de dar tudo verde em cima do vazio.
+      checa(conteudo.length >= 900, "a medição percorreu a arte inteira", conteudo.length + " textos medidos em "
+        + render.FUNDO_IDS.length + " superfícies");
+
+      // O DEFEITO RELATADO, no pixel. Sobre a folha creme, NENHUM texto pode ficar abaixo do piso.
+      // Antes da correção eram 57 (título branco sobre creme a 1,27:1, a lista inteira a 1,00:1,
+      // a caixa de nota a 1,00:1); a bateria estava verde do mesmo jeito.
+      const ruinsPapel = conteudo.filter((r) => r.fundo === "papel" && reprovado(r));
+      const piorPapel = conteudo.filter((r) => r.fundo === "papel").reduce((m, r) => Math.min(m, r.ratio), Infinity);
+      checa(ruinsPapel.length === 0, "na folha de papel nenhum texto fica ilegível",
+        ruinsPapel.length ? ruinsPapel.slice(0, 4).map((r) => nome(r) + " " + r.ratio.toFixed(2) + ":1").join(" · ")
+          : "pior caso " + piorPapel.toFixed(2) + ":1");
+
+      // A CAIXA DE NOTA DO FLUXO, que é o defeito 2: texto Navy dentro de cartão Navy, 1,00:1.
+      // Ela merece checagem própria porque é o caso que uma lista de seletores escrita à mão
+      // reintroduz sem ninguém perceber — já aconteceu, e o comentário no CSS avisava.
+      const notas = conteudo.filter((r) => /^\.(fnote|flow-note)\b/.test(r.nome) || /Observação da caixa de nota/.test(r.texto));
+      const notasRuins = notas.filter(reprovado);
+      checa(notas.length >= 15, "  a caixa de nota do fluxo foi medida nas duas orientações", notas.length + " medições");
+      checa(notasRuins.length === 0, "  e o texto dela nunca some dentro do próprio cartão",
+        notasRuins.length ? notasRuins.slice(0, 4).map((r) => nome(r) + " " + r.ratio.toFixed(2) + ":1").join(" · ")
+          : "pior caso " + notas.reduce((m, r) => Math.min(m, r.ratio), Infinity).toFixed(2) + ":1");
+
+      // Tinta IGUAL ao fundo é o sintoma mais grosseiro e o mais fácil de deixar passar: some da
+      // arte sem deixar buraco, e a miniatura não denuncia. Vale para toda superfície.
+      const invisiveis = conteudo.filter((r) => r.ratio < 1.5);
+      checa(invisiveis.length === 0, "nenhum texto sai da mesma cor do fundo em superfície nenhuma",
+        invisiveis.slice(0, 4).map((r) => nome(r) + " " + r.ratio.toFixed(2) + ":1").join(" · ") || "menor razão medida "
+          + conteudo.reduce((m, r) => Math.min(m, r.ratio), Infinity).toFixed(2) + ":1");
+
+      // CATRACA. Estes oito casos já estavam abaixo do piso ANTES desta rodada e não vêm da
+      // superfície: são a paleta da marca sobre o brilho do Quadriculado e sobre o degradê do
+      // Padrão. Foram medidos nos DOIS motores, o de antes e o de agora, e deram o mesmo número
+      // até o centésimo — ou seja, nada desta rodada os causou. Consertar cada um repinta
+      // superfícies que este lote não pode mudar, então ficam registrados aqui para virarem
+      // decisão do Hugo. A causa comum: o brilho do Quadriculado é um radial-gradient pensado
+      // para fundo escuro e continua sendo aplicado por cima quando o tema é claro.
+      //
+      // A lista é uma CATRACA, não um perdão: um caso NOVO reprova, e um caso que SUMIU daqui
+      // também reprova — assim ninguém acrescenta linha aqui para calar um defeito recém-criado,
+      // e a lista não vira depósito de defeito velho já resolvido.
+      const CONHECIDOS = [
+        "padrao/-/tpl_editorial .eyebrow",        // rótulo Sky sobre o degradê azul — 2,85:1
+        "grade/-/tpl_bold .eyebrow",              // idem no Destaque sobre o Quadriculado — 2,88:1
+        "grade/dark/comparacao .cp-s",            // o ">" sobre o brilho do Quadriculado — 2,75:1
+        "grade/light/comparacao .cp-s",           // idem no tema claro — 2,41:1
+        "grade/light/serie .sr-de",               // "02 / 05" sobre o brilho do Quadriculado — 2,85:1
+        "grade/light/story_cover .eyebrow",       // rótulo da capa de Story, mesma origem — 2,71:1
+        "grade/dark/text .eyebrow",              // rótulo do slide de texto no canto escurecido — 2,41:1
+        "grade/light/text .eyebrow",             // idem no tema claro — 2,21:1
+      ];
+      const ruinsAgora = Array.from(new Set(conteudo.filter(reprovado).map(nome)));
+      const novos = ruinsAgora.filter((n) => CONHECIDOS.indexOf(n) < 0);
+      const sumiram = CONHECIDOS.filter((n) => ruinsAgora.indexOf(n) < 0);
+      checa(novos.length === 0, "nenhum texto NOVO abaixo do piso de leitura da WCAG",
+        novos.slice(0, 5).join(" · ") || ruinsAgora.length + " casos, todos já conhecidos");
+      checa(sumiram.length === 0, "  e a lista de casos conhecidos não guarda defeito já resolvido",
+        sumiram.length ? "consertados, tire da lista: " + sumiram.join(" · ") : CONHECIDOS.length + " casos registrados");
+    }
+
+
+    secao("37. Os outros defeitos desta rodada, um teste para cada");
+    {
+      const rd = require("./lib/render.js");
+
+      // A MARCA D'ÁGUA SEM CLASSE. A superfície papel manda esconder a marca d'água
+      // (.wm { display:none }) porque sobre a folha ela lê como sujeira. Só que nenhuma das cinco
+      // variantes saía COM classe: a regra existia há meses mirando um seletor que o HTML nunca
+      // teve. No tema escuro o véu é de 5% e ninguém notava; com o papel valendo como superfície
+      // clara, a palavra "SELET" gigante apareceu por trás do fecho. Um teste de CSS nunca pegaria
+      // isto — a regra estava lá, correta, e não pegava em nada.
+      // "none" é a opção de NÃO desenhar marca d'água: não há elemento para carimbar.
+      const semClasse = rd.WATERMARK_IDS.filter((w) => w !== "none").filter((w) => {
+        const h = rd.carouselSlidesHtml({ fundo: "padrao", slides: [{ layout: "text", title: "T", body: "b" }] },
+          rd.TEMPLATES.editorial, { fundo: "padrao", watermark: w })[0].html;
+        return h.indexOf('class="wm"') < 0;
+      });
+      checa(semClasse.length === 0, "toda variante de marca d'água sai com classe (senão a regra que a esconde no papel não pega em nada)",
+        semClasse.length ? "sem classe: " + semClasse.join(", ") : rd.WATERMARK_IDS.join(", "));
+      const comWm = rd.carouselSlidesHtml({ fundo: "papel", slides: [{ layout: "cta", title: "Pronto?", body: "b" }] },
+        rd.TEMPLATES.editorial, { fundo: "papel", watermark: "word" })[0].html;
+      checa(/\.wm[^{]*\{[^}]*display\s*:\s*none/.test(comWm), "  e no papel existe a regra que a apaga");
+
+      // O FLUXO VERTICAL NO TEMA CLARO. O texto de apoio (.flow-note) fica direto sobre a
+      // superfície e tinha a cor cravada em Mist — tinta de fundo escuro. No tema claro a frase
+      // sumia nas quatro superfícies escuras. A seção 36 mede isso no pixel; esta checagem é o
+      // atalho barato que aponta a linha exata quando ela volta.
+      const fluxoClaro = rd.carouselSlidesHtml({ fundo: "padrao", slides: [{ layout: "flow", theme: "light",
+        title: "T", flow: [{ label: "A", sub: "a" }, { label: "B", sub: "b" }], body: "Apoio do fluxo vertical." }] },
+        rd.TEMPLATES.editorial, { fundo: "padrao" })[0].html;
+      const trechoNota = (fluxoClaro.match(/\.flow-note\s*\{[^}]*\}/) || [""])[0];
+      checa(trechoNota.indexOf("#AFBCC9") < 0, "o apoio do fluxo vertical não sai em tinta de fundo escuro no tema claro",
+        trechoNota.slice(0, 80));
+
+      // A CAIXA DE NOTA DO FLUXO NO PAPEL. O CSS da superfície tinha uma lista de seletores
+      // escrita à mão repintando `.fnote span:last-child` de Navy — e essa frase mora DENTRO de
+      // uma caixa Navy. Azul-escuro sobre azul-escuro. O comentário do próprio arquivo avisava
+      // para não pôr ali nada que viva dentro de cartão escuro, e a linha estava lá.
+      const papelFluxo = rd.carouselSlidesHtml({ fundo: "papel", slides: [{ layout: "flow", orient: "row",
+        title: "T", flow: [{ label: "A", sub: "a", icon: "check" }], note: "Observação da nota." }] },
+        rd.TEMPLATES.editorial, { fundo: "papel" })[0].html;
+      checa(!/\.fnote span:last-child\s*\{[^}]*#003554/.test(papelFluxo),
+        "a caixa de nota do fluxo não recebe tinta Navy sobre cartão Navy");
+
+      // "SUPERFÍCIE CLARA" É DADO, NÃO UMA STRING REPETIDA. Enquanto a proteção era a comparação
+      // com "papel" escrita em quatro lugares, a próxima superfície clara nasceria com o defeito
+      // inteiro de volta. Aqui a bateria cobra que exista pelo menos uma superfície marcada como
+      // clara e que TODA superfície marcada assim mande na tinta — e não só a que tem esse nome.
+      const claras = rd.FUNDO_IDS.filter((f) => rd.FUNDOS[f] && rd.FUNDOS[f].claro);
+      checa(claras.length >= 1, "a superfície clara é declarada como DADO, não pela string do nome", claras.join(", "));
+      const naoMandam = claras.filter((f) => {
+        const mk = (t) => rd.carouselSlidesHtml({ fundo: f, slides: [{ layout: "list", theme: t, title: "T", items: ["a"], body: "c" }] },
+          rd.TEMPLATES.editorial, {})[0].html;
+        return mk("dark") !== mk("light");
+      });
+      checa(naoMandam.length === 0, "  e toda superfície clara vence o tema que o modelo escreveu no slide",
+        naoMandam.length ? "não vence em: " + naoMandam.join(", ") : claras.join(", "));
+
+      // A PRÉVIA DA PEÇA DE IMAGEM COM ARQUÉTIPO. O realce era aplicado DUAS vezes: previewFields
+      // já devolvia a manchete em HTML e o arquétipo aplica o mesmo realce lá dentro — a segunda
+      // passada começa por esc(), então a arte saía com '<span class="accent">95%</span>' escrito
+      // por extenso, em letra de manchete. Ninguém viu porque a checagem lia o código.
+      // A prova precisa ser do DESENHO, não do código: o documento que a prévia manda para a
+      // câmera é aberto no navegador e o que se lê é o TEXTO VISÍVEL. Se as tags virarem letra,
+      // elas aparecem aqui — e é exatamente o que a arte mostrava.
+      const navP = await chromium.launch();
+      const pgPrev = await navP.newPage({ viewport: { width: 1080, height: 1080 } });
+      const CONCEITO = { eyebrow: "GESTÃO", headline: "A margem da sua ==operação== com 95%",
+        subtext: "Quatro números definem quanto você ganha.", cta: "Conhecer a plataforma" };
+      const NUMEROS = [{ value: "95%", label: "aprovação" }, { value: "D+10", label: "PIX" },
+        { value: "D+30", label: "cartão" }, { value: "R$ 1,99", label: "transação" }];
+      const textoDesenhado = async (parsed, extra) => {
+        const r = await rd.renderPreview(Object.assign({ content_type: "ad_creative", parsed, soHtml: true,
+          folder: "regprev" + un() }, extra || {}));
+        if (!r.ok) return { erro: r.error };
+        await pgPrev.setContent(r.html, { waitUntil: "load" });
+        await pgPrev.waitForTimeout(120);
+        return { template: r.template, texto: await pgPrev.evaluate(() => document.body.innerText.replace(/\s+/g, " ")) };
+      };
+      const comArq = await textoDesenhado(Object.assign({}, CONCEITO, { stats: NUMEROS }));
+      checa(comArq.template === "stat_grid", "a peça de Imagem com números cai na grade também na prévia", comArq.template || comArq.erro);
+      checa(comArq.texto && comArq.texto.indexOf("<span") < 0 && comArq.texto.indexOf("class=") < 0,
+        "  e a arte NÃO desenha as tags do realce como texto",
+        (comArq.texto || "").slice(0, 90));
+      checa(comArq.texto && comArq.texto.indexOf("A margem da sua operação com 95%") >= 0,
+        "  a manchete sai inteira, com o ==destaque== virando realce e não marcador",
+        (comArq.texto || "").slice(0, 90));
+      // O outro lado do mesmo par: nos templates de arte o realce PRECISA continuar existindo.
+      // Sem esta metade, "tirar o realce de todo lugar" passaria no teste acima.
+      const semArq = await textoDesenhado(CONCEITO, { template: "bold" });
+      checa(semArq.texto && semArq.texto.indexOf("A margem da sua operação com 95%") >= 0,
+        "  e o template de arte continua desenhando a manchete sem marcador", (semArq.texto || "").slice(0, 90));
+      const htmlBold = (await rd.renderPreview({ content_type: "ad_creative", parsed: CONCEITO, template: "bold", soHtml: true, folder: "regprev" + un() })).html;
+      checa(/<span class="accent">95%<\/span>/.test(htmlBold), "  com o realce do número no lugar (a correção não apagou o destaque)");
+      await navP.close();
+    }
+
+
+    secao("38. Editor de arte: a caixa de fonte e o aviso antes de refazer");
+    {
+      const appSrc = fs.readFileSync(path.join(__dirname, "public", "js", "app.js"), "utf8");
+      // As listas do app.js são LIDAS DE VERDADE, não procuradas com regex: o trecho da declaração
+      // é recortado e avaliado. Um teste de string diria "a palavra Montserrat aparece no arquivo",
+      // que é justamente o tipo de checagem que deixou passar o editor oferecendo Archivo Black —
+      // uma família que o motor de arte não tem e que só existia porque o editor baixava a fonte
+      // por conta própria.
+      let LISTAS = null;
+      try {
+        // Um recorte contíguo do bloco inteiro de tipografia: assim o teste avalia as listas
+        // COMO ELAS SÃO, e não uma cópia que alguém teria de manter em dia aqui também.
+        const a = appSrc.indexOf("const TIPOGRAFIA_OPCOES = [");
+        const b = appSrc.indexOf("const PALETA_OPCOES = [");
+        LISTAS = new Function("esc", appSrc.slice(a, b)
+          + String.fromCharCode(10) + "return { TIPOGRAFIA_OPCOES, TIPOGRAFIA_ROTULOS, EDITOR_FONTES, EDITOR_FONTES_LINK };")(String);
+      } catch (e) { LISTAS = null; }
+      checa(!!(LISTAS && LISTAS.EDITOR_FONTES && LISTAS.EDITOR_FONTES.length),
+        "as listas de tipografia da tela são lidas de verdade (não por regex)",
+        LISTAS ? LISTAS.EDITOR_FONTES.length + " opções no editor" : "não deu para avaliar as declarações");
+
+      if (LISTAS) {
+        const daCriacao = LISTAS.TIPOGRAFIA_OPCOES.filter((o) => o[0]);
+        const doEditor = LISTAS.EDITOR_FONTES.filter((f) => !f.marca);
+        // 1) Toda família oferecida em qualquer uma das duas telas TEM que existir no motor de arte.
+        //    Archivo Black e Georgia não existiam, e a peça saía com elas: o editor puxava a fonte
+        //    do Google sozinho e o render devolvia outra coisa.
+        const foraDoMotor = daCriacao.map((o) => o[0]).filter((id) => render.FAMILIA_IDS.indexOf(id) < 0);
+        checa(foraDoMotor.length === 0, "toda tipografia oferecida na tela existe no motor de arte",
+          foraDoMotor.length ? "não existem em FAMILIAS: " + foraDoMotor.join(", ") : render.FAMILIA_IDS.join(", "));
+        // 2) E toda família do motor tem que aparecer na tela, senão ela é inalcançável.
+        const presas = render.FAMILIA_IDS.filter((id) => daCriacao.every((o) => o[0] !== id));
+        checa(presas.length === 0, "  e toda família do motor aparece para escolher", presas.join(", ") || "as sete");
+        // 3) A caixa do editor e a da criação são a MESMA lista. Eram duas, e por isso divergiam.
+        const nomesEditor = doEditor.map((f) => f.nome).join(" | ");
+        const nomesCriacao = daCriacao.map((o) => o[2].nome).join(" | ");
+        checa(nomesEditor === nomesCriacao, "a caixa de fonte do editor oferece a mesma lista da criação",
+          nomesEditor === nomesCriacao ? nomesEditor : "editor: " + nomesEditor + "  ·  criação: " + nomesCriacao);
+        // 4) O endereço do Google Fonts sai da mesma lista — e traz TODAS as famílias. Enquanto era
+        //    escrito à mão, a caixa oferecia Montserrat e o navegador nunca baixava: o texto saía
+        //    na fonte de reserva, parecido o bastante para ninguém notar.
+        const faltamNoLink = LISTAS.TIPOGRAFIA_OPCOES.map((o) => o[2].google).concat([LISTAS.TIPOGRAFIA_ROTULOS.google])
+          .filter((g) => LISTAS.EDITOR_FONTES_LINK.indexOf("family=" + g) < 0);
+        checa(faltamNoLink.length === 0, "  e o endereço do Google Fonts do editor traz todas elas",
+          faltamNoLink.join(", ") || "as oito famílias + os rótulos");
+        // 5) O endereço responde de verdade. Endereço malformado volta 400 e o navegador fica sem
+        //    fonte nenhuma, calado.
+        const url = (LISTAS.EDITOR_FONTES_LINK.match(/href="([^"]+)"/) || [])[1];
+        const resp = await new Promise((ok) => {
+          try {
+            require("https").get(url, { headers: { "user-agent": "Mozilla/5.0 (bateria 4Selet)" } }, (r) => {
+              let s = ""; r.on("data", (c) => (s += c)); r.on("end", () => ok({ status: r.statusCode, css: s }));
+            }).on("error", (e) => ok({ status: 0, css: "", erro: e.message }));
+          } catch (e) { ok({ status: 0, css: "", erro: e.message }); }
+        });
+        checa(resp.status === 200, "  e o endereço responde (senão o texto sai na fonte de reserva, sem avisar)",
+          "HTTP " + resp.status + (resp.erro ? " — " + resp.erro : ""));
+        if (resp.status === 200) {
+          const semCss = LISTAS.TIPOGRAFIA_OPCOES.map((o) => o[2].nome).concat([LISTAS.TIPOGRAFIA_ROTULOS.nome])
+            .filter((n) => resp.css.indexOf("font-family: '" + n + "'") < 0);
+          checa(semCss.length === 0, "  e a resposta traz o desenho de cada família pedida", semCss.join(", ") || "todas");
+        }
+      }
+
+      // O <link> DE FONTES NÃO PODE SE MULTIPLICAR. Ao salvar, o navegador serializa o endereço com
+      // "&amp;" no lugar de "&", então comparar as duas strings ao pé da letra nunca casava: cada
+      // abrir-e-salvar empilhava mais uma cópia do mesmo <link> dentro do HTML da peça (medido: 3
+      // cópias depois do segundo salvamento).
+      let FONTES_JA_NA_ARTE = null;
+      try {
+        // A REGRA é lida do próprio app.js, na linha em que ela vive: reescrevê-la aqui faria o
+        // teste passar sobre uma cópia, que é como um teste deixa de valer.
+        const li = appSrc.indexOf("const FONTES_JA_NA_ARTE = ");
+        FONTES_JA_NA_ARTE = new Function("FONTS", appSrc.slice(li, appSrc.indexOf(String.fromCharCode(10), li))
+          + String.fromCharCode(10) + "return FONTES_JA_NA_ARTE;")(LISTAS ? LISTAS.EDITOR_FONTES_LINK : "");
+      } catch (e) { FONTES_JA_NA_ARTE = null; }
+      // O CARIMBO DE MONTAGEM. É o que separa "peça que alguém montou à mão" de "peça que o modelo
+      // desenhou": sem ele, ou o painel refaz a arte em silêncio (era o que acontecia) ou pergunta
+      // sempre — e pergunta que aparece sempre ensina a clicar em "sim" sem ler.
+      let temMarca = null;
+      try {
+        const i = appSrc.indexOf("function temMarcaDeMontagem(");
+        temMarca = new Function(appSrc.slice(i, appSrc.indexOf("\n", i)) + "\nreturn temMarcaDeMontagem;")();
+      } catch (e) { temMarca = null; }
+      if (temMarca) {
+        checa(temMarca('<html data-montagem="editor"><body>x</body></html>'), "o carimbo do editor marca a peça como montada à mão");
+        checa(temMarca('<html><head><link id="he-fonts" rel="stylesheet"></head></html>'),
+          "  e a peça montada ANTES do carimbo é reconhecida pelo <link> que só o editor injeta");
+        checa(!temMarca('<html><head><style>b{}</style></head><body>arte do modelo</body></html>'),
+          "  e a arte desenhada pelo modelo NÃO dispara o aviso (senão a pergunta aparece sempre)");
+      } else {
+        checa(false, "a marca de montagem pôde ser lida do app.js");
+      }
+
+      // TODO BOTÃO QUE REDESENHA A ARTE PELO MODELO PASSA PELA MESMA CONFERÊNCIA. Hoje são três:
+      // "Gerar arte final", "Regerar slide N" e "Ajustar com IA". Este teste existe para o PRÓXIMO
+      // botão não nascer sem o aviso — que é como os três primeiros nasceram.
+      const chamadas = (appSrc.match(/artesMontadasAMao\(/g) || []).length - 1; // -1: a definição
+      checa(chamadas >= 3, "os três caminhos que redesenham a arte consultam a montagem antes",
+        chamadas + " chamadas de artesMontadasAMao");
+      // A troca de fonte no editor usa a MESMA voz da criação — não um segundo texto escrito à mão.
+      const trechoOnchange = appSrc.slice(appSrc.indexOf('$("#he-font").onchange'), appSrc.indexOf('$("#he-font").onchange') + 900);
+      checa(/confirmaForaDaIdentidade\(/.test(trechoOnchange),
+        "trocar a fonte no editor abre o MESMO aviso de identidade da criação");
+      checa(/refleteFonte\(/.test(trechoOnchange),
+        "  e dizer “Não” devolve a caixa para a fonte que o texto realmente usa (relê o elemento)");
+    }
+
+
+    secao("39. Agendamento: nunca duas vezes, nunca fora de hora");
+    {
+      // A FILA DE VERDADE NÃO É TOCADA. O schedule.js decide onde grava a partir de PATHS.DATA_DIR
+      // no momento em que é carregado; a bateria aponta essa pasta para um canto isolado ANTES de
+      // carregá-lo. Sem isto, um teste de agendamento criaria itens vencidos na fila real e o
+      // painel que está no ar publicaria de verdade, na conta da 4Selet. O publicador é um ESPIÃO:
+      // conta chamadas e não fala com o Instagram.
+      const cfg = require("./lib/config.js");
+      const dataReal = cfg.PATHS.DATA_DIR;
+      const caixa = fs.mkdtempSync(path.join(os.tmpdir(), "regr-agenda-"));
+      cfg.PATHS.DATA_DIR = caixa;
+      let agenda = null;
+      try { agenda = require("./lib/schedule.js"); } catch (e) { agenda = null; }
+      checa(!!agenda && String(agenda.rodaTique) !== "undefined", "o tique do agendador pode ser disparado pela bateria",
+        agenda ? "isolado em " + path.basename(caixa) : "não carregou");
+
+      if (agenda) {
+        const daqui = (ms) => new Date(Date.now() + ms).toISOString();
+        const zera = () => { try { fs.writeFileSync(path.join(caixa, "schedule.json"), "[]"); } catch (e) {} };
+        const espiao = () => {
+          const chamadas = {};
+          const fn = async (folder) => { chamadas[folder] = (chamadas[folder] || 0) + 1; await new Promise((r) => setTimeout(r, 120)); return { ok: true, dry_run: true }; };
+          return { chamadas, fn };
+        };
+
+        // (a) DATA NO PASSADO. A trava existia só no navegador: pela API dava para agendar para
+        // ontem e o tique seguinte postava na hora, sem ninguém olhando.
+        zera();
+        let recusou = "";
+        try { agenda.add({ folder: "zz_bat_ontem", kind: "feed", caption: "c", scheduled_at: daqui(-24 * 3600 * 1000), by: "bateria", destino: "feed" }); }
+        catch (e) { recusou = e.code || ""; }
+        checa(recusou === "E_DATA_NO_PASSADO", "agendar para um horário que já passou é recusado", recusou || "FOI ACEITO");
+        // E a outra ponta: o remédio não pode virar doença. Agendar para daqui a pouco continua valendo.
+        let aceitou = true;
+        try { agenda.add({ folder: "zz_bat_futuro", kind: "feed", caption: "c", scheduled_at: daqui(30 * 1000), by: "bateria", destino: "feed" }); }
+        catch (e) { aceitou = false; }
+        checa(aceitou, "  e agendar para daqui a 30 segundos continua funcionando (a folga do relógio não atrapalha)");
+
+        // (b) POST DUPLICADO. Dois tiques sobrepostos sobre a mesma fila vencida. Antes das travas
+        // isto dava TRÊS posts para dois agendamentos, porque cada tique decidia a fila no começo e
+        // continuava usando essa foto antiga depois de esperar o Instagram. Ler o código não pega:
+        // só o CONTADOR pega.
+        zera();
+        const fila = JSON.parse(fs.readFileSync(path.join(caixa, "schedule.json"), "utf8"));
+        const vencido = (id, folder) => ({ id, folder, kind: "feed", destino: "feed", caption: "c",
+          scheduled_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(), status: "pending", by: "bateria" });
+        fila.push(vencido("zzbat1", "zz_bat_a"), vencido("zzbat2", "zz_bat_b"));
+        fs.writeFileSync(path.join(caixa, "schedule.json"), JSON.stringify(fila));
+        const e1 = espiao();
+        await Promise.all([agenda.rodaTique(e1.fn, null), agenda.rodaTique(e1.fn, null)]);
+        const repetidos = Object.keys(e1.chamadas).filter((f) => e1.chamadas[f] > 1);
+        checa(repetidos.length === 0, "dois tiques ao mesmo tempo não publicam a mesma peça duas vezes",
+          JSON.stringify(e1.chamadas));
+        checa(e1.chamadas.zz_bat_a === 1 && e1.chamadas.zz_bat_b === 1,
+          "  e as duas peças vencidas saem, uma vez cada (o remédio não travou a fila)", JSON.stringify(e1.chamadas));
+
+        // (c) FORA DE HORA. O painel desligado por dias voltava e mandava tudo que tinha vencido de
+        // uma vez, de madrugada. Passou de duas horas, vira "perdido" com o motivo escrito.
+        zera();
+        const f2 = [];
+        f2.push(Object.assign(vencido("zzbat3", "zz_bat_velho"), { scheduled_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString() }));
+        f2.push(Object.assign(vencido("zzbat4", "zz_bat_recente"), { scheduled_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() }));
+        fs.writeFileSync(path.join(caixa, "schedule.json"), JSON.stringify(f2));
+        const e2 = espiao();
+        await agenda.rodaTique(e2.fn, null);
+        const depois = JSON.parse(fs.readFileSync(path.join(caixa, "schedule.json"), "utf8"));
+        const velho = depois.find((x) => x.id === "zzbat3");
+        checa(!e2.chamadas.zz_bat_velho && velho && velho.status === "perdido",
+          "agendamento vencido faz dias NÃO é publicado fora de hora", velho ? velho.status : "sumiu");
+        checa(velho && /passou há/.test(String(velho.error || "")) && /agende de novo/.test(String(velho.error || "")),
+          "  e o motivo fica escrito por extenso, para a aba Agendados mostrar",
+          (velho && String(velho.error || "").slice(0, 70)) || "sem motivo");
+        checa(e2.chamadas.zz_bat_recente === 1, "  enquanto o que venceu faz 10 minutos publica normalmente",
+          JSON.stringify(e2.chamadas));
+
+        // (d) A TRAVA ENTRE PROCESSOS. No instante do deploy existem dois painéis vivos apontando
+        // para a mesma pasta de dados. A trava de memória não atravessa processos; a de arquivo sim.
+        zera();
+        fs.writeFileSync(path.join(caixa, "schedule.json"), JSON.stringify([vencido("zzbat5", "zz_bat_travado")]));
+        fs.mkdirSync(path.join(caixa, "schedule_locks"), { recursive: true });
+        fs.writeFileSync(path.join(caixa, "schedule_locks", "zzbat5.lock"), JSON.stringify({ pid: 999999 }));
+        const e3 = espiao();
+        await agenda.rodaTique(e3.fn, null);
+        checa(!e3.chamadas.zz_bat_travado, "peça que OUTRO painel já está publicando não é publicada de novo",
+          JSON.stringify(e3.chamadas));
+        try { fs.unlinkSync(path.join(caixa, "schedule_locks", "zzbat5.lock")); } catch (e) {}
+
+        // (e) JÁ PUBLICADA NA MÃO. O agendamento que sobrou não pode virar um segundo post.
+        zera();
+        fs.writeFileSync(path.join(caixa, "schedule.json"), JSON.stringify([vencido("zzbat6", "zz_bat_ja_saiu")]));
+        const e4 = espiao();
+        await agenda.rodaTique(e4.fn, () => true);
+        const pulado = JSON.parse(fs.readFileSync(path.join(caixa, "schedule.json"), "utf8")).find((x) => x.id === "zzbat6");
+        checa(!e4.chamadas.zz_bat_ja_saiu && pulado && pulado.status === "skipped",
+          "peça publicada na mão antes da hora não é publicada de novo pelo agendamento",
+          pulado ? pulado.status : "sumiu");
+      }
+
+      // A FILA REAL continua intocada: nenhum item da bateria pode ter caído nela.
+      let filaReal = [];
+      try { filaReal = JSON.parse(fs.readFileSync(path.join(dataReal, "schedule.json"), "utf8")); } catch (e) { filaReal = []; }
+      checa(!filaReal.some((x) => String(x && x.folder).indexOf("zz_bat_") === 0),
+        "e nada disto encostou na fila de publicação de verdade", filaReal.length + " itens reais, nenhum da bateria");
+      cfg.PATHS.DATA_DIR = dataReal;
+      try { fs.rmSync(caixa, { recursive: true, force: true }); } catch (e) {}
+    }
+
+    secao("40. Peça com problema não some da biblioteca e não trava o botão");
+    {
+      const content = require("./lib/content.js");
+      // O status.json pela metade é o que sobra de um desligamento no meio da gravação. A peça
+      // SUMIA da biblioteca (listTasks descartava quem não abrisse o arquivo) e, se alguém tentasse
+      // aprovar mesmo assim, a rota estourava DENTRO de um handler async do Express: nada era
+      // respondido e o botão girava para sempre.
+      const boa = "zzbatok_" + DATA;
+      const ruim = "zzbatruim_" + DATA;
+      peca(boa, { "copy/instagram_caption.txt": "legenda boa" });
+      peca(ruim, { "copy/instagram_caption.txt": "legenda da peça com problema" });
+      const arqStatus = path.join(RAIZ, ruim, "status.json");
+      const inteiro = fs.readFileSync(arqStatus, "utf8");
+      fs.writeFileSync(arqStatus, inteiro.slice(0, Math.floor(inteiro.length * 0.6)));   // truncado, como um desligamento deixa
+
+      const lista = content.listTasks();
+      const naLista = lista.find((t) => t.folder === ruim);
+      checa(!!naLista, "peça com o arquivo de controle ilegível APARECE na biblioteca (antes sumia sem uma palavra)");
+      checa(!!(naLista && naLista.problema), "  e aparece MARCADA como problema", naLista ? String(naLista.status) : "");
+      checa(!!(naLista && String(naLista.problema_motivo || "").length > 20),
+        "  com o motivo escrito em português", (naLista && String(naLista.problema_motivo || "").slice(0, 60)) || "sem motivo");
+
+      const det = content.getTask(ruim);
+      checa(!!(det && det.status), "abrir a peça responde em vez de estourar (era isto que deixava o botão girando)");
+      let estourou = "";
+      try { const nome = det.status.task_name; String(nome); } catch (e) { estourou = e.message; }
+      checa(!estourou, "  e a rota consegue ler o nome da peça sem quebrar", estourou);
+
+      const rec = await content.promote("zzbatruim", DATA, "approved", "bateria");
+      checa(rec && rec.ok === false && String(rec.error || "").length > 30,
+        "aprovar uma peça assim volta com o motivo explicado, em vez de ficar sem resposta",
+        (rec && String(rec.error || "").slice(0, 70)) || "sem erro");
+      checa(fs.existsSync(path.join(RAIZ, ruim)), "  e nada é apagado: as artes e os textos continuam no disco");
+      checa(!!lista.find((t) => t.folder === boa), "  a peça boa ao lado continua normal na biblioteca");
+    }
+
+    secao("41. Gravação: nada é escrito direto no arquivo final");
+    {
+      // tmp + rename + fsync. Sem isso, um desligamento no meio deixa o arquivo pela metade — e o
+      // índice do histórico de versões é lido com readJsonSafe, então meio arquivo vira ZERO
+      // versões para desfazer, com os .snap parados no disco sem ninguém alcançá-los.
+      const content = require("./lib/content.js");
+      const alvo = "zzbatgrav_" + DATA;
+      peca(alvo, { "copy/instagram_caption.txt": "primeira versão da legenda" });
+      const direto = [];
+      const wOrig = fs.writeFileSync, oOrig = fs.openSync;
+      const finais = /\.(json|txt|snap|png|html)$/i;
+      const espiaoLigado = { on: true };
+      fs.writeFileSync = function (p, ...r) {
+        const s = String(p);
+        if (espiaoLigado.on && finais.test(s) && s.indexOf(alvo) >= 0 && !/\.tmp$|\.parcial$/.test(s)) direto.push(path.basename(s));
+        return wOrig.apply(fs, [p, ...r]);
+      };
+      fs.openSync = function (p, ...r) {
+        const s = String(p);
+        if (espiaoLigado.on && String(r[0] || "").indexOf("w") >= 0 && finais.test(s) && s.indexOf(alvo) >= 0 && !/\.tmp$|\.parcial$/.test(s)) direto.push(path.basename(s));
+        return oOrig.apply(fs, [p, ...r]);
+      };
+      try {
+        content.writeContentFile(alvo, "copy/instagram_caption.txt", "segunda versão da legenda", "bateria");
+        content.writeContentFile(alvo, "copy/instagram_caption.txt", "terceira versão da legenda", "bateria");
+      } catch (e) { direto.push("ERRO: " + e.message); }
+      espiaoLigado.on = false;
+      fs.writeFileSync = wOrig; fs.openSync = oOrig;
+      checa(direto.length === 0, "salvar o texto de uma peça não escreve nada direto no destino",
+        direto.length ? "escreveu direto: " + Array.from(new Set(direto)).join(", ") : "tudo por tmp + rename");
+
+      // E o histórico continua servindo para desfazer — que é o que o arquivo pela metade matava.
+      const versoes = content.listContentVersions(alvo, "copy/instagram_caption.txt");
+      checa(versoes.length >= 2, "  e o desfazer enxerga as versões guardadas", versoes.length + " versões");
+
+      // ARTE GRAVADA É ARTE ÍNTEGRA: a gravação atômica mexe em bytes, e um erro aqui corrompe
+      // arte importada em silêncio — o PNG abre cinza e ninguém sabe de onde veio.
+      const png = fs.readFileSync(path.join(RAIZ, "..", "assets", "logo-4selet-light.png"), null);
+      content.writeMediaFile(alvo, "ads/ad.png", png);
+      const volta = fs.readFileSync(path.join(RAIZ, alvo, "ads", "ad.png"), null);
+      const sha = (b) => require("crypto").createHash("sha256").update(b).digest("hex");
+      checa(sha(volta) === sha(png), "a arte gravada volta byte a byte igual", volta.length + " bytes");
+      checa(volta[0] === 0x89 && volta[1] === 0x50 && volta[2] === 0x4e && volta[3] === 0x47,
+        "  e continua sendo um PNG de verdade");
+    }
+
+
+    secao("42. O que o briefing pede e a peça não leva vira aviso — e nada além disso");
+    {
+      // A tipografia pedida no briefing não fazia nada e ninguém avisava, nos DOIS sentidos:
+      // família que o motor não tem sumia sem uma palavra, e família que o motor TEM terminava em
+      // Inter do mesmo jeito. O aviso agora existe — e a parte difícil é ele NÃO aparecer quando
+      // não deve, porque um alarme falso faz a pessoa parar de ler a faixa inteira.
+      const rFora = await post("/api/generate/interpret", {
+        texto: "Carrossel de 5 slides sobre split payment para produtores digitais. "
+          + "Use a tipografia Manrope nos titulos. CTA: Conhecer a plataforma.",
+      });
+      const avisos = (rFora.body && rFora.body.nao_aproveitado) || [];
+      const tipo = avisos.find((a) => a && a.id === "tipografia");
+      checa(!!tipo, "fonte que o motor NÃO tem vira aviso na leitura do briefing",
+        avisos.map((a) => a.id).join(", ") || "nenhum aviso");
+      // A lista de saída sai do próprio motor: escrever os sete nomes aqui faria este teste virar
+      // falso vermelho no dia em que alguém acrescentar uma família ao render.js.
+      if (tipo) {
+        const rotulos = render.FAMILIA_IDS.map((id) => render.FAMILIAS[id].label);
+        const faltam = rotulos.filter((n) => String(tipo.aviso || "").indexOf(n) < 0);
+        checa(faltam.length === 0, "  e o aviso lista as famílias que EXISTEM de verdade no motor",
+          faltam.join(", ") || rotulos.length + " famílias citadas");
+        checa(/Tipografia/.test(String(tipo.aviso || "")), "  e diz ONDE resolver (o campo Tipografia da criação)");
+      }
+
+      // ANTIALARME. Estes quatro trechos aparecem em briefing real e NÃO são direção de arte:
+      // "fonte:" quase sempre quer dizer procedência; "logo depois" é advérbio; hashtag não é cor.
+      const armadilhas = [
+        ["procedência, não tipografia", "Post de feed sobre o crescimento do e-commerce brasileiro em 2026 (fonte: CNDL, agosto de 2026). Explique o que muda para quem vende infoproduto."],
+        ["advérbio, não a marca", "Post de feed explicando o fluxo do checkout. Logo depois da compra aprovada o produtor recebe a notificacao e o aluno entra na area de membros."],
+        ["hashtag, não cor", "Post de feed sobre taxa zero na plataforma. Fechar com #taxazero #4selet #infoproduto"],
+      ];
+      for (const [oq, texto] of armadilhas) {
+        const r = await post("/api/generate/interpret", { texto });
+        const n = ((r.body && r.body.nao_aproveitado) || []).map((a) => a.id + ": " + a.trecho);
+        checa(n.length === 0, "  antialarme — " + oq + " não vira aviso", n.join(" · ") || "faixa limpa");
+      }
+
+      // A FRASE DO AVISO CITA CONTROLES QUE EXISTEM. Sem isto, o aviso vira instrução para clicar
+      // num botão que alguém removeu — a mesma família de defeito que a rodada inteira conserta.
+      const cfg42 = require("./lib/config.js");
+      checa(Array.isArray(render.FAMILIA_IDS) && render.FAMILIA_IDS.length > 0
+        && Array.isArray(render.FUNDO_IDS) && render.FUNDO_IDS.length > 0
+        && Array.isArray(cfg42.PALETA_IDS),
+        "as saídas que os avisos nomeiam continuam existindo (Tipografia, superfície, paleta)",
+        render.FAMILIA_IDS.length + " famílias · " + render.FUNDO_IDS.length + " superfícies · " + cfg42.PALETA_IDS.length + " paletas");
+
+      // PROVA VISUAL DA TIPOGRAFIA. O aviso promete que escolher a família muda a arte. Se os dois
+      // PNG saíssem iguais, a promessa seria falsa e nenhuma leitura de código pegaria isso.
+      const conceito42 = { eyebrow: "GESTÃO", headline: "A margem real da sua operação com R$ 1,99",
+        subtext: "Migração sem parar de vender.", cta: "Conhecer a plataforma" };
+      const inter = await render.renderPreview({ content_type: "ad_creative", parsed: conceito42, template: "bold", font: "", folder: "regfont" + un() });
+      const outra = await render.renderPreview({ content_type: "ad_creative", parsed: conceito42, template: "bold", font: "montserrat", folder: "regfont" + un() });
+      const sha42 = (d) => require("crypto").createHash("sha256").update(Buffer.from(String(d).split(",")[1], "base64")).digest("hex");
+      checa(inter.ok && outra.ok, "a mesma peça é desenhada nas duas famílias", (inter.error || "") + (outra.error || ""));
+      if (inter.ok && outra.ok) {
+        checa(sha42(inter.dataUrl) !== sha42(outra.dataUrl),
+          "  e a família escolhida CHEGA na arte (os dois PNG saem diferentes)",
+          "inter " + sha42(inter.dataUrl).slice(0, 10) + " · montserrat " + sha42(outra.dataUrl).slice(0, 10));
+      }
     }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });

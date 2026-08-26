@@ -35,7 +35,7 @@ function spawnAsync(args, opts) {
     let child;
     try {
       const env = opts.env ? Object.assign({}, process.env, opts.env) : process.env;
-      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT, env });
+      child = spawn(process.execPath, args, { cwd: PATHS.PROJECT_ROOT, env, windowsHide: true });
     } catch (e) {
       return resolve({ code: -1, stdout: "", stderr: "", error: (e && e.message) || String(e), timedOut: false, ok: false });
     }
@@ -1697,11 +1697,11 @@ function montaArquetipoDePeca(arq, conceito, ctx) {
     title: conceito.headline || conceito.title || "",
     body: conceito.subtext || conceito.body || "",
   });
-  // Papel é superfície CLARA: sem forçar o tema, o arquétipo desenha com as cores do fundo
-  // escuro e o texto quase some na folha. Mesma regra dos slides do carrossel.
-  const ajustado = (resolveFundo(ctx.fundo) === "papel" && !dados.theme)
-    ? Object.assign({}, dados, { theme: "light" }) : dados;
-  return SLIDE_ARCHETYPES[arq](ajustado, ctx);
+  // A superfície clara não precisa mais ser remendada aqui: o próprio arquétipo resolve o tema
+  // por `temaDoSlide(slide, ctx)`, que lê o `ctx.fundo` que vai logo abaixo. O remendo que
+  // existia neste ponto só valia quando o conceito NÃO trazia tema — e o modelo traz quase
+  // sempre, então ele quase nunca pegava e a peça saía com o texto claro sobre a folha creme.
+  return SLIDE_ARCHETYPES[arq](dados, ctx);
 }
 // Remove uma chave do render.json (usado pra "voltar ao padrão do estilo").
 function deleteRenderPref(loc, key) {
@@ -1794,17 +1794,46 @@ function resolveTheme(v) { return String(v || "").toLowerCase() === "light" ? TH
 //
 // Fundo é uma dimensão SEPARADA de propósito: qualquer layout pode vestir qualquer fundo, então
 // 14 layouts × 5 fundos é o que a pessoa passa a alcançar, sem escrever 70 desenhos.
+//
+// `claro: true` marca a superfície que traz a PRÓPRIA cor e ignora o tema: papel é uma folha
+// creme, e papel escuro não é papel. Ela é o dado que a regra de tinta lê (temaDoSlide) — não
+// uma string "papel" repetida por aí. A próxima superfície clara que alguém criar herda a
+// proteção só de escrever esta linha; sem o campo, herdaria o defeito.
 const FUNDOS = {
   padrao: { rotulo: "Padrão", desc: "Degradê azul com os pontos da marca" },
   grade: { rotulo: "Quadriculado", desc: "Malha de gráfico com brilho, como as artes de dado" },
   solido: { rotulo: "Azul chapado", desc: "Sem degradê e sem textura — o mais silencioso" },
-  papel: { rotulo: "Papel", desc: "Folha clara com canto dobrado, para regras e princípios" },
+  papel: { rotulo: "Papel", desc: "Folha clara com canto dobrado, para regras e princípios", claro: true },
   vinheta: { rotulo: "Foco no centro", desc: "Bordas escurecidas, atenção no meio da arte" },
 };
 const FUNDO_IDS = Object.keys(FUNDOS);
 function resolveFundo(v) {
   const id = String(v || "").toLowerCase().trim();
   return FUNDOS[id] ? id : "padrao";
+}
+// A superfície escolhida traz a própria cor (e é clara)?
+function fundoEhClaro(v) { return !!FUNDOS[resolveFundo(v)].claro; }
+
+// A TINTA DO TEXTO SAI DA SUPERFÍCIE QUE ESTÁ REALMENTE ATRÁS DELE. É o ponto único onde os
+// arquétipos decidem claro/escuro, e existe por causa de um defeito que chegou ao ar:
+//
+//   a cor do TEXTO vinha do `theme` que o modelo escreveu no slide, e a cor do FUNDO vinha da
+//   superfície escolhida na tela. Quando as duas discordavam — "Papel" na tela e `theme:"dark"`
+//   no slide, que é o que o modelo devolve na maioria das gerações — o texto saía branco sobre
+//   a folha creme. Medido no carrossel gerado de verdade: título a 1,27:1, itens da lista a
+//   1,00:1 (o slide inteiro em branco), rótulo, número, citação, todos entre 1,0 e 1,5:1.
+//
+// Havia remendos espalhados que só valiam "se o slide NÃO declarou tema" — e o modelo declara
+// quase sempre, então o remendo quase nunca pegava. Aqui a superfície simplesmente VENCE: quem
+// escolheu a folha creme escolheu uma arte clara, e o `theme` do slide só decide onde a
+// superfície não impõe cor nenhuma.
+function temaSobreFundo(temaDeclarado, fundo) {
+  if (fundoEhClaro(fundo)) return THEME_LIGHT;
+  return resolveTheme(temaDeclarado);
+}
+// Atalho para os arquétipos: o tema do slide/cartão levando em conta a superfície do ctx.
+function temaDoSlide(slide, ctx) {
+  return temaSobreFundo(slide && slide.theme, ctx && ctx.fundo);
 }
 // O CSS de cada superfície. Recebe o tema já resolvido para respeitar claro/escuro onde faz
 // sentido — só o "papel" impõe a própria cor, porque papel escuro não é papel.
@@ -1845,14 +1874,19 @@ function fundoCss(id, tema) {
         .card::after { content:""; position:absolute; right:0; bottom:0; width:132px; height:132px;
           z-index:1; pointer-events:none; background:${PALETTE.mist}; opacity:.8;
           clip-path: polygon(100% 0, 0 100%, 100% 100%); }
-        /* Rede de segurança do papel: alguns arquétipos fixam a cor do texto de apoio no claro
-           da paleta (pensado para fundo escuro), e sobre a folha ele quase some. Aqui esses
-           textos voltam a ser escuros. Descoberto olhando o carrossel pronto, não por teste —
-           na miniatura o slide parecia certo. */
-        /* SÓ o texto que fica direto sobre a folha. Nada que viva DENTRO de um cartão escuro
-           (.node-s, .fr-s, .st-label) entra aqui: pintá-los de azul-escuro sobre cartão navy
-           os faz sumir — foi o que aconteceu na primeira tentativa desta correção. */
-        .s-body, .flow-note, .fnote span:last-child, .pageno { color:${PALETTE.navy} !important; }
+        /* AQUI NÃO ENTRA LISTA DE SELETORES — e é de propósito.
+           Existia uma "rede de segurança" que repintava de azul-escuro uma lista escrita à mão
+           (.s-body, .flow-note, .fnote span:last-child, .pageno). Duas coisas deram errado com
+           ela, e as duas chegaram à arte publicada:
+             1) a lista tentava consertar o efeito (texto claro sobre a folha) em vez da causa
+                (o arquétipo achava que estava desenhando para fundo escuro), então cobria alguns
+                textos e deixava todo o resto — título, itens, número, citação — branco no creme;
+             2) .fnote span:last-child é a frase de dentro da CAIXA DE NOTA do fluxo, e essa
+                caixa tem fundo Navy. Pintá-la de Navy deu azul-escuro sobre azul-escuro: a nota
+                virou uma tarja lisa, com o texto ainda no HTML e 1,00:1 de contraste medido.
+           Agora o tema vem da superfície (temaSobreFundo), então cada arquétipo já escolhe a
+           tinta certa para a folha, inclusive dentro dos cartões escuros que ele mesmo desenha.
+           Fica só o padrão herdado do cartão, para qualquer texto sem cor própria. */
         .card, .mid { color:${PALETTE.darker}; }`;
     case "vinheta":
       return `.card { background:${t.bg}; }
@@ -1874,7 +1908,9 @@ function fundoNoTemplate(tplId, fundo) {
   // Na Foto a superfície É a foto. Cobri-la com papel ou quadriculado apagaria a imagem que a
   // pessoa escolheu — o oposto do que ela pediu ao anexar a foto.
   if (tplId === "photo") return "";
-  const claro = id === "papel";
+  // Pelo campo da superficie, nao pelo id escrito a mao: e a MESMA pergunta que temaSobreFundo
+  // faz para os arquetipos. Duas listas de "quais fundos sao claros" acabariam divergindo.
+  const claro = fundoEhClaro(id);
   let css = fundoCss(id, claro ? THEME_LIGHT : THEME_DARK);
   // No Dividido a superfície veste a BANDA DE BAIXO. A faixa clara de cima com o logo é a
   // identidade do layout — trocá-la faria "Dividido" deixar de ser dividido. Os pontos da marca
@@ -1893,7 +1929,7 @@ function fundoNoTemplate(tplId, fundo) {
 }
 // Sobre papel o logo claro desaparece. Quem monta o template pergunta aqui qual variante usar.
 function logoDoFundo(fundo) {
-  return resolveFundo(fundo) === "papel" ? LOGO_DARK : LOGO_LIGHT;
+  return fundoEhClaro(fundo) ? LOGO_DARK : LOGO_LIGHT;
 }
 
 // Marca d'agua tipografica: palavra display gigante transbordando a direita, ATRAS
@@ -1906,27 +1942,33 @@ function watermark(spec, theme) {
   const style = String(s.style || "word").toLowerCase();
   if (style === "none" || style === "off") return "";
   const op = Number(t.wmOp) || 0.05;
+  // Todas as variantes saem com a classe `wm`. A superfície de papel manda esconder a marca
+  // d'água (`.wm, .watermark { display:none }`) porque sobre a folha ela lê como sujeira — só
+  // que nenhuma variante tinha classe nenhuma, então a regra não pegava em nada e a palavra
+  // gigante continuava atrás do texto. Só não aparecia porque no tema escuro o véu é de 5%;
+  // no tema claro ele é de 60%, e no fecho em papel a palavra "SELET" apareceu por trás da
+  // frase inteira. Classe no elemento é o que faz a regra da superfície existir de verdade.
   if (style === "symbol") {
-    return '<img src="' + SIMBOLO + '" alt="" style="position:absolute;top:50%;right:-8%;transform:translateY(-50%);'
+    return '<img class="wm" src="' + SIMBOLO + '" alt="" style="position:absolute;top:50%;right:-8%;transform:translateY(-50%);'
       + "width:60%;height:auto;z-index:0;pointer-events:none;opacity:" + Math.min(op + 0.06, 0.7) + ';" />';
   }
   if (style === "canto") {
     // símbolo pequeno e discreto no canto inferior direito — assinatura leve (z-index:0 = atrás do conteúdo)
-    return '<img src="' + SIMBOLO + '" alt="" style="position:absolute;bottom:56px;right:56px;'
+    return '<img class="wm" src="' + SIMBOLO + '" alt="" style="position:absolute;bottom:56px;right:56px;'
       + "width:92px;height:auto;z-index:0;pointer-events:none;opacity:" + Math.min(op + 0.22, 0.6) + ';" />';
   }
   if (style === "padrao" || style === "tile") {
     // símbolo repetido em padrão sutil cobrindo o fundo
-    return '<div style="position:absolute;inset:0;z-index:0;pointer-events:none;opacity:'
+    return '<div class="wm" style="position:absolute;inset:0;z-index:0;pointer-events:none;opacity:'
       + Math.min(op + 0.03, 0.1) + ";background-image:url('" + SIMBOLO + "');background-repeat:repeat;background-size:160px 160px;\"></div>";
   }
   const text = esc(s.text != null && String(s.text) !== "" ? String(s.text) : "SELET");
   const base = "position:absolute;top:50%;right:-4%;transform:translateY(-50%);z-index:0;"
     + "font-family:'Inter',sans-serif;font-weight:800;font-size:440px;line-height:0.78;letter-spacing:-14px;white-space:nowrap;pointer-events:none;";
   if (style === "outline") {
-    return '<div style="' + base + "opacity:" + Math.min(op + 0.14, 0.85) + ";color:transparent;-webkit-text-stroke:2px " + t.wm + ';">' + text + "</div>";
+    return '<div class="wm" style="' + base + "opacity:" + Math.min(op + 0.14, 0.85) + ";color:transparent;-webkit-text-stroke:2px " + t.wm + ';">' + text + "</div>";
   }
-  return '<div style="' + base + "color:" + t.wm + ";opacity:" + op + ';">' + text + "</div>";
+  return '<div class="wm" style="' + base + "color:" + t.wm + ";opacity:" + op + ';">' + text + "</div>";
 }
 
 // ---- Arquetipos de SLIDE do carrossel -------------------------------------
@@ -2031,8 +2073,11 @@ function carFooter() { return ""; }
 
 // Texto (desenvolvimento): titulo forte + paragrafo de apoio.
 function slideText(slide, ctx) {
-  const light = String(slide.theme || "").toLowerCase() === "light";
-  ctx.theme = resolveTheme(slide.theme);
+  // O `light` sai do TEMA JÁ RESOLVIDO, nunca de uma segunda leitura de `slide.theme`. Esta linha
+  // lia o campo do slide direto: o carDoc desenhava a folha creme e o corpo do texto continuava
+  // com a cor de fundo escuro, porque as duas decisões vinham de fontes diferentes.
+  ctx.theme = temaDoSlide(slide, ctx);
+  const light = ctx.theme === THEME_LIGHT;
   // Marca d'agua editorial no slide de frase (default "SELET"; "" desliga).
   ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "SELET");
   const bodyColor = light ? PALETTE.navy : PALETTE.mist;
@@ -2096,7 +2141,7 @@ function slideStatGrid(slide, ctx) {
   // Tema é TINTA, não layout: resolvido aqui e nunca entra no roteador de arquétipo. O campo
   // `theme` já existia no schema e era jogado fora por quatro dos seis arquétipos — alternar claro
   // e escuro dentro do mesmo carrossel é o principal recurso de ritmo do perfil real.
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   // Sem números: NÃO renderiza uma grade vazia (o slide ficava só com o título). Cai no layout
   // de texto p/ mostrar o conteúdo — o usuário pode escolher esse layout sem quebrar a peça.
@@ -2141,7 +2186,7 @@ function slideList(slide, ctx) {
   const items = (Array.isArray(slide.items) ? slide.items : []).slice(0, 6)
     .map((it) => (typeof it === "string" ? it : (it && it.text) || ""))
     .filter((t) => String(t || "").trim());
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   // Sem itens: NÃO renderiza uma lista vazia. Cai no texto p/ mostrar o conteúdo do slide.
   if (!items.length) return slideText(slide, ctx);
@@ -2199,7 +2244,7 @@ function respiroDoCabecalho(ctx, model, zoom) {
   return Math.max(32, Math.min(96, Math.round(sobra * 0.3)));
 }
 function slideDevice(slide, ctx) {
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const claro = ctx.theme === THEME_LIGHT;
   const img = (slide && slide.image) || "";
   // Sem imagem de verdade, um aparelho vazio no meio do carrossel é pior que o layout de texto.
@@ -2252,8 +2297,11 @@ function slideCta(slide, ctx) {
   // Variante CLARA (editorial, alinhada a esquerda) — igual a referencia do usuario:
   // fundo Cloud, logo dark no topo-esquerda, headline display BOLD + enfase em Blue,
   // corpo (ex.: "Venha para a 4Selet...") no mesmo tratamento + marca d'agua "SELET".
-  if (String(slide.theme || "").toLowerCase() === "light") {
-    ctx.theme = THEME_LIGHT;
+  // Pelo TEMA RESOLVIDO (que já considera a superfície), não pelo campo cru do slide: sobre a
+  // folha de papel o fecho tem de nascer claro mesmo quando o modelo escreveu `theme:"dark"` —
+  // era esse fecho que saía com a manchete branca sobre o creme.
+  ctx.theme = temaDoSlide(slide, ctx);
+  if (ctx.theme === THEME_LIGHT) {
     ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "SELET");
     // Corpo no MESMO formato do headline (tamanho/peso/cor) — igual a referencia:
     // texto uniforme, so o trecho de enfase muda de COR. Tamanho pelo total p/ caber.
@@ -2342,7 +2390,7 @@ function cssAparelhoClaro(claro) {
 }
 
 function slideFlow(slide, ctx) {
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const claro = ctx.theme === THEME_LIGHT;
   const nodes = (Array.isArray(slide.flow) ? slide.flow : []).slice(0, 4)
     .filter((nd) => String((typeof nd === "string" ? nd : (nd && nd.label)) || "").trim());
@@ -2436,7 +2484,12 @@ function slideFlow(slide, ctx) {
     + ".node-ic svg { width:" + v(62, 54, 46) + "px; height:" + v(62, 54, 46) + "px; }"
     + ".node-l { font-size:" + v(42, 37, 33) + "px; font-weight:700; color:#FFFFFF; line-height:1.12; }"
     + ".node-s { margin-top:" + v(8, 5, 4) + "px; font-size:" + v(30, 27, 25) + "px; color:" + PALETTE.mist + "; line-height:1.24; }"
-    + ".flow-note { margin-top:" + v(38, 22) + "px; font-size:" + v(34, 30) + "px; line-height:1.32; color:" + PALETTE.mist + "; }"
+    // O texto de apoio do fluxo vertical fica DIRETO sobre a superfície do slide, então a cor
+    // dele tem de sair do tema, como o `.s-body` dos arquétipos vizinhos. Estava cravado em Mist
+    // (tinta de fundo escuro): no tema claro dava 1,34:1 sobre o degradê Cloud e 1,00:1 sobre o
+    // quadriculado — a frase sumia. O `cssFluxoClaro` só é aplicado no fluxo em LINHA, e esta era
+    // a única declaração do fluxo vertical que não olhava para o tema.
+    + ".flow-note { margin-top:" + v(38, 22) + "px; font-size:" + v(34, 30) + "px; line-height:1.32; color:" + (claro ? PALETTE.navy : PALETTE.mist) + "; }"
     + cssNota
     + (apertado ? ".fnote { margin-top:30px; padding:24px 30px; } .fnote span:last-child { font-size:29px; }" : "")
     + cssExtrasApertados(v);   // a pílula vem do CSS base; isto entra depois e a aperta quando precisa
@@ -2457,7 +2510,7 @@ function slideFlow(slide, ctx) {
 // palavras gigantes empilhadas.
 function slidePalavra(slide, ctx) {
   const palavra = String(slide.word || "").trim();
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   // A palavra E a marca d'agua deste slide.
   ctx.watermark = slide.watermark != null ? slide.watermark : "";
@@ -2498,7 +2551,7 @@ function slidePalavra(slide, ctx) {
 function slideNumero(slide, ctx) {
   const stats = (Array.isArray(slide.stats) ? slide.stats : []).filter((s) => s && s.value != null);
   if (!stats.length) return slideText(slide, ctx);
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "");
   const bruto = String(stats[0].value).trim();
@@ -2567,7 +2620,7 @@ function slideSerie(slide, ctx) {
   const s = slide.serie || {};
   const n = Number(s.n);
   if (!(n >= 1)) return slideText(slide, ctx);
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : "";
   const total = Number(s.total) > 0 ? Number(s.total) : 0;
@@ -2613,7 +2666,7 @@ function slideSerie(slide, ctx) {
 //  2) o tamanho da aba dobrada e o recorte saem da MESMA variável — se divergirem, sobra um degrau
 //     branco no canto.
 function serieEmPapel(slide, ctx, s) {
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   ctx.watermark = slide.watermark != null ? slide.watermark : null;
   const ABA = 92;
   const css = `.pp-mesa { align-self:center; transform:rotate(-1.1deg);
@@ -2661,7 +2714,7 @@ function parVersus(slide) {
 function slideComparacao(slide, ctx) {
   const par = parVersus(slide);
   if (!par) return slideText(slide, ctx);
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : (ctx.wmStyle ? { style: ctx.wmStyle } : "");
   const maior = Math.max(par.a.length, par.b.length);
@@ -2698,7 +2751,7 @@ function slideCitacao(slide, ctx) {
   const c = slide.citacao || {};
   const texto = String((typeof c === "string" ? c : c.text) || "").trim();
   if (!texto) return slideText(slide, ctx);
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : "";
   const autor = String((c && c.autor) || (c && c.author) || "").trim();
@@ -2739,7 +2792,7 @@ function slideMedidor(slide, ctx) {
   if (!isFinite(num) || !max) {
     return (Array.isArray(slide.stats) && slide.stats.length) ? slideNumero(slide, ctx) : slideText(slide, ctx);
   }
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : null;
   const frac = Math.max(0, Math.min(1, num / max));
@@ -2795,7 +2848,7 @@ function slideMapa(slide, ctx) {
   const ramos = (Array.isArray(t.branches) ? t.branches : [])
     .filter((b) => String((typeof b === "string" ? b : (b && b.label)) || "").trim()).slice(0, 3);
   if (!raiz || ramos.length < 2) return slideFlow(slide, ctx);
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : null;
   const converge = String(t.direction || "") === "converge";
@@ -2852,7 +2905,7 @@ function slideDialogo(slide, ctx) {
   const falas = (Array.isArray(slide.dialog) ? slide.dialog : [])
     .filter((f) => String((typeof f === "string" ? f : (f && f.text)) || "").trim()).slice(0, 4);
   if (falas.length < 1) return slideText(slide, ctx);
-  ctx.theme = resolveTheme(slide.theme);
+  ctx.theme = temaDoSlide(slide, ctx);
   const light = ctx.theme === THEME_LIGHT;
   ctx.watermark = slide.watermark != null ? slide.watermark : null;
   const tam = falas.length >= 4 ? 34 : falas.length === 3 ? 38 : 44;
@@ -3241,14 +3294,12 @@ function carouselSlidesHtml(concept, buildCover, opts) {
         logo: logoV, watermark: wmV,
       });
     } else {
-      // Papel é uma superfície CLARA: se o slide não pediu tema, ele passa a valer como claro.
-      // Sem isto a folha ficava creme e o texto continuava com as cores do fundo escuro — a arte
-      // saía legível só de perto, que é o pior tipo de defeito (parece certo na miniatura).
+      // A regra de tinta clara/escura NÃO mora mais aqui: mora em `temaDoSlide`, que o arquétipo
+      // chama com a superfície do ctx. O remendo que ficava neste ponto tinha a condição
+      // "e o slide não declarou tema" — e o modelo declara `theme:"dark"` em quase toda geração,
+      // então a folha creme saía com título branco, lista Cloud sobre Cloud e nota invisível.
       const fundoDoSlide = resolveFundo((s && s.fundo) || (opts && opts.fundo) || concept.fundo);
-      const sAjustado = (fundoDoSlide === "papel" && !(s && s.theme))
-        ? Object.assign({}, s, { theme: "light" })
-        : s;
-      html = SLIDE_ARCHETYPES[arch](sAjustado, {
+      html = SLIDE_ARCHETYPES[arch](s, {
         width: 1080, height: 1350, n: n, total: total,
         cta: arch === "cta" ? (concept.cta || "") : "",
         footer: concept.footer,
@@ -3346,7 +3397,7 @@ function storyTop(ctx) {
 }
 
 function storyCover(card, ctx) {
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : (ctx.wmStyle ? null : "SELET");
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
@@ -3362,7 +3413,7 @@ function storyCover(card, ctx) {
 }
 
 function storyText(card, ctx) {
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
@@ -3379,7 +3430,7 @@ function storyText(card, ctx) {
 function storyNumber(card, ctx) {
   const stats = (Array.isArray(card.stats) ? card.stats : []).filter((s) => s && s.value != null).slice(0, 3);
   if (!stats.length) return storyText(card, ctx);
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
@@ -3416,7 +3467,7 @@ function storyQuote(card, ctx) {
   const q = card.quote || card.citacao || {};
   const texto = String((typeof q === "string" ? q : q.text) || "").trim();
   if (!texto) return storyText(card, ctx);
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
@@ -3441,7 +3492,7 @@ function storyPoll(card, ctx) {
   const p = card.poll || {};
   const pergunta = String(p.question || p.pergunta || "").trim();
   if (!pergunta) return storyText(card, ctx);
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
@@ -3462,12 +3513,15 @@ function storyPoll(card, ctx) {
 
 function storyPhoto(card, ctx) {
   if (!card.image || !imagemExiste(card.image)) return storyText(card, ctx);
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : null;   // null = herda a escolha da peca
   ctx.image = card.image;
+  // O apoio do cartão de foto ficava cravado em Cloud enquanto o título seguia o tema — as duas
+  // cores saindo de fontes diferentes, que é o defeito desta correção. Sobre o véu claro (tema
+  // claro) Cloud sobre Cloud some. O caminho escuro continua exatamente como era.
   const css = `.mid { justify-content:flex-end; }
     .s-title { font-size:96px; }
-    .s-body { color:${PALETTE.cloud}; }`;
+    .s-body { color:${ctx.theme === THEME_LIGHT ? PALETTE.navy : PALETTE.cloud}; }`;
   return storyDoc(ctx, css, `${storyTop(ctx)}
   <div class="mid">
     ${card.eyebrow ? `<div class="eyebrow">${esc(card.eyebrow)}</div>` : ""}
@@ -3479,7 +3533,7 @@ function storyPhoto(card, ctx) {
 // Cartao de link. NAO desenha seta "arrasta pra cima": o swipe-up nao existe mais no Instagram —
 // hoje e um sticker de link, que a pessoa cola. A arte so deixa claro o convite e o espaco.
 function storyLink(card, ctx) {
-  ctx.theme = resolveTheme(card.theme);
+  ctx.theme = temaDoSlide(card, ctx);
   ctx.watermark = card.watermark != null ? card.watermark : (ctx.wmStyle ? null : "SELET");
   ctx.image = card.image || "";
   const light = ctx.theme === THEME_LIGHT;
@@ -3550,13 +3604,11 @@ function storyCardsHtml(concept, opts) {
     const card = cards[i];
     const arq = storyArchetype(card, i, total);
     const desenha = STORY_ARCHETYPES[arq] || storyText;
-    // Papel é superfície CLARA: cartão sem tema declarado passa a valer como claro, igual ao
-    // carrossel. Sem isto a folha ficava creme com o texto ainda pintado para fundo escuro.
+    // Mesma regra do carrossel, e pelo mesmo caminho: quem decide a tinta é `temaDoSlide`, com a
+    // superfície do ctx. O remendo daqui só valia para cartão SEM tema declarado, e era por isso
+    // que o story em folha de papel saía com a tipografia de fundo escuro.
     const fundoDoCard = resolveFundo((card && card.fundo) || (opts && opts.fundo) || concept.fundo);
-    const cardAjustado = (fundoDoCard === "papel" && !(card && card.theme))
-      ? Object.assign({}, card, { theme: "light" })
-      : card;
-    const html = desenha(cardAjustado, {
+    const html = desenha(card, {
       width: S.w, height: S.h, n: i + 1, total: total,
       cta: concept.cta || "", logo: logoV, wmStyle: wmV, image: (card && card.image) || "",
       fundo: fundoDoCard,
@@ -3953,13 +4005,21 @@ async function renderVideo(folder) {
 // nem zona active, e devolve um data URL PNG. Usado na tela de criacao para o
 // usuario ver a arte antes de salvar. Espelha o mapeamento de campos dos renders
 // por tipo (renderImage/renderFeed/renderCarousel).
+//
+// A manchete sai daqui como TEXTO CRU, nunca como HTML. O realce de números e o ==destaque==
+// são aplicados por quem desenha, logo antes de montar o documento. Enquanto esta função
+// devolvia a manchete já em HTML, o ramo do arquétipo repassava essa string para o arquétipo,
+// que aplica o MESMO realce lá dentro — e a segunda passada começa por esc(), então as tags
+// saíam IMPRESSAS na arte: a prévia da peça de Imagem mostrava, com todas as letras,
+// '<span class="accent">95%</span>' escrito em cima do fundo. Quem só lê o código não vê isso;
+// só olhando o PNG. A regra que impede a volta é esta: texto cru entra, realce só na saída.
 function previewFields(ct, parsed) {
   parsed = parsed || {};
   if (ct.kind === "image") {
     return {
       width: 1080, height: 1080,
       eyebrow: parsed.eyebrow || "",
-      headline: highlightHeadline(parsed.headline || "4Selet."),
+      headline: parsed.headline || "4Selet.",
       subtext: parsed.subtext || "",
       cta: parsed.cta || "",
       badge: parsed.badge || "",
@@ -3977,7 +4037,7 @@ function previewFields(ct, parsed) {
     return {
       width: 1080, height: 1350,
       eyebrow: "",
-      headline: highlightHeadline(arte.headline),
+      headline: arte.headline,
       subtext: arte.subtext,
       cta: "",
       badge: "",
@@ -3991,7 +4051,7 @@ function previewFields(ct, parsed) {
     return {
       width: 1080, height: 1350,
       eyebrow: parsed.eyebrow || "",
-      headline: highlightHeadline(s.title || ""),
+      headline: s.title || "",
       subtext: s.body || "",
       cta: "",
       badge: parsed.badge || "",
@@ -4021,7 +4081,7 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo, folder } = {}) {
+async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo, folder, soHtml } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   // A prévia aceita os mesmos 14 arranjos do render final. Enquanto só os 4 passavam por aqui,
@@ -4119,8 +4179,17 @@ async function renderPreview({ content_type, parsed, template, logo, watermark, 
         headline: fields.headline, subtext: fields.subtext, eyebrow: fields.eyebrow,
       }), { width: fields.width, height: fields.height, n: 1, total: 1, cta: fields.cta || "",
             image: fields.image || "", fundo: fundoV, logo: logoV, wmStyle: wmV })
-    : resolveTemplate(tplId)(Object.assign({}, fields, { logo: logoV, watermark: wmV, fundo: fundoV }));
+    // O arquétipo recebe a manchete CRUA (ele mesmo aplica o realce); o template de arte espera
+    // a manchete já em HTML, como o renderImage/renderFeed também fazem no render que salva.
+    // O realce mora AQUI, na saída, e não dentro de previewFields: era de lá que a manchete já
+    // em HTML vazava para o arquétipo e voltava com as tags impressas na arte.
+    : resolveTemplate(tplId)(Object.assign({}, fields, { headline: highlightHeadline(fields.headline || ""), logo: logoV, watermark: wmV, fundo: fundoV }));
   FAMILIA_ATUAL = "";
+  // `soHtml` devolve o documento ANTES de virar PNG. Existe para a bateria poder ler o TEXTO que
+  // a arte vai desenhar — foi por aqui que a peça de Imagem saiu com '<span class="accent">95%'
+  // escrito por extenso na manchete, e nenhuma checagem de código pegou. Do PNG não dá para ler
+  // texto sem OCR; deste HTML dá, e ele é exatamente o que a câmera fotografa no passo seguinte.
+  if (soHtml) return { ok: true, html: doc, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };
   const png = await htmlStringToPngDataUrl(doc, fields.width, fields.height);
   if (!png.ok) return { ok: false, error: png.error, template: tplId };
   return { ok: true, dataUrl: png.dataUrl, template: tplId, kind: ct.kind, width: fields.width, height: fields.height };

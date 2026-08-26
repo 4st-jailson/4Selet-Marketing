@@ -36,7 +36,7 @@ function warn(msg) { console.error("[check_approved_integrity] WARN: " + msg); }
 function gitApprovedDirs() {
   try {
     const { spawnSync } = require("child_process");
-    const r = spawnSync("git", ["ls-tree", "-d", "--name-only", "HEAD", "outputs/approved/"], { encoding: "utf8" });
+    const r = spawnSync("git", ["ls-tree", "-d", "--name-only", "HEAD", "outputs/approved/"], { encoding: "utf8", windowsHide: true });
     if (r.status !== 0 || !r.stdout) return null;
     return r.stdout.split("\n").map((l) => l.trim()).filter(Boolean).map((p) => path.basename(p));
   } catch (e) { return null; }
@@ -143,7 +143,7 @@ try {
     const refresh = path.resolve("scripts", "refresh_index.js");
     if (fs.existsSync(refresh)) {
       const { spawnSync } = require("child_process");
-      spawnSync(process.execPath, [refresh], { stdio: "inherit" });
+      spawnSync(process.execPath, [refresh], { stdio: "inherit", windowsHide: true });
     }
   }
   process.exit(divergentTasks > 0 ? 1 : 0);

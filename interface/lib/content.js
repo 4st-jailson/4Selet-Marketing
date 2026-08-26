@@ -21,17 +21,32 @@ function readJsonSafe(p) {
 // em JSON invalido, a peca SUMIA da biblioteca e toda mutacao passava a falhar em silencio.
 // O rename e atomico no mesmo filesystem, entao o arquivo final nunca fica pela metade.
 // (Mesmo padrao ja usado em campaigns.js / collections.js / publications.js.)
+//
+// Duas correcoes 2026-08 no MESMO ponto, porque tmp+rename sozinho ainda perdia dado:
+// (1) nome do tmp UNICO por processo/chamada — com ".tmp" fixo, o painel e um script rodando
+//     juntos escreviam no MESMO arquivo temporario: um truncava o do outro e o rename publicava
+//     um JSON pela metade, que e exatamente o defeito que este helper existe para evitar;
+// (2) fsync ANTES do rename — o rename pode chegar ao disco antes do conteudo, e ai um
+//     desligamento deixa o arquivo com zero byte (a peca perde foto/manchete sem aviso).
+let _seqTmp = 0;
+function tmpVizinho(alvo) { return alvo + "." + process.pid + "." + (++_seqTmp) + ".tmp"; }
+function gravaEDescarrega(tmp, data, encoding) {
+  const fd = fs.openSync(tmp, "w");
+  try {
+    fs.writeSync(fd, encoding ? Buffer.from(data, encoding) : (Buffer.isBuffer(data) ? data : Buffer.from(String(data))));
+    fs.fsyncSync(fd);
+  } finally { fs.closeSync(fd); }
+}
 function writeJsonAtomic(p, obj) {
-  const tmp = p + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8");
+  const tmp = tmpVizinho(p);
+  gravaEDescarrega(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8");
   fs.renameSync(tmp, p);
 }
 
 // Escrita ATOMICA de arquivo comum (texto ou binario) — mesma ideia do writeJsonAtomic.
 function writeFileAtomic(target, data, encoding) {
-  const tmp = target + ".tmp";
-  if (encoding) fs.writeFileSync(tmp, data, encoding);
-  else fs.writeFileSync(tmp, data);
+  const tmp = tmpVizinho(target);
+  gravaEDescarrega(tmp, data, encoding);
   fs.renameSync(tmp, target);
 }
 
@@ -43,13 +58,52 @@ function writeFileAtomic(target, data, encoding) {
 // corrida no status.json da mesma peca) SEM ficar atras dos renders pesados do render.js.
 // Retorna Promise<{ code, stdout, stderr, ok }>. Nunca rejeita.
 let _scriptChain = Promise.resolve();
+
+// PECAS EM TRANSICAO neste instante (aprovar, rejeitar, reabrir, gerar previa).
+//
+// O script roda em OUTRO PROCESSO e faz duas coisas que nao podem ser atropeladas: ASSINA todos
+// os arquivos da peca (content_hashes) e MOVE a pasta de zona. Enquanto ele trabalha, o painel
+// continua atendendo — e a gravacao que chegasse no meio era ACEITA ("salvo" na tela) e caia
+// FORA da assinatura: a peca ficava aprovada com um arquivo que nao bate com o proprio carimbo,
+// e so la na frente, na hora de publicar, o gate recusava (E_HASH_MISMATCH) sem ninguem entender
+// por que. Chegando um pouco mais tarde, a gravacao caia numa pasta FANTASMA recriada no lugar
+// antigo e o texto simplesmente sumia — com a tela dizendo "salvo".
+// Enquanto durar a transicao, gravar naquela peca e RECUSADO com motivo. Sao poucos segundos.
+const _emTransicao = new Map(); // pasta -> quantas transicoes em curso
+
+// A pasta da peca a partir dos argumentos do script. MESMA regra do scripts/promote_task.js
+// (folderName = task + "_" + date); se um dia mudar la, muda aqui junto.
+function pastaDoArgv(argv) {
+  const i = argv.indexOf("--task"), j = argv.indexOf("--date");
+  if (i < 0 || j < 0) return null;
+  const t = argv[i + 1], d = argv[j + 1];
+  return (t && d) ? t + "_" + d : null;
+}
+function entraTransicao(folder) { if (folder) _emTransicao.set(folder, (_emTransicao.get(folder) || 0) + 1); }
+function saiTransicao(folder) {
+  if (!folder) return;
+  const n = (_emTransicao.get(folder) || 0) - 1;
+  if (n > 0) _emTransicao.set(folder, n); else _emTransicao.delete(folder);
+}
+// Barra a gravacao enquanto a peca esta mudando de estado. Quem escreve na pasta chama isto.
+function recusaSeEmTransicao(folder) {
+  if (!_emTransicao.get(folder)) return;
+  const e = new Error("Esta peça está sendo aprovada (ou reaberta) neste instante, e salvar por cima agora corromperia a versão aprovada. "
+    + "Espere alguns segundos e salve de novo — o que você escreveu continua aí na tela.");
+  e.code = "E_TRANSICAO_EM_CURSO";
+  throw e;
+}
+
 function runScript(scriptFile, argv) {
   const script = path.join(PATHS.SCRIPTS_DIR, scriptFile);
+  const alvo = pastaDoArgv(argv);
   const run = _scriptChain.then(() => new Promise((resolve) => {
     let child;
+    entraTransicao(alvo);
     try {
-      child = spawn(process.execPath, [script, ...argv], { cwd: PATHS.PROJECT_ROOT });
+      child = spawn(process.execPath, [script, ...argv], { cwd: PATHS.PROJECT_ROOT, windowsHide: true });
     } catch (e) {
+      saiTransicao(alvo);
       return resolve({ code: -1, stdout: "", stderr: (e && e.message) || String(e), ok: false });
     }
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
@@ -58,7 +112,8 @@ function runScript(scriptFile, argv) {
     child.stdout.on("data", (d) => { if (stdout.length < MAX) stdout += d; });
     child.stderr.on("data", (d) => { if (stderr.length < MAX) stderr += d; });
     child.on("error", (err) => { stderr += (err && err.message) || String(err); });
-    child.on("close", (code) => { invalidateTasksCache(); resolve({ code: code === null ? -1 : code, stdout: stdout.trim(), stderr: stderr.trim(), ok: code === 0 }); });
+    // Libera a peca ANTES de resolver: quem esperou a aprovacao terminar ja pode gravar.
+    child.on("close", (code) => { saiTransicao(alvo); invalidateTasksCache(); resolve({ code: code === null ? -1 : code, stdout: stdout.trim(), stderr: stderr.trim(), ok: code === 0 }); });
   }));
   _scriptChain = run.then(() => undefined, () => undefined); // a cadeia nunca quebra
   return run;
@@ -66,6 +121,36 @@ function runScript(scriptFile, argv) {
 
 function isTaskDir(p) {
   return fs.existsSync(path.join(p, "status.json"));
+}
+
+// --- Peca com o status.json ILEGIVEL --------------------------------------
+// O status.json e o arquivo de controle da peca. Quando ele fica pela metade (desligamento no
+// meio de uma gravacao antiga, sem tmp+rename), o readJsonSafe devolve null — e a peca SUMIA da
+// biblioteca sem uma palavra: ninguem sabia que ela existia, e as artes continuavam no disco.
+// Pior, a tela de detalhe pedia `status.task_name` de um status nulo, a rota estourava DENTRO de
+// um handler assincrono do Express e nao respondia NADA: o botao de aprovar/gerar previa girava
+// para sempre. As tres funcoes abaixo dao a essa peca um lugar visivel e uma resposta.
+const AVISO_STATUS_ILEGIVEL = "O arquivo de controle desta peça (status.json) está ilegível — provavelmente uma gravação"
+  + " interrompida. Nada foi apagado: as artes e os textos continuam no disco. Enquanto ele não for restaurado,"
+  + " aprovar, reabrir e gerar prévia ficam indisponíveis nesta peça.";
+// Nome e data a partir do nome da pasta — folder = task_name + "_" + task_date (regra do
+// scripts/promote_task.js). E a unica identidade que sobra quando o status.json nao abre.
+function pedacosDaPasta(folder) {
+  const m = /^(.*)_(\d{4}-\d{2}-\d{2})$/.exec(String(folder || ""));
+  return m ? { task_name: m[1], task_date: m[2] } : { task_name: String(folder || ""), task_date: null };
+}
+function statusDeEmergencia(folder) {
+  const p = pedacosDaPasta(folder);
+  return {
+    task_name: p.task_name, task_date: p.task_date,
+    status: "problema", ilegivel: true, problema: AVISO_STATUS_ILEGIVEL,
+    created_at: null, last_updated_at: null, platforms: [], history: [],
+  };
+}
+// O status.json desta peca esta ilegivel? (existe, mas nao abre)
+function statusIlegivel(loc) {
+  const p = path.join(loc.path, "status.json");
+  return fs.existsSync(p) && !readJsonSafe(p);
 }
 
 const IMAGE_EXT = [".png", ".jpg", ".jpeg", ".webp"];
@@ -162,8 +247,24 @@ function listTasks() {
       if (!stat.isDirectory()) continue;
       if (!isTaskDir(full)) continue;
       const status = readJsonSafe(path.join(full, "status.json"));
-      if (!status) continue;
       const files = listFiles(full).filter((f) => f.rel !== "status.json");
+      // Status ilegivel: a peca ENTRA na lista, marcada como problema. Antes ela sumia daqui e
+      // a pessoa concluia que tinha perdido o trabalho (ver AVISO_STATUS_ILEGIVEL la em cima).
+      // Vem com a miniatura e o tipo deduzidos dos arquivos, para dar para reconhecer qual e.
+      if (!status) {
+        const p = pedacosDaPasta(name);
+        out.push({
+          folder: name, zone: z.zone, path: full,
+          task_name: p.task_name, title: null, task_date: p.task_date,
+          status: "problema", problema: true, problema_motivo: AVISO_STATUS_ILEGIVEL,
+          published_at: null, campaign_id: null, campaign_angle: null, platforms: [],
+          last_updated_at: null, created_at: null,
+          recency: files.reduce((m, f) => Math.max(m, f.mtime || 0), 0),
+          first_viewed_at: null, tags: [], pillar: null, imported: false, origem: null,
+          kind: classifyKind(files, null), thumb: pickThumb(files),
+        });
+        continue;
+      }
       out.push({
         folder: name,
         zone: z.zone,
@@ -229,7 +330,10 @@ function listFiles(dir, base) {
 function getTask(folder) {
   const loc = findTask(folder);
   if (!loc) return null;
-  const status = readJsonSafe(path.join(loc.path, "status.json"));
+  // Status ilegivel: devolve um status de EMERGENCIA no lugar de null. Quem chama (as rotas de
+  // aprovar e de gerar previa) le `status.task_name` direto; com null aquilo estourava dentro de
+  // um handler assincrono, a requisicao ficava sem resposta e o botao girava para sempre.
+  const status = readJsonSafe(path.join(loc.path, "status.json")) || statusDeEmergencia(folder);
   const files = listFiles(loc.path).filter((f) => f.rel !== "status.json");
   // Anota cada arquivo com flags de midia para o front decidir preview.
   const annotated = files.map((f) => ({
@@ -245,6 +349,8 @@ function getTask(folder) {
     path: loc.path,
     status,
     files: annotated,
+    // Marca de problema no proprio objeto da peca, para a tela poder dizer o que houve.
+    problema: status.ilegivel ? AVISO_STATUS_ILEGIVEL : null,
     tags: Array.isArray(status && status.tags) ? status.tags : [],
     kind: classifyKind(files, status),
     thumb: pickThumb(files),
@@ -305,9 +411,13 @@ const HISTORY_ROOT = path.join(PATHS.OUTPUTS_DIR, ".history");
 const HISTORY_MAX = 25;
 function historyDir(folder) { return path.join(HISTORY_ROOT, String(folder).replace(/[^a-zA-Z0-9._-]/g, "_")); }
 function readHistoryIndex(folder) { const idx = readJsonSafe(path.join(historyDir(folder), "index.json")); return Array.isArray(idx) ? idx : []; }
+// O indice do historico tambem vai por tmp+rename. Ele e um arquivo so para TODAS as versoes
+// guardadas da peca: um desligamento no meio da gravacao deixava o JSON pela metade, o
+// readHistoryIndex devolvia [] (le com readJsonSafe) e o "desfazer" da peca sumia inteiro, sem
+// uma palavra — os .snap continuavam no disco, mas ninguem mais chegava neles.
 function writeHistoryIndex(folder, list) {
   const dir = historyDir(folder); fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "index.json"), JSON.stringify(list, null, 2) + "\n", "utf8");
+  writeJsonAtomic(path.join(dir, "index.json"), list);
 }
 function snapshotContentFile(loc, folder, rel, note) {
   const src = path.join(loc.path, rel);
@@ -315,7 +425,9 @@ function snapshotContentFile(loc, folder, rel, note) {
   const content = fs.readFileSync(src, "utf8");
   const dir = historyDir(folder); fs.mkdirSync(dir, { recursive: true });
   const id = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 6);
-  fs.writeFileSync(path.join(dir, id + ".snap"), content, "utf8");
+  // Tambem por tmp+rename: um .snap pela metade e uma versao que o "desfazer" oferece na tela e
+  // restaura truncada por cima do texto bom — pior que nao ter a versao.
+  writeFileAtomic(path.join(dir, id + ".snap"), content, "utf8");
   let list = readHistoryIndex(folder);
   list.unshift({ id, rel, ts: new Date().toISOString(), note: String(note || "").slice(0, 200), size: Buffer.byteLength(content) });
   if (list.length > HISTORY_MAX) { // poda: mantem os mais recentes
@@ -347,12 +459,37 @@ function writeContentFile(folder, rel, content, note) {
   }
   const target = path.normalize(path.join(loc.path, rel));
   if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
+  recusaSeEmTransicao(folder); // aprovar/reabrir em curso: ver o comentario em _emTransicao
   // Rede de seguranca p/ "desfazer": snapshot do estado ATUAL antes de sobrescrever. Nao-critico.
   try { snapshotContentFile(loc, folder, rel, note); } catch (e) { console.warn("[history] snapshot falhou:", e && e.message); }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   writeFileAtomic(target, content, "utf8");
+  confirmaQueFicouNaPeca(loc, target); // a pasta pode ter sido movida no meio
   invalidateTasksCache();
   return path.relative(loc.path, target).split(path.sep).join("/");
+}
+
+// Confere que o arquivo recem-gravado ficou DENTRO da peca de verdade.
+//
+// Existe por causa do mkdirSync recursivo logo acima: se a peca saiu daqui no meio da gravacao
+// (o script de aprovacao roda em outro processo e MOVE a pasta), o mkdir RECRIA a pasta antiga e
+// o arquivo aterrissa numa casca vazia, sem status.json — invisivel na biblioteca. A tela dizia
+// "salvo" e o texto nao existia em lugar nenhum que alguem fosse olhar. Pior: a casca deixava a
+// peca em DUAS zonas, e a partir dai qualquer aprovar/reabrir morria com E_DUPLICATE_LOCATION.
+// Aqui a casca e desfeita (so pastas VAZIAS sao removidas) e o erro chega a quem salvou.
+function confirmaQueFicouNaPeca(loc, target) {
+  if (fs.existsSync(path.join(loc.path, "status.json"))) return; // continua sendo a peca: tudo certo
+  try { fs.unlinkSync(target); } catch (e) { /* ja nao existe */ }
+  let dir = path.dirname(target);
+  while (dir.startsWith(loc.path)) {                     // desfaz so o que a gravacao criou
+    try { if (fs.readdirSync(dir).length) break; fs.rmdirSync(dir); } catch (e) { break; }
+    if (dir === loc.path) break;
+    dir = path.dirname(dir);
+  }
+  const e = new Error("A peça mudou de lugar enquanto eu salvava (alguém aprovou ou reabriu neste instante), "
+    + "então NADA foi salvo. Abra a peça de novo e refaça a alteração.");
+  e.code = "E_PECA_SAIU_DO_LUGAR";
+  throw e;
 }
 
 // Escreve um arquivo BINARIO (imagem importada) dentro da task, só na zona active.
@@ -364,8 +501,10 @@ function writeMediaFile(folder, rel, buffer) {
   if (loc.zone !== "active") { const e = new Error("task esta em '" + loc.zone + "' — só a zona active aceita mídia"); e.code = "E_NOT_EDITABLE"; throw e; }
   const target = path.normalize(path.join(loc.path, rel));
   if (target !== loc.path && !target.startsWith(loc.path + path.sep)) { const e = new Error("path invalido"); e.code = "E_BAD_PATH"; throw e; }
+  recusaSeEmTransicao(folder); // mesma razao do writeContentFile
   fs.mkdirSync(path.dirname(target), { recursive: true });
   writeFileAtomic(target, buffer);
+  confirmaQueFicouNaPeca(loc, target);
   invalidateTasksCache();
   return path.relative(loc.path, target).split(path.sep).join("/");
 }
@@ -533,10 +672,14 @@ function setMediaMeta(folder, meta) {
 // então não fere o gate R5). Grava published_at/published_by/last_post_id no status.json.
 function setPublished(folder, meta) {
   const loc = findTask(folder);
-  if (!loc) return false;
+  // ESTA marca e a que impede o mesmo post de sair duas vezes (o guard E_ALREADY_PUBLISHED da
+  // rota le ela). Devolver `false` calado aqui era o pior desfecho possivel: o post ja tinha ido
+  // ao ar, a peca continuava com cara de nao-publicada e o proximo clique postava de novo. Quem
+  // chama ja trata a excecao e AVISA na tela ("marque manualmente para nao publicar de novo").
+  if (!loc) { const e = new Error("Não encontrei a peça " + folder + " para marcar como publicada."); e.code = "E_TASK_NOT_FOUND"; throw e; }
   const p = path.join(loc.path, "status.json");
   const status = readJsonSafe(p);
-  if (!status) return false;
+  if (!status) { const e = new Error("O post foi ao ar, mas não consegui marcar a peça: " + AVISO_STATUS_ILEGIVEL); e.code = "E_STATUS_ILEGIVEL"; throw e; }
   status.published_at = (meta && meta.at) || new Date().toISOString(); // `at` = data informada (marcação manual de publicação antiga); senão agora
   if (meta && meta.by) status.published_by = String(meta.by).slice(0, 120);
   if (meta && meta.post_id) status.last_post_id = String(meta.post_id).slice(0, 120);
@@ -656,11 +799,25 @@ function markViewed(folder) {
   return true;
 }
 
+// Peca com o status.json ilegivel nao tem como mudar de estado: o script la dentro le esse mesmo
+// arquivo e para. Recusar AQUI, com texto de gente, e o que faz a acao VOLTAR — antes a rota
+// estourava antes de chegar no script e a requisicao morria sem resposta (botao girando).
+// Devolve o mesmo formato do runScript, entao a rota responde 400 com este `error`.
+function recusaSeIlegivel(task_name, task_date) {
+  const folder = String(task_name) + "_" + String(task_date);
+  const loc = findTask(folder);
+  if (!loc || !statusIlegivel(loc)) return null;
+  return Promise.resolve({ code: -1, stdout: "", stderr: "", ok: false, error: AVISO_STATUS_ILEGIVEL, code_erro: "E_STATUS_ILEGIVEL" });
+}
+
 function generatePreview(task_name, task_date) {
-  return runScript("generate_preview.js", ["--task", task_name, "--date", task_date]);
+  return recusaSeIlegivel(task_name, task_date)
+    || runScript("generate_preview.js", ["--task", task_name, "--date", task_date]);
 }
 
 function promote(task_name, task_date, to, by, reason) {
+  const recusa = recusaSeIlegivel(task_name, task_date);
+  if (recusa) return recusa;
   const argv = ["--task", task_name, "--date", task_date, "--to", to];
   if (by) argv.push("--by", by);
   if (reason) argv.push("--reason", reason);

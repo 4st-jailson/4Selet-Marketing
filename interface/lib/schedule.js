@@ -10,11 +10,29 @@ const publications = require("./publications");
 
 const FILE = path.join(PATHS.DATA_DIR, "schedule.json");
 
+// Folga entre o relógio de quem agenda e o do servidor (ver o uso em add()).
+const FOLGA_RELOGIO_MS = 2 * 60 * 1000;
+// Atraso máximo que ainda vale publicar sozinho. O painel desligado por dias voltava e disparava
+// TUDO que tinha vencido, de uma vez, na conta real — uma peça de terça saindo no sábado de
+// madrugada, junto com outras cinco. Passou disto, o agendamento é dado como perdido e quem
+// cuida decide (o motivo aparece na aba Publicações › Agendados).
+const ATRASO_MAX_MS = 2 * 60 * 60 * 1000;
+
 function load() { try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch (e) { return []; } }
+// Gravação ATÔMICA e DURÁVEL da fila. O tmp+rename já existia; faltavam duas coisas que este
+// arquivo não pode perder (ele é a lista do que vai ser postado na conta real):
+// (1) nome do tmp ÚNICO — com nome fixo, dois processos gravando ao mesmo tempo (o painel e um
+//     script de manutenção) truncam o tmp um do outro e o rename publica um arquivo pela metade;
+// (2) fsync ANTES do rename — sem ele o rename pode chegar ao disco antes do conteúdo, e um
+//     desligamento logo depois deixa a fila com zero byte: todos os agendamentos somem calados.
+// (Gêmeo do mesmo trecho em publications.js e content.js — mesma razão, mesmo formato.)
+let _seqTmp = 0;
 function save(list) {
   if (!fs.existsSync(PATHS.DATA_DIR)) fs.mkdirSync(PATHS.DATA_DIR, { recursive: true });
-  const tmp = FILE + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(list, null, 2), { mode: 0o600 });
+  const tmp = FILE + "." + process.pid + "." + (++_seqTmp) + ".tmp";
+  const fd = fs.openSync(tmp, "w", 0o600);
+  try { fs.writeSync(fd, JSON.stringify(list, null, 2)); fs.fsyncSync(fd); }
+  finally { fs.closeSync(fd); }
   fs.renameSync(tmp, FILE);
 }
 
@@ -46,6 +64,14 @@ function cancelPendingFor(folder, reason, destino) {
 function add({ folder, kind, caption, scheduled_at, by, label, destino }) {
   const when = new Date(scheduled_at);
   if (isNaN(when.getTime())) { const e = new Error("Data/hora inválida."); e.code = "E_BAD_DATE"; throw e; }
+  // Horário que JÁ PASSOU não é agendamento — é publicar agora, sem ninguém olhando. A trava
+  // existia só no navegador: pela API dava para agendar para ontem, e o tique seguinte postava
+  // na hora. A folga de 2 minutos é para o relógio do navegador não brigar com o do servidor
+  // (o campo de data só tem minuto: escolher "agora" chega aqui até 59s atrasado).
+  if (when.getTime() < Date.now() - FOLGA_RELOGIO_MS) {
+    const e = new Error("Esse horário já passou. Escolha uma data e hora no futuro — se a ideia é publicar agora, use o botão de publicar.");
+    e.code = "E_DATA_NO_PASSADO"; throw e;
+  }
   // Um agendamento pendente por peça. Duplo clique no botão "Agendar" (ou um retry) criava dois
   // itens iguais, e cada um virava um post no horário marcado.
   const dest = DESTINO_IDS.indexOf(destino) >= 0 ? destino : "feed";
@@ -89,6 +115,43 @@ function cancel(id) {
 // (folder, {kind, caption}) e devolve { ok, dry_run, post_id }. Marca "publishing" antes
 // de chamar (evita disparo duplo) e grava o resultado.
 let started = false;
+// Trava de reentrada DO TIQUE. Um tique podia começar com o anterior ainda no ar (publicar um
+// carrossel passa de um minuto): cada um decidia a fila no começo e continuava usando essa foto
+// ANTIGA depois de esperar o Instagram. O segundo item da fila — já publicado pelo outro tique —
+// era publicado DE NOVO. Dois posts iguais na conta real, sem ninguém olhando. Um tique por vez.
+let tiqueRodando = false;
+
+// Trava POR ITEM, em arquivo, para o caso de existir mais de um painel vivo apontando para a
+// mesma pasta de dados (o instante do deploy, em que o contêiner novo sobe antes do antigo sair).
+// A trava de memória acima não atravessa processos; esta atravessa, porque criar arquivo com "wx"
+// falha se ele já existir — quem cria é quem publica. Some sozinha: quem termina apaga a sua, e
+// as esquecidas por um desligamento são varridas junto com os itens presos em "publishing".
+const LOCKS_DIR = path.join(PATHS.DATA_DIR, "schedule_locks");
+function caminhoTrava(id) { return path.join(LOCKS_DIR, String(id).replace(/[^a-zA-Z0-9_-]/g, "") + ".lock"); }
+function tentaTravar(id) {
+  try { fs.mkdirSync(LOCKS_DIR, { recursive: true }); } catch (e) { /* já existe */ }
+  let fd;
+  try { fd = fs.openSync(caminhoTrava(id), "wx", 0o600); } catch (e) { return false; } // já travado
+  try { fs.writeSync(fd, JSON.stringify({ pid: process.pid, desde: new Date().toISOString() })); }
+  finally { fs.closeSync(fd); }
+  return true;
+}
+function destrava(id) { try { fs.unlinkSync(caminhoTrava(id)); } catch (e) { /* já saiu */ } }
+
+// PEGA o agendamento para publicar. Relê do disco de propósito: a lista que o tique montou lá
+// atrás pode estar velha, e é exatamente por confiar nela que o mesmo post saía duas vezes.
+// Só sai daqui com o item se ele AINDA estiver pendente no arquivo e a trava for nossa.
+function reivindica(id) {
+  const l = load();
+  const it = l.find((x) => x.id === id);
+  if (!it || it.status !== "pending") return null;   // outro tique já pegou (ou foi cancelado)
+  if (!tentaTravar(id)) return null;                 // outro painel está publicando este agora
+  it.status = "publishing";
+  it.started_at = new Date().toISOString();
+  it.pid = process.pid;
+  save(l);
+  return it;
+}
 
 // Destrava itens que ficaram presos em "publishing". O processo pode morrer (deploy, OOM)
 // entre marcar "publishing" e gravar o resultado; como o tick só olha "pending", o item ficava
@@ -107,19 +170,70 @@ function recoverStuck() {
     it.error = "A publicação foi interrompida (o painel reiniciou no meio). Confira no Instagram se o post saiu antes de publicar de novo.";
     it.failed_at = new Date().toISOString();
     changed = true;
+    destrava(it.id); // a trava em arquivo também ficou para trás
     console.error("[schedule] agendamento preso em publishing destravado:", it.id, it.folder);
   }
   if (changed) save(l);
+  varreTravasEsquecidas(l);
+}
+
+// Trava em arquivo que sobrou de um desligamento. Só apaga a de item que NÃO está publicando:
+// a de quem está no limbo fica com ele até o recoverStuck acima resolver o caso. Sem esta
+// varredura, um item que morreu entre travar e gravar "publishing" ficaria pendente para sempre,
+// sem nunca poder ser pego de novo — o agendamento simplesmente não aconteceria.
+function varreTravasEsquecidas(lista) {
+  let nomes;
+  try { nomes = fs.readdirSync(LOCKS_DIR); } catch (e) { return; } // pasta ainda não existe
+  const agora = Date.now();
+  for (const nome of nomes) {
+    if (!/\.lock$/.test(nome)) continue;
+    const p = path.join(LOCKS_DIR, nome);
+    let st; try { st = fs.statSync(p); } catch (e) { continue; }
+    if (agora - st.mtimeMs < STUCK_MS) continue;      // pode estar em uso agora
+    const it = lista.find((x) => x.id === nome.replace(/\.lock$/, ""));
+    if (it && it.status === "publishing") continue;   // ainda no limbo
+    try { fs.unlinkSync(p); } catch (e) { /* já saiu */ }
+  }
 }
 
 function startWorker(publishFn, isPublishedFn) {
   if (started) return; started = true;
   recoverStuck();
   const tick = async () => {
-    recoverStuck();
-    const now = Date.now();
-    const due = load().filter((x) => x.status === "pending" && new Date(x.scheduled_at).getTime() <= now);
-    for (const it of due) {
+    if (tiqueRodando) return; // ver a trava de reentrada lá em cima
+    tiqueRodando = true;
+    try { await rodaTique(publishFn, isPublishedFn); } finally { tiqueRodando = false; }
+  };
+  setInterval(() => { tick().catch(() => {}); }, 60 * 1000).unref();
+  setTimeout(() => { tick().catch(() => {}); }, 4000).unref(); // roda logo após o boot (pega atrasados)
+}
+
+// Um tique: pega os agendamentos vencidos e publica um por um. Separado do startWorker para
+// deixar à vista que quem o chama é a trava de reentrada — e só ela.
+async function rodaTique(publishFn, isPublishedFn) {
+  recoverStuck();
+  const now = Date.now();
+  const due = load().filter((x) => x.status === "pending" && new Date(x.scheduled_at).getTime() <= now);
+  for (const alvo of due) {
+    // Relê do disco e trava ANTES de publicar. É este passo que impede o mesmo agendamento de
+    // ser pego duas vezes; a lista `due` acima é só um ponto de partida, e confiar nela depois
+    // da espera pelo Instagram era exatamente o motivo de o post sair repetido.
+    const it = reivindica(alvo.id);
+    if (!it) continue;
+    try {
+      // Venceu faz tempo demais. O painel podia ter passado dias fora do ar (queda do provedor,
+      // deploy travado) e, ao voltar, mandava tudo de uma vez para a conta real, fora de hora.
+      // Melhor não publicar e dizer o porquê do que postar de madrugada uma peça de terça.
+      const atraso = now - new Date(it.scheduled_at).getTime();
+      if (atraso > ATRASO_MAX_MS) {
+        const horas = Math.round(atraso / 3600000);
+        update(it.id, {
+          status: "perdido", perdido_at: new Date().toISOString(),
+          error: "O horário marcado passou há " + (horas >= 48 ? Math.round(horas / 24) + " dias" : horas + " horas")
+            + " e o painel não estava no ar para publicar. Não publiquei fora de hora — confira a peça e agende de novo.",
+        });
+        continue;
+      }
       // A peça pode ter sido publicada na mão depois de agendada. Publicar de novo aqui
       // duplicaria o post na conta real, então pulamos e registramos o porquê.
       if (typeof isPublishedFn === "function") {
@@ -130,32 +244,36 @@ function startWorker(publishFn, isPublishedFn) {
           continue;
         }
       }
-      update(it.id, { status: "publishing", started_at: new Date().toISOString() });
-      try {
-        // O DESTINO tem que viajar junto. Sem ele, o publicador caía no destino padrão do tipo
-        // da peça — ou seja, FEED — e um Story agendado saía como post de feed, com a arte do
-        // feed, sozinho, no horário marcado. E o histórico logo abaixo registrava "Story"
-        // (destinoDe(it)), então nem olhando a aba Publicados dava para descobrir o que saiu.
-        const r = await publishFn(it.folder, { kind: it.kind, destino: destinoDe(it), caption: it.caption });
-        update(it.id, { status: r && r.dry_run ? "simulado" : "published", post_id: (r && r.post_id) || null, published_at: new Date().toISOString() });
-        if (r && r.ok && !r.dry_run) {
-          // MARCA A PEÇA como publicada — sem isto, o post agendado não deixa rastro no
-          // status.json e o guard de post duplicado (409 E_ALREADY_PUBLISHED na rota) NÃO
-          // dispara: um "Publicar agora" depois do agendado sairia como SEGUNDO post na conta
-          // real. A rota já fazia isto; o disparador do agendamento não fazia.
-          try { require("./content").setPublished(it.folder, { by: it.by, post_id: r.post_id }); }
-          catch (e) { console.error("[schedule] post publicado mas falhou ao marcar a peça:", it.folder, e && e.message); }
-          // registra no histórico de publicações (aba "Publicados") quando saiu de verdade
-          try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, destino: destinoDe(it), caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); }
-          catch (e) { console.error("[schedule] post publicado mas falhou ao registrar no histórico:", it.folder, e && e.message); }
-        }
-      } catch (e) {
-        update(it.id, { status: "failed", error: (e && e.message ? e.message : String(e)).slice(0, 300), failed_at: new Date().toISOString() });
+      // O DESTINO tem que viajar junto. Sem ele, o publicador caía no destino padrão do tipo
+      // da peça — ou seja, FEED — e um Story agendado saía como post de feed, com a arte do
+      // feed, sozinho, no horário marcado. E o histórico logo abaixo registrava "Story"
+      // (destinoDe(it)), então nem olhando a aba Publicados dava para descobrir o que saiu.
+      const r = await publishFn(it.folder, { kind: it.kind, destino: destinoDe(it), caption: it.caption });
+      update(it.id, { status: r && r.dry_run ? "simulado" : "published", post_id: (r && r.post_id) || null, published_at: new Date().toISOString() });
+      if (r && r.ok && !r.dry_run) {
+        // MARCA A PEÇA como publicada — sem isto, o post agendado não deixa rastro no
+        // status.json e o guard de post duplicado (409 E_ALREADY_PUBLISHED na rota) NÃO
+        // dispara: um "Publicar agora" depois do agendado sairia como SEGUNDO post na conta
+        // real. A rota já fazia isto; o disparador do agendamento não fazia.
+        try { require("./content").setPublished(it.folder, { by: it.by, post_id: r.post_id }); }
+        catch (e) { console.error("[schedule] post publicado mas falhou ao marcar a peça:", it.folder, e && e.message); }
+        // registra no histórico de publicações (aba "Publicados") quando saiu de verdade
+        try { publications.add({ folder: it.folder, label: it.label, kind: it.kind, destino: destinoDe(it), caption: it.caption, post_id: r.post_id, permalink: r.permalink, scheduled_at: it.scheduled_at, by: it.by }); }
+        catch (e) { console.error("[schedule] post publicado mas falhou ao registrar no histórico:", it.folder, e && e.message); }
       }
+    } catch (e) {
+      update(it.id, { status: "failed", error: (e && e.message ? e.message : String(e)).slice(0, 300), failed_at: new Date().toISOString() });
+    } finally {
+      // Solta a trava do item aconteça o que acontecer — inclusive quando ele foi dado como
+      // perdido ou pulado acima. Trava esquecida seguraria o próximo agendamento desta peça.
+      destrava(it.id);
     }
-  };
-  setInterval(() => { tick().catch(() => {}); }, 60 * 1000).unref();
-  setTimeout(() => { tick().catch(() => {}); }, 4000).unref(); // roda logo após o boot (pega atrasados)
+  }
 }
 
-module.exports = { add, list, update, cancel, startWorker, pendingFor, cancelPendingFor };
+// `rodaTique` sai daqui SÓ para a bateria poder disparar dois tiques sobrepostos e CONTAR quantas
+// vezes cada peça foi publicada. O post duplicado era invisível para quem lia o código — as três
+// travas parecem certas na leitura — e só o contador prova. O painel continua chamando o tique
+// por startWorker, que é quem segura a trava de reentrada; quem chamar rodaTique direto está
+// fora dela de propósito, que é justamente o cenário do teste.
+module.exports = { add, list, update, cancel, startWorker, pendingFor, cancelPendingFor, rodaTique };

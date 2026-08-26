@@ -429,7 +429,13 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .lr-thumb-fb .lr-thumb-ico { display: grid; }
 /* mix de conteúdo no dashboard — barras por tipo */
 .mix { display: flex; flex-direction: column; gap: 11px; margin-top: var(--s3); }
-.mix-row { display: grid; grid-template-columns: 112px 1fr 26px; align-items: center; gap: 12px; }
+/* A linha virou LINK (leva para a biblioteca filtrada por este tipo). Precisa parecer clicável
+   sem virar botão: o rótulo escurece e a barra ganha um leve realce no hover e no foco. */
+.mix-row { display: grid; grid-template-columns: 112px 1fr 26px; align-items: center; gap: 12px; color: inherit; text-decoration: none; border-radius: var(--r-xs); transition: color var(--tr); }
+.mix-row:hover, .mix-row:focus-visible { text-decoration: none; outline: none; }
+.mix-row:hover .mix-lbl, .mix-row:focus-visible .mix-lbl { color: var(--text); }
+.mix-row:hover .mix-bar, .mix-row:focus-visible .mix-bar { background: var(--border); }
+.mix-row:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
 .mix-lbl { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mix-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .mix-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand-blue), var(--brand-sky)); }
@@ -881,6 +887,58 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .cc-meta { font-size: 12px; color: var(--text-dim); }
 .cc-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .kind-group { margin-bottom: var(--s7); }
+
+/* ---- Aprovados por ESTADO DE ATENÇÃO ----
+   A faixa de triagem é a única coisa acima da dobra que responde "o que precisa de mim agora".
+   Âmbar, não vermelho: é fila esperando, não erro. */
+.triagem {
+  display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--border-soft); border-left: 3px solid var(--warn);
+  border-radius: var(--r); padding: 18px var(--s6); margin-bottom: var(--s6); box-shadow: var(--shadow-sm);
+}
+.triagem-txt { flex: 1 1 320px; min-width: 0; }
+.triagem-tit { font-size: 16px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 4px; }
+.triagem-sub { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; }
+.triagem-acao { display: flex; align-items: center; gap: var(--s2); flex: none; }
+
+/* Cabeçalho de seção com o número ao lado do nome: o número é o dado, o nome é o rótulo. */
+.ap-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: var(--s4); }
+.ap-head h2 { font-size: 17px; letter-spacing: -.01em; }
+.ap-conta {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: var(--r-pill);
+  background: var(--surface-3); color: var(--text-2);
+}
+.ap-conta.warn { background: var(--warn-soft); color: var(--warn); }
+.ap-conta.ok { background: var(--ok-soft); color: var(--ok); }
+.ap-explica { font-size: 13px; color: var(--text-dim); }
+
+/* O que já foi resolvido fica recolhido: existe, não ocupa a tela. */
+.ap-resolvidas { border: 1px solid var(--border-soft); border-radius: var(--r); background: var(--surface-2); margin-bottom: var(--s7); }
+.ap-resolvidas > summary {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer;
+  padding: 15px var(--s5); border-radius: var(--r); list-style: none;
+}
+.ap-resolvidas > summary::-webkit-details-marker { display: none; }
+.ap-resolvidas > summary::before {
+  content: ""; width: 16px; height: 16px; flex: none; background: currentColor; color: var(--text-dim);
+  -webkit-mask: var(--ico-arrow) center/16px no-repeat; mask: var(--ico-arrow) center/16px no-repeat;
+  transform: rotate(0deg); transition: transform var(--tr);
+}
+.ap-resolvidas[open] > summary::before { transform: rotate(90deg); }
+.ap-resolvidas > summary:hover .ap-res-tit { color: var(--accent-strong); }
+.ap-res-tit { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.ap-res-sub { font-size: 13.5px; color: var(--text-dim); }
+.ap-res-corpo { padding: var(--s2) var(--s5) var(--s5); }
+.ap-res-corpo .kind-group:last-child { margin-bottom: 0; }
+
+/* Aviso gravado na peça, dentro do cartão. Só aparece onde ajuda a escolher o que abrir. */
+.cc-aviso {
+  display: flex; align-items: flex-start; gap: 7px; margin-top: 2px;
+  padding: 8px 10px; border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn);
+}
+.cc-aviso svg { flex: none; margin-top: 1px; }
+.cc-aviso span { font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+.filter-kind { margin-top: calc(var(--s3) * -1); }
 .thumb { background: var(--thumb-bg); }
 
 /* ---- key-value ---- */
@@ -1345,7 +1403,10 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
   padding: 0 24px 0 8px; font-size: 12px; cursor: pointer;
 }
 .he-bar #he-lh { height: 30px; }
-.he-bar #he-font { width: 128px; }
+/* A caixa de fonte passou a oferecer as mesmas famílias da criação, e os nomes são mais longos
+   ("Playfair Display", "JetBrains Mono (rótulos)"). Em 128px o nome saía cortado — e fonte cortada
+   na caixa é a pessoa não conseguir conferir com o que está trabalhando. */
+.he-bar #he-font { width: 158px; }
 .he-bar #he-align { width: 84px; }
 /* Largura suficiente pro valor + setas de incremento sem cortar (tamanho até "600",
    entrelinha "2.95", rotação "-180"). Antes 54-58px cortava o último dígito. */
@@ -2346,12 +2407,20 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
   transition: border-color var(--tr), background var(--tr), transform var(--tr);
 }
 .dash-acao:hover { border-color: var(--brand-sky); background: var(--surface-2); transform: translateY(-1px); }
+/* As quatro ações moram na MESMA grade de 4 colunas dos quatro números, coladas embaixo deles,
+   para lerem como um painel de comando só. Mas o ícone estava noutra escala: medido na tela,
+   26px de ladrilho e 14px de desenho contra 44px e 22px da linha de cima — 59% e 64%. Do lado
+   de um número grande, isso lia como rodapé, não como ação.
+   O ladrilho não pode chegar a 44px (o cartão de ação tem 12px de recuo contra 20px do de cima,
+   e ficaria da altura do outro): 34/18 mantém a mesma PROPORÇÃO interna da linha de cima (o
+   desenho ocupando pouco mais da metade do ladrilho) e cresce o cartão só 1,5px. O raio
+   acompanha a escala e passa a ser o mesmo do ladrilho de cima. */
 .dash-acao-ico {
-  flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center;
-  border-radius: 7px; background: var(--surface-2); color: var(--brand-blue);
-  font-size: 14px; line-height: 1;
+  flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: var(--r-sm); background: var(--surface-2); color: var(--brand-blue);
+  font-size: 18px; line-height: 1;
 }
-.dash-acao-ico svg { width: 14px; height: 14px; }
+.dash-acao-ico svg { width: 18px; height: 18px; }
 .dash-acao-txt { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .dash-acao-txt strong { font-size: 13px; font-weight: 650; line-height: 1.35; }
 .dash-acao-txt span {
