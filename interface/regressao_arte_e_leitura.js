@@ -2262,6 +2262,13 @@ function briefingLongo() {
       const CONHECIDOS = [
         "padrao/-/tpl_editorial .eyebrow",        // rótulo Sky sobre o degradê azul — 2,85:1
         "grade/-/tpl_bold .eyebrow",              // idem no Destaque sobre o Quadriculado — 2,88:1
+        // O MESMO defeito no Editorial sobre o Quadriculado. Não estava aqui porque, na máquina
+        // onde a lista foi escrita, ele media um fio ACIMA do piso e o Destaque um fio abaixo —
+        // e no container de produção acontece o inverso. Os dois são a mesma tinta sobre o mesmo
+        // brilho, na casa dos 2,8: o que decide qual dos dois cruza a linha é a fonte instalada,
+        // que desloca o rótulo alguns pixels sobre o degradê. Registrar só um dos dois fazia a
+        // bateria passar aqui e reprovar lá, pelo mesmo defeito.
+        "grade/-/tpl_editorial .eyebrow",         // idem no Editorial sobre o Quadriculado — 2,8:1
         "grade/dark/comparacao .cp-s",            // o ">" sobre o brilho do Quadriculado — 2,75:1
         "grade/light/comparacao .cp-s",           // idem no tema claro — 2,41:1
         "grade/light/serie .sr-de",               // "02 / 05" sobre o brilho do Quadriculado — 2,85:1
@@ -2271,7 +2278,17 @@ function briefingLongo() {
       ];
       const ruinsAgora = Array.from(new Set(conteudo.filter(reprovado).map(nome)));
       const novos = ruinsAgora.filter((n) => CONHECIDOS.indexOf(n) < 0);
-      const sumiram = CONHECIDOS.filter((n) => ruinsAgora.indexOf(n) < 0);
+      // O lado inverso da catraca exige MARGEM, e não apenas "passou do piso". Motivo medido: os
+      // casos do Quadriculado vivem na casa dos 2,8 e a medição varia alguns centésimos entre
+      // máquinas (a fonte instalada desloca o texto sobre o degradê). Sem margem, o mesmo commit
+      // passava aqui e reprovava em produção — a bateria acusava "defeito resolvido, tire da
+      // lista" para algo que continua quebrado, e isso ensina a ignorar a bateria.
+      // Um conserto de verdade sobe muito: os do papel foram de 1,00 para 8,09:1. O piso de
+      // "claramente resolvido" fica bem acima do ruído e bem abaixo de qualquer conserto real.
+      const RESOLVIDO_ACIMA_DE = 3.5;
+      const piorPorNome = {};
+      conteudo.forEach((r) => { const n = nome(r); if (piorPorNome[n] == null || r.ratio < piorPorNome[n]) piorPorNome[n] = r.ratio; });
+      const sumiram = CONHECIDOS.filter((n) => piorPorNome[n] != null && piorPorNome[n] >= RESOLVIDO_ACIMA_DE);
       checa(novos.length === 0, "nenhum texto NOVO abaixo do piso de leitura da WCAG",
         novos.slice(0, 5).join(" · ") || ruinsAgora.length + " casos, todos já conhecidos");
       checa(sumiram.length === 0, "  e a lista de casos conhecidos não guarda defeito já resolvido",
