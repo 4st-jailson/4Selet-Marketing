@@ -1289,15 +1289,15 @@ input.has-key:focus { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-so
    cortava o texto no meio ("Item 918×567 px · x 81"). Medido: com a barra lateral do editor aberta,
    isso começa em 944px de janela, que é uma largura comum. A barra ocupa 40px a partir de 18, então
    66px deixa as medidas livres em qualquer largura. */
-.he-dims { position: fixed; left: 18px; bottom: 66px; z-index: 20; display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; background: rgba(6,20,26,.86); border: 1px solid var(--border); border-radius: 8px; font-size: 11.5px; line-height: 1.35; color: var(--text-2); pointer-events: none; font-variant-numeric: tabular-nums; box-shadow: var(--shadow-sm); }
+.he-dims { position: fixed; left: 18px; bottom: 66px; z-index: 20; display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; background: rgba(6,20,26,.86); border: 1px solid var(--border); border-radius: 8px; font-size: 11.5px; line-height: 1.35; color: var(--brand-mist); pointer-events: none; font-variant-numeric: tabular-nums; box-shadow: var(--shadow-sm); }
 /* `display:flex` numa CLASSE vence o `[hidden] { display:none }` do navegador, que é estilo de
    agente do usuário. Sem esta linha o readout NUNCA some: vazio, ele vira uma caixinha escura
    sem nada dentro no canto inferior esquerdo do palco — e o botão "Medidas" parece não fazer
    nada. Mesmo defeito que já apareceu no "Ver mais" dos arranjos: em toda regra que declara
    `display`, o [hidden] precisa ser reafirmado. */
 .he-dims[hidden] { display: none; }
-.he-dims b { color: var(--text); font-weight: 700; }
-.he-dims .hed-sel { color: var(--accent-strong); }
+.he-dims b { color: var(--brand-cloud); font-weight: 700; }
+.he-dims .hed-sel { color: var(--brand-sky); }
 
 /* ---- Editor HTML: edita o HTML real da peça e re-renderiza (Playwright) ---- */
 .he-bar { display: flex; gap: 6px; align-items: center; padding: 9px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
