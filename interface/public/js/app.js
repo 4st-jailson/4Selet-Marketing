@@ -1829,8 +1829,11 @@ async function approvedPieces(query) {
   };
 
   const resolvidas = grupos.agendada.length + grupos.publicada.length;
+  // O bloco do que já está resolvido é uma FOLHA PRÓPRIA, separada da de cima por um vão. São
+  // dois assuntos: em cima, o que espera decisão; aqui, o que já saiu das suas mãos. Grudados,
+  // liam como uma seção a mais da mesma lista.
   const blocoResolvidas = resolvidas ? `
-    <details class="ap-resolvidas" open>
+    <details class="ap-resolvidas ap-folha" open>
       <summary>
         <span class="ap-res-tit">Já resolvidas</span>
         <span class="ap-res-sub">${[grupos.agendada.length ? plural(grupos.agendada.length, "agendada", "agendadas") : "",
@@ -1856,11 +1859,11 @@ async function approvedPieces(query) {
       ${shown.length ? (
         secao("nunca_aberta", "Nunca abertas", "chegaram e ninguém olhou", "warn")
         + secao("vista", "Vistas, esperando publicação", "você já olhou; falta decidir quando vai ao ar", "")
-        + blocoResolvidas
       ) : '<div class="empty">' + (fk === "all" && fc === "all"
           ? 'Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.'
           : "Nenhuma peça aprovada com esses filtros.") + "</div>"}
-    </div>`);
+    </div>
+    ${shown.length ? blocoResolvidas : ""}`);
 
   const vai = (par, v) => { location.hash = "#/approved?" + par + "=" + encodeURIComponent(v) + (par === "kind" && fc !== "all" ? "&campaign=" + encodeURIComponent(fc) : "") + (par === "campaign" && fk !== "all" ? "&kind=" + encodeURIComponent(fk) : ""); };
   $$(".filter-bar .chip-filter[data-camp]").forEach((b) => { b.onclick = () => vai("campaign", b.dataset.camp); });
@@ -1879,11 +1882,16 @@ const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 async function collectionsHome() {
   const { collections } = await API.collections();
   await ensureCampMap();
+  // A MESMA folha da aba vizinha. Sem ela, trocar de aba fazia o contêiner sumir e as abas
+  // PULAREM 25px — medido: 129px do topo numa aba, 104px na outra. Duas abas da mesma tela
+  // precisam ter a mesma moldura, senão a troca parece uma mudança de página.
   setView(`
-    ${approvedTabs("collections")}
-    <div class="section-head"><h2>Coleções</h2><button class="btn btn-primary" id="new-coll">＋ Nova coleção</button></div>
-    <p class="muted mb">Agrupe peças aprovadas em coleções com ordem própria — úteis para sequência de postagem, destaques ou reaproveitamento. É opcional: as peças continuam onde estão; a coleção apenas aponta para elas, e a mesma peça pode estar em várias.</p>
-    ${collections.length ? '<div class="coll-grid">' + collections.map(collectionTile).join("") + "</div>" : '<div class="empty">Nenhuma coleção ainda. Crie a primeira para organizar suas peças aprovadas.</div>'}`);
+    <div class="ap-folha">
+      ${approvedTabs("collections")}
+      <div class="section-head"><h2>Coleções</h2><button class="btn btn-primary" id="new-coll">＋ Nova coleção</button></div>
+      <p class="muted mb">Agrupe peças aprovadas em coleções com ordem própria — úteis para sequência de postagem, destaques ou reaproveitamento. É opcional: as peças continuam onde estão; a coleção apenas aponta para elas, e a mesma peça pode estar em várias.</p>
+      ${collections.length ? '<div class="coll-grid">' + collections.map(collectionTile).join("") + "</div>" : '<div class="empty">Nenhuma coleção ainda. Crie a primeira para organizar suas peças aprovadas.</div>'}
+    </div>`);
   $("#new-coll").onclick = async () => { const c = await newCollectionFlow(); if (c) location.hash = "#/approved?collection=" + encodeURIComponent(c.id); };
 }
 

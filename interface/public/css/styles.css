@@ -899,8 +899,14 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .ap-folha .content-card { background: var(--surface-2); border-color: var(--border); }
 .ap-folha .content-card:hover { background: var(--surface); border-color: var(--accent); }
 .ap-folha .triagem { background: var(--surface-2); }
-.ap-folha .ap-resolvidas { background: transparent; border-color: var(--border); }
 .ap-folha .kind-group:last-child { margin-bottom: 0; }
+/* O bloco do que já está resolvido é uma folha PRÓPRIA, com o mesmo vão que separa dois cartões
+   da página. Dentro da folha de cima ele lia como mais uma seção da mesma lista, e são dois
+   assuntos: em cima o que espera decisão, aqui o que já saiu das suas mãos. */
+.ap-folha + .ap-resolvidas.ap-folha { margin-top: var(--s6); }
+.ap-resolvidas.ap-folha { padding: 0; }
+.ap-resolvidas.ap-folha > summary { padding: 18px var(--s6); }
+.ap-resolvidas.ap-folha .ap-res-corpo { padding: 0 var(--s6) var(--s6); }
 .ap-folha > .seg-group { margin-bottom: var(--s5); }
 @media (max-width: 640px) { .ap-folha { padding: var(--s4); border-radius: var(--r); } }
 
