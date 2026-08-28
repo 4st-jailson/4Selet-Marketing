@@ -1823,7 +1823,10 @@ async function approvedPieces(query) {
 
   // O TIPO virou filtro. Era seção; virar filtro é o que libera a seção para dizer o estado.
   const kindsPresentes = Array.from(new Set(porCampanha.map((t) => t.kind).filter(Boolean)));
-  const kindFilters = ['<button class="chip-filter ' + (fk === "all" ? "on" : "") + '" data-kind="all">Todos os tipos</button>']
+  // O total entra na pílula "Todos". Ele morava num texto cinza no canto oposto da tela, o que
+  // dava três jeitos diferentes de contar a mesma coisa na mesma tela; aqui todo número que se
+  // refere a tipo mora no mesmo lugar e na mesma forma.
+  const kindFilters = ['<button class="chip-filter ' + (fk === "all" ? "on" : "") + '" data-kind="all">Todos <b>' + porCampanha.length + "</b></button>"]
     .concat(kindsPresentes.map((k) => {
       const n = porCampanha.filter((t) => t.kind === k).length;
       return `<button class="chip-filter ${k === fk ? "on" : ""}" data-kind="${esc(k)}">${esc(kindLabel(k))} <b>${n}</b></button>`;
@@ -1862,8 +1865,12 @@ async function approvedPieces(query) {
   const secao = (chave, titulo, explica, classe) => {
     const lista = grupos[chave];
     if (!lista.length) return "";
+    // O título da seção era 17px/700 — o MESMO tamanho e peso do título da página. Dois títulos
+    // de mesma força na mesma tela é o que fazia o topo virar um sanduíche. Aqui ele vira rótulo:
+    // continua dividindo a lista, para de disputar. Segue sendo h2 — muda a roupa, não a estrutura,
+    // para quem navega por leitor de tela não perder a hierarquia.
     return `<div class="kind-group" id="ap-${chave}">
-      <div class="ap-head">
+      <div class="ap-head ap-head-leve">
         <h2>${esc(titulo)}</h2>
         <span class="ap-conta ${classe || ""}">${lista.length}</span>
         <span class="ap-explica">${esc(explica)}</span>
@@ -1874,6 +1881,31 @@ async function approvedPieces(query) {
       })).join("")}</div>
     </div>`;
   };
+
+  // A BARRA DE TRABALHO: filtro e contagem numa faixa só, que acompanha a rolagem.
+  //
+  // Antes eram três coisas soltas — uma linha de pílulas de campanha, outra de tipo e uma contagem
+  // em texto num canto — e a contagem sumia assim que a pessoa descia na lista, junto com o filtro.
+  // Com 22 peças, trocar de filtro exigia subir de volta ao topo. Aqui elas viram uma faixa que
+  // fica ao alcance a lista inteira, e a contagem passa a morar dentro de uma pílula: some a
+  // terceira linguagem de contagem que a tela tinha (texto cinza, negrito na pílula e selo).
+  //
+  // A barra existe mesmo sem filtro nenhum: é ela que carrega a contagem, e uma peça que aparece
+  // e some conforme o acervo muda de forma é pior do que uma faixa constante.
+  const rotuloDoGrupo = (txt) => '<span class="ap-barra-rot">' + esc(txt) + "</span>";
+  const temDoisGrupos = campSet.length && kindsPresentes.length > 1;
+  const barraDeTrabalho = shown.length || approved.length ? `
+    <div class="ap-barra">
+      <div class="ap-barra-filtros">
+        ${campSet.length ? (temDoisGrupos ? rotuloDoGrupo("Campanha") : "") + campFilters : ""}
+        ${kindsPresentes.length > 1 ? (temDoisGrupos ? rotuloDoGrupo("Tipo") : "") + kindFilters : ""}
+      </div>
+      <span class="ap-barra-conta">${shown.length === approved.length
+        ? "mostrando " + (approved.length === 1 ? "a única peça" : "as " + approved.length)
+        // Com filtro ligado, a contagem crua mentia: dizia "22 peças" com 2 na tela. Dizer os dois
+        // números é o que deixa claro que o resto continua lá, só está filtrado.
+        : "mostrando " + shown.length + " de " + approved.length}</span>
+    </div>` : "";
 
   const resolvidas = grupos.agendada.length + grupos.publicada.length;
   // O bloco do que já está resolvido é uma FOLHA PRÓPRIA, separada da de cima por um vão. São
@@ -1898,14 +1930,9 @@ async function approvedPieces(query) {
   // cartões, para não sumirem em cima dela, passam a ter o tom claro no lugar do branco.
   setView(`
     <div class="ap-folha">
-      ${approvedTabs("pieces", shown.length === approved.length
-        ? plural(approved.length, "peça", "peças")
-        // Com filtro ligado, a contagem crua mentia: dizia "22 peças" com 2 na tela. Dizer os dois
-        // números é o que deixa claro que o resto continua lá, só está filtrado.
-        : shown.length + " de " + approved.length)}
+      ${approvedTabs("pieces")}
       ${faixa}
-      ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
-      ${kindsPresentes.length > 1 ? '<div class="filter-bar filter-kind">' + kindFilters + "</div>" : ""}
+      ${barraDeTrabalho}
       ${shown.length ? (
         // "Saíram do ar" vem primeiro e SÓ existe quando tem peça dentro — é a única seção que
         // aponta uma divergência entre o painel e a realidade, e por isso não pode esperar a
