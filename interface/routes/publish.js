@@ -76,6 +76,78 @@ router.post("/test", adminOnly, async (req, res) => {
 // histórico de publicações que foram ao ar (agendadas OU diretas) — aba "Publicados"
 router.get("/publications", (req, res) => res.json({ items: publications.list() }));
 
+// CONFERE, post a post, se o que está no histórico ainda existe no Instagram.
+//
+// Por que existe: a Meta não avisa quando alguém apaga um post — não há webhook de exclusão.
+// Sem conferir, o painel anuncia "Publicado" para sempre, o botão "Ver no Instagram" leva a uma
+// página morta e a peça segue travada como já publicada.
+//
+// O que esta rota NÃO resolve, e é decisão de produto em aberto: o Dashboard segue contando o
+// post apagado em "publicações no mês" e pode apontar para ele como "última publicação". Não é
+// esquecimento — publicar e depois apagar É um fato que aconteceu, e subtrair isso do histórico
+// de atividade em silêncio seria reescrever o passado. Enquanto ninguém decidir, o Dashboard
+// fica como está e quem quer a verdade sobre o que está NO AR olha "Saíram do ar" no Aprovados.
+//
+// O que ele NÃO faz, de propósito: não destrava a peça e não mexe no que está na conta. Só
+// registra o que descobriu. Quem decide o que fazer com a peça é a pessoa — foi o pedido.
+// Curto de propósito. A conferência roda TODA VEZ que a aba abre — a janela existe só para o
+// caso de a tela ser remontada em sequência (voltar, trocar de aba, atualizar), que gastaria uma
+// chamada por post sem nenhuma chance de a resposta ter mudado. Dois minutos protegem disso sem
+// a lista ficar velha: apagou o post e abriu a aba, o painel vê.
+// Curto de propósito. A conferência roda TODA VEZ que a aba abre — a janela existe só para o
+// caso de a tela ser remontada em sequência (voltar, trocar de aba, atualizar), que gastaria uma
+// chamada por post sem chance de a resposta ter mudado. 45s cobrem isso e não viram armadilha:
+// apagar o post pelo celular e voltar ao painel demora mais do que isso.
+const CONFERENCIA_VALE_MS = 45 * 1000;
+// Teto da rodada. O histórico só cresce, e uma chamada por cartão com 30s de teto cada vira
+// minutos numa instabilidade da Meta — segurando a trava e o pedido do navegador junto.
+const MAX_POR_RODADA = 40;
+// A trava guarda a HORA, não um sim/não. Trava booleana que não é solta por um caminho de erro
+// cala a conferência até o processo reiniciar; com carimbo, o pior caso é conferir duas vezes.
+const TRAVA_VALE_MS = 5 * 60 * 1000;
+let conferindoDesde = 0;
+router.post("/publications/conferir", async (req, res) => {
+  const agora = Date.now();
+  if (conferindoDesde && (agora - conferindoDesde) < TRAVA_VALE_MS) {
+    return res.status(409).json({ error: "Já tem uma conferência em andamento.", code: "E_CONFERINDO" });
+  }
+  if (!publish.isConfigured()) return res.json({ ok: false, motivo: "sem_conexao", itens: [] });
+  conferindoDesde = agora;
+  const itens = [];
+  const paraGravar = [];
+  try {
+    for (const rec of publications.list().slice(0, MAX_POR_RODADA)) {
+      const recente = Date.parse(rec.conferido_em || "");
+      if (isFinite(recente) && (agora - recente) < CONFERENCIA_VALE_MS) {
+        itens.push({ id: rec.id, folder: rec.folder, estado: rec.estado_conferencia || "no_ar", doCache: true });
+        continue;
+      }
+      const ids = publications.idsDe(rec);
+      let r;
+      if (!ids.length) r = { estado: "sem_id", total: 0, sumiram: 0 };
+      else if (publish.storyJaExpirou(rec, agora)) r = { estado: "story_expirado", total: ids.length, sumiram: 0 };
+      else r = await publish.conferirMidias(ids);
+
+      // A decisão do que gravar mora em lib/publish.js e é medida caso a caso pela bateria — foi
+      // por não estar medida que o pior defeito desta funcionalidade passou.
+      const patch = publish.patchDaConferencia(rec, r, agora);
+      paraGravar.push({ id: rec.id, patch });
+      itens.push({ id: rec.id, folder: rec.folder, label: rec.label, estado: r.estado, sumiram: r.sumiram || 0, total: r.total || 0 });
+    }
+    // UMA gravação para a rodada inteira. `update` reescreve o arquivo completo a cada chamada —
+    // num laço, o histórico era reescrito uma vez por registro, e cada reescrita é uma janela em
+    // que uma queda deixa o arquivo pela metade.
+    try { publications.updateMany(paraGravar); }
+    catch (e) { console.error("[conferir] falha ao gravar a rodada:", e && e.message); }
+  } catch (e) {
+    return res.status(502).json({ error: (e && e.message) || "Não consegui conferir com o Instagram.", code: "E_CONFERIR" });
+  } finally {
+    conferindoDesde = 0;
+  }
+  const sumidas = itens.filter((x) => x.estado === "sumiu" || x.estado === "parcial");
+  res.json({ ok: true, itens: itens, sumidas: sumidas.length, conferidas: itens.length });
+});
+
 // TIRA uma publicação do ar. DOIS caminhos, e a diferença importa:
 //   ?no_instagram=1  → apaga DE VERDADE no Instagram (DELETE na Graph API) e depois some da lista.
 //   sem isso         → só some da lista do painel; o post no Instagram fica onde está. É o caso de

@@ -2753,6 +2753,79 @@ function briefingLongo() {
       }
     }
 
+    secao("43. Post apagado no Instagram: o painel descobre — e cala quando não sabe");
+    {
+      // A Meta NÃO avisa quando um post é apagado (não existe webhook de exclusão), então o
+      // painel pergunta. O risco desta função não é deixar de achar: é AFIRMAR que sumiu quando
+      // a rede caiu, o token venceu ou a chamada estourou o limite. Um alarme falso aqui manda a
+      // pessoa atrás de um post que está no ar, e ensina ela a ignorar o aviso da próxima vez.
+      const pub43 = require("./lib/publish.js");
+
+      checa(typeof pub43.conferirMidias === "function" && typeof pub43.storyJaExpirou === "function",
+        "as funções que a rota de conferência chama existem de verdade",
+        "conferirMidias=" + typeof pub43.conferirMidias + " storyJaExpirou=" + typeof pub43.storyJaExpirou);
+
+      const L = (arr) => pub43.leituraDaConferencia(arr).estado;
+      checa(L([]) === "sem_id", "registro sem identificador de post não vira alarme", L([]));
+      checa(L([true]) === "no_ar", "post que a Meta confirma continua no ar", L([true]));
+      checa(L([true, true]) === "no_ar", "carrossel inteiro no ar", L([true, true]));
+      checa(L([false]) === "sumiu", "post que a Meta não acha mais: sumiu", L([false]));
+      checa(L([false, false]) === "sumiu", "todos os cartões sumiram", L([false, false]));
+      checa(L([true, false]) === "parcial", "um cartão saiu e outro ficou: parcial", L([true, false]));
+      // A ordem das perguntas é a regra: sumiço CONFIRMADO pesa mais do que cartão em dúvida.
+      checa(L([false, null]) === "parcial", "  sumiço confirmado + cartão em dúvida ainda é notícia", L([false, null]));
+      checa(L([null]) === "indefinido", "sem resposta da Meta NÃO vira sumiço", L([null]));
+      checa(L([null, null]) === "indefinido", "  nem com vários sem resposta", L([null, null]));
+      checa(L([true, null]) === "indefinido", "  nem misturado com cartão vivo", L([true, null]));
+      const cont43 = pub43.leituraDaConferencia([true, false, null]);
+      checa(cont43.total === 3 && cont43.sumiram === 1 && cont43.no_ar === 1 && cont43.indefinidos === 1,
+        "a conta de quantos sumiram / ficaram / não responderam bate",
+        JSON.stringify(cont43));
+      const vazio43 = await pub43.conferirMidias([]);
+      checa(vazio43.estado === "sem_id", "conferir sem id nenhum não chama a Meta e devolve sem_id", vazio43.estado);
+
+      // STORY EXPIRA SOZINHO em 24h. Sem esta regra, todo Story publicado ontem viraria alarme
+      // permanente — e alarme que toca sempre é alarme que ninguém lê.
+      const H = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+      const S = (rec) => pub43.storyJaExpirou(rec, Date.now());
+      checa(S({ destino: "story", published_at: H(2) }) === false, "Story de 2 horas atrás ainda deve estar no ar");
+      checa(S({ destino: "story", published_at: H(30) }) === true, "Story de 30 horas atrás sumiu sozinho — é esperado, não é alarme");
+      checa(S({ kind: "story", published_at: H(30) }) === true, "  registro antigo, que só tem `kind`, também é reconhecido como Story");
+      checa(S({ destino: "feed", published_at: H(30) }) === false, "post de feed de 30 horas NÃO expira sozinho — se sumiu, alguém apagou");
+      checa(S({ destino: "feed", published_at: H(24 * 90) }) === false, "  nem depois de 90 dias");
+      checa(S({ destino: "story", published_at: "" }) === false, "Story sem data não é declarado expirado no chute");
+      checa(S({ destino: "story", published_at: H(24.5) }) === true, "  passou de um dia, conta como expirado");
+      // O corte é 23h e não 24h porque `published_at` é gravado DEPOIS do último cartão sair: ele
+      // já nasce atrasado, e com 24h cravadas havia uma janela em que o sumiço natural do Story
+      // seria anunciado como se alguém tivesse apagado.
+      checa(S({ destino: "story", published_at: H(23.5) }) === true, "  a folga de uma hora existe: 23h30 já conta como expirado");
+      checa(S({ destino: "story", published_at: H(22) }) === false, "  e 22h ainda não");
+
+      // A GRAVAÇÃO. Esta é a parte que faltava medir — e foi exatamente por aqui que passou o
+      // pior defeito: o sumiço confirmado de um Story era APAGADO quando ele completava as 23h.
+      const T0 = Date.parse("2026-08-28T12:00:00.000Z");
+      const P = (rec, estado) => pub43.patchDaConferencia(rec, { estado }, T0);
+      checa(P({}, "sumiu").sumiu_em === new Date(T0).toISOString(), "sumiço novo carimba a hora em que foi descoberto", JSON.stringify(P({}, "sumiu")));
+      checa(P({ sumiu_em: "2026-08-01T00:00:00.000Z" }, "sumiu").sumiu_em === undefined,
+        "  sumiço já conhecido NÃO é recarimbado (a hora que importa é a da primeira vez)", JSON.stringify(P({ sumiu_em: "2026-08-01T00:00:00.000Z" }, "sumiu")));
+      checa(P({}, "parcial").sumiu_em === new Date(T0).toISOString(), "parcial também é notícia e carimba");
+      checa(P({ sumiu_em: "x" }, "no_ar").sumiu_em === null, "post confirmado no ar É o que desfaz a marca");
+      const marcado = { sumiu_em: "2026-08-28T04:05:00.000Z", estado_conferencia: "sumiu" };
+      checa(P(marcado, "story_expirado").sumiu_em === undefined,
+        "Story que completa as 23h NÃO apaga um sumiço já confirmado", JSON.stringify(P(marcado, "story_expirado")));
+      checa(P(marcado, "sem_id").sumiu_em === undefined, "  registro sem id também não apaga a prova");
+      checa(P(marcado, "indefinido").sumiu_em === undefined, "  e a Meta sem responder também não");
+      checa(P(marcado, "indefinido").estado_conferencia === undefined,
+        "  `indefinido` não sobrescreve nem o estado — não é notícia sobre o post");
+      checa(P(marcado, "story_expirado").estado_conferencia === "story_expirado",
+        "  mas `story_expirado` é notícia e fica registrado");
+      // QUANDO perguntei grava sempre: sem isso, com o token vencido a janela nunca era carimbada
+      // e toda abertura da aba varria o histórico inteiro de novo — justo quando tudo ia falhar.
+      ["sumiu", "parcial", "no_ar", "sem_id", "story_expirado", "indefinido"].forEach((e) => {
+        checa(!!P({}, e).conferido_em, "a hora da pergunta é gravada mesmo no estado " + e, JSON.stringify(P({}, e)));
+      });
+    }
+
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });
   srv.close();
   console.log("\n" + "=".repeat(64));

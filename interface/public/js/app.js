@@ -1214,7 +1214,6 @@ async function viewDashboard() {
   // O "+" da faixa de ações era um GLIFO de texto no meio de três SVGs: medido, saía 14x17
   // contra 14x14 dos vizinhos, e por ser mais alto desalinhava a fila inteira. Mesmo traço e
   // mesma espessura dos outros três.
-  const ICO_MAIS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
   const ICO_RELOGIO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>';
   const ICO_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg>';
   const ICO_AVIAO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>';
@@ -1569,8 +1568,18 @@ function avisoDeOrigem(origem) {
 // pessoa decide o que abrir primeiro — em outros lugares o aviso continua dentro da peça.
 // ATENÇÃO: em vários pontos isto é chamado como `.map(taskCard)`, e aí o 2º argumento é o ÍNDICE
 // do array. Por isso o teste é por objeto, não por presença.
+// O "+" dos botoes de acao. Era um GLIFO de texto no meio de SVGs: medido, saia 14x17 contra
+// 14x14 dos vizinhos e desalinhava a fila. Vive no escopo do modulo porque o Aprovados tambem
+// usa (botao "Nova colecao"), e duplicar o desenho e como o painel volta a ter dois "+" diferentes.
+const ICO_MAIS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+
 function taskCard(t, opts) {
   const mostrarAviso = !!(opts && typeof opts === "object" && opts.aviso);
+  // O selo do cartão diria "Publicado" para uma peça cujo post já não existe — a marca no painel
+  // continua lá, é só o Instagram que não tem mais. Dizer "Publicado" ali seria repetir a mentira
+  // que a conferência acabou de desmentir. Carrega o ESTADO e não um sim/não, porque "parcial"
+  // (um Story em que só parte dos cartões saiu) não pode ser anunciado como se tudo tivesse caído.
+  const foraDoAr = (opts && typeof opts === "object" && opts.foraDoAr) ? String(opts.foraDoAr) : "";
   const avisos = mostrarAviso ? ((t.origem && t.origem.avisos) || []) : [];
   const hasThumb = t.thumb && t.thumb.rel;
   const previewable = hasThumb && (t.thumb.type === "video" || t.thumb.type === "image" || /\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i.test(t.thumb.rel));
@@ -1588,7 +1597,10 @@ function taskCard(t, opts) {
       <div class="cc-meta">${esc(kindLabel(t.kind))} · ${esc(fmtDate(t.task_date))}${(t.pillar && pillarLabel(t.pillar)) ? ' · <span class="lr-pillar">' + esc(pillarLabel(t.pillar)) + "</span>" : ""}</div>
       ${tagsHtml}
       ${avisos.length ? '<div class="cc-aviso" title="' + esc(avisos.join("\n\n")) + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg><span>' + esc(resumoDoAviso(avisos[0])) + (avisos.length > 1 ? " (+" + (avisos.length - 1) + ")" : "") + "</span></div>" : ""}
-      <div class="cc-foot">${statusBadge(effStatus(t.status, t.published_at))}${origemTag(t.origem)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
+      <div class="cc-foot">${foraDoAr
+        ? '<span class="badge rejected" title="A peça continua marcada como publicada no painel, mas o post não está mais no Instagram. Nada foi desfeito.">'
+          + (foraDoAr === "parcial" ? "Parte saiu do ar" : "Saiu do ar") + "</span>"
+        : statusBadge(effStatus(t.status, t.published_at))}${origemTag(t.origem)}${t.campaign_id ? tag(campLabel(t.campaign_id)) : ""}</div>
     </div></a>`;
 }
 
@@ -1722,9 +1734,19 @@ async function viewApproved(arg, query) {
 }
 
 // Sub-navegação de Aprovados: peças aprovadas ⇄ coleções.
-function approvedTabs(active) {
-  const tab = (key, label, href) => `<a class="seg ${active === key ? "on" : ""}" href="${href}">${esc(label)}</a>`;
-  return `<div class="seg-group mb">${tab("pieces", "Peças aprovadas", "#/approved")}${tab("collections", "Coleções", "#/approved?view=collections")}</div>`;
+// As abas do Aprovados são NAVEGAÇÃO, e os filtros logo abaixo são FILTRO — mas as duas fileiras
+// eram pílulas de 13px/600 e 12,5px/600, meio pixel de diferença. Nada na tela dizia que faziam
+// coisas diferentes. Aqui a aba vira sublinhado (a convenção de sempre para navegar) e a pílula
+// fica só para filtrar. `direita` recebe a contagem, que antes morava numa faixa própria abaixo,
+// junto de um título ("Conteúdo aprovado") que repetia o nome da página e da aba pela terceira
+// vez — e que, sem a faixa de alerta no meio, encostava no título da seção seguinte, do mesmo
+// tamanho e peso, formando o sanduíche que a página tinha.
+function approvedTabs(active, direita) {
+  const tab = (key, label, href) => `<a class="ap-aba ${active === key ? "on" : ""}" href="${href}">${esc(label)}</a>`;
+  return `<div class="ap-abas-linha">
+    <div class="ap-abas">${tab("pieces", "Peças aprovadas", "#/approved")}${tab("collections", "Coleções", "#/approved?view=collections")}</div>
+    ${direita ? '<div class="ap-abas-dir">' + direita + "</div>" : ""}
+  </div>`;
 }
 
 // APROVADOS, organizado por ESTADO DE ATENÇÃO — não por tipo.
@@ -1741,7 +1763,12 @@ function approvedTabs(active) {
 //
 // DE PROPÓSITO NÃO EXISTE SEÇÃO DO SQUAD: a origem continua sendo o mesmo selo discreto no
 // cartão. Quem organiza a tela é o estado da peça; a integração é complemento, não eixo.
-function estadoDaAprovada(t, agendadas) {
+function estadoDaAprovada(t, agendadas, sumidas) {
+  // SAIU DO AR vem antes de "publicada" e é o único estado que a peça não escolheu: ela continua
+  // marcada como publicada aqui dentro, mas a conferência com o Instagram não achou mais o post.
+  // Se caísse em "publicada", ficaria dentro de "Já resolvidas" — a gaveta que diz "nada aqui
+  // espera você" — que é exatamente o oposto do que ela é.
+  if (t.published_at && sumidas && typeof sumidas.has === "function" && sumidas.has(t.folder)) return "sumida";
   if (t.published_at) return "publicada";
   if (agendadas.has(t.folder)) return "agendada";
   return t.first_viewed_at ? "vista" : "nunca_aberta";
@@ -1762,15 +1789,32 @@ function resumoDoAviso(txt) {
   return frase.length > 96 ? frase.slice(0, 95).replace(/[\s,;]+\S*$/, "") + "…" : frase;
 }
 async function approvedPieces(query) {
-  const [{ tasks }, { campaigns }, agenda] = await Promise.all([
+  const [{ tasks }, { campaigns }, agenda, pubHist] = await Promise.all([
     API.content(), API.campaigns(),
     // Agendada não é "esperando decisão": já tem hora marcada. Sem esta lista ela cairia em
     // "vista, esperando publicação" e apareceria como pendência que não é. Degrada sozinha.
     API.listSchedule().catch(() => ({ items: [] })),
+    // Quem já saiu do ar. Quem grava esse rastro é a conferência da aba Publicações; aqui só se
+    // lê. Degrada sozinho: sem o histórico, nenhuma peça é marcada como sumida e a página fica
+    // exatamente como era antes — melhor do que não abrir.
+    API.publications().catch(() => ({ items: [] })),
   ]);
   setCampMap(campaigns);
   const approved = tasks.filter((t) => t.zone === "approved" || t.status === "approved");
   const agendadas = new Set(((agenda && agenda.items) || []).filter((x) => x.status === "pending").map((x) => x.folder));
+  // UM registro por pasta: o MAIS RECENTE. O histórico guarda uma linha por POST, e uma peça
+  // republicada tem duas — a velha (do post apagado, com `sumiu_em`) e a nova, no ar. Olhando a
+  // pasta inteira, a linha velha contaminava a nova para sempre: a peça era republicada com
+  // sucesso e continuava presa em "Saíram do ar", sem nada na tela que desfizesse isso.
+  const maisNova = new Map();
+  ((pubHist && pubHist.items) || []).forEach((p) => {
+    const atual = maisNova.get(p.folder);
+    if (!atual || String(p.published_at || "").localeCompare(String(atual.published_at || "")) > 0) maisNova.set(p.folder, p);
+  });
+  // Guarda o ESTADO, não só o fato: "parcial" (parte dos cartões de um Story saiu) não é a mesma
+  // notícia que "sumiu", e o cartão precisa saber a diferença para não exagerar.
+  const sumidas = new Map();
+  maisNova.forEach((p, folder) => { if (p.sumiu_em) sumidas.set(folder, p.estado_conferencia || "sumiu"); });
 
   const fc = (query && query.campaign) || "all";
   const fk = (query && query.kind) || "all";
@@ -1791,8 +1835,8 @@ async function approvedPieces(query) {
       return `<button class="chip-filter ${id === fc ? "on" : ""}" data-camp="${esc(id)}">${esc(c ? c.name : id)}</button>`;
     })).join("");
 
-  const grupos = { nunca_aberta: [], vista: [], agendada: [], publicada: [] };
-  shown.forEach((t) => grupos[estadoDaAprovada(t, agendadas)].push(t));
+  const grupos = { sumida: [], nunca_aberta: [], vista: [], agendada: [], publicada: [] };
+  shown.forEach((t) => grupos[estadoDaAprovada(t, agendadas, sumidas)].push(t));
   const recente = (a, b) => String(b.created_at || b.task_date || "").localeCompare(String(a.created_at || a.task_date || ""));
   Object.keys(grupos).forEach((k) => grupos[k].sort(recente));
 
@@ -1824,7 +1868,10 @@ async function approvedPieces(query) {
         <span class="ap-conta ${classe || ""}">${lista.length}</span>
         <span class="ap-explica">${esc(explica)}</span>
       </div>
-      <div class="content-grid">${lista.map((t) => taskCard(t, { aviso: chave === "nunca_aberta" })).join("")}</div>
+      <div class="content-grid">${lista.map((t) => taskCard(t, {
+        aviso: chave === "nunca_aberta",
+        foraDoAr: chave === "sumida" ? (sumidas.get(t.folder) || "sumiu") : "",
+      })).join("")}</div>
     </div>`;
   };
 
@@ -1851,13 +1898,20 @@ async function approvedPieces(query) {
   // cartões, para não sumirem em cima dela, passam a ter o tom claro no lugar do branco.
   setView(`
     <div class="ap-folha">
-      ${approvedTabs("pieces")}
-      <div class="section-head"><h2>Conteúdo aprovado</h2><span class="dim">${plural(approved.length, "peça aprovada", "peças aprovadas")}</span></div>
+      ${approvedTabs("pieces", shown.length === approved.length
+        ? plural(approved.length, "peça", "peças")
+        // Com filtro ligado, a contagem crua mentia: dizia "22 peças" com 2 na tela. Dizer os dois
+        // números é o que deixa claro que o resto continua lá, só está filtrado.
+        : shown.length + " de " + approved.length)}
       ${faixa}
       ${campSet.length ? '<div class="filter-bar">' + campFilters + "</div>" : ""}
       ${kindsPresentes.length > 1 ? '<div class="filter-bar filter-kind">' + kindFilters + "</div>" : ""}
       ${shown.length ? (
-        secao("nunca_aberta", "Nunca abertas", "chegaram e ninguém olhou", "warn")
+        // "Saíram do ar" vem primeiro e SÓ existe quando tem peça dentro — é a única seção que
+        // aponta uma divergência entre o painel e a realidade, e por isso não pode esperar a
+        // pessoa rolar até o fim para ser vista.
+        secao("sumida", "Saíram do ar", "estavam publicadas, mas o post não está mais no Instagram", "err")
+        + secao("nunca_aberta", "Nunca abertas", "chegaram e ninguém olhou", "warn")
         + secao("vista", "Vistas, esperando publicação", "você já olhou; falta decidir quando vai ao ar", "")
       ) : '<div class="empty">' + (fk === "all" && fc === "all"
           ? 'Nenhuma peça aprovada ainda. Aprove peças em <a href="#/content">Conteúdo</a>.'
@@ -1887,8 +1941,7 @@ async function collectionsHome() {
   // precisam ter a mesma moldura, senão a troca parece uma mudança de página.
   setView(`
     <div class="ap-folha">
-      ${approvedTabs("collections")}
-      <div class="section-head"><h2>Coleções</h2><button class="btn btn-primary" id="new-coll">＋ Nova coleção</button></div>
+      ${approvedTabs("collections", '<button class="btn btn-primary" id="new-coll">' + ICO_MAIS + "Nova coleção</button>")}
       <p class="muted mb">Agrupe peças aprovadas em coleções com ordem própria — úteis para sequência de postagem, destaques ou reaproveitamento. É opcional: as peças continuam onde estão; a coleção apenas aponta para elas, e a mesma peça pode estar em várias.</p>
       ${collections.length ? '<div class="coll-grid">' + collections.map(collectionTile).join("") + "</div>" : '<div class="empty">Nenhuma coleção ainda. Crie a primeira para organizar suas peças aprovadas.</div>'}
     </div>`);
@@ -5289,6 +5342,19 @@ async function openPhonePreview(task) {
   render(initV);
 }
 
+// O aviso que aparece na linha do histórico quando a conferência não achou mais o post na conta.
+// Só a NOTÍCIA: não oferece botão nem desfaz nada. Quem decide o que fazer com a peça é a pessoa.
+function avisoForaDoAr(p) {
+  const parcial = p.estado_conferencia === "parcial";
+  let quando = String(p.sumiu_em || "");
+  try { quando = new Date(p.sumiu_em).toLocaleString("pt-BR"); } catch (e) { /* fica o ISO */ }
+  return '<span class="pub-fora-txt" title="Conferido com o Instagram em ' + esc(quando) + '. '
+    + 'A peça continua marcada como publicada no painel — nada foi desfeito.">'
+    + '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>'
+    + (parcial ? "Parte dos cartões saiu do ar" : "Não está mais no Instagram")
+    + "</span>";
+}
+
 // View "Publicações": abas [Publicados | Agendados]. Publicados = histórico do que foi ao ar
 // (agendado OU direto); Agendados = fila pendente (ainda vai sair).
 async function viewPublications(arg, query) {
@@ -5366,10 +5432,11 @@ async function viewPublications(arg, query) {
     </tr>`).join("") : '<tr><td colspan="5" class="utable-vazio">Nenhum agendamento pendente. Agende uma peça aprovada em “Publicar ou agendar”.</td></tr>';
     body = `<div class="card"><table class="utable"><thead><tr><th>Peça</th><th>Destino</th><th>Quando</th><th>Status</th><th></th></tr></thead><tbody id="sched-rows">${rows}</tbody></table></div>`;
   } else {
-    const rows = pubs.length ? pubs.map((p) => `<tr>
+    const rows = pubs.length ? pubs.map((p) => `<tr data-pub="${esc(p.id)}" class="${p.sumiu_em ? "pub-sumiu" : ""}">
       <td class="pub-peca">
         <a class="pub-nome" href="#/task/${encodeURIComponent(p.folder)}" title="${esc(p.label || p.folder)}">${esc(p.label || p.folder)}</a>
         <div class="pub-pasta">${esc(p.folder)}</div>
+        <div class="pub-fora">${p.sumiu_em ? avisoForaDoAr(p) : ""}</div>
       </td>
       <td class="pub-quando">${quandoFoi(p.published_at)}</td>
       <td>${seloDestino(p)}${comoFoi(p)}</td>
@@ -5394,6 +5461,57 @@ async function viewPublications(arg, query) {
     const p = pubs.find((x) => x.id === b.dataset.tirar); if (!p) return;
     abreTirarDoAr(p, () => viewPublications(arg, query));
   }; });
+
+  // CONFERE com o Instagram toda vez que a aba Publicados abre.
+  //
+  // Não é capricho: a Meta não tem webhook de exclusão, então perguntar é o único jeito de o
+  // painel descobrir que um post saiu do ar. Sem isso ele anuncia "Publicado" para sempre.
+  //
+  // Roda DEPOIS da tela montada e sem travar nada — a lista aparece na hora e as marcas chegam
+  // quando chegarem. A atualização é feita na própria linha, não com um novo desenho da página:
+  // redesenhar aqui dispararia a conferência de novo, sem fim.
+  if (tab === "publicados" && pubs.length) conferirNoInstagram(pubs);
+}
+
+async function conferirNoInstagram(pubs) {
+  // A rodada é serial e cada chamada tem teto de 30s — demorar alguns segundos é o normal, e
+  // nesse tempo a pessoa já pode ter ido para outra tela. Sem esta fotografia, o aviso subia
+  // sobre a tela errada, falando de linhas que não existem mais ali.
+  const rota = location.hash;
+  let r;
+  // Silencioso de propósito. Falha de rede ou Instagram desconectado não é notícia sobre os
+  // posts, e um erro vermelho toda vez que a aba abre ensinaria a pessoa a ignorar o aviso que
+  // realmente importa. O histórico continua na tela exatamente como estava.
+  try { r = await API.conferirPublicacoes(); } catch (e) { return; }
+  if (location.hash !== rota) return;
+  if (!r || !r.ok || !Array.isArray(r.itens)) return;
+  const achaLinha = (id) => document.querySelector('[data-pub="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+  let novas = 0;
+  r.itens.forEach((it) => {
+    const tr = achaLinha(it.id);
+    const antes = pubs.find((p) => p.id === it.id);
+    if (it.estado === "sumiu" || it.estado === "parcial") {
+      if (!(antes && antes.sumiu_em)) novas++;    // já marcada não é novidade
+      if (!tr) return;
+      tr.classList.add("pub-sumiu");
+      const cel = tr.querySelector(".pub-fora");
+      if (cel) cel.innerHTML = avisoForaDoAr({ sumiu_em: new Date().toISOString(), estado_conferencia: it.estado });
+      return;
+    }
+    // DESMARCAR também é trabalho desta função. O servidor limpa `sumiu_em` quando a Meta
+    // confirma que o post está no ar — sem este ramo, o painel se retratava no arquivo e seguia
+    // acusando na tela até alguém recarregar a página.
+    if (it.estado === "no_ar" && tr && tr.classList.contains("pub-sumiu")) {
+      tr.classList.remove("pub-sumiu");
+      const cel = tr.querySelector(".pub-fora");
+      if (cel) cel.innerHTML = "";
+    }
+  });
+  if (novas) {
+    toast(novas === 1
+      ? "1 publicação não está mais no Instagram. A peça continua marcada como publicada — nada foi desfeito."
+      : novas + " publicações não estão mais no Instagram. As peças continuam marcadas como publicadas — nada foi desfeito.", "warn");
+  }
 }
 // A confirmação de que o post saiu do ar — e o aviso sobre o aplicativo do celular.
 // Existe por um episódio concreto (20/08/2026): a exclusão funcionou, mas o app do Instagram

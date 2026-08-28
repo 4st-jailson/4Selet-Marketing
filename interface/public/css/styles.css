@@ -578,6 +578,18 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 }
 .pub-nome:hover { color: var(--brand-sky); text-decoration: underline; }
 .pub-pasta { margin-top: 2px; font-size: 11.5px; color: var(--text-3, var(--text-2)); opacity: .75; word-break: break-all; }
+
+/* O post não está mais na conta — descoberto pela conferência que roda ao abrir a aba.
+   É NOTÍCIA, não erro: nada foi desfeito e a peça continua marcada como publicada aqui dentro.
+   Por isso a linha ganha um traço na lateral e um aviso, e não o vermelho de falha da tela toda. */
+.pub-sumiu > td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+.pub-fora:empty { display: none; }
+.pub-fora-txt {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 5px;
+  font-size: 11.5px; font-weight: 600; color: var(--err);
+  background: var(--err-soft); border-radius: var(--r-pill); padding: 2px 9px 2px 7px;
+}
+.pub-fora-txt svg { flex: none; }
 .pub-quando { white-space: nowrap; }
 .pub-perto { font-weight: 600; }
 .pub-exata { margin-top: 2px; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -932,7 +944,39 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 }
 .ap-conta.warn { background: var(--warn-soft); color: var(--warn); }
 .ap-conta.ok { background: var(--ok-soft); color: var(--ok); }
+.ap-conta.err { background: var(--err-soft); color: var(--err); }
 .ap-explica { font-size: 13px; color: var(--text-dim); }
+
+/* ABAS DO APROVADOS — navegação, não filtro.
+   Elas e os filtros por tipo eram as duas pílulas do mesmo tamanho e peso (13px/600 contra
+   12,5px/600), empilhadas, fazendo trabalhos diferentes sem nada avisar. Sublinhado navega,
+   pílula filtra — é a convenção que o olho já conhece. À direita fica a contagem (ou a ação da
+   aba), que antes morava numa faixa própria com um título repetindo o nome da página. */
+.ap-abas-linha {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4);
+  flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: var(--s5);
+}
+.ap-abas { display: flex; gap: var(--s6); flex-wrap: wrap; }
+.ap-aba {
+  font-size: 14px; font-weight: 600; color: var(--text-mut); text-decoration: none;
+  padding: 4px 1px 11px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color var(--tr), border-color var(--tr); white-space: nowrap;
+}
+.ap-aba:hover { color: var(--text); }
+.ap-aba.on { color: var(--accent-strong); border-bottom-color: var(--accent-strong); }
+.ap-abas-dir { font-size: 14px; color: var(--text-dim); padding-bottom: 9px; }
+.ap-abas-dir .btn { margin-bottom: 2px; display: inline-flex; align-items: center; gap: 7px; }
+/* SVG solto dentro de botão não tem tamanho: sem isto o "+" do "Nova coleção" saía invisível.
+   Escopado de propósito — os outros botões com ícone da tela já resolvem o tamanho por conta. */
+.ap-abas-dir .btn svg { width: 15px; height: 15px; flex: none; }
+/* No celular a ação não cabe ao lado das abas e cai para a linha de baixo. Com a régua na linha
+   INTEIRA, o botão ficava dentro da faixa das abas e lia como se fosse mais uma aba. Aqui a régua
+   passa a ser só das abas, e a ação desce para fora dela. */
+@media (max-width: 640px) {
+  .ap-abas-linha { border-bottom: none; }
+  .ap-abas { width: 100%; border-bottom: 1px solid var(--border); }
+  .ap-abas-dir { padding-bottom: 0; padding-top: var(--s3); }
+}
 
 /* O que já foi resolvido fica recolhido: existe, não ocupa a tela. */
 .ap-resolvidas { border: 1px solid var(--border-soft); border-radius: var(--r); background: var(--surface-2); margin-bottom: var(--s7); }

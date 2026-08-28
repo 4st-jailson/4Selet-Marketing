@@ -119,4 +119,23 @@ function update(id, patch) {
   return list[i];
 }
 
-module.exports = { add, list, get, remove, update, idsDe };
+// Aplica VÁRIOS patches numa gravação só. `update` faz load + save do arquivo INTEIRO, com fsync,
+// a cada chamada — e a conferência com o Instagram mexe em todos os registros de uma vez. Chamar
+// `update` num laço reescrevia o histórico N vezes por rodada, e cada reescrita é uma janela em
+// que uma queda deixa o arquivo pela metade. `patches`: [{ id, patch }]. Devolve quantos casaram.
+function updateMany(patches) {
+  const lista = Array.isArray(patches) ? patches.filter((p) => p && p.id && p.patch) : [];
+  if (!lista.length) return 0;
+  const atual = load();
+  let n = 0;
+  for (const p of lista) {
+    const i = atual.findIndex((x) => x.id === String(p.id));
+    if (i < 0) continue;
+    atual[i] = Object.assign({}, atual[i], p.patch);
+    n++;
+  }
+  if (n) save(atual);
+  return n;
+}
+
+module.exports = { add, list, get, remove, update, updateMany, idsDe };

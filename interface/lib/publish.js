@@ -634,6 +634,131 @@ async function mediaAindaExiste(id, token) {
   } catch (e) { return null; }
 }
 
+// Story SOME SOZINHO depois de 24h — é o funcionamento normal do Instagram, não um post que
+// alguém apagou. Sem esta regra, todo Story publicado ontem viraria alarme permanente, e um
+// alarme que toca sempre é um alarme que ninguém lê. Fica separada da rede de propósito: assim
+// a bateria consegue medir a regra sem bater na Meta.
+// 23h, não 24h cravadas. O relógio da Meta começa quando o CARTÃO sai; o nosso `published_at` é
+// gravado depois do último cartão e da busca do permalink, então ele já nasce alguns minutos
+// atrasado — num Story de 7 cartões, mais. Com o corte exato em 24h, existe uma janela em que o
+// cartão já expirou lá e o painel ainda o considera vivo, e aí o sumiço natural é anunciado como
+// se alguém tivesse apagado. A hora de folga fica do lado seguro: o pior caso vira "deixei de
+// avisar sobre um Story apagado na 23ª hora", e não "acusei um sumiço que não houve".
+const STORY_VIVE_MS = 23 * 60 * 60 * 1000;
+function storyJaExpirou(rec, agora) {
+  if (!rec) return false;
+  const ehStory = String(rec.destino || "") === "story" || String(rec.kind || "") === "story";
+  if (!ehStory) return false;
+  const t = Date.parse(rec.published_at || "");
+  if (!isFinite(t)) return false;             // sem data não dá para afirmar nada
+  return ((agora == null ? Date.now() : agora) - t) >= STORY_VIVE_MS;
+}
+
+// CONFERIR se os posts ainda estão no ar. É o oposto do apagar: não muda nada na conta, só
+// pergunta. Existe porque a Meta NÃO avisa quando um post é apagado — não há webhook de exclusão
+// (os campos de webhook do Instagram são de comentário, menção, mensagem e insight de Story).
+// Sem perguntar, o painel anuncia para sempre um post que não existe mais.
+//
+// `indefinido` é deliberado e não é frescura: a Meta respondendo qualquer outra coisa — rede
+// fora, limite de chamadas, token vencido — NÃO é prova de que o post sumiu. Tratar isso como
+// sumiço encheria a tela de alarme falso justamente quando o painel está com problema.
+// A LEITURA do que voltou, separada da rede — mesma razão de `leituraDoApagar` existir: assim a
+// bateria mede cada combinação sem chamar a Meta. Recebe um true/false/null por cartão.
+// A ordem das perguntas é a regra: um cartão CONFIRMADO ausente pesa mais do que um cartão que
+// não deu para conferir. Um carrossel com um cartão sumido e outro sem resposta é `parcial` —
+// alguma coisa saiu do ar de fato, e isso é notícia mesmo com o resto em dúvida.
+function leituraDaConferencia(resultados) {
+  const r = Array.isArray(resultados) ? resultados : [];
+  if (!r.length) return { estado: "sem_id", total: 0, sumiram: 0, no_ar: 0, indefinidos: 0 };
+  const sumiram = r.filter((x) => x === false).length;
+  const no_ar = r.filter((x) => x === true).length;
+  const indefinidos = r.length - sumiram - no_ar;
+  let estado;
+  if (sumiram === r.length) estado = "sumiu";
+  else if (sumiram > 0) estado = "parcial";
+  else if (indefinidos > 0) estado = "indefinido";
+  else estado = "no_ar";
+  return { estado, total: r.length, sumiram, no_ar, indefinidos };
+}
+
+// PROVA DE VIDA DO TOKEN — a trava que impede o pior erro possível desta função.
+//
+// O código 100 da Meta NÃO quer dizer "esse post não existe". A mensagem dela é literalmente
+// "does not exist, cannot be loaded due to missing permissions, or does not support this
+// operation": três causas no mesmo código, e a mensagem não separa qual delas foi. Então, se o
+// token perder o alcance da conta — permissão retirada do app, token gerado para outra Página,
+// app de volta para modo de desenvolvimento — TODO post do histórico responderia 100, e o painel
+// anunciaria que a conta inteira foi apagada. Alarme falso em massa, no dia em que a pessoa mais
+// precisa confiar no aviso.
+//
+// A pergunta de controle desfaz a ambiguidade: se o token não consegue nem ler a PRÓPRIA conta,
+// o 100 era permissão, não sumiço. Uma chamada a mais, e só quando algum post deu sumido.
+let _tokenViu = { em: 0, resposta: null };
+async function tokenEnxergaAConta(token) {
+  // Memória curta: a rodada percorre o histórico inteiro e não faz sentido reperguntar a mesma
+  // coisa a cada registro. 30s cobre uma rodada e não sobrevive a uma troca de token.
+  if (_tokenViu.resposta !== null && (Date.now() - _tokenViu.em) < 30000) return _tokenViu.resposta;
+  const c = ig();
+  if (!c.ig_user_id) return null;
+  let r;
+  try { r = await graphGet("/" + encodeURIComponent(c.ig_user_id), { fields: "id", access_token: token }, "conferir se o token ainda enxerga a conta"); }
+  catch (e) { return null; }
+  const viu = !!(r && r.ok && r.body && r.body.id);
+  _tokenViu = { em: Date.now(), resposta: viu };
+  return viu;
+}
+
+// O QUE VAI SER GRAVADO depois de uma conferência. Vive aqui, e não solto dentro da rota, porque
+// foi exatamente aqui que passou o pior defeito desta funcionalidade: a bateria media a máquina de
+// estados e a regra do Story separadas, mas ninguém media a GRAVAÇÃO — e a gravação apagava o
+// sumiço confirmado de um Story assim que ele completava as 23h. Função pura, medida caso a caso.
+//
+// A regra em uma frase: `conferido_em` (QUANDO perguntei) grava sempre; `estado_conferencia` e
+// `sumiu_em` (O QUE descobri) só mudam quando houve notícia de verdade sobre o post.
+function patchDaConferencia(rec, resultado, agora) {
+  const estado = (resultado && resultado.estado) || "indefinido";
+  const iso = new Date(agora == null ? Date.now() : agora).toISOString();
+  const patch = { conferido_em: iso };
+  // `indefinido` é o painel dizendo que não conseguiu perguntar — não é notícia sobre o post.
+  if (estado !== "indefinido") patch.estado_conferencia = estado;
+  if (estado === "sumiu" || estado === "parcial") {
+    // Preserva o carimbo original: a hora que importa é a da PRIMEIRA vez que se soube.
+    if (!(rec && rec.sumiu_em)) patch.sumiu_em = iso;
+  } else if (estado === "no_ar") {
+    // O ÚNICO estado que prova que o post está lá, e portanto o único que pode desfazer a marca.
+    // `story_expirado` e `sem_id` não perguntam nada à Meta; apagar a marca por causa deles fazia
+    // o painel esquecer que alguém tinha apagado o post.
+    patch.sumiu_em = null;
+  }
+  return patch;
+}
+
+async function conferirMidias(ids) {
+  const lista = (Array.isArray(ids) ? ids : [ids])
+    .map((v) => String(v == null ? "" : v).trim())
+    .filter((v, i, a) => v && a.indexOf(v) === i);
+  if (!lista.length) return leituraDaConferencia([]);
+  // Sem conexão não se afirma nada: `indefinido` é o painel dizendo que não conseguiu perguntar,
+  // e é diferente de o post ter sumido.
+  if (!isConfigured()) return Object.assign(leituraDaConferencia(lista.map(() => null)), { ausentes: [] });
+  const token = String(ig().access_token || "").replace(/\s+/g, "");
+  const respostas = [];
+  const ausentes = [];
+  for (const id of lista) {
+    const r = await mediaAindaExiste(id, token);
+    respostas.push(r);
+    if (r === false) ausentes.push(id);
+  }
+  // Só paga a chamada de controle quando há um sumiço para afirmar.
+  if (respostas.indexOf(false) >= 0) {
+    const viu = await tokenEnxergaAConta(token);
+    if (viu !== true) {
+      return Object.assign(leituraDaConferencia(respostas.map(() => null)), { ausentes: [], motivo: "token_cego" });
+    }
+  }
+  return Object.assign(leituraDaConferencia(respostas), { ausentes });
+}
+
 // A LEITURA da resposta da Meta, separada da chamada de rede — assim dá para conferir cada
 // resposta possível na bateria sem bater na Meta de verdade (apagar não é coisa que se testa
 // com chamada real). Devolve {ok:true,...} ou {ok:false, code, message}.
@@ -760,6 +885,9 @@ module.exports = {
   pickImages,
   inspecionaToken, tornarPermanente,   // diz o QUE o token e e ate quando vale; e deriva o da Pagina
   deleteMedia, deleteMedias, leituraDoApagar, // apaga um post (ou TODOS os cartoes de um story); a leitura da resposta e testavel sem rede
+  // CONFERIR se o post ainda esta no ar. `storyJaExpirou` sai exportado separado porque e a
+  // regra que evita o alarme falso do Story, e a bateria mede ela sem rede.
+  conferirMidias, leituraDaConferencia, patchDaConferencia, storyJaExpirou, mediaAindaExiste,
   // Quais cartoes sairam juntos no ultimo story publicado, e o status da copia APROVADA —
   // as duas coisas que o registro do historico e a trava de post repetido precisam saber
   // para nao enxergar metade do que foi publicado.

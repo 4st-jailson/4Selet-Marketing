@@ -148,6 +148,11 @@ const API = (() => {
     markPublished: (folder, payload) => req("POST", "/api/publish/" + encodeURIComponent(folder) + "/mark-published", payload || {}),
     listSchedule: () => req("GET", "/api/publish/schedule"),
     publications: () => req("GET", "/api/publish/publications"),
+    // Pergunta ao Instagram, post a post, se o que está no histórico ainda existe. A Meta não
+    // avisa quando alguém apaga um post, então perguntar é o único caminho. Sem parâmetro de
+    // forçar: quem controla o ritmo é a janela do servidor, e um "fura o cache" aberto a qualquer
+    // sessão logada queimaria a cota da Graph que a PUBLICAÇÃO precisa.
+    conferirPublicacoes: () => req("POST", "/api/publish/publications/conferir"),
     // noInstagram=true apaga o post na conta; false só limpa a linha do histórico do painel.
     removePublication: (id, noInstagram) => req("DELETE", "/api/publish/publications/" + encodeURIComponent(id) + (noInstagram ? "?no_instagram=1" : "")),
     cancelSchedule: (id) => req("DELETE", "/api/publish/schedule/" + encodeURIComponent(id)),
