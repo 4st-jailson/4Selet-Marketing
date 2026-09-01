@@ -92,10 +92,6 @@ router.get("/publications", (req, res) => res.json({ items: publications.list() 
 // registra o que descobriu. Quem decide o que fazer com a peça é a pessoa — foi o pedido.
 // Curto de propósito. A conferência roda TODA VEZ que a aba abre — a janela existe só para o
 // caso de a tela ser remontada em sequência (voltar, trocar de aba, atualizar), que gastaria uma
-// chamada por post sem nenhuma chance de a resposta ter mudado. Dois minutos protegem disso sem
-// a lista ficar velha: apagou o post e abriu a aba, o painel vê.
-// Curto de propósito. A conferência roda TODA VEZ que a aba abre — a janela existe só para o
-// caso de a tela ser remontada em sequência (voltar, trocar de aba, atualizar), que gastaria uma
 // chamada por post sem chance de a resposta ter mudado. 45s cobrem isso e não viram armadilha:
 // apagar o post pelo celular e voltar ao painel demora mais do que isso.
 const CONFERENCIA_VALE_MS = 45 * 1000;
@@ -280,6 +276,12 @@ router.post("/:folder/schedule", (req, res) => {
     const b = req.body || {};
     if (!b.scheduled_at) return res.status(400).json({ error: "scheduled_at (data/hora) é obrigatório" });
     publish.assertApproved(req.params.folder); // gate ANTES de agendar (peça precisa estar aprovada+íntegra)
+    // A MESMA trava do publicar. Sem ela, agendar uma peca que ja foi ao ar respondia
+    // "Agendado. Veja em Agendados." e a pessoa ia embora achando que sairia no horario —
+    // quando o disparador vai encontrar a peca ja publicada e nao postar nada.
+    if (jaPublicada(content.getTask(req.params.folder), req.params.folder)) {
+      return res.status(409).json({ error: "Esta peça já foi publicada. Para publicar de novo, reabra a peça primeiro.", code: "E_ALREADY_PUBLISHED" });
+    }
     const item = schedule.add({ folder: req.params.folder, kind: b.kind, caption: b.caption, scheduled_at: b.scheduled_at, label: b.label, destino: b.destino, by: req.user && req.user.username });
     res.json({ ok: true, item });
   } catch (e) {
@@ -345,15 +347,7 @@ router.post("/:folder", async (req, res) => {
     // que já saíram). Registra o que saiu e marca a peça, para o painel dizer a verdade.
     if (e.code === "E_STORY_PARCIAL" && Array.isArray(e.publicados) && e.publicados.length) {
       const who = req.user && (req.user.name || req.user.username);
-      const t = content.getTask(folder);
-      try { content.setPublished(folder, { by: who, post_id: e.publicados[0] }); }
-      catch (e2) { console.error("[publish] story parcial: falhou ao marcar a peça:", folder, e2 && e2.message); }
-      try {
-        publications.add({ folder: folder, label: (t && t.status && t.status.title) || folder, kind: e.publicados.length > 1 ? e.publicados.length + " cartões de story" : "story", destino: "story", post_id: e.publicados[0], cartoes: e.publicados, scheduled_at: null, by: who });
-        msg += " Registrei em Publicações os " + e.publicados.length
-          + (e.publicados.length === 1 ? " cartão que saiu" : " cartões que saíram")
-          + ", para você poder apagá-los pelo painel se quiser.";
-      } catch (e2) { console.error("[publish] story parcial: falhou ao registrar no histórico:", folder, e2 && e2.message); }
+      msg += publish.registraParcialDoStory(folder, e.publicados, who);
     }
     const gate = ["E_NOT_APPROVED", "E_INVALID_STATE", "E_GATE_NO_HASHES", "E_HASH_MISMATCH"].indexOf(e.code) >= 0;
     res.status(gate ? 409 : (e.code === "E_NO_IMAGE" ? 422 : 400)).json({ error: msg, code: e.code });

@@ -151,10 +151,17 @@ if (target === "approved") {
   status.approved_at = now;
   // A.2 — snapshot SHA-256 dos arquivos (excluindo o proprio status.json) para
   // permitir check_approved_integrity detectar edicoes pos-aprovacao.
+  // SEM ASSINATURA NAO HA APROVACAO. Isto era um `warn` e o script seguia em frente: a peca ia
+  // para a zona aprovada sem `content_hashes`, a tela dizia "Aprovada e salva", e o gate de
+  // publicacao so descobria o buraco na hora de publicar — recusando com E_GATE_NO_HASHES uma
+  // peca que a pessoa tinha aprovado dias antes. Falhar aqui e antes de mover a pasta.
   try {
     status.content_hashes = hashDirectory(src.path, ["status.json", "preview.html"]);
   } catch (e) {
-    warn("falha ao calcular content_hashes (seguindo sem): " + e.message);
+    fail("E_APPROVE_NO_HASHES: nao consegui assinar os arquivos da peca — aprovacao cancelada: " + e.message, 2);
+  }
+  if (target === "approved" && (!status.content_hashes || !Object.keys(status.content_hashes).length)) {
+    fail("E_APPROVE_NO_HASHES: a peca ficaria aprovada sem nenhuma assinatura de arquivo — aprovacao cancelada.", 2);
   }
   // B9: hash separado do preview.html aprovado (registro visual do que foi aprovado).
   // Separado dos content_hashes p/ nao quebrar tasks aprovadas antes desta mudanca.

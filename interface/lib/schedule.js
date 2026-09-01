@@ -91,7 +91,10 @@ function add({ folder, kind, caption, scheduled_at, by, label, destino }) {
   const list = load();
   const item = {
     id: crypto.randomBytes(8).toString("hex"),
-    folder, label: label || folder, kind: kind || null, caption: caption || null, destino: dest,
+    folder, label: label || folder, kind: kind || null,
+    // `caption || null` apagava a escolha de publicar SEM legenda: vazio virava null e, na hora
+    // de publicar, o painel caia na legenda do arquivo. Vazio e resposta; ausente e outra coisa.
+    caption: caption == null ? null : String(caption), destino: dest,
     scheduled_at: when.toISOString(), status: "pending",
     created_at: new Date().toISOString(), by: by || null,
   };
@@ -262,7 +265,19 @@ async function rodaTique(publishFn, isPublishedFn) {
         catch (e) { console.error("[schedule] post publicado mas falhou ao registrar no histórico:", it.folder, e && e.message); }
       }
     } catch (e) {
-      update(it.id, { status: "failed", error: (e && e.message ? e.message : String(e)).slice(0, 300), failed_at: new Date().toISOString() });
+      // STORY PARCIAL PELO AGENDAMENTO. Cartoes ja no ar e a peca marcada como nao-publicada era
+      // o pior desfecho: some do painel e a proxima tentativa duplica o que saiu. O botao ja
+      // registrava; o agendador nao. Agora os dois passam pelo mesmo lugar.
+      let extra = "";
+      if (e && e.code === "E_STORY_PARCIAL" && Array.isArray(e.publicados) && e.publicados.length) {
+        try { extra = require("./publish").registraParcialDoStory(it.folder, e.publicados, it.by, { scheduled_at: it.scheduled_at }); }
+        catch (e2) { console.error("[schedule] story parcial: falhou ao registrar:", it.folder, e2 && e2.message); }
+      }
+      update(it.id, {
+        status: extra ? "parcial" : "failed",
+        error: ((e && e.message ? e.message : String(e)) + extra).slice(0, 300),
+        failed_at: new Date().toISOString(),
+      });
     } finally {
       // Solta a trava do item aconteça o que acontecer — inclusive quando ele foi dado como
       // perdido ou pulado acima. Trava esquecida seguraria o próximo agendamento desta peça.

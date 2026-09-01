@@ -944,6 +944,51 @@ async function receberAgora(payload, opcoes) {
     let enquadradas = 0;   // quantas artes o painel teve de encaixar em 9:16 por conta propria
     const falharam = [];   // e quais nem encaixar deu — estas viram AVISO, nunca silencio
 
+    // ENCAIXAR A ARTE EM 9:16. Vive aqui, e não solto dentro de um `else`, porque agora há TRÊS
+    // caminhos que precisam dele: a vertical não veio, a que veio não serve, e a que veio era um
+    // desenho que dependia de imagem ausente. Enquanto era um bloco solto, os dois últimos não
+    // faziam nada e não diziam nada.
+    //
+    // htmlToPng NÃO lança quando o Chromium morre ou estoura o tempo — devolve { ok:false }. Por
+    // isso o try/catch sozinho nunca bastou aqui: o `if (r && r.ok)` sem `else` engolia o caso.
+    const encaixaNoStory = async (numero, arteRel) => {
+      let deuCerto = false;
+      let porque = "";
+      try {
+        const r = await render.enquadraStory(folder, { arte: arteRel, n: numero });
+        deuCerto = !!(r && r.ok);
+        if (!deuCerto) porque = (r && r.stderr) ? String(r.stderr).slice(0, 160) : "o desenho da versão vertical não ficou pronto";
+      } catch (e) {
+        porque = e.code || e.message;
+      }
+      if (deuCerto) { enquadradas++; log("Arte " + numero + ": enquadrada em 9:16 para o Story."); }
+      else { falharam.push(numero); log("Arte " + numero + ": não consegui enquadrar em 9:16 (" + porque + ")."); }
+      return deuCerto;
+    };
+
+    // A VERTICAL QUE CHEGOU TEM FORMA DE STORY? Um PNG de 1 pixel passava por "versão 9:16",
+    // desligava o encaixe automático e ia para o Instagram. A tolerância é folgada de propósito
+    // (uma arte 1080×1919 não é problema); o que se quer barrar é o que não tem nada a ver.
+    const medeAVertical = (pasta, base, ext) => {
+      const loc = content.findTask(pasta);
+      if (!loc) return { serve: true, porque: "" };   // sem a peça, não há o que medir: não inventa
+      const path2 = require("path");
+      const fs2 = require("fs");
+      const alvo = [".png", ".jpg", ".jpeg", "." + String(ext || "png")]
+        .map((e) => path2.join(loc.path, base + e))
+        .find((p) => fs2.existsSync(p));
+      if (!alvo) return { serve: false, porque: "sem arquivo em disco" };
+      const d = render.dimensoesDeImagem(alvo);
+      if (!d || !d.w || !d.h) return { serve: true, porque: "" };   // não consegui medir: não acusa
+      if (d.w < 1080) return { serve: false, porque: "com " + d.w + "×" + d.h + " (largura menor que 1080)" };
+      const proporcao = d.h / d.w;
+      const alvoProp = 1920 / 1080;
+      if (Math.abs(proporcao - alvoProp) / alvoProp > 0.02) {
+        return { serve: false, porque: "com " + d.w + "×" + d.h + " (proporção fora de 9:16)" };
+      }
+      return { serve: true, porque: "" };
+    };
+
     // Entrega sem `post_id` não tem como ser reconhecida num reenvio: o painel só sabe que dois
     // envios são o mesmo post porque o identificador bate. Enquanto isso passava calado, cada
     // reenvio criava mais uma peça idêntica em Aprovados e ninguém entendia de onde vinham as
@@ -1019,7 +1064,32 @@ async function receberAgora(payload, opcoes) {
           content.writeMediaFile(folder, baseSt + "." + c.story.ext, c.story.buf);
           usouSt = true;
         }
-        if (usouSt) log("Arte " + n + ": veio também na versão 9:16 — o Story sai inteiro, sem corte.");
+        // MEDIR ANTES DE ANUNCIAR. O que chega no campo `story` era gravado sem ninguém olhar o
+        // tamanho: uma arte de 1 pixel virava a "versão 9:16" da peça, desligava o enquadramento
+        // automático e ia para o Story assim. `normalizar` só confere os bytes mágicos e o teto de
+        // tamanho — nada dizia se aquilo tinha a forma de um Story.
+        if (usouSt) {
+          const medida = medeAVertical(folder, baseSt, c.story.ext);
+          if (medida.serve) {
+            log("Arte " + n + ": veio também na versão 9:16 — o Story sai inteiro, sem corte.");
+          } else {
+            usouSt = false;
+            log("Arte " + n + ": a versão 9:16 que veio não serve (" + medida.porque + ") — vou encaixar a arte no lugar.");
+            avisos.push("A versão vertical da arte " + n + " chegou " + medida.porque
+              + ". O esperado é 1080×1920 (9:16). Ignorei a que veio e encaixei a arte de feed em 1080×1920 —"
+              + " se a vertical for importante, peça ao squad para reenviar no tamanho certo.");
+          }
+        }
+        // TODA saída deste bloco vira palavra. Antes, HTML dependente de imagem externa e sem PNG
+        // junto não gravava nada, não avisava nada e ainda desligava o encaixe automático — a peça
+        // nascia sem Story e sem uma linha dizendo por quê.
+        if (!usouSt) {
+          if (c.story.html && refsExternas(c.story.html).length) {
+            avisos.push("A versão vertical da arte " + n + " veio como desenho que depende de uma imagem"
+              + " que não veio junto, então não deu para montá-la. Encaixei a arte de feed em 1080×1920 no lugar.");
+          }
+          await encaixaNoStory(n, relArte);
+        }
       } else {
         // NÃO VEIO A VERTICAL — e o painel resolve sozinho, aqui, na chegada.
         //
@@ -1041,17 +1111,7 @@ async function receberAgora(payload, opcoes) {
         // que agora silencioso. Duas armadilhas moram aqui, e por isso o `catch` sozinho não
         // bastava: htmlToPng NÃO lança quando o Chromium morre ou estoura o tempo — devolve
         // { ok:false } (render.js) —, e o `if (r && r.ok)` sem `else` engolia esse caso inteiro.
-        let deuCerto = false;
-        let porque = "";
-        try {
-          const r = await render.enquadraStory(folder, { arte: relArte, n: n });
-          deuCerto = !!(r && r.ok);
-          if (!deuCerto) porque = (r && r.stderr) ? String(r.stderr).slice(0, 160) : "o desenho da versão vertical não ficou pronto";
-        } catch (e) {
-          porque = e.code || e.message;
-        }
-        if (deuCerto) { enquadradas++; log("Arte " + n + ": enquadrada em 9:16 para o Story."); }
-        else { falharam.push(n); log("Arte " + n + ": não consegui enquadrar em 9:16 (" + porque + ")."); }
+        await encaixaNoStory(n, relArte);
       }
     }
     // ACENTO QUEBRADO que já chegou assim. O painel passou a garantir a declaração de codificação
@@ -1218,7 +1278,12 @@ async function gravarDeHtml(render, content, folder, base, c, log, avisos, n, ob
   const loc = content.findTask(folder);
   if (!loc) return false;
   const dim = { w: c.largura || dimensoesDoHtml(c.html).w, h: c.altura || dimensoesDoHtml(c.html).h };
-  const limpo = render.sanitizeArtHtml(c.html);
+  // "ARRASTE PARA O LADO" NÃO EXISTE NO STORY. A instrução faz sentido no carrossel, onde a
+  // pessoa desliza entre os slides; no Story ela ensina um gesto que não funciona — deslizar ali
+  // pula para o próximo perfil. Esta limpeza estava escrita, exportada e nunca era chamada: um
+  // conserto que existia só no comentário. Aqui ela entra, e só no caminho do Story.
+  const fonte = String(base || "").indexOf("story/") === 0 ? semAfordanciaDeCarrossel(c.html) : c.html;
+  const limpo = render.sanitizeArtHtml(fonte);
   const htmlAbs = path.join(loc.path, base + ".html");
   const pngAbs = path.join(loc.path, base + ".png");
   fs.mkdirSync(path.dirname(htmlAbs), { recursive: true });

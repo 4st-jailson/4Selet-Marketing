@@ -245,10 +245,20 @@ function textForGovernance(contentTypeId, parsed) {
     Object.keys(v).forEach((k) => { if (CHAVES_NAO_TEXTO.indexOf(k) < 0) push(v[k]); });
   };
 
+  // O FEED E A MÍDIA CAÍAM AQUI E SAÍAM CEDO — levando só o corpo, as hashtags e o CTA.
+  //
+    // A manchete e o apoio são justamente o que vai DESENHADO na arte, e eram os únicos campos que
+  // o gate de marca nunca via: dava para salvar uma peça com o número da campanha errado dentro da
+  // headline enquanto a tela escrevia "Passou na checagem da marca (sem problemas)". O texto que
+  // vira imagem precisa passar pela mesma régua do texto que vira legenda.
   if (typeof parsed.body === "string") {
     push(parsed.body);
     push(parsed.hashtags);
     push(parsed.cta);
+    push(parsed.headline);
+    push(parsed.subtext);
+    push(parsed.eyebrow);
+    push(parsed.badge);
     return parts.join("\n");
   }
   for (const k of ["headline", "subtext", "concept", "hook", "caption", "cta", "eyebrow", "badge", "notes"]) push(parsed[k]);
@@ -505,6 +515,9 @@ router.post("/preview", async (req, res, next) => {
       font: body.font, // tipografia da peça: a prévia sai na MESMA família da arte final
       fundo: body.fundo, // superfície da arte: a prévia sai no MESMO fundo do render final
       folder: body.folder, // nome da peça: a rotação do "Automático" é por nome, e tem que bater
+      // A COR DA CAMPANHA tambem na previa: sem este campo, a tela mostrava a arte na paleta da
+      // marca e o arquivo salvo saia na cor da campanha. Aprovar uma e receber a outra.
+      campanha: body.campaign_id || body.campanha || null,
       only: body.only, // renderiza só o slide desse índice (progresso "slide N de M" no carrossel)
       media: body.media, // metadados da "4Selet na Mídia" (print/modelo/veículo) p/ a prévia do mockup
     });
@@ -955,7 +968,12 @@ router.post("/save", async (req, res, next) => {
     if (body.content_type === "instagram_carousel" && parsed && Array.isArray(parsed.slides)) {
       try {
         capa = await capaFoto.buscarCapa(parsed, { nome: body.task_name });
-        if (capa && capa.ok) capaFoto.aplicarNaCapa(parsed, capa);
+        // Só anuncia o que de fato aconteceu. Quando a capa já tem uma imagem, a foto encontrada
+        // é descartada — e a tela dizia "A capa ganhou uma foto." com a miniatura do mesmo jeito.
+        if (capa && capa.ok && !capaFoto.aplicarNaCapa(parsed, capa)) {
+          capa = { ok: false, motivo: "capa_ja_tinha",
+            explica: "A capa já tinha uma imagem sua, então mantive a sua. A foto que encontrei ficou no acervo — dá para trocar na peça se quiser." };
+        }
       } catch (e) {
         capa = { ok: false, motivo: "erro", explica: "Não consegui buscar a foto da capa: " + e.message };
         console.error("[capa] falhou:", e && e.message);
@@ -985,6 +1003,14 @@ router.post("/save", async (req, res, next) => {
       return res.status(e.code === "E_NOT_EDITABLE" ? 409 : 500).json({ error: e.message, code: e.code });
     }
 
+    // OS AVISOS DAS FOTOS DAS CENAS ENTRAM NA FAIXA QUE A TELA JA MOSTRA.
+    // Eles eram calculados, devolvidos em `fotos_cena.avisos` e lidos por ninguem: a tela so
+    // desenhava `governance` e `capa`. Uma cena que ficou sem foto virava silencio, e a peca
+    // parecia completa. Empurrar para `gov.warnings` reaproveita a faixa em vez de criar mais
+    // um campo com chance de ficar orfao.
+    if (fotosCena && Array.isArray(fotosCena.avisos) && fotosCena.avisos.length) {
+      gov.warnings = (gov.warnings || []).concat(fotosCena.avisos);
+    }
     res.json({ ok: true, folder, file: rel, governance: gov, capa, fotos_cena: fotosCena, task: content.getTask(folder) });
   } catch (e) { next(e); }
 });
@@ -1015,6 +1041,13 @@ router.post("/slide", async (req, res, next) => {
       provider: body.provider,
       simulate: () => JSON.stringify(slides[index]), // sem chave: mantém o slide atual (sinalizado)
     });
+    // SEM CHAVE NÃO HOUVE REGERAÇÃO. O adaptador devolve o PRÓPRIO slide no modo simulado, e a
+    // tela anunciava "Slide N refeito." em verde para um slide que voltou byte a byte igual.
+    // Erro aqui é melhor que sucesso falso: manda configurar a chave, em vez de deixar a pessoa
+    // procurando o que mudou numa arte que não mudou.
+    if (result && result.simulated) {
+      return res.status(422).json({ error: "A IA está em modo simulado (sem chave configurada), então o slide não foi refeito. Configure a chave em Configurações.", code: "E_SEM_CHAVE", simulated: true });
+    }
     const newSlide = extractJson(result.text);
     if (!newSlide || typeof newSlide !== "object" || Array.isArray(newSlide)) return res.status(422).json({ error: "a IA não retornou um slide válido" });
     // preserva a foto de fundo do slide se a IA não devolver uma
@@ -1068,6 +1101,13 @@ router.post("/slide-mem", async (req, res, next) => {
       provider: body.provider,
       simulate: () => JSON.stringify(slides[index]), // sem chave: mantém o slide atual (sinalizado)
     });
+    // SEM CHAVE NÃO HOUVE REGERAÇÃO. O adaptador devolve o PRÓPRIO slide no modo simulado, e a
+    // tela anunciava "Slide N refeito." em verde para um slide que voltou byte a byte igual.
+    // Erro aqui é melhor que sucesso falso: manda configurar a chave, em vez de deixar a pessoa
+    // procurando o que mudou numa arte que não mudou.
+    if (result && result.simulated) {
+      return res.status(422).json({ error: "A IA está em modo simulado (sem chave configurada), então o slide não foi refeito. Configure a chave em Configurações.", code: "E_SEM_CHAVE", simulated: true });
+    }
     const newSlide = extractJson(result.text);
     if (!newSlide || typeof newSlide !== "object" || Array.isArray(newSlide)) return res.status(422).json({ error: "a IA não retornou um slide válido" });
     // preserva a foto de fundo do slide se a IA não devolver uma

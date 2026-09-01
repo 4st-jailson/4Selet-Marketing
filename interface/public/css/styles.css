@@ -748,6 +748,15 @@ a.stat:hover::after { opacity: 1; transform: translateY(-50%) translateX(3px); b
 .ph-status-icons { display: inline-flex; align-items: center; gap: 6px; }
 .phone-view { flex: 1; min-height: 0; position: relative; }
 .phone-note { color: rgba(255,255,255,.7); font-size: 12.5px; line-height: 1.55; text-align: left; margin: 0; }
+/* Qual arte está na tela. A prévia do celular vive sobre um fundo escuro próprio (não usa os
+   tokens de tema da página), por isso as cores aqui são literais e claras de propósito. */
+.phone-note-ok, .phone-note-alerta {
+  margin-top: 10px; padding: 9px 11px; border-radius: 9px; font-size: 12px;
+  border-left: 3px solid;
+}
+.phone-note-ok { background: rgba(99,198,139,.12); border-left-color: #63c68b; color: rgba(255,255,255,.86); }
+.phone-note-alerta { background: rgba(224,167,90,.13); border-left-color: #e0a75a; color: rgba(255,255,255,.86); }
+.phone-note-ok strong, .phone-note-alerta strong { color: #fff; }
 /* Janela estreita (não cabe lado a lado): empilha e deixa rolar, com aparelho menor. */
 @media (max-width: 900px) {
   .phone-ov { align-items: flex-start; overflow-y: auto; }

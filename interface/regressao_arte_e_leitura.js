@@ -1485,8 +1485,24 @@ function briefingLongo() {
     // unico momento sem atrito: a peca ainda esta em rascunho, entao a arte nova entra no
     // calculo dos content_hashes. Feito depois, com a peca aprovada, qualquer arquivo novo
     // derruba o gate de publicacao com E_HASH_MISMATCH.
-    checa(sq2.indexOf("render.enquadraStory(folder, { arte: relArte, n: n })") >= 0,
+    checa(sq2.indexOf("render.enquadraStory(folder, { arte: arteRel, n: numero })") >= 0,
       "entrega sem a vertical e ENQUADRADA sozinha, na chegada");
+    // O encaixe deixou de ser um bloco solto dentro de um `else` e virou uma funcao — porque
+    // agora sao TRES os caminhos que precisam dele: a vertical nao veio, a que veio nao tem forma
+    // de Story, e a que veio era um desenho que dependia de imagem ausente. Enquanto era um bloco
+    // solto, os dois ultimos nao faziam nada E nao diziam nada.
+    // Dois pontos de chamada cobrem os tres caminhos: o `if (!usouSt)` recolhe tanto a vertical
+    // que nao serve quanto o desenho que dependia de imagem ausente, e o `else` recolhe a que
+    // nunca veio. O que importa e que nenhum deles termine em silencio.
+    checa((sq2.match(/await encaixaNoStory\(/g) || []).length >= 2,
+      "  e os desfechos ruins da vertical caem todos no mesmo encaixe",
+      (sq2.match(/await encaixaNoStory\(/g) || []).length + " pontos de chamada");
+    checa(/if \(!usouSt\) \{/.test(sq2) && /veio como desenho que depende de uma imagem/.test(sq2),
+      "  inclusive o desenho que depende de imagem que nao veio — antes era no-op mudo");
+    checa(sq2.indexOf("const medeAVertical") >= 0 && sq2.indexOf("render.dimensoesDeImagem(alvo)") >= 0,
+      "  a vertical que chega e MEDIDA antes de ser anunciada (uma arte de 1px ja passou por 9:16)");
+    checa(/indexOf\("story\/"\) === 0 \? semAfordanciaDeCarrossel/.test(sq2),
+      "  e o \"arraste para o lado\" sai do Story — a limpeza existia e nunca era chamada");
     checa(sq2.indexOf("let relArte") >= 0, "a partir da arte que acabou de ser gravada");
     checa(srcRender.indexOf("const n = Number(opts.n) > 0 ? Number(opts.n) : 1;") >= 0,
       "e cada slide vira um Story proprio (antes gravavam por cima do mesmo story_1)");
@@ -2824,6 +2840,130 @@ function briefingLongo() {
       ["sumiu", "parcial", "no_ar", "sem_id", "story_expirado", "indefinido"].forEach((e) => {
         checa(!!P({}, e).conferido_em, "a hora da pergunta é gravada mesmo no estado " + e, JSON.stringify(P({}, e)));
       });
+    }
+
+    secao("44. \"Gerar de novo\" que não gera nada tem que DIZER que não gerou");
+    {
+      // O caso real: o Hugo clicou em "Gerar de novo" na versão 9:16, o painel respondeu
+      // "Versão 9:16 pronta" e o PNG continuou byte a byte idêntico — porque aquela arte já era a
+      // saída daquele mesmo enquadramento. Sucesso mudo é pior que erro: o erro manda investigar,
+      // o sucesso falso manda confiar. A raiz era `htmlToPng` devolver ok só porque o processo do
+      // render saiu com código 0, sem olhar o arquivo.
+      const rr44 = require("./lib/render.js");
+      const nome44 = "zzbatmudou_" + un();
+      const dir44 = peca(nome44 + "_" + DATA, {});
+      // Uma arte de origem de verdade: sem ela o enquadramento não tem o que enquadrar.
+      const arte44 = await rr44.renderPreview({ content_type: "ad_creative", template: "bold",
+        parsed: { eyebrow: "TESTE", headline: "Uma arte para enquadrar", subtext: "Só para a bateria.", cta: "" },
+        folder: "regmud" + un() });
+      checa(arte44.ok, "consegui desenhar a arte de origem do teste", arte44.error || "");
+      if (arte44.ok) {
+        fs.mkdirSync(path.join(dir44, "ads"), { recursive: true });
+        fs.writeFileSync(path.join(dir44, "ads", "feed.png"), Buffer.from(String(arte44.dataUrl).split(",")[1], "base64"));
+
+        const um = await rr44.enquadraStory(nome44 + "_" + DATA, { n: 1 });
+        checa(um.ok && um.mudou === true,
+          "arte que ainda não existia: o painel diz que MUDOU", "ok=" + um.ok + " mudou=" + um.mudou);
+
+        const dois = await rr44.enquadraStory(nome44 + "_" + DATA, { n: 1 });
+        checa(dois.ok === true, "  refazer com a mesma entrada continua dando certo", "ok=" + dois.ok);
+        checa(dois.mudou === false,
+          "  e o painel ADMITE que a arte saiu idêntica — não anuncia sucesso à toa", "mudou=" + dois.mudou);
+
+        const p44 = path.join(dir44, "story", "story_1.png");
+        checa(fs.existsSync(p44) && fs.statSync(p44).size > 0, "  a arte enquadrada está mesmo em disco");
+      }
+
+      // O MECANISMO por tras do "mudou" e da guarda de render sem saida. Data e tamanho mentem:
+      // o render reescreve o arquivo (data nova) com bytes idênticos, que foi exatamente o caso
+      // que passou despercebido. Por isso a comparação é por CONTEÚDO.
+      const A = rr44.assinaturaDoArquivo;
+      checa(A(path.join(dir44, "nao_existe.png")) === "", "arquivo que não existe não tem assinatura");
+      const vazio44 = path.join(dir44, "vazio.png");
+      fs.writeFileSync(vazio44, "");
+      checa(A(vazio44) === "", "  arquivo vazio também não conta como saída do render");
+      const x1 = path.join(dir44, "x1.txt"), x2 = path.join(dir44, "x2.txt");
+      fs.writeFileSync(x1, "mesmo conteudo"); fs.writeFileSync(x2, "mesmo conteudo");
+      checa(A(x1) && A(x1) === A(x2), "  conteúdo igual dá assinatura igual — data diferente não engana");
+      fs.writeFileSync(x2, "conteudo outro");
+      checa(A(x1) !== A(x2), "  e conteúdo diferente dá assinatura diferente");
+
+      // A PRÉVIA DO CELULAR E A PUBLICAÇÃO PRECISAM OLHAR O MESMO ARQUIVO.
+      //
+      // Caso real: em "Ver no celular", a aba Story mostrava `editorTargets` — a arte de FEED —
+      // enquanto a publicação manda `story/story_N` (pickImages). A mesma peça aparecia de dois
+      // jeitos em duas telas do painel, e não havia como saber qual valia. Como uma delas roda no
+      // navegador e a outra no servidor, não dá para medir as duas na mesma chamada; então aqui
+      // se prova o lado do SERVIDOR de verdade, e se confere que o lado da TELA continua ligado à
+      // regra certa. O comportamento na tela foi validado em navegador nos dois ramos (peça com e
+      // sem vertical própria).
+      const dPrev = peca("zzbatprev_" + un() + "_" + DATA, {
+        "ads/feed.png": "x", "story/story_1.png": "x", "story/story_2.png": "x",
+      });
+      const pub44 = require("./lib/publish.js");
+      const escolhidas = pub44.pickImages(dPrev, "feed", "story").map((f) => path.basename(f));
+      checa(escolhidas.join(",") === "story_1.png,story_2.png",
+        "quem publica no Story escolhe os cartões de story/, em ordem", escolhidas.join(","));
+      const semVertical = peca("zzbatprev2_" + un() + "_" + DATA, { "ads/feed.png": "x" });
+      checa(path.basename(pub44.pickImages(semVertical, "feed", "story")[0] || "") === "feed.png",
+        "  e sem vertical própria cai na arte de feed (o Instagram é quem corta)");
+
+      const appjs = fs.readFileSync(path.join(__dirname, "public", "js", "app.js"), "utf8");
+      checa(/function artesDeStory\(task\)/.test(appjs) && /story\\\/story_0\*\\d\+/.test(appjs),
+        "a tela tem a MESMA regra de escolha da arte de Story que o servidor");
+      checa(/const src = artesStory\.length \? artesStory :/.test(appjs),
+        "  e a prévia do Story desenha essa arte, não a de feed");
+
+      // O CARROSSEL TAMBÉM PRECISA SABER SE MUDOU. O primeiro conserto ficou só no enquadramento
+      // do Story; carrossel, Story nativo, slide avulso e Mídia montavam um objeto novo e perdiam
+      // o campo no caminho — então o botão principal responderia "nada mudou" para SEMPRE nesses
+      // quatro. Aqui a peça é desenhada de verdade, duas vezes, e as duas respostas são medidas.
+      const nomeC = "zzbatmudouc_" + un() + "_" + DATA;
+      peca(nomeC, { "copy/instagram_carousel.json": { eyebrow: "TESTE", cta: "", hashtags: ["#4Selet"],
+        slides: [{ title: "Primeiro", body: "Um corpo curto." }, { title: "Segundo", body: "Outro corpo." }] } });
+      const c1 = await rr44.render(nomeC, "carousel", {});
+      checa(c1.ok === true && c1.mudou === true,
+        "carrossel desenhado pela primeira vez diz que MUDOU", "ok=" + c1.ok + " mudou=" + c1.mudou);
+      const c2 = await rr44.render(nomeC, "carousel", {});
+      checa(c2.ok === true && c2.mudou === false,
+        "  e desenhado de novo, sem mexer em nada, ADMITE que saiu idêntico", "ok=" + c2.ok + " mudou=" + c2.mudou);
+
+      // Os outros dois retornos que perdiam o campo: prova de contrato (desenhá-los exige
+      // insumo que esta seção não monta — Story quer roteiro próprio, Mídia quer o print).
+      const fonteRender = fs.readFileSync(path.join(__dirname, "lib", "render.js"), "utf8");
+      // A régua também mudou: "pelo menos um cartão saiu" virou "todos saíram". Um Story de 5 em
+      // que só o primeiro foi desenhado dizia "Arte gerada", e a publicação levava junto os quatro
+      // arquivos velhos dos cartões que não saíram.
+      checa(/ok: rels\.length === built\.length, mudou: mudouAlgum/.test(fonteRender),
+        "  o Story nativo leva o campo E exige todos os cartões");
+      checa(/ok: rels\.length === docs\.length, mudou: mudouAlgum/.test(fonteRender),
+        "  a peça de Mídia leva o campo E exige todos os formatos");
+      checa(/faltaram: built\.filter/.test(fonteRender) && /faltaram: docs\.filter/.test(fonteRender),
+        "  e os dois dizem QUAIS não saíram, para a tela poder nomear");
+      checa(/r\.mudou === false && btn\.dataset\.kind !== "video"/.test(appjs),
+        "o botão principal de gerar arte LÊ o campo — não anuncia sucesso à toa");
+
+      // "PODE SER RESTAURADA DEPOIS" PRECISA SER VERDADE. A tela prometia isso em dois lugares e
+      // não existia caminho de volta: `_archived/` não é zona conhecida, e não havia rota, botão
+      // nem script que trouxesse a peça. Eram 211 peças presas em cima de uma frase.
+      const ct44 = require("./lib/content.js");
+      const nomeD = "zzbatdesc_" + un();
+      peca(nomeD + "_" + DATA, { "copy/instagram_caption.txt": "peça de teste do descarte" });
+      const antesD = ct44.listDescartadas().length;
+      ct44.discardTask(nomeD + "_" + DATA);
+      checa(!ct44.getTask(nomeD + "_" + DATA), "peça descartada sai da biblioteca");
+      const listaD = ct44.listDescartadas();
+      checa(listaD.length === antesD + 1, "  e passa a ser LISTÁVEL nas descartadas", antesD + " -> " + listaD.length);
+      checa(listaD.some((d) => d.folder === nomeD + "_" + DATA), "  com o nome dela, para dar para achar");
+      const volta = ct44.restaurarTask(nomeD + "_" + DATA);
+      checa(!!ct44.getTask(volta.folder), "restaurar traz a peça DE VOLTA para a biblioteca", volta.folder);
+      checa(ct44.listDescartadas().length === antesD, "  e ela sai da lista de descartadas");
+      // Restaurar por cima de uma peça viva seria trocar um problema por um pior.
+      let recusou = "";
+      try { ct44.discardTask(volta.folder); ct44.restaurarTask(volta.folder); peca(volta.folder, {}); ct44.restaurarTask(volta.folder); }
+      catch (e) { recusou = e.code || e.message; }
+      checa(recusou === "E_EXISTS" || recusou === "E_TASK_NOT_FOUND",
+        "  e não sobrescreve uma peça ativa de mesmo nome", recusou || "(não recusou)");
     }
 
   criadas.forEach((d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} });

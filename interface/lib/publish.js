@@ -875,6 +875,38 @@ async function publishTask(folder, opts) {
   return { ok: true, dry_run: false, destino, type: tipo, post_id: res.post_id, cartoes: res.cartoes || null, permalink };
 }
 
+// O STORY QUE SAIU PELA METADE. Alguns cartoes ja estao no Instagram e o seguinte falhou.
+// Sem registrar nada, esses cartoes ficam fora do historico — nenhum botao do painel os alcanca,
+// a peca continua parecendo nao-publicada, e a proxima tentativa duplica o que ja saiu.
+//
+// Vive aqui, e nao dentro de uma rota, porque HA DOIS caminhos que publicam: o botao e o
+// disparador do agendamento. So o primeiro registrava. Repetir a regra em dois lugares foi
+// exatamente como um deles ficou para tras.
+// Devolve o texto do que foi registrado, para quem chamou poder dizer a verdade na tela.
+function registraParcialDoStory(folder, publicados, quem, extra) {
+  const ids = (Array.isArray(publicados) ? publicados : []).filter(Boolean);
+  if (!ids.length) return "";
+  const content = require("./content");
+  const publications = require("./publications");
+  let t = null;
+  try { t = content.getTask(folder); } catch (e) { /* a peca pode ter sumido; o registro ainda vale */ }
+  try { content.setPublished(folder, { by: quem, post_id: ids[0] }); }
+  catch (e) { console.error("[publish] story parcial: falhou ao marcar a peca:", folder, e && e.message); }
+  try {
+    publications.add(Object.assign({
+      folder: folder,
+      label: (t && t.status && t.status.title) || folder,
+      kind: ids.length > 1 ? ids.length + " cartões de story" : "story",
+      destino: "story", post_id: ids[0], cartoes: ids, scheduled_at: null, by: quem,
+    }, extra || {}));
+  } catch (e) {
+    console.error("[publish] story parcial: falhou ao registrar no historico:", folder, e && e.message);
+    return "";
+  }
+  return " Registrei em Publicações " + (ids.length === 1 ? "o cartão que saiu" : "os " + ids.length + " cartões que saíram")
+    + ", para você poder apagá-los pelo painel se quiser.";
+}
+
 module.exports = {
   connectionState,
   isConfigured, publicConfig, setInstagram, testConnection, publishTask, assertApproved,
@@ -888,6 +920,10 @@ module.exports = {
   // CONFERIR se o post ainda esta no ar. `storyJaExpirou` sai exportado separado porque e a
   // regra que evita o alarme falso do Story, e a bateria mede ela sem rede.
   conferirMidias, leituraDaConferencia, patchDaConferencia, storyJaExpirou, mediaAindaExiste,
+  // O desfecho PARCIAL do Story: alguns cartoes ja estao no ar. Precisa ser registrado pelos
+  // dois caminhos que publicam (o botao e o agendador), senao a peca fica "nao publicada" com
+  // post vivo na conta — e a proxima tentativa duplica o que ja saiu.
+  registraParcialDoStory,
   // Quais cartoes sairam juntos no ultimo story publicado, e o status da copia APROVADA —
   // as duas coisas que o registro do historico e a trava de post repetido precisam saber
   // para nao enxergar metade do que foi publicado.

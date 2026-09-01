@@ -173,17 +173,22 @@ async function fotosDasCenas(conceito, opts) {
 // Aplica no conceito: a foto vira o `image` da CAPA (primeiro slide), e o rastro do que foi
 // escolhido fica junto — quem abrir a peça precisa saber que a foto veio de uma busca, com que
 // termo, e de quem é o crédito.
+// Devolve SE APLICOU. Antes devolvia o conceito e carimbava `capa_foto.aplicada` de qualquer
+// jeito — inclusive quando a capa já tinha foto e a nova foi descartada. A tela lia esse carimbo
+// e escrevia "A capa ganhou uma foto." com a miniatura ao lado, enquanto a capa continuava com a
+// imagem antiga. O carimbo é a prova de que a foto entrou; não pode ser escrito quando não entrou.
 function aplicarNaCapa(conceito, achado) {
-  if (!conceito || !achado || !achado.ok) return conceito;
+  if (!conceito || !achado || !achado.ok) return false;
   const slides = Array.isArray(conceito.slides) ? conceito.slides : [];
-  if (!slides.length) return conceito;
+  if (!slides.length) return false;
   // Não sobrescreve foto que já estava lá (a pessoa pode ter anexado a dela).
-  if (!String(slides[0].image || "").trim()) slides[0].image = achado.url;
+  if (String(slides[0].image || "").trim()) return false;
+  slides[0].image = achado.url;
   conceito.capa_foto = Object.assign({}, conceito.capa_foto || {}, {
     busca: achado.busca, porque: achado.porque || null,
     aplicada: achado.url, autor: achado.autor, autor_url: achado.autor_url,
   });
-  return conceito;
+  return true;
 }
 
 module.exports = { buscarCapa, aplicarNaCapa, pedidoDeCapa, melhorFoto, buscarPorTermo, fotosDasCenas, MAX_FOTOS_POR_VIDEO };

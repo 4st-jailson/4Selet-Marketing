@@ -172,11 +172,34 @@ async function htmlToPng(htmlPath, outPng, width, height, scale, opts) {
   // esperavam para sempre, ate reiniciar o painel. 4 min e folga larga p/ um PNG.
   const spawnOpts = { timeout: PNG_RENDER_TIMEOUT_MS };
   if (opts && opts.strictNet) spawnOpts.env = { RENDER_STRICT_NET: "1" };
+  // O QUE ESTAVA LÁ ANTES. Serve para responder duas perguntas que este retorno não respondia, e
+  // que custaram uma ação inteira mentindo para o dono do produto: o arquivo foi mesmo escrito, e
+  // ele MUDOU? Sem isso, `ok` significava apenas "o processo do render saiu com código 0" — e um
+  // botão "Gerar de novo" que reproduz o mesmo PNG anunciava sucesso sem nada ter acontecido.
+  const antes = assinaturaDoArquivo(outPng);
   const r = await spawnAsync(args, spawnOpts);
   if (r.timedOut) {
-    return { code: r.code, stdout: r.stdout, stderr: "O render da imagem passou de " + Math.round(PNG_RENDER_TIMEOUT_MS / 60000) + " minutos e foi interrompido. Tente de novo.", ok: false };
+    return { code: r.code, stdout: r.stdout, stderr: "O render da imagem passou de " + Math.round(PNG_RENDER_TIMEOUT_MS / 60000) + " minutos e foi interrompido. Tente de novo.", ok: false, mudou: false };
   }
-  return { code: r.code, stdout: r.stdout, stderr: r.stderr || r.error, ok: r.ok };
+  const depois = assinaturaDoArquivo(outPng);
+  // Saiu com código 0 e não deixou arquivo? Isso é falha, não sucesso — e era relatado como ok.
+  if (r.ok && !depois) {
+    return { code: r.code, stdout: r.stdout, ok: false, mudou: false,
+      stderr: "O render terminou sem erro mas não deixou a imagem em disco (" + path.basename(outPng) + ")." };
+  }
+  return { code: r.code, stdout: r.stdout, stderr: r.stderr || r.error, ok: r.ok, mudou: !!(depois && depois !== antes) };
+}
+
+// Impressão digital barata de um arquivo, para saber se ele mudou. Hash do conteúdo — tamanho e
+// data mentem: o render reescreve o arquivo (data nova) com bytes idênticos, que foi exatamente o
+// caso que passou despercebido.
+function assinaturaDoArquivo(p) {
+  try {
+    if (!fs.existsSync(p)) return "";
+    const b = fs.readFileSync(p);
+    if (!b.length) return "";
+    return require("crypto").createHash("sha256").update(b).digest("hex");
+  } catch (e) { return ""; }
 }
 
 // Fator de resolucao dos renders FINAIS (salvos/baixados): 2x = alta resolucao.
@@ -1604,6 +1627,17 @@ function readLogoPref(loc) { const v = readRenderJson(loc).logo; return LOGO_IDS
 function readFontPref(loc) { const v = readRenderJson(loc).font; return FAMILIA_IDS.indexOf(v) >= 0 ? v : ""; }
 // Qual paleta a peça herda da campanha à qual está vinculada. Lê o arquivo da campanha direto (e
 // não via lib/campaigns) para não criar dependência circular: campanhas não sabem de render.
+// A paleta de uma campanha pelo ID. Existe separada de `paletaDaCampanha(loc)` porque a PREVIA
+// acontece antes de a peca existir em disco: ali so ha o id que a pessoa escolheu na tela.
+// As duas terminam na mesma tabela, para a previa e o arquivo final nao divergirem de cor.
+function paletaPorId(id) {
+  try {
+    if (!id) return null;
+    const c = readJson(path.join(PATHS.CAMPAIGNS_DIR, String(id) + ".json"));
+    const pid = c && c.palette;
+    return (PALETA_IDS.indexOf(pid) >= 0 && PALETAS_CAMPANHA[pid].cores) ? PALETAS_CAMPANHA[pid].cores : null;
+  } catch (e) { return null; }
+}
 function paletaDaCampanha(loc) {
   try {
     const st = readJson(path.join(loc.path, "status.json")) || {};
@@ -3263,7 +3297,11 @@ function carouselSlidesHtml(concept, buildCover, opts) {
       // miniatura, e a arte saía sem foto nenhuma. Se há foto de verdade, a capa usa o layout que
       // sabe desenhá-la; sem foto, nada muda.
       const capaImg = (s && s.image) || concept.image || "";
-      const fundoCapa = resolveFundo((s && s.fundo) || concept.fundo || (opts && opts.fundo));
+      // A ORDEM importa e ja mordeu: `concept.fundo` e o valor congelado na hora da geracao;
+      // `opts.fundo` e o que a pessoa acabou de escolher na tela. Com o congelado na frente, a
+      // capa ignorava a escolha enquanto os slides obedeciam — na mesma peca, no mesmo clique.
+      // Identica as linhas dos slides de conteudo, logo abaixo.
+      const fundoCapa = resolveFundo((s && s.fundo) || (opts && opts.fundo) || concept.fundo);
       // A capa também aceita um arquétipo — antes só os 4 templates chegavam aqui, e escolher
       // "Grade de números" numa peça de carrossel não mudava um pixel.
       const arqCapa = (opts && opts.templateId && ehArquetipoDePeca(opts.templateId)) ? opts.templateId : null;
@@ -3645,6 +3683,14 @@ async function renderStoryDeFeed(folder, opts) {
     { headline: dadosSalvos.headline, subtext: dadosSalvos.subtext, caption: caption },
     { manchete: STORY_MAX_MANCHETE, apoio: STORY_MAX_APOIO }
   );
+  // SEM TEXTO, NAO DESENHA. Num carrossel, `render.json.dados` e a legenda do feed costumam
+  // estar vazios: o texto mora nos slides. O cartao saia com o rotulo de reserva da marca como
+  // unico conteudo — e, uma vez gravado em story/, passava a ser ELE que ia ao Story no lugar
+  // dos slides. Falhar aqui e melhor: a peca continua com os slides e a tela diz o porque.
+  if (!String(arte.headline || "").trim() && !String(arte.subtext || "").trim()) {
+    const e = new Error("Esta peça não tem manchete nem apoio para desenhar a versão vertical — o texto dela está nos slides.");
+    e.code = "E_SEM_TEXTO"; throw e;
+  }
   const card = {
     title: arte.headline,
     body: arte.subtext || "",
@@ -3666,7 +3712,7 @@ async function renderStoryDeFeed(folder, opts) {
   const outPng = path.join(dir, "story_1.png");
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
-  return { ok: !!r.ok, rels: r.ok ? ["story/story_1.png"] : [], total: 1, stderr: r.ok ? null : (r.stderr || r.stdout) };
+  return { ok: !!r.ok, mudou: !!r.mudou, rels: r.ok ? ["story/story_1.png"] : [], total: 1, stderr: r.ok ? null : (r.stderr || r.stdout) };
 }
 
 // ENQUADRAR uma arte pronta em 9:16, sem cortar nada.
@@ -3721,7 +3767,7 @@ async function enquadraStory(folder, opts) {
   fs.writeFileSync(htmlPath, html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
   return {
-    ok: !!r.ok, modo: "enquadrada", rels: r.ok ? ["story/story_" + n + ".png"] : [],
+    ok: !!r.ok, modo: "enquadrada", mudou: !!r.mudou, rels: r.ok ? ["story/story_" + n + ".png"] : [],
     origem: path.relative(loc.path, origem).replace(/\\/g, "/"),
     ocupa: { topo: Math.round((S.h - alt) / 2), base: Math.round((S.h + alt) / 2) },
     stderr: r.ok ? null : (r.stderr || r.stdout),
@@ -3759,6 +3805,7 @@ async function renderStory(folder, opts) {
   const built = storyCardsHtml(concept, { logo: logoV, watermark: wmV, fundo: fundoDaPeca(loc, opts) });
   const rels = [];
   let lastErr = null;
+  let mudouAlgum = false;
   for (const item of built) {
     const htmlPath = path.join(dir, "story_" + item.n + ".html");
     const outPng = path.join(dir, "story_" + item.n + ".png");
@@ -3766,8 +3813,15 @@ async function renderStory(folder, opts) {
     const r = await htmlToPng(htmlPath, outPng, S.w, S.h, RENDER_SCALE);
     if (!r.ok) lastErr = r.stderr || r.stdout;
     else rels.push("story/story_" + item.n + ".png");
+    if (r.mudou) mudouAlgum = true;
   }
-  return { ok: rels.length > 0, rels: rels, total: built.length, stderr: lastErr };
+  // `mudou` = ALGUM cartao saiu diferente do que ja estava em disco. Sem este campo a tela nao
+  // consegue distinguir "redesenhei" de "reproduzi o mesmo arquivo", e anuncia sucesso nos dois.
+  // TODOS os cartoes, nao "pelo menos um". A regua frouxa fazia um Story pela metade passar por
+  // pronto, e a publicacao ia com os arquivos velhos dos cartoes que nao sairam.
+  return { ok: rels.length === built.length, mudou: mudouAlgum, rels: rels, total: built.length,
+    faltaram: built.filter((b) => rels.indexOf("story/story_" + b.n + ".png") < 0).map((b) => b.n),
+    stderr: lastErr };
 }
 
 // Prepara uma peça IMPORTADA para edição: cada arte vira imagem-base de uma prancheta editável.
@@ -3843,6 +3897,7 @@ async function renderCarousel(folder, opts) {
   const total = built.length;
   const rels = [];
   let lastErr = null;
+  let mudouAlgum = false;
   // Sequencial (await em fila): renderiza um slide por vez, sem abrir N Chromium
   // ao mesmo tempo. Nao bloqueia o event loop (cada htmlToPng e assincrono).
   for (const item of built) {
@@ -3852,8 +3907,9 @@ async function renderCarousel(folder, opts) {
     const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
     if (!r.ok) lastErr = r.stderr || r.stdout;
     else rels.push("slides/slide_" + item.n + ".png");
+    if (r.mudou) mudouAlgum = true;
   }
-  return { ok: rels.length === total, rels, stderr: lastErr || "", count: rels.length, total: total, template: tpl.id };
+  return { ok: rels.length === total, mudou: mudouAlgum, rels, stderr: lastErr || "", count: rels.length, total: total, template: tpl.id };
 }
 
 // Re-renderiza UM slide do carrossel (após regerar o conteúdo só dele), sem tocar nos outros.
@@ -3873,7 +3929,7 @@ async function renderCarouselSlide(folder, n) {
   const htmlPath = path.join(dir, "slide_" + n + ".html"), outPng = path.join(dir, "slide_" + n + ".png");
   fs.writeFileSync(htmlPath, item.html, "utf8");
   const r = await htmlToPng(htmlPath, outPng, 1080, 1350, RENDER_SCALE);
-  return { ok: r.ok, rel: "slides/slide_" + n + ".png", stderr: r.stderr || "" };
+  return { ok: r.ok, mudou: !!r.mudou, rel: "slides/slide_" + n + ".png", stderr: r.stderr || "" };
 }
 
 // ---- Video (Remotion parametrizado) ---------------------------------------
@@ -4081,7 +4137,22 @@ async function htmlStringToPngDataUrl(html, w, h, scale) {
   }
 }
 
-async function renderPreview({ content_type, parsed, template, logo, watermark, only, media, font, fundo, folder, soHtml } = {}) {
+// A PREVIA E O ARQUIVO FINAL PRECISAM SAIR DA MESMA COR.
+//
+// A troca de cor da campanha acontece dentro de `htmlToPng`, mas so quando `PALETA_ATUAL` esta
+// preenchida — e quem preenchia era so o `render()` do arquivo final. A previa passava direto:
+// a pessoa aprovava uma arte azul na tela e o arquivo salvo saia na cor da campanha.
+//
+// O envelope liga a paleta antes e DESLIGA num `finally`. Sem o finally, a variavel de modulo
+// vazaria para o proximo render — de outra peca, de outra pessoa.
+async function renderPreview(args) {
+  const a = args || {};
+  const antes = PALETA_ATUAL;
+  if (a.campanha) PALETA_ATUAL = paletaPorId(a.campanha);
+  try { return await renderPreviewInterno(a); }
+  finally { PALETA_ATUAL = antes; }
+}
+async function renderPreviewInterno({ content_type, parsed, template, logo, watermark, only, media, font, fundo, folder, campanha, soHtml } = {}) {
   const ct = contentTypeById(content_type);
   if (!ct || ct.media !== "image") return { ok: false, error: "este tipo nao tem previa de arte" };
   // A prévia aceita os mesmos 14 arranjos do render final. Enquanto só os 4 passavam por aqui,
@@ -4497,15 +4568,19 @@ async function renderMedia(folder, opts) {
     const sz = MEDIA_SIZES[key];
     return { sz, html: tplMedia(Object.assign({ width: sz.w, height: sz.h }, props)) };
   });
-  const rels = []; let err = "";
+  const rels = []; let err = ""; let mudouAlgum = false;
   for (const { sz, html } of docs) {
     const base = sz.png.replace(/\.png$/i, "");
     const hp = path.join(dir, base + ".html"), pp = path.join(dir, sz.png);
     fs.writeFileSync(hp, html, "utf8");
     const r = await htmlToPng(hp, pp, sz.w, sz.h, RENDER_SCALE);
     if (r.ok) rels.push("ads/" + sz.png); else err = r.stderr || err;
+    if (r.mudou) mudouAlgum = true;
   }
-  return { ok: rels.length > 0, rels, stderr: err, template: model };
+  // Mesma regua do Story e do carrossel: todos os formatos pedidos, ou nao e sucesso.
+  return { ok: rels.length === docs.length, mudou: mudouAlgum, rels, total: docs.length,
+    faltaram: docs.filter((d) => rels.indexOf("ads/" + d.sz.png) < 0).map((d) => d.sz.png),
+    stderr: err, template: model };
 }
 
 // Dispatcher por kind. `opts.template` (editorial|bold|split) so afeta estaticos.
@@ -4551,7 +4626,10 @@ module.exports = {
   storyCardsHtml, storyArchetype,   // idem, para o story
   renderStoryDeFeed, enquadraStory,  // arte 9:16: redesenhada (peca do painel) ou enquadrada (arte que chegou pronta)
   prepararImportada, dimensoesDeImagem,   // arte importada -> prancheta editavel
-  htmlToPng, sanitizeArtHtml,   // usados pelo recebimento do squad: HTML de FORA vira PNG (limpo + sem rede)
+  htmlToPng,
+  // A impressao digital de arquivo: e ela que sustenta o `mudou` e a guarda de render sem saida.
+  // Exportada para a bateria medir os casos de borda sem depender de um render de verdade.
+  assinaturaDoArquivo, sanitizeArtHtml,   // usados pelo recebimento do squad: HTML de FORA vira PNG (limpo + sem rede)
   tplMedia,           // pura: template da arte "4Selet na Midia" (device mockup / mao+tablet)
   imagemExiste,       // pura: a foto apontada existe mesmo? (o modelo inventa caminho)
   TEMPLATE_IDS, PECA_IDS, ARQ_PECA, LOGO_IDS, WATERMARK_IDS,

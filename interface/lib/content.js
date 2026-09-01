@@ -828,7 +828,11 @@ function promote(task_name, task_date, to, by, reason) {
 // nomeado mas outputs/approved e outputs/archive são bind-mounts (dispositivos DIFERENTES),
 // então fs.renameSync cruza filesystem e falha com EXDEV. Fallback: copia + apaga. (Mesmo
 // padrão de scripts/promote_task.js:moveDirRobust.)
-function moveDirRobust(src, dst) {
+// A regra de mover pasta entre zonas mora em scripts/lib/move_dir.js — os tres lugares que
+// movem peca usam a mesma. Enquanto cada um tinha a sua, dois ficaram com o renameSync puro e
+// nunca funcionaram em producao (EXDEV entre o volume e o bind-mount).
+const { moveDirRobust } = require(path.join(PATHS.SCRIPTS_DIR, "lib", "move_dir"));
+function moveDirRobustLocalNaoUsado(src, dst) {
   const tryRename = () => { fs.renameSync(src, dst); };
   try { tryRename(); return; } catch (e) {
     if (e.code === "EBUSY" || e.code === "EPERM") { // lock de FS (Windows) → retry curto
@@ -872,8 +876,59 @@ function discardTask(folder) {
   return { from: loc.path, to: dest };
 }
 
+// O CAMINHO DE VOLTA. A tela promete, em dois lugares, que a peça descartada "pode ser restaurada
+// depois; nada é apagado" — e por muito tempo essa volta não existia em lugar nenhum do código:
+// `_archived/` não é uma zona conhecida, então `findTask`/`listTasks` nunca a enxergam e não havia
+// rota, botão nem script que trouxesse a peça de volta. Eram 211 peças presas em cima de uma
+// promessa. Estas duas funções são a promessa cumprida.
+//
+// `_archived/` continua FORA de ZONES de propósito: a peça descartada não deve reaparecer na
+// biblioteca, nas contagens nem nos filtros. Ela é listada só por quem pede por ela.
+function listDescartadas() {
+  const raiz = path.join(PATHS.OUTPUTS_DIR, "_archived");
+  if (!fs.existsSync(raiz)) return [];
+  return fs.readdirSync(raiz, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => {
+      const p = path.join(raiz, e.name);
+      const st = readJsonSafe(path.join(p, "status.json")) || {};
+      let quando = null;
+      try { quando = fs.statSync(p).mtime.toISOString(); } catch (err) { /* sem data: a lista ainda vale */ }
+      return {
+        folder: e.name,
+        title: st.title || st.task_name || e.name,
+        task_name: st.task_name || null,
+        task_date: st.task_date || null,
+        status_antes: st.status || null,
+        descartada_em: quando,
+      };
+    })
+    .sort((a, b) => String(b.descartada_em || "").localeCompare(String(a.descartada_em || "")));
+}
+
+// Traz a peça de volta para a zona ativa. Recusa quando já existe algo com o mesmo nome lá —
+// sobrescrever silenciosamente uma peça viva seria trocar um problema por outro pior.
+function restaurarTask(folder) {
+  const nome = String(folder || "").trim();
+  if (!nome || nome.indexOf("/") >= 0 || nome.indexOf("\\") >= 0 || nome.indexOf("..") >= 0) {
+    const e = new Error("nome de peça inválido"); e.code = "E_BAD_NAME"; throw e;
+  }
+  const origem = path.join(PATHS.OUTPUTS_DIR, "_archived", nome);
+  if (!fs.existsSync(origem)) { const e = new Error("esta peça não está nos descartados"); e.code = "E_TASK_NOT_FOUND"; throw e; }
+  // O nome pode ter ganhado o carimbo de hora no descarte (quando já havia outra igual lá).
+  const limpo = nome.replace(/__\d{4}-\d{2}-\d{2}T[\d-]+Z?$/, "");
+  const destino = path.join(PATHS.OUTPUTS_DIR, limpo);
+  if (fs.existsSync(destino)) {
+    const e = new Error("já existe uma peça ativa com este nome — renomeie ou descarte a atual antes de restaurar");
+    e.code = "E_EXISTS"; throw e;
+  }
+  moveDirRobust(origem, destino);
+  invalidateTasksCache();
+  return { folder: limpo, from: origem, to: destino };
+}
+
 module.exports = {
   listTasks, getTask, findTask, readFile, resolveFile, createTask, writeContentFile, writeMediaFile,
   listContentVersions, restoreContentVersion, collectMediaForZip,
-  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, clearPublished, setImported, setOrigem, getOrigem, markViewed, setTags, generatePreview, promote, discardTask,
+  setCampaignId, setTitle, setTemplate, setRenderPref, setPillar, setMediaMeta, setPublished, clearPublished, setImported, setOrigem, getOrigem, markViewed, setTags, generatePreview, promote, discardTask, listDescartadas, restaurarTask,
 };

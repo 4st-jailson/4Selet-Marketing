@@ -8,6 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const { hashDirectory, diffHashes } = require("./lib/content_hash");
+const { moveDirRobust } = require("./lib/move_dir");
 
 function nowIso() {
   const d = new Date();
@@ -54,6 +55,7 @@ const logLines = ["# integrity check - " + nowIso(), ""];
 
 let divergentTasks = 0;
 let revertedTasks = 0;
+let revertFailures = 0;   // reverter que FALHOU e outro desfecho: quem automatiza precisa distinguir
 
 try {
   const dirs = fs.readdirSync(approvedDir, { withFileTypes: true }).filter((e) => e.isDirectory());
@@ -108,12 +110,17 @@ try {
       reason: "edit_after_approval",
     });
     try {
-      fs.renameSync(taskDir, dst);
+      // `renameSync` puro NUNCA funcionou em producao: `outputs/` e um volume nomeado e
+      // `outputs/approved` e um bind-mount do host — dispositivos diferentes, EXDEV garantido.
+      // O erro virava um WARN e o script terminava dizendo que estava tudo certo, enquanto a
+      // peca adulterada continuava aprovada. Este e o conserto que a mensagem do gate manda rodar.
+      moveDirRobust(taskDir, dst);
       writeJsonAtomic(path.join(dst, "status.json"), status);
       revertedTasks++;
       info("  auto-revert: " + ent.name + " -> outputs/ (status=draft)");
       logLines.push("  auto-reverted to " + dst);
     } catch (e) {
+      revertFailures++;
       warn("  falha auto-revert: " + e.message);
       logLines.push("  ERROR auto-revert: " + e.message);
     }
@@ -136,7 +143,8 @@ try {
   }
 
   fs.writeFileSync(logPath, logLines.join("\n") + "\n", "utf8");
-  info(divergentTasks + " task(s) com divergencias; " + revertedTasks + " auto-revertidas; log: " + logPath);
+  info(divergentTasks + " task(s) com divergencias; " + revertedTasks + " auto-revertidas"
+    + (revertFailures ? "; " + revertFailures + " NAO revertidas (falha ao mover)" : "") + "; log: " + logPath);
 
   // se houve auto-revert, regenerar INDEX
   if (revertedTasks > 0) {
@@ -146,7 +154,9 @@ try {
       spawnSync(process.execPath, [refresh], { stdio: "inherit", windowsHide: true });
     }
   }
-  process.exit(divergentTasks > 0 ? 1 : 0);
+  // 3 = achou divergencia E nao conseguiu reverter. Antes isso saia como 1, igual a
+  // "achei e resolvi" — quem automatiza nao tinha como saber que o conserto nao pegou.
+  process.exit(revertFailures > 0 ? 3 : (divergentTasks > 0 ? 1 : 0));
 } catch (e) {
   console.error("[check_approved_integrity] falha tecnica: " + (e && e.message ? e.message : e));
   process.exit(2);

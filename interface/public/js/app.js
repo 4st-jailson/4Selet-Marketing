@@ -1573,6 +1573,55 @@ function avisoDeOrigem(origem) {
 // usa (botao "Nova colecao"), e duplicar o desenho e como o painel volta a ter dois "+" diferentes.
 const ICO_MAIS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
 
+// A JANELA DAS DESCARTADAS. Lista o que está em outputs/_archived/ e traz de volta.
+async function abreDescartadas() {
+  let itens = [];
+  try { itens = (await API.descartadas()).items || []; }
+  catch (e) { toast((e && e.message) || "Não consegui ler as peças descartadas.", "error"); return; }
+
+  const ov = document.createElement("div");
+  ov.className = "modal-ov";
+  const linha = (d) => {
+    let quando = "";
+    try { quando = d.descartada_em ? new Date(d.descartada_em).toLocaleDateString("pt-BR") : ""; } catch (e) {}
+    return '<tr data-desc="' + esc(d.folder) + '">'
+      + '<td><strong>' + esc(d.title || d.folder) + "</strong><div class=\"pub-pasta\">" + esc(d.folder) + "</div></td>"
+      + '<td class="pub-quando">' + esc(quando) + "</td>"
+      + '<td class="u-actions"><button class="btn btn-sm" data-restaurar="' + esc(d.folder) + '">Restaurar</button></td></tr>';
+  };
+  ov.innerHTML = '<div class="modal" role="dialog" aria-modal="true" style="max-width:760px">'
+    + '<div class="pub-head"><h3>Peças descartadas</h3><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>'
+    + '<p class="muted" style="padding:0 var(--s6)">Nada foi apagado. Restaurar traz a peça de volta para a biblioteca, no estado em que ela estava.</p>'
+    + '<div style="padding:var(--s5) var(--s6);max-height:60vh;overflow:auto">'
+    + (itens.length
+      ? '<table class="utable utable-pub"><thead><tr><th>Peça</th><th>Descartada em</th><th></th></tr></thead><tbody id="desc-rows">' + itens.map(linha).join("") + "</tbody></table>"
+      : '<div class="empty">Nenhuma peça descartada.</div>')
+    + "</div></div>";
+  document.body.appendChild(ov); document.body.classList.add("no-scroll");
+  requestAnimationFrame(() => ov.classList.add("open"));
+  const fecha = () => { ov.remove(); document.body.classList.remove("no-scroll"); };
+  ov.querySelector('[data-x="close"]').onclick = fecha;
+  ov.onclick = (e) => { if (e.target === ov) fecha(); };
+  ov.querySelectorAll("[data-restaurar]").forEach((b) => {
+    b.onclick = async () => {
+      const pasta = b.dataset.restaurar;
+      b.disabled = true; b.textContent = "restaurando…";
+      try {
+        const r = await API.restaurar(pasta);
+        const tr = ov.querySelector('[data-desc="' + (window.CSS && CSS.escape ? CSS.escape(pasta) : pasta) + '"]');
+        if (tr) tr.remove();
+        toast("Peça restaurada — já está na biblioteca.", "success");
+        if (location.hash.indexOf("#/content") === 0) router();
+        if (r && r.folder) location.hash = "#/task/" + encodeURIComponent(r.folder);
+        fecha();
+      } catch (e) {
+        b.disabled = false; b.textContent = "Restaurar";
+        toast((e && e.message) || "Não consegui restaurar.", "error");
+      }
+    };
+  });
+}
+
 function taskCard(t, opts) {
   const mostrarAviso = !!(opts && typeof opts === "object" && opts.aviso);
   // O selo do cartão diria "Publicado" para uma peça cujo post já não existe — a marca no painel
@@ -1633,7 +1682,7 @@ async function viewContent(arg, query) {
   if (query && query.collection && collsActive.some((c) => c.id === query.collection)) q0.push("coleção:" + query.collection);
 
   setView(`
-    <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-ghost" onclick="location.hash='#/import'" title="Subir uma peça pronta feita fora do painel">Importar conteúdo</button><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
+    <div class="section-head"><h2>Biblioteca de conteúdo</h2><div class="flex" style="gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="#/approved?view=collections" title="Agrupamentos de peças aprovadas">Coleções</a><button class="btn btn-ghost" id="lib-descartadas" title="Peças que você tirou da biblioteca — dá para trazer de volta">Descartadas</button><button class="btn btn-ghost" onclick="location.hash='#/import'" title="Subir uma peça pronta feita fora do painel">Importar conteúdo</button><button class="btn btn-primary" onclick="location.hash='#/create'">＋ Criar conteúdo</button></div></div>
     <div class="lib-toolbar">
       <input id="lib-search" class="lib-search" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Buscar por título, tema ou tag…  (ou filtre com os atalhos abaixo)" value="${esc(q0.join(" "))}" />
     </div>
@@ -1723,6 +1772,12 @@ async function viewContent(arg, query) {
   }
   $$(".lib-quals .qual-chip").forEach((b) => { b.onclick = (e) => { e.stopPropagation(); openQualMenu(b, b.dataset.q.replace(/:$/, "")); }; });
   $("#lib-clear").onclick = () => { st.kind = "all"; $("#lib-search").value = ""; closeQualMenu(); apply(); };
+  // AS DESCARTADAS, e o caminho de volta. A tela prometia "pode ser restaurada depois" desde
+  // sempre, e não havia botão, rota nem script que cumprisse — eram 211 peças presas em cima de
+  // uma frase. Elas continuam fora da biblioteca de propósito (não entram em contagem nem em
+  // filtro); quem quiser vê-las pede por elas aqui.
+  const btnDesc = $("#lib-descartadas");
+  if (btnDesc) btnDesc.onclick = () => abreDescartadas();
   apply();
 }
 
@@ -1947,8 +2002,15 @@ async function approvedPieces(query) {
     ${shown.length ? blocoResolvidas : ""}`);
 
   const vai = (par, v) => { location.hash = "#/approved?" + par + "=" + encodeURIComponent(v) + (par === "kind" && fc !== "all" ? "&campaign=" + encodeURIComponent(fc) : "") + (par === "campaign" && fk !== "all" ? "&kind=" + encodeURIComponent(fk) : ""); };
-  $$(".filter-bar .chip-filter[data-camp]").forEach((b) => { b.onclick = () => vai("campaign", b.dataset.camp); });
-  $$(".filter-bar .chip-filter[data-kind]").forEach((b) => { b.onclick = () => vai("kind", b.dataset.kind); });
+  // A LIGAÇÃO NÃO PODE DEPENDER DA MOLDURA. Estes dois seletores exigiam `.filter-bar` em volta
+  // das pílulas; quando elas se mudaram para a barra de trabalho (`.ap-barra`), os cliques
+  // pararam de existir — a pílula continuava desenhada, destacava a ativa, e não filtrava nada.
+  // O que identifica um filtro é o `data-camp`/`data-kind` que ele carrega, não a caixa onde
+  // está pendurado. Amarrar ao dado sobrevive à próxima mudança de layout.
+  // Amarrado à PÍLULA (`.chip-filter` + o dado que ela carrega), e não à caixa em volta. `[data-kind]`
+  // sozinho seria largo demais: o botão de gerar arte também usa esse atributo.
+  $$(".chip-filter[data-camp]").forEach((b) => { b.onclick = () => vai("campaign", b.dataset.camp); });
+  $$(".chip-filter[data-kind]").forEach((b) => { b.onclick = () => vai("kind", b.dataset.kind); });
   if ($("#ap-revisar")) $("#ap-revisar").onclick = () => {
     const alvo = $("#ap-nunca_aberta");
     if (alvo) alvo.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2634,7 +2696,19 @@ function renderPanel(folder, task) {
 // cada lado, e é onde o texto começa. Aqui a peça ganha uma arte vertical de verdade, com o mesmo
 // conteúdo. Aparece só onde faz sentido: peça estática, não importada, e que ainda não tem a arte.
 const KINDS_COM_VERSAO_STORY = ["feed", "image", "carousel", "media"];
+// PERGUNTA A QUEM SABE, em vez de refazer a conta. Quem decide o que vai ao Story é `pickImages`
+// (lib/publish.js), e a rota já devolve o resultado dele em `artes_por_destino`. Enquanto a tela
+// tinha a própria regra — só olhar `story/` —, a peça de Mídia, que grava o 9:16 em
+// `ads/story.png`, era anunciada como se não tivesse vertical: o cartão oferecia gerar uma que já
+// existia e o aviso de corte falava de um corte que não ia acontecer.
 function temArteDeStory(task) {
+  const mapa = task && task.artes_por_destino;
+  if (mapa && Array.isArray(mapa.story) && mapa.story.length) {
+    const feed = Array.isArray(mapa.feed) ? mapa.feed : [];
+    // Tem vertical PRÓPRIA quando o que vai ao Story não é a mesma arte que vai ao feed.
+    return mapa.story.join("|") !== feed.join("|");
+  }
+  // Sem o campo (rota antiga, ou falha ao montá-lo), cai na regra de antes em vez de mentir.
   return (task.files || []).some((f) => /^story\/story_\d+\.(png|jpe?g)$/i.test(f.rel));
 }
 function podeGerarVersaoStory(task) {
@@ -3039,6 +3113,10 @@ function ligaArranjoDaCriacao() {
   ligaVerMaisArranjos("g-style-grid", "g-style-mais");
 }
 
+// A campanha escolhida no formulario. A previa precisa dela para desenhar na MESMA cor do
+// arquivo final: a troca de paleta e por campanha, e sem este campo a tela mostrava a arte na
+// paleta da marca enquanto o arquivo salvo saia na cor da campanha.
+function campanhaEscolhida() { const el = document.getElementById("g-camp"); return (el && el.value) || null; }
 function selectedFundo() {
   const el = document.getElementById("pick-fundo");
   if (!el) return undefined;
@@ -4364,6 +4442,12 @@ async function refineTask(folder, task) {
       task_name: s.task_name, task_date: s.task_date,
       platforms: s.platforms || [], campaign_id: s.campaign_id || undefined,
       parsed: r.parsed, raw: r.raw,
+      // REGRAVAR POR CIMA É O PONTO AQUI. Sem este campo, o save batia em 409 "já existe uma peça
+      // com esse identificador" — a própria peça que estamos ajustando —, a IA era chamada, a
+      // chamada era paga, e nada era gravado. "Ajustar com IA" nunca funcionou. A trava do 409
+      // existe para proteger quem cria uma peça nova e tromba num slug igual; este caminho é o
+      // caso legítimo do contrário: é a MESMA peça, de propósito.
+      overwrite: true,
     });
     if (autoRenders(task.kind)) {
       btn.innerHTML = '<span class="spinner"></span> atualizando a arte…'; showBusy("Atualizando a arte…");
@@ -4694,7 +4778,16 @@ async function viewTaskDetail(folder) {
       try {
         const r = await API.renderMedia(folder, btn.dataset.kind, selectedTemplate(), selectedLogo(), selectedWatermark(), selectedFont(), selectedFundo());
         if (!r.ok) throw new Error(r.stderr || r.error || "falha ao gerar a arte");
-        hideBusy(); toast("Arte gerada", "success"); router();
+        hideBusy();
+        // MESMO CRITÉRIO DO BOTÃO DO STORY, e pelo mesmo motivo: gerar de novo com tudo igual
+        // reproduz o mesmo arquivo, byte a byte. Anunciar "Arte gerada" nesse caso faz a pessoa
+        // acreditar que a peça mudou, olhar a arte igual e não saber se o botão está quebrado.
+        // O vídeo não passa por este caminho de assinatura, então ali a mensagem segue a antiga.
+        toast(r.mudou === false && btn.dataset.kind !== "video"
+          ? "O desenho saiu idêntico ao que já estava lá: nada mudou. Mude o texto, a foto, o arranjo ou a superfície e gere de novo."
+          : "Arte gerada",
+          r.mudou === false && btn.dataset.kind !== "video" ? "warn" : "success");
+        router();
       } catch (e) { hideBusy(); toast(e.message, "error"); btn.disabled = false; btn.textContent = orig; out.textContent = ""; }
     };
     // Logo/marca d'água/tipografia: trocar o seletor DESTACA "Gerar arte final" — é onde a escolha entra na arte.
@@ -4716,7 +4809,16 @@ async function viewTaskDetail(folder) {
         const r = await API.versaoStory(folder);
         if (!r.ok) throw new Error(r.error || "não consegui desenhar a versão 9:16");
         hideBusy();
-        toast("Versão 9:16 pronta. Ao publicar no Story é ela que vai ao ar.", "success");
+        // DIZER QUAL DOS DOIS ACONTECEU. Refazer o enquadramento de uma arte que já era o
+        // resultado dele devolve o mesmo PNG, byte a byte — e o painel anunciava "pronta" do
+        // mesmo jeito. Quem clicava concluía que tinha mudado alguma coisa, olhava a arte igual
+        // e ficava sem saber se o botão estava quebrado. Sucesso mudo é pior que erro.
+        toast(r.mudou
+          ? "Versão 9:16 pronta. Ao publicar no Story é ela que vai ao ar."
+          : (r.modo === "enquadrada"
+            ? "A arte vertical já era exatamente este enquadramento — refiz e saiu idêntica. Nada mudou. Para outro resultado, a versão 9:16 precisa vir desenhada na origem."
+            : "O desenho saiu idêntico ao que já estava lá: nada mudou. Mude a arte, a foto ou o texto e gere de novo."),
+          r.mudou ? "success" : "warn");
         router();
       } catch (e) {
         hideBusy(); btn.disabled = false; btn.textContent = orig;
@@ -5207,7 +5309,10 @@ async function openPublishModal(task) {
     const tt = publishing.querySelector(".pub-prog-t"); if (tt) tt.textContent = connected ? "Publicando no Instagram…" : "Simulando publicação…";
     publishing.hidden = false; // overlay com spinner grande + mensagem (mais intuitivo que só o texto do botão)
     try {
-      const r = await API.publishPiece(task.folder, { destino: destino, caption: cap || undefined, dryRun: !connected });
+      // A legenda vai SEMPRE, inclusive vazia. Com `cap || undefined`, apagar o texto fazia a chave
+      // sumir do JSON e o servidor caia na legenda do arquivo — publicando exatamente o que a
+      // pessoa tinha acabado de apagar, depois de ver a previa sem legenda.
+      const r = await API.publishPiece(task.folder, { destino: destino, caption: cap, dryRun: !connected });
       // Estado de SUCESSO: troca pra confirmação visível antes de fechar (some o spinner).
       const sp = publishing.querySelector(".spinner"); if (sp) sp.remove();
       if (tt) tt.textContent = r.dry_run ? "Simulação concluída" : "Publicado no Instagram!";
@@ -5242,7 +5347,8 @@ async function openPublishModal(task) {
     if (inFlight) return;
     inFlight = true; sBtn.disabled = true;
     try {
-      await API.schedulePost(task.folder, { destino: destino, caption: destino === "story" ? undefined : (capEl.value.trim() || undefined), scheduled_at: iso, label: displayName(task) });
+      await API.schedulePost(task.folder, { destino: destino, // Mesmo motivo do publicar: vazio e uma ESCOLHA ("quero sem legenda"), nao ausencia.
+        caption: destino === "story" ? undefined : capEl.value.trim(), scheduled_at: iso, label: displayName(task) });
       toast("Agendado. Veja em Agendados.", "ok");
       inFlight = false; close();
     } catch (e) {
@@ -5277,6 +5383,20 @@ async function loadCaption(task) {
 // Prévia no celular: mockup de smartphone moderno mostrando a peça como o público veria no
 // Instagram — alterna entre Feed, Story e Reels, com interação (arrastar carrossel, tocar p/
 // avançar o story, vídeo tocando). É só visualização; não altera a peça.
+// A arte que o Instagram VAI RECEBER quando o destino é o Story — a mesma escolha que o backend
+// faz em `pickImages` (lib/publish.js): os cartões `story/story_N`, em ordem; na falta deles, o
+// `ads/story.png` da peça de Mídia. Vazio significa "esta peça não tem vertical própria".
+function artesDeStory(task) {
+  const files = (task && task.files) || [];
+  const cartoes = umaPorArte(files.filter((f) => /^story\/story_0*\d+\.(png|jpe?g|webp)$/i.test(f.rel)))
+    .map((f) => ({ f, n: parseInt((f.rel.match(/story_0*(\d+)\./i) || [])[1] || "0", 10) }))
+    .sort((a, b) => a.n - b.n)
+    .map((c) => c.f.rel);
+  if (cartoes.length) return cartoes;
+  const daMidia = files.find((f) => /^ads\/story\.(png|jpe?g)$/i.test(f.rel));
+  return daMidia ? [daMidia.rel] : [];
+}
+
 async function openPhonePreview(task) {
   const imgs = editorTargets(task).map((t) => API.rawUrl(task.folder, t.rel));
   const vidFile = (task.files || []).find((f) => f.isVideo);
@@ -5285,6 +5405,9 @@ async function openPhonePreview(task) {
   const caption = await loadCaption(task);
   const uname = "4selet";
   const fs = imgs.length ? imgs : [];
+  // A vertical de verdade, quando a peça tem. É ela que o Story publica.
+  const relsStory = artesDeStory(task);
+  const artesStory = relsStory.map((rel) => API.rawUrl(task.folder, rel));
   const cover = imgs[0] || "";
   const capFirst = esc(((caption || "").split("\n").filter(Boolean)[0] || "")).slice(0, 110);
   const I = {
@@ -5304,7 +5427,14 @@ async function openPhonePreview(task) {
       + '<div class="ph-feed-scroll">' + instagramPreview(fs.length ? fs : [cover], caption, uname) + '</div>' + tabBar + '</div>';
   }
   function storyView() {
-    const src = fs.length ? fs : [cover];
+    // A PRÉVIA DO STORY MOSTRA A ARTE DO STORY — não a de feed esticada.
+    //
+    // Ela mostrava `editorTargets`, que devolve a arte de FEED. Só que quem vai para o Instagram
+    // quando o destino é Story é `story/story_N` (lib/publish.js, `pickImages`). Resultado: esta
+    // tela e a prévia do "Publicar ou agendar" mostravam a MESMA peça de dois jeitos diferentes,
+    // e não havia como saber qual era a verdadeira — que é justamente a pergunta que uma prévia
+    // existe para responder.
+    const src = artesStory.length ? artesStory : (fs.length ? fs : [cover]);
     const bars = src.map((_, i) => '<span class="ph-sbar' + (i === 0 ? " on" : "") + '"><i></i></span>').join("");
     return '<div class="ph-app ph-story">'
       + '<img class="ph-9bg" src="' + esc(src[0]) + '" alt="">'
@@ -5334,6 +5464,13 @@ async function openPhonePreview(task) {
     +   '<div class="phone-side-head"><span class="phone-title">Prévia no celular</span><button class="btn btn-ghost btn-sm" data-x="close">Fechar</button></div>'
     +   '<div class="phone-seg">' + seg + "</div>"
     +   '<p class="phone-note">Como a sua peça aparece no Instagram. Arraste o carrossel ou toque para avançar o story. É só visualização — curtidas e tempo são ilustrativos.</p>'
+        // DIZER QUAL ARTE ESTÁ NA TELA. Sem isto, a aba Story mostrava a arte de feed encaixada
+        // no formato vertical, enquanto a publicação mandava a arte de `story/` — duas telas do
+        // painel discordando sobre a mesma peça, sem nada que dissesse qual valia.
+    +   (artesStory.length
+          ? '<p class="phone-note phone-note-ok">Na aba Story você está vendo a <strong>arte vertical de verdade</strong>'
+            + (artesStory.length > 1 ? " (" + artesStory.length + " cartões)" : "") + " — a mesma que vai ao ar ao publicar no Story.</p>"
+          : '<p class="phone-note phone-note-alerta">Esta peça <strong>não tem arte vertical própria</strong>. A aba Story mostra a arte de feed encaixada só para você ter uma ideia — ao publicar no Story, o Instagram vai ampliar e cortar as laterais.</p>')
     + "</div></div>";
   document.body.appendChild(ov); document.body.classList.add("no-scroll");
   requestAnimationFrame(() => ov.classList.add("open"));
@@ -7039,7 +7176,7 @@ async function renderArtPreview(contentType, kind) {
       const slides = []; let tpl2 = template;
       for (let i = 0; i < total; i++) {
         setBusyMsg("Desenhando o slide " + (i + 1) + " de " + total + "…");
-        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, folder: pastaDaPeca, only: i });
+        const r = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, folder: pastaDaPeca, campaign_id: campanhaEscolhida(), only: i });
         if (!r || !r.slides || !r.slides[0]) throw new Error((r && r.error) || "falha ao renderizar a prévia");
         slides.push(r.slides[0]);
         if (r.template) tpl2 = r.template;
@@ -7047,7 +7184,7 @@ async function renderArtPreview(contentType, kind) {
       }
       out = { ok: true, slides, template: tpl2, kind: "carousel", width: 1080, height: 1350 };
     } else {
-      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, folder: pastaDaPeca });
+      out = await API.renderPreview({ content_type: contentType, parsed, template, logo, watermark, font, fundo, folder: pastaDaPeca, campaign_id: campanhaEscolhida() });
     }
     const fname = ((slugify(($("#g-title") && $("#g-title").value) || "") || "previa-4selet").slice(0, 40)) + ".png";
     if (out.slides && out.slides.length) {

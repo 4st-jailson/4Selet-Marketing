@@ -117,6 +117,9 @@ const API = (() => {
     downloadUrl: (folder, rel, scale) => "/api/content/" + encodeURIComponent(folder) + "/download?rel=" + encodeURIComponent(rel) + (scale ? "&scale=" + encodeURIComponent(scale) : ""),
     zipUrl: (folder) => "/api/content/" + encodeURIComponent(folder) + "/zip",
     preview: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preview"),
+    // Os descartados e o caminho de volta — a tela promete restauracao desde sempre.
+    descartadas: () => req("GET", "/api/content/descartadas/lista"),
+    restaurar: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/restaurar"),
     // Arte importada -> prancheta editavel (a receita que faltava).
     prepararEdicao: (folder) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/preparar-edicao", {}),
     renderMedia: (folder, kind, template, logo, watermark, font, fundo) => req("POST", "/api/content/" + encodeURIComponent(folder) + "/render?kind=" + encodeURIComponent(kind) + (template ? "&template=" + encodeURIComponent(template) : "") + (logo ? "&logo=" + encodeURIComponent(logo) : "") + (watermark ? "&watermark=" + encodeURIComponent(watermark) : "") + (font ? "&font=" + encodeURIComponent(font) : "") + (fundo ? "&fundo=" + encodeURIComponent(fundo) : "")),

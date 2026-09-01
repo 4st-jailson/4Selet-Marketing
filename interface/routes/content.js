@@ -299,16 +299,55 @@ router.post("/:folder/versao-story", async (req, res) => {
     //  - arte que chegou pronta (squad, importada) → ENQUADRA a arte inteira em 9:16, com a própria
     //    imagem desfocada preenchendo as faixas. Redesenhar aqui jogaria fora o design de quem fez.
     const veioPronta = !!(t.status && (t.status.imported || (t.status.origem && t.status.origem.sistema)));
-    const r = veioPronta
-      ? await render.enquadraStory(req.params.folder, {})
-      : await render.renderStoryDeFeed(req.params.folder, {});
+    // CARROSSEL VIRA UM STORY POR SLIDE. Ele caia no redesenho de peca unica, que monta UM
+    // cartao a partir da manchete do feed — texto que o carrossel nao tem, porque o dele mora
+    // dentro de cada slide. Saia um cartao praticamente vazio, e era ele que passava a ir ao ar.
+    // Enquadrar slide a slide preserva a arte inteira e mantem a sequencia, que e o que a
+    // entrega do squad ja faz para carrossel (lib/squad.js).
+    let r;
+    if (t.kind === "carousel") {
+      const slides = (t.files || [])
+        .filter((f) => /^slides\/slide_0*\d+\.(png|jpe?g|webp)$/i.test(f.rel) && !/\.(orig|bg)\./i.test(f.rel))
+        .map((f) => ({ rel: f.rel, n: parseInt((f.rel.match(/slide_0*(\d+)\./i) || [])[1] || "0", 10) }))
+        .sort((a, b) => a.n - b.n);
+      if (!slides.length) return res.status(409).json({ error: "Este carrossel não tem slides para enquadrar.", code: "E_SEM_ARTE" });
+      const rels = []; let falhou = ""; let mudouAlgum = false;
+      for (const s of slides) {
+        const rr = await render.enquadraStory(req.params.folder, { arte: s.rel, n: s.n });
+        if (rr && rr.ok) { rels.push.apply(rels, rr.rels || []); if (rr.mudou) mudouAlgum = true; }
+        else { falhou = "o cartão " + s.n + " não ficou pronto"; break; }
+      }
+      r = { ok: !falhou, mudou: mudouAlgum, rels: rels, stderr: falhou };
+    } else if (veioPronta) {
+      r = await render.enquadraStory(req.params.folder, {});
+    } else {
+      r = await render.renderStoryDeFeed(req.params.folder, {});
+    }
     const task = content.getTask(req.params.folder);
     if (!r.ok) return res.status(400).json({ error: (r.stderr && String(r.stderr).slice(0, 300)) || "Não consegui gerar a versão 9:16.", task });
-    return res.json({ ok: true, modo: veioPronta ? "enquadrada" : "redesenhada", rels: r.rels, task });
+    // `mudou` existe porque "gerou" e "mudou" não são a mesma coisa. Reenquadrar uma arte que já
+    // era o resultado deste mesmo enquadramento devolve o PNG idêntico, byte a byte — e a tela
+    // anunciava "pronta", como se algo tivesse acontecido. Quem clicou ficou com a impressão de
+    // que o painel trabalhou. Agora a resposta diz qual dos dois foi.
+    return res.json({ ok: true, modo: veioPronta ? "enquadrada" : "redesenhada", mudou: !!r.mudou, rels: r.rels, task });
   } catch (e) {
-    if (e.code === "E_SEM_ARTE") return res.status(409).json({ error: e.message, code: e.code });
+    if (e.code === "E_SEM_ARTE" || e.code === "E_SEM_TEXTO") return res.status(409).json({ error: e.message, code: e.code });
     const code = e.code === "E_NOT_EDITABLE" ? 409 : 500;
     return res.status(code).json({ error: e.message, code: e.code });
+  }
+});
+
+// OS DESCARTADOS, e o caminho de volta. A tela promete "pode ser restaurada depois" desde
+// sempre; ate agora nao havia rota nenhuma que cumprisse isso.
+router.get("/descartadas/lista", (req, res) => {
+  try { res.json({ items: content.listDescartadas() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post("/:folder/restaurar", (req, res) => {
+  try { res.json(Object.assign({ ok: true }, content.restaurarTask(req.params.folder))); }
+  catch (e) {
+    const code = e.code === "E_TASK_NOT_FOUND" ? 404 : (e.code === "E_EXISTS" ? 409 : (e.code === "E_BAD_NAME" ? 400 : 500));
+    res.status(code).json({ error: e.message, code: e.code || null });
   }
 });
 

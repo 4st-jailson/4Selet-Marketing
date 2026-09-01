@@ -103,7 +103,16 @@ router.post("/webhook", async (req, res) => {
       : "O squad refez este post.");
   } else if (anterior) {
     const aindaExiste = anterior.folder && require("../lib/content").findTask(anterior.folder);
-    if (aindaExiste || anterior.estado === "montando") {
+    // A RESERVA PRECISA DE PRAZO. Ela é gravada em disco ANTES da montagem, e quem a solta é o
+    // ciclo vivo da requisição. Se o painel reiniciar no meio (deploy, queda), a linha fica em
+    // "montando" para sempre: todo reenvio daquele post passa a receber ok:true dizendo que a
+    // arte já chegou, e nada é criado. O squad não tem como saber, e a peça simplesmente não
+    // existe. Trinta minutos é o mesmo limite que a tela já usa para chamar uma entrega de
+    // "interrompida no meio" — passado isso, a reserva é considerada morta e a montagem segue.
+    const RESERVA_VALE_MS = 30 * 60 * 1000;
+    const idade = Date.now() - Date.parse(anterior.em || "");
+    const montandoVivo = anterior.estado === "montando" && (!isFinite(idade) || idade < RESERVA_VALE_MS);
+    if (aindaExiste || montandoVivo) {
       log(anterior.estado === "montando"
         ? "Esta entrega já estava sendo montada — não criei outra peça."
         : "Este post já tinha chegado antes: mantive a peça " + anterior.folder + ".");

@@ -203,7 +203,16 @@ app.use("/api/squad", require("./routes/squad"));
 // mão depois de agendada, para não sair o mesmo post duas vezes.
 require("./lib/schedule").startWorker(
   require("./lib/publish").publishTask,
-  (folder) => { const t = require("./lib/content").getTask(folder); return !!(t && t.status && t.status.published_at); }
+  // As DUAS copias. `getTask` acha a peca pelo nome e olha a zona ativa ANTES da aprovada, mas
+  // quem publica e sempre a copia aprovada: com uma peca de mesmo nome nas duas zonas, a
+  // pergunta caia na errada e o agendador postava de novo o que ja estava no ar. E a mesma
+  // regra que a rota usa (routes/publish.js, `jaPublicada`).
+  (folder) => {
+    const t = require("./lib/content").getTask(folder);
+    if (t && t.status && t.status.published_at) return true;
+    const a = require("./lib/publish").statusAprovado(folder);
+    return !!(a && a.published_at);
+  }
 );
 
 // Confere a conexão com o Instagram ao subir e a cada 6h, em segundo plano. Sem isto o painel
