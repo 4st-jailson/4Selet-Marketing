@@ -57,12 +57,57 @@ Fonte de verdade: `interface/lib/config.js`. **É por aqui que a operação pens
 
 > **Estado de implementação (2026-06-12, com correções de 2026-07-30):**
 > **Interface principal:** o **Painel web** em `interface/` (`npm start` → `http://localhost:4500`) é o **caminho principal** de operação — gerência de campanhas, geração de conteúdo com IA e workflow de aprovação visual. A **extensão Claude Code no VSCode** é o caminho **secundário/avançado** (chat direto com os agentes, pipeline e scripts). Ver `GUIA_DE_USO.md` (Seções 4 e 8) e `interface/README.md`.
-> **PRONTO ✅** — **Painel web** (`interface/`: Express + SPA, geração/refino/aprovação, governança de marca); **pipeline executável** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`, sequencial + BullMQ, entregue commit e787dc7); knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (compositions `AdVideo` + `CampanhaDemo` + `BrandStory`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados. **Pesquisa de mercado ao vivo (Tavily)** ENTREGUE no painel (`interface/lib/research.js`; opt-in por geração, chave gravada em `interface/data/tavily.json`; degrada para simulado sem a chave). **Publicação real no Instagram feed** ENTREGUE (`interface/lib/publish.js` + `interface/routes/publish.js` via **Graph API v21.0** — imagem única + carrossel — atrás do **gate de aprovação R5**, com **agendamento** em `interface/lib/schedule.js`). **Autenticação multi-usuário do painel** ENTREGUE (`interface/lib/auth.js`: login por pessoa, hash scrypt, sessão por cookie assinado HMAC, perfis **admin** e **membro**, convite por magic-link). **Suporte multi-provedor de IA** ENTREGUE (`interface/lib/ai.js`: dispatcher **Claude (Anthropic)** + **ChatGPT (OpenAI)**, escolha por chamada ou padrão em Configurações). **Painel em PRODUÇÃO** em **`https://mkt.4st.co`** (Docker Compose, Linux .63).
+> **PRONTO ✅** — **Painel web** (`interface/`: Express + SPA, geração/refino/aprovação, governança de marca); **pipeline executável** (`pipeline/orchestrator.js` + `worker.js` + `agents.js`, sequencial + BullMQ, entregue commit e787dc7); knowledge files (`knowledge/`), assets de marca (`assets/`), as **7 skills** em `skills/` (5 agentes + orchestrator + **task-promoter**), o projeto **Remotion** em `src/` (compositions `AdVideo` + `CampanhaDemo` + `BrandStory`), `package.json` / `tsconfig.json` / `remotion.config.ts` / `.gitignore`, e dependências instaladas (**Node v24.16.0, git v2.54.0, Remotion 4.0.469 + React 19, Playwright + Chromium**). **Workflow de Aprovação Níveis 1+2 (v1.0)** implementado: 7 scripts em `scripts/` + módulos em `scripts/lib/` (content_hash, status_bootstrap), `status.json` por task como fonte da verdade, `outputs/approved/` e `outputs/archive/` versionados em git, 10 testes felizes + 7 adversariais validados. **Pesquisa de mercado ao vivo (Tavily)** ENTREGUE no painel (`interface/lib/research.js`; opt-in por geração, chave gravada em `interface/data/tavily.json`; degrada para simulado sem a chave). **Publicação real no Instagram feed** ENTREGUE (`interface/lib/publish.js` + `interface/routes/publish.js` via **Graph API v21.0** — imagem única + carrossel — atrás do **gate de aprovação R5**, com **agendamento** em `interface/lib/schedule.js`). **Autenticação multi-usuário do painel** ENTREGUE (`interface/lib/auth.js`: login por pessoa, hash scrypt, sessão por cookie assinado HMAC, perfis **admin** e **membro**, convite por magic-link). **Suporte multi-provedor de IA** ENTREGUE (`interface/lib/ai.js`: dispatcher **Claude (Anthropic)** + **ChatGPT (OpenAI)**, escolha por chamada ou padrão em Configurações). **Painel em PRODUÇÃO** em **`https://mkt.4st.co`** (servidor Linux em **`172.16.0.68`** — o `.63` é endereço ANTIGO e não vale mais; ver "Produção: como chegar e como trocar de versão").
 > **PENDENTE ⏳** — `@supabase/supabase-js` + Supabase (**não é pré-requisito de publicação** — ver Distribution Agent), **`REDIS_URL`** para ativar a fila BullMQ (a pasta `pipeline/` já existe; sem Redis roda **sequencial**), **OAuth YouTube** (publicação no YouTube **não existe** no painel — não há publisher). ⚠️ **Corrigido em 2026-07-30:** a **chave de IA está configurada** (`ANTHROPIC_API_KEY` em `interface/.env`; produção mostra "IA conectada") e a **chave Tavily também** (`TAVILY_API_KEY`) — a geração **não** roda simulada. A chave do **Pexels** fica em `interface/data/pexels.json` (Configurações do painel).
 > **Documentação de referência** (ordem de leitura): 1) `STATUS_PROJETO.md` — estado atual · 2) `GUIA_DE_USO.md` — passo a passo (§23 Workflow) · 3) `SPEC_WORKFLOW_APROVACAO.md` — contrato v1.1 · 4) `skills/<nome>/SKILL.md` — comportamento por agente.
 > ⚠️ **Regra CRITICAL Re-aprovação** ativa nas 4 skills de conteúdo: NÃO editar `outputs/approved/<task>/` diretamente — rework via `node scripts/promote_task.js --to in_review`.
 
 ---
+
+---
+
+# Produção: como chegar e como trocar de versão
+
+**Leia isto ANTES de mexer no deploy.** As duas informações abaixo mudaram em 2026-09-01 e a
+segunda existe porque eu derrubei o painel seguindo a ordem errada.
+
+## Endereço do servidor: `172.16.0.68`
+
+O `143.14.247.63` **não existe mais** — a máquina mudou para a rede local. Se você achar o IP
+antigo em algum lugar (config, anotação, memória de sessão), está desatualizado.
+
+```bash
+ssh -i ~/.ssh/id_4selet_63 sysadmin@172.16.0.68
+```
+
+O atalho `panelprod` no `~/.ssh/config` já aponta para o endereço novo. O repositório no servidor
+fica em `/home/sysadmin/4selet-marketing`, e o `git pull` de lá exige a chave própria:
+`GIT_SSH_COMMAND="ssh -i ~/.ssh/id_github_deploy" git pull --ff-only`.
+
+> **Sintoma que engana:** com o endereço velho, a porta 22 dá *tempo esgotado* enquanto o ping
+> ainda responde (outra máquina passou a ocupar o IP). Isso parece firewall ou fail2ban e **não é**.
+> Antes de investigar bloqueio, confirme o endereço.
+
+## Trocar a versão em produção: a ordem não é negociável
+
+Produção roda num container **feito à mão** (`painel-emergencia`/`painel-novo`), FORA do compose,
+com o apelido de rede `panel` — é por ele que o Caddy encontra o painel. O `scripts/deploy_prod.sh`
+**não serve** para essa troca.
+
+**NUNCA pare o container que está servindo antes de o substituto estar respondendo.** Em 2026-09-01
+eu parei primeiro e o `docker run` foi barrado pela camada de permissão: o painel ficou em **502** e
+o dono do produto teve de subir na mão. A causa não foi a permissão — foi a ordem.
+
+A sequência correta, definida pelo Hugo:
+
+1. Subir o container novo com **outro nome** e **sem** `--network-alias panel`. O antigo segue servindo.
+2. Validar por dentro (`docker exec ... fetch http://127.0.0.1:4500/...`) **pelo CONTEÚDO**, não só
+   pelo código HTTP: confira um marcador que só exista na versão nova.
+3. Só então `docker network disconnect` o antigo e `docker network connect --alias panel` o novo.
+4. Parar o antigo **por último**, e deixá-lo **parado, não removido**, por alguns dias.
+
+> **Armadilha ao conferir qual versão está no ar:** escolher um marcador que exista nas duas versões
+> dá falso positivo. Use algo introduzido pela versão nova e ausente na anterior.
 
 # Orchestrator
 
